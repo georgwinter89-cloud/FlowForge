@@ -78,12 +78,18 @@ in den Kontext künftiger Sessions geladen** und nie von Hand gepflegt.
 
 ### 4.1 Form
 
-- Ein Workflow ist eine **gerade Kette** von Blöcken. Parallelität existiert **innerhalb** von
-  Blöcken (z.B. Audit-Block startet intern zwei Prüfer) — die Leinwand bleibt übersichtlich.
+- Die Leinwand ist ein **Schaubild** (Entscheidung Georg, 07.08.2026): gerahmte Block-Karten,
+  **frei platzierbar** (Positionen werden gespeichert), verbunden durch von Hand gezogene
+  **Pfeile**, die die Reihenfolge bestimmen. Datenformat: Karten + Pfeile.
+- **Ein-Pfad-Regel bis zur Freischaltung paralleler Zweige** (BAUPLAN Schritt 13): Ein
+  Workflow ist ein durchgehender Pfad — ein zweiter Pfeil aus derselben Karte wird mit
+  freundlichem Hinweis abgelehnt. Danach sind **parallele Zweige** erlaubt: gleichzeitig
+  laufen dürfen mehrere lesende Blöcke, aber höchstens ein schreibender (§5); Zweige werden
+  vor dem nächsten gemeinsamen Schritt zusammengeführt. Parallelität existiert außerdem
+  **innerhalb** von Blöcken (z.B. Audit-Block startet intern zwei Prüfer).
 - **Fehlschlag-Rückführung:** „bei Fehlschlag zurück zu Block X" (braucht der Prüfer sofort).
   Standard **2 Reparatur-Runden** (pro Workflow verstellbar); danach hält der Lauf an und stellt
   eine Folgen-Frage („Weitermachen, zurückstellen oder Stand wiederherstellen?").
-- Freie Verzweigungen auf der Leinwand: bewusst nicht in V1.
 
 ### 4.2 Anatomie eines Blocks
 
@@ -101,7 +107,7 @@ Prüfer (schreibt eigene Tests, liefert Rot-vor-Grün-Beleg; „≠ Bauer" heiß
 frische Session ohne das Arbeitswissen des Bauers) · Diagnose ·
 Frage an den Menschen (Folgen-Fragen, keine Technik-Fragen) · Audit · Sessionende.
 
-Übergangszustand, bis diese echten Arbeitsaufträge stehen (Bauschritt 7/8): Die
+Übergangszustand, bis diese echten Arbeitsaufträge stehen (Bauschritt 8/9): Die
 Bibliothek enthält bewusst triviale Übungs-Blöcke (Späher, Mini-Bauer, fairer und
 strenger Übungs-Prüfer, Rechte-Probe), an denen Kette, Sperren und
 Fehlschlag-Rückführung erprobt werden. Prüfer-Blöcke melden ihr Urteil als letzte
@@ -159,7 +165,7 @@ Zeile ihres Abschlusstexts („PRUEFUNG: BESTANDEN/FEHLGESCHLAGEN").
 | Programmbibliotheken installieren (offizielle Quellen) | Sonstige Internetzugriffe |
 | Tests ausführen | Alles Unumkehrbare |
 
-Übergangsregel, bis die echten Arbeitsauftrags-Blöcke stehen (Bauschritt 7): Kommandozeilen-
+Übergangsregel, bis die echten Arbeitsauftrags-Blöcke stehen (Bauschritt 8): Kommandozeilen-
 Befehle lösen eine Rückfrage aus — auch Tests und Installationen. Ausnahme: Befehle, die der
 Motor selbst zweifelsfrei als **rein lesend** einstuft (z.B. Verzeichnis auflisten), laufen
 ohne Rückfrage durch. Sicherer Standard, solange die Blöcke die Befehle noch nicht einordnen
@@ -185,6 +191,5 @@ gibt es einen **„App starten"-Knopf**, der genau diese Anleitung ausführt (We
 - Anbieterneutralität, API-Betrieb, lokale KI (→ V2, durch Motor-Anschluss vorbereitet)
 - Englische Oberfläche (→ V2, durch zentrale Texte vorbereitet)
 - Import/Export von Blöcken, Mehrbenutzer/Accounts, Auto-Update-Mechanismus
-- Freie Verzweigungen/Parallelstränge auf der Leinwand
 - Umbau eines Workflows, während er läuft
 - Jede Form von Prozess-Selbstvermessung (Bestandslisten, Nachweis-Register o.ä.)

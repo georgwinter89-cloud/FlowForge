@@ -2,7 +2,9 @@
 
 Stand: 07.08.2026 · Grundlage: [SPEC.md](SPEC.md) · Status: nach Angreifer-Prüfung
 (2 Angriffslisten eingearbeitet; 21 Funde, davon 3 blockierend — alle aufgelöst.
-Motor-Entscheidung durch Georg am 07.08.2026: Abo-Modus für Eigengebrauch, Details SPEC §2)
+Motor-Entscheidung durch Georg am 07.08.2026: Abo-Modus für Eigengebrauch, Details SPEC §2.
+Leinwand-Entscheidung durch Georg am 07.08.2026: Schaubild aus Karten + Pfeilen als
+Schritt 6 vorgezogen, parallele Zweige als Schritt 13 — Details SPEC §4.1)
 
 **Regeln:** Jeder Bauschritt endet mit etwas, das Georg selbst anfassen und prüfen kann
 (Alltagstest). Nach jedem Schritt gibt es eine installierbare Version. Ein Schritt pro
@@ -63,12 +65,24 @@ Zusammenstecken; laufender Block wird auf der Leinwand hervorgehoben; Sperren-Me
 Standard 2 Runden, danach Folgen-Frage (inkl. Option „Stand wiederherstellen" — die
 Sicherungspunkte aus Schritt 4 existieren dann schon).
 Getestet wird mit **bewusst trivialen Übungs-Blöcken** (Dummy-Arbeitsaufträge) — die
-echten Arbeitsaufträge kommen in Schritt 7/8.
+echten Arbeitsaufträge kommen in Schritt 8/9.
 **Alltagstest:** Georg steckt selbst eine 3-Block-Kette und lässt sie laufen; ein
 absichtlich strenger Übungs-Prüfer schickt den Lauf zweimal zurück, dann kommt die
 Folgen-Frage.
 
-### 6 — Agent-Karten-Brücke
+### 6 — Leinwand als Schaubild
+Die Kette wird zum Schaubild (SPEC §4.1): gerahmte Block-Karten, frei auf der Leinwand
+platzierbar (Positionen werden gespeichert); Pfeile werden von Karte zu Karte gezogen
+und bestimmen die Reihenfolge. Datenformat: Karten + Pfeile — vorbereitet auf spätere
+Verzweigungen. Ein-Pfad-Regel: ein zweiter Pfeil aus derselben Karte wird mit
+freundlichem Hinweis abgelehnt (parallele Zweige: Schritt 13). braucht/liefert-Prüfung,
+Sperren, Rückführung und Lauf-Anzeige (laufende Karte hervorgehoben) funktionieren
+unverändert.
+**Alltagstest:** Georg ordnet seine Blöcke frei an, verbindet sie mit Pfeilen und lässt
+den Workflow laufen; ein zweiter Pfeil aus einer Karte wird freundlich abgelehnt; nach
+einem App-Neustart liegen alle Karten noch da, wo er sie hingeschoben hat.
+
+### 7 — Agent-Karten-Brücke
 Der Agent bekommt Werkzeuge, um Karten zu **lesen und zu schreiben** (anlegen, erledigen,
 aktualisieren) — mit denselben harten Regeln wie für Menschen: Längengrenze durchgesetzt,
 genau eine Status-Karte. Kartenvorauswahl beim Lauf-Start festgenagelt auf: **Status-Karte
@@ -76,7 +90,7 @@ genau eine Status-Karte. Kartenvorauswahl beim Lauf-Start festgenagelt auf: **St
 **Alltagstest:** Ein Ein-Block-Workflow liest die Status-Karte vor und legt eine
 Aufgaben-Karte an; eine zu lange Agenten-Karte wird sichtbar abgelehnt.
 
-### 7 — Erste echte Kette: „Feature hinzufügen"
+### 8 — Erste echte Kette: „Feature hinzufügen"
 Die Arbeitsaufträge Kontext laden, Paket schneiden, Angreifer (nur lesend), Bauer,
 Prüfer (frische Session ohne Bauer-Kontext, eigene Tests, Rot-vor-Grün-Beleg) und
 Sessionende — **jeder einzeln im Ein-Block-Workflow erprobt**, dann als Kette.
@@ -85,7 +99,7 @@ Bauer-Kontext", nicht „anderes Gehirn" — wird in SPEC §4.3 so präzisiert.
 **Alltagstest:** Georg lässt an einem Übungsprojekt ein kleines Feature bauen; im
 Laufbericht sind Angriffsliste, Prüfbeleg und Rot-vor-Grün-Nachweis sichtbar.
 
-### 8 — Spec-Interview, Diagnose & Frage an den Menschen
+### 9 — Spec-Interview, Diagnose & Frage an den Menschen
 Gesprächsoberfläche für mehrrundige Dialoge (das Spec-Interview „grillt" wie eine Chat-
 Ansicht innerhalb des Laufs); Frage-an-den-Menschen-Block (Einzelfrage, Folgen-Sprache);
 Diagnose-Arbeitsauftrag (Ursache belegen, bevor etwas angefasst wird). Damit stehen die
@@ -93,13 +107,13 @@ Vorlagen **„Neue App starten"** und **„Bug jagen"**.
 **Alltagstest:** Georg startet „Neue App starten", wird in mehreren Runden gegrillt, und
 am Ende liegen Entscheidungs-, Aufgaben- und Status-Karten im Projekt.
 
-### 9 — Startanleitung & „App starten"-Knopf
+### 10 — Startanleitung & „App starten"-Knopf
 Startanleitung als Pflichtartefakt jedes Bau-Workflows (maschinenlesbar); „App starten"-
 Knopf führt sie aus (Web-App → Browser; Kommandozeilen-Programm → Fenster; usw.).
 **Alltagstest:** Georg baut mit „Neue App starten" eine Mini-App von der Idee bis zum
 Klick auf „App starten" — ohne Kommandozeile.
 
-### 10 — Sessions & automatischer Übertrag
+### 11 — Sessions & automatischer Übertrag
 Kontext-Füllstand live anzeigen; Übertrag bei ~85 % (bevorzugt an Blockgrenzen: Karten
 aktualisieren, Workflow-Position samt Teilschritt notieren, frische Session, nahtlos
 weiter); Übertragsgrenze pro Workflow (Zahl/unbegrenzt); Kontingent-/Kostenpausen-
@@ -110,20 +124,30 @@ hinterlässt ein Übertrags-Protokoll in Alltagssprache im Laufbericht.
 **Alltagstest:** Georg setzt den Test-Schalter, startet einen mittelgroßen Auftrag, sieht
 mindestens zwei Überträge im Protokoll und ein fertiges Ergebnis — ohne einzugreifen.
 
-### 11 — Parallelität & Warteschlange
+### 12 — Parallelität & Warteschlange
 Bis zu 3 Läufe gleichzeitig in verschiedenen Projekten; pro Projekt nur ein schreibender
 Agent; Warteschlange mit automatischem Anlauf. Sichtbarer Hinweis: parallele Läufe
 vervielfachen den Verbrauch.
 **Alltagstest:** Zwei Läufe in zwei Projekten parallel; ein dritter Start im selben
 Projekt wartet sichtbar und startet von allein.
 
-### 12 — Block-Editor mit KI-Assistent
+### 13 — Parallele Zweige auf der Leinwand
+Verzweigen und Zusammenführen (SPEC §4.1): Von einer Karte dürfen mehrere Pfeile
+ausgehen; gleichzeitig laufen dürfen mehrere lesende Blöcke, aber höchstens ein
+schreibender (SPEC §5). Vor dem nächsten gemeinsamen Schritt werden Zweige
+zusammengeführt (warten, bis alle fertig sind). Fehlschlag-Rückführung und Folgen-Frage
+funktionieren auch im Verzweigten; die Live-Ansicht zeigt mehrere gleichzeitig laufende
+Karten. Sichtbarer Hinweis: parallele Blöcke vervielfachen den Verbrauch.
+**Alltagstest:** Georg lässt einen lesenden Block parallel zum Bauer laufen, sieht beide
+gleichzeitig im Liveticker, und der Workflow führt danach beide Ergebnisse zusammen.
+
+### 14 — Block-Editor mit KI-Assistent
 Formular entlang der Block-Anatomie; Erstellungsassistent in 4 Schritten (inkl.
 Probelauf-Vorschau); eigene Blöcke in der Bibliothek, bearbeiten/löschen.
 **Alltagstest:** Georg erstellt per Assistent einen eigenen Block und nutzt ihn in
 einer Kette.
 
-### 13 — V1-Feinschliff
+### 15 — V1-Feinschliff
 Zustände auf der Projektübersicht („läuft", „wartet auf Antwort", …); Laufberichte-
 Ansicht ausgebaut (Filter, Details); Rechte-Standard sichtbar in Projekteinstellungen;
 Politur.
@@ -135,5 +159,10 @@ Handarbeit braucht.
 Motor-Durchstich früh (3), weil dort das größte technische Risiko liegt — inklusive
 Rechte-Durchsetzung und Verbrauchs-Messung, den zwei größten Adapter-Risiken.
 Sicherungspunkte (4) vor der ersten selbstgebauten Kette (5), damit das Sicherheitsnetz
-existiert, bevor Georg den Agenten frei laufen lässt. Erst die Brücke Agent↔Karten (6),
-dann echte Arbeitsaufträge (7/8) — jede Vorlage steht auf einzeln erprobten Blöcken.
+existiert, bevor Georg den Agenten frei laufen lässt. Die Schaubild-Leinwand (6) direkt
+danach, weil Georg täglich auf ihr arbeitet — je früher, desto weniger gewöhnt er sich
+an eine Oberfläche, die wieder verschwindet. Erst die Brücke Agent↔Karten (7), dann
+echte Arbeitsaufträge (8/9) — jede Vorlage steht auf einzeln erprobten Blöcken.
+Parallele Zweige (13) erst nach echten Blöcken und Projekt-Parallelität (12): Der
+Ablaufplaner für gleichzeitige Blöcke zahlt sich erst aus, wenn es Blöcke gibt, deren
+Parallel-Lauf echte Zeit spart.
