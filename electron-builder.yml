@@ -5,6 +5,10 @@ directories:
 files:
   - out/**
   - package.json
+# Die native claude.exe des Motors muss als echte Datei neben dem asar-Archiv
+# liegen, sonst kann sie nicht als Prozess gestartet werden.
+asarUnpack:
+  - node_modules/@anthropic-ai/claude-agent-sdk-win32-x64/**
 npmRebuild: false
 win:
   target: nsis

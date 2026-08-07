@@ -11,6 +11,15 @@ import {
   karteErledigtSetzen,
   karteLoeschen
 } from './projekte.js'
+import { einstellungenLaden, einstellungenSpeichern } from './einstellungen.js'
+import {
+  laufStarten,
+  laufSanftStoppen,
+  laufHartStoppen,
+  laufFrageAntworten,
+  laufZustand,
+  laufberichteLaden
+} from './lauf.js'
 
 function createWindow() {
   const fenster = new BrowserWindow({
@@ -55,6 +64,20 @@ function registriereIpc() {
     karteErledigtSetzen(pfad, id, erledigt)
   )
   ipcMain.handle('karte-loeschen', (_e, { pfad, id }) => karteLoeschen(pfad, id))
+
+  ipcMain.handle('einstellungen-laden', () => einstellungenLaden())
+  ipcMain.handle('einstellungen-speichern', (_e, neu) => einstellungenSpeichern(neu))
+
+  ipcMain.handle('lauf-starten', (ereignis, { pfad, workflowId }) =>
+    laufStarten(BrowserWindow.fromWebContents(ereignis.sender), pfad, workflowId)
+  )
+  ipcMain.handle('lauf-sanft-stoppen', (_e, pfad) => laufSanftStoppen(pfad))
+  ipcMain.handle('lauf-hart-stoppen', (_e, pfad) => laufHartStoppen(pfad))
+  ipcMain.handle('lauf-frage-antworten', (_e, { frageId, erlaubt }) =>
+    laufFrageAntworten(frageId, erlaubt)
+  )
+  ipcMain.handle('lauf-zustand', (_e, pfad) => laufZustand(pfad))
+  ipcMain.handle('laufberichte-laden', (_e, pfad) => laufberichteLaden(pfad))
 }
 
 app.whenReady().then(() => {

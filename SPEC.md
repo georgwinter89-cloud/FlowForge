@@ -143,6 +143,10 @@ Frage an den Menschen (Folgen-Fragen, keine Technik-Fragen) · Audit · Sessione
 | Programmbibliotheken installieren (offizielle Quellen) | Sonstige Internetzugriffe |
 | Tests ausführen | Alles Unumkehrbare |
 
+Übergangsregel, bis die echten Arbeitsauftrags-Blöcke stehen (Bauschritt 7): Kommandozeilen-
+Befehle lösen **immer** eine Rückfrage aus — auch Tests und Installationen. Sicherer Standard,
+solange die Blöcke die Befehle noch nicht einordnen können.
+
 ## 8. Ergebnis erleben
 
 Jeder Bau-Workflow muss eine **Startanleitung** als Pflicht-Artefakt hinterlassen. Pro Projekt

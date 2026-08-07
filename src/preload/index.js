@@ -11,5 +11,21 @@ contextBridge.exposeInMainWorld('flowforge', {
   karteAendern: (pfad, id, aenderung) => ipcRenderer.invoke('karte-aendern', { pfad, id, aenderung }),
   karteErledigtSetzen: (pfad, id, erledigt) =>
     ipcRenderer.invoke('karte-erledigt-setzen', { pfad, id, erledigt }),
-  karteLoeschen: (pfad, id) => ipcRenderer.invoke('karte-loeschen', { pfad, id })
+  karteLoeschen: (pfad, id) => ipcRenderer.invoke('karte-loeschen', { pfad, id }),
+
+  einstellungenLaden: () => ipcRenderer.invoke('einstellungen-laden'),
+  einstellungenSpeichern: (neu) => ipcRenderer.invoke('einstellungen-speichern', neu),
+
+  laufStarten: (pfad, workflowId) => ipcRenderer.invoke('lauf-starten', { pfad, workflowId }),
+  laufSanftStoppen: (pfad) => ipcRenderer.invoke('lauf-sanft-stoppen', pfad),
+  laufHartStoppen: (pfad) => ipcRenderer.invoke('lauf-hart-stoppen', pfad),
+  laufFrageAntworten: (frageId, erlaubt) =>
+    ipcRenderer.invoke('lauf-frage-antworten', { frageId, erlaubt }),
+  laufZustand: (pfad) => ipcRenderer.invoke('lauf-zustand', pfad),
+  laufberichteLaden: (pfad) => ipcRenderer.invoke('laufberichte-laden', pfad),
+  aufLaufEreignis: (rueckruf) => {
+    const empfaenger = (_ereignis, daten) => rueckruf(daten)
+    ipcRenderer.on('lauf-ereignis', empfaenger)
+    return () => ipcRenderer.removeListener('lauf-ereignis', empfaenger)
+  }
 })

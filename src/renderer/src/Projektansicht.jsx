@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { texte } from '../../shared/texte.js'
 import KartenFormular from './KartenFormular.jsx'
+import Leinwand from './Leinwand.jsx'
 
 const t = texte.projektansicht
 const tk = texte.karten
@@ -147,10 +148,10 @@ export default function Projektansicht({ pfad, onZurueck }) {
           </div>
         </aside>
         <div className="spalte spalte-leinwand">
-          <div className="platzhalter">
-            <p className="leer-titel">{t.leinwandTitel}</p>
-            <p className="leer-untertitel">{t.leinwandHinweis}</p>
+          <div className="spalten-kopf">
+            <h2>{t.leinwandTitel}</h2>
           </div>
+          <Leinwand pfad={pfad} />
         </div>
         <aside className="spalte spalte-bibliothek">
           <div className="platzhalter">

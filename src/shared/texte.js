@@ -84,5 +84,104 @@ export const texte = {
     kartenDateiKaputt:
       'Die Kartendatei dieses Projekts ist beschädigt und konnte nicht gelesen werden.',
     unbekannt: 'Das hat leider nicht geklappt. Bitte versuch es noch einmal.'
+  },
+  einstellungen: {
+    ueberschrift: 'Einstellungen',
+    knopf: 'Einstellungen',
+    motorUeberschrift: 'KI-Motor',
+    modusFeld: 'Wie soll sich der Motor anmelden?',
+    modusAbo: 'Mit meinem Claude-Abo (empfohlen)',
+    modusAboHinweis:
+      'Nutzt dein bestehendes Claude-Login und dein Abo-Kontingent. Nur für den eigenen Gebrauch.',
+    modusApi: 'Mit API-Schlüssel',
+    modusApiHinweis: 'Abrechnung pro Verbrauch über dein Anthropic-Konto.',
+    apiSchluesselFeld: 'API-Schlüssel',
+    apiSchluesselPlatzhalter: 'sk-ant-…',
+    obergrenzeFeld: 'Ausgaben-Obergrenze pro Lauf (US-Dollar)',
+    obergrenzeHinweis: 'Erreicht ein Lauf diese Grenze, hält der Motor von selbst an.',
+    speichern: 'Speichern',
+    abbrechen: 'Abbrechen',
+    fehlerApiSchluesselFehlt: 'Für den API-Modus brauchst du einen API-Schlüssel.',
+    fehlerObergrenze: 'Die Ausgaben-Obergrenze muss eine Zahl größer als 0 sein.'
+  },
+  lauf: {
+    uebungsHinweis:
+      'Die richtige Leinwand mit Drag & Drop kommt in einem späteren Bauschritt. Zum Ausprobieren des Motors gibt es zwei Übungs-Workflows:',
+    starten: 'Starten',
+    laeuft: 'läuft …',
+    sanftStoppen: 'Sanft anhalten',
+    sanftStoppenHinweis: 'Der laufende Schritt macht fertig, dann hält der Lauf an.',
+    hartStoppen: 'Sofort abbrechen',
+    hartStoppenBestaetigung:
+      'Sofort abbrechen? Der Block gilt dann als nicht gelaufen — angefangene Änderungen können unfertig zurückbleiben.',
+    rohProtokollZeigen: 'Rohprotokoll einblenden',
+    rohProtokollVerbergen: 'Rohprotokoll ausblenden',
+    tickerUeberschrift: 'Liveticker',
+    verbrauchKontext: (von, bis) => `Kontext: etwa ${von}–${bis} % gefüllt`,
+    verbrauchTokens: (tokens) => `${tokens.toLocaleString('de-DE')} Tokens`,
+    verbrauchKosten: (usd) => `Kosten bisher: ${usd.toFixed(2).replace('.', ',')} $`,
+    verbrauchKostenAbo: 'im Abo enthalten',
+    zustandLabels: {
+      erfolgreich: 'Erfolgreich',
+      fehlgeschlagen: 'Fehlgeschlagen',
+      'sanft-gestoppt': 'Sanft gestoppt',
+      'hart-abgebrochen': 'Sofort abgebrochen'
+    },
+    fertigErfolgreich: 'Der Lauf ist fertig.',
+    fertigFehlgeschlagen: 'Der Lauf ist fehlgeschlagen.',
+    fertigSanft: 'Der Lauf wurde sanft angehalten.',
+    fertigHart: 'Der Lauf wurde sofort abgebrochen. Der Block gilt als nicht gelaufen.',
+    okKnopf: 'Alles klar',
+    schonAktiv: 'Es läuft schon ein Workflow. Bitte warte, bis er fertig ist.',
+    workflowUnbekannt: 'Diesen Workflow gibt es nicht.',
+    aboNichtErlaubt:
+      'Diese FlowForge-Version läuft nur mit API-Schlüssel. Bitte hinterlege einen in den Einstellungen.',
+    motorNichtAngemeldet:
+      'Der Motor ist nicht angemeldet. Bitte melde dich einmal in der Claude-App bzw. mit „claude" an — oder hinterlege einen API-Schlüssel in den Einstellungen.',
+    obergrenzeErreicht: 'Die Ausgaben-Obergrenze für diesen Lauf wurde erreicht.'
+  },
+  rechteFrage: {
+    ueberschrift: 'Der Agent bittet um Erlaubnis',
+    folgenHinweis:
+      'Wenn du ablehnst, sucht der Agent einen anderen Weg innerhalb des Projektordners — oder beendet den Auftrag mit einer Erklärung.',
+    erlauben: 'Erlauben',
+    ablehnen: 'Ablehnen',
+    schreibenAusserhalb: (pfad) =>
+      `Der Agent möchte außerhalb des Projektordners schreiben:\n${pfad}`,
+    befehl: (befehl) => `Der Agent möchte einen Kommandozeilen-Befehl ausführen:\n${befehl}`,
+    internet: (ziel) => `Der Agent möchte aufs Internet zugreifen:\n${ziel}`,
+    unbekanntesWerkzeug: (name) =>
+      `Der Agent möchte ein Werkzeug nutzen, das FlowForge nicht kennt: ${name}`,
+    abgelehntFuerAgent:
+      'Der Nutzer hat das nicht erlaubt. Suche einen anderen Weg innerhalb des Projektordners — oder beende den Auftrag mit einer kurzen Erklärung.'
+  },
+  ticker: {
+    motorGestartet: (modell) => `Motor gestartet (${modell}).`,
+    schreibtDatei: (pfad) => `Schreibt Datei: ${pfad}`,
+    aendertDatei: (pfad) => `Ändert Datei: ${pfad}`,
+    liestDatei: (pfad) => `Liest: ${pfad}`,
+    durchsucht: 'Durchsucht das Projekt.',
+    plant: 'Plant die Arbeitsschritte.',
+    unteraufgabe: 'Startet eine Unteraufgabe.',
+    befehl: (befehl) => `Kommandozeile: ${befehl}`,
+    internet: (ziel) => `Internetzugriff: ${ziel}`,
+    werkzeug: (name) => `Nutzt Werkzeug: ${name}`,
+    rechteFrageGestellt: 'Rechte-Rückfrage an dich — bitte oben beantworten.',
+    rechteFrageErlaubt: 'Du hast es erlaubt.',
+    rechteFrageAbgelehnt: 'Du hast es abgelehnt.',
+    sanftAngefordert: 'Sanftes Anhalten angefordert — der laufende Schritt macht fertig.',
+    hartAbgebrochen: 'Sofort abgebrochen.',
+    fertigIn: (sekunden) => `Fertig nach ${sekunden} Sekunden.`
+  },
+  laufberichte: {
+    ueberschrift: 'Laufberichte',
+    keine: 'Noch keine Laufberichte.',
+    details: 'Einzelheiten',
+    schliessen: 'Zuklappen',
+    fehlertextLabel: 'Fehler',
+    rechteFragenLabel: 'Rechte-Rückfragen',
+    erlaubt: 'erlaubt',
+    abgelehnt: 'abgelehnt',
+    verlaufLabel: 'Verlauf'
   }
 }
