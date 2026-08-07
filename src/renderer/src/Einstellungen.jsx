@@ -8,6 +8,7 @@ export default function Einstellungen({ onSchliessen }) {
   const [modus, setModus] = useState('abo')
   const [apiSchluessel, setApiSchluessel] = useState('')
   const [obergrenze, setObergrenze] = useState(5)
+  const [rechteAutomatisch, setRechteAutomatisch] = useState(false)
   const [aboErlaubt, setAboErlaubt] = useState(true)
   const [fehler, setFehler] = useState('')
   const [geladen, setGeladen] = useState(false)
@@ -18,6 +19,7 @@ export default function Einstellungen({ onSchliessen }) {
       setModus(e.einstellungen.motorModus)
       setApiSchluessel(e.einstellungen.apiSchluessel)
       setObergrenze(e.einstellungen.ausgabenObergrenzeUsd)
+      setRechteAutomatisch(Boolean(e.einstellungen.rechteAutomatisch))
       setAboErlaubt(e.aboErlaubt)
       setGeladen(true)
     })
@@ -27,7 +29,8 @@ export default function Einstellungen({ onSchliessen }) {
     const ergebnis = await window.flowforge.einstellungenSpeichern({
       motorModus: modus,
       apiSchluessel,
-      ausgabenObergrenzeUsd: Number(obergrenze)
+      ausgabenObergrenzeUsd: Number(obergrenze),
+      rechteAutomatisch
     })
     if (!ergebnis.ok) return setFehler(ergebnis.fehler)
     onSchliessen()
@@ -93,6 +96,33 @@ export default function Einstellungen({ onSchliessen }) {
             </label>
           </>
         )}
+        <p className="bericht-abschnitt">{t.rechteUeberschrift}</p>
+        <div className="feld">
+          <label className="wahl-zeile">
+            <input
+              type="radio"
+              name="rechte"
+              checked={!rechteAutomatisch}
+              onChange={() => setRechteAutomatisch(false)}
+            />
+            <span>
+              {t.rechteFragen}
+              <span className="feld-hinweis"> — {t.rechteFragenHinweis}</span>
+            </span>
+          </label>
+          <label className="wahl-zeile">
+            <input
+              type="radio"
+              name="rechte"
+              checked={rechteAutomatisch}
+              onChange={() => setRechteAutomatisch(true)}
+            />
+            <span>
+              {t.rechteAutomatisch}
+              <span className="feld-hinweis"> — {t.rechteAutomatischHinweis}</span>
+            </span>
+          </label>
+        </div>
         {fehler && <p className="fehlermeldung">{fehler}</p>}
         <div className="dialog-knoepfe">
           <button className="knopf-sekundaer" onClick={onSchliessen}>

@@ -464,11 +464,14 @@ export const BLOCK_KATALOG = [
 // Vorlagen-Workflows (SPEC §4.4): fertige Ketten, die per Drag & Drop auf die
 // leere Leinwand gelegt werden.
 export const VORLAGEN = [
+  // Spec-Erfassung getrennt vom Bauen (Feedback Georg, 07.08.2026): erst das
+  // Interview allein laufen lassen — die Karten sind dann da; gebaut wird
+  // danach mit „Feature hinzufügen".
   {
     id: 'neue-app-starten',
     name: 'Neue App starten',
     symbol: '🌱',
-    kette: ['spec-interview', 'paket-schneiden', 'angreifer', 'bauer', 'pruefer', 'sessionende']
+    kette: ['spec-interview']
   },
   {
     id: 'feature-hinzufuegen',

@@ -176,7 +176,10 @@ function Laufbericht({ bericht }) {
               <p className="bericht-abschnitt">{tb.rechteFragenLabel}</p>
               {bericht.rechteFragen.map((frage, i) => (
                 <p key={i} className="bericht-zeile">
-                  {frage.beschreibung} — <strong>{frage.erlaubt ? tb.erlaubt : tb.abgelehnt}</strong>
+                  {frage.beschreibung} —{' '}
+                  <strong>
+                    {frage.automatisch ? tb.automatischErlaubt : frage.erlaubt ? tb.erlaubt : tb.abgelehnt}
+                  </strong>
                 </p>
               ))}
             </div>
@@ -341,9 +344,9 @@ export default function Leinwand({ pfad, karten, onWiederhergestellt }) {
   const [punkte, setPunkte] = useState([])
   const [vorschau, setVorschau] = useState(null)
   const [sicherungsMeldung, setSicherungsMeldung] = useState('')
-  // Untere Bereiche standardmäßig eingeklappt — mehr Platz für die Leinwand.
-  const [berichteOffen, setBerichteOffen] = useState(false)
-  const [punkteOffen, setPunkteOffen] = useState(false)
+  // Tabs der Mittelspalte (Feedback Georg, 07.08.2026): Schaubild, Lauf,
+  // Berichte und Sicherungspunkte gestapelt wurden unübersichtlich.
+  const [tab, setTab] = useState('schaubild')
   // Kartenvorauswahl für den Lauf (SPEC §5, BAUPLAN 7): Status + offene Aufgaben
   // sind vorausgewählt; Georg kann Karten dazuziehen (zusatz) oder vorausgewählte
   // rauswerfen (raus). Beides gilt für den nächsten Start, wird nicht gespeichert.
@@ -382,6 +385,7 @@ export default function Leinwand({ pfad, karten, onWiederhergestellt }) {
     window.flowforge.laufZustand(pfad).then((e) => {
       if (!e.ok || !e.aktiv) return
       setZustand('laeuft')
+      setTab('lauf')
       setAktiveInstanz(e.blockInstanzId ?? null)
       if (e.frage) setFrage(e.frage)
       if (e.entscheidung) setEntscheidung(e.entscheidung)
@@ -390,7 +394,10 @@ export default function Leinwand({ pfad, karten, onWiederhergestellt }) {
     })
     const abmelden = window.flowforge.aufLaufEreignis((ereignis) => {
       if (ereignis.projektPfad !== pfad) return
-      if (ereignis.art === 'zustand' && ereignis.zustand === 'laeuft') setZustand('laeuft')
+      if (ereignis.art === 'zustand' && ereignis.zustand === 'laeuft') {
+        setZustand('laeuft')
+        setTab('lauf')
+      }
       if (ereignis.art === 'block') setAktiveInstanz(ereignis.instanzId)
       if (ereignis.art === 'ticker')
         setTicker((alt) => [...alt, { zeit: new Date(), text: ereignis.text }])
@@ -440,9 +447,13 @@ export default function Leinwand({ pfad, karten, onWiederhergestellt }) {
   }, [ticker])
 
   // Kartengrößen nach jedem Rendern messen — die Pfeile setzen am Kartenrand an.
+  // Im versteckten Schaubild (anderer Tab aktiv) misst der Browser 0 — dann die
+  // letzten echten Größen behalten.
   useLayoutEffect(() => {
     const neu = {}
-    for (const [id, el] of kartenRefs.current) neu[id] = { w: el.offsetWidth, h: el.offsetHeight }
+    for (const [id, el] of kartenRefs.current)
+      if (el.offsetWidth > 0) neu[id] = { w: el.offsetWidth, h: el.offsetHeight }
+    if (Object.keys(neu).length === 0) return
     setGroessen((alt) => {
       const altIds = Object.keys(alt)
       const neuIds = Object.keys(neu)
@@ -520,10 +531,10 @@ export default function Leinwand({ pfad, karten, onWiederhergestellt }) {
     if (vorlageId) {
       const vorlage = vorlageDefinition(vorlageId)
       if (!vorlage) return
-      if (workflow.bloecke.length > 0) {
-        setMeldung(tk.vorlageNurLeer)
-        return
-      }
+      // Liegt schon etwas auf der Leinwand, ersetzt die Vorlage es — aber nur
+      // nach Rückfrage (Feedback Georg, 07.08.2026: erst Spec-Interview, dann
+      // Bau-Vorlage auf dieselbe Leinwand).
+      if (workflow.bloecke.length > 0 && !window.confirm(tk.vorlageErsetzenBestaetigung)) return
       const bloecke = vorlage.kette.map((blockId, i) => ({
         instanzId: crypto.randomUUID(),
         blockId,
@@ -747,12 +758,36 @@ export default function Leinwand({ pfad, karten, onWiederhergestellt }) {
 
   const zugStart = pfeilZug && karteRect(pfeilZug.von)
 
+  // Offene Fragen ziehen den Blick auf den Lauf-Tab, auch wenn Georg gerade
+  // woanders ist.
+  const laufBrauchtDich = Boolean(frage || entscheidung || menschFrage)
+  const tabs = [
+    ['schaubild', texte.projektansicht.tabSchaubild],
+    ['lauf', texte.projektansicht.tabLauf],
+    ['berichte', `${texte.projektansicht.tabBerichte} (${berichte.length})`],
+    ['punkte', `${texte.projektansicht.tabPunkte} (${punkte.length})`]
+  ]
+
   return (
     <div className="leinwand">
-      {meldung && <p className="fehlermeldung">{meldung}</p>}
-      {fehler && <p className="fehlermeldung">{fehler}</p>}
+      <div className="tab-leiste">
+        {tabs.map(([wert, titel]) => (
+          <button
+            key={wert}
+            className={'tab-knopf' + (tab === wert ? ' tab-aktiv' : '')}
+            onClick={() => setTab(wert)}
+          >
+            {titel}
+            {wert === 'lauf' && zustand === 'laeuft' && <span className="tab-marke">{t.laeuft}</span>}
+            {wert === 'lauf' && laufBrauchtDich && <span className="tab-punkt" />}
+          </button>
+        ))}
+      </div>
 
-      {bearbeitbar && (
+      {tab === 'schaubild' && meldung && <p className="fehlermeldung">{meldung}</p>}
+      {tab === 'schaubild' && fehler && <p className="fehlermeldung">{fehler}</p>}
+
+      {tab === 'schaubild' && bearbeitbar && (
         <div className="kette-kopf">
           <button
             className="knopf-primaer knopf-klein"
@@ -774,7 +809,7 @@ export default function Leinwand({ pfad, karten, onWiederhergestellt }) {
         </div>
       )}
 
-      {bearbeitbar && (
+      {tab === 'schaubild' && bearbeitbar && (
         <div
           className="kontext-bereich"
           title={ta.hinweis}
@@ -805,6 +840,7 @@ export default function Leinwand({ pfad, karten, onWiederhergestellt }) {
 
       <div
         className="schaubild"
+        style={tab === 'schaubild' ? undefined : { display: 'none' }}
         onDragOver={bearbeitbar ? (e) => e.preventDefault() : undefined}
         onDrop={bearbeitbar ? neuAblegen : undefined}
       >
@@ -901,7 +937,10 @@ export default function Leinwand({ pfad, karten, onWiederhergestellt }) {
         </div>
       </div>
 
-      {zustand !== 'bereit' && (
+      {tab === 'lauf' && zustand === 'bereit' && ticker.length === 0 && (
+        <p className="feld-hinweis">{texte.projektansicht.tabLaufLeer}</p>
+      )}
+      {tab === 'lauf' && !(zustand === 'bereit' && ticker.length === 0) && (
         <div className="lauf-ansicht">
           <VerbrauchZeile verbrauch={verbrauch} modus={modus} />
 
@@ -945,7 +984,13 @@ export default function Leinwand({ pfad, karten, onWiederhergestellt }) {
             <div className={'lauf-ergebnis ergebnis-' + ergebnis.zustand}>
               <p>{fertigText(ergebnis.zustand)}</p>
               {ergebnis.fehlertext && <p className="feld-hinweis">{ergebnis.fehlertext}</p>}
-              <button className="knopf-sekundaer knopf-klein" onClick={() => setZustand('bereit')}>
+              <button
+                className="knopf-sekundaer knopf-klein"
+                onClick={() => {
+                  setZustand('bereit')
+                  setTab('schaubild')
+                }}
+              >
                 {t.okKnopf}
               </button>
             </div>
@@ -953,51 +998,41 @@ export default function Leinwand({ pfad, karten, onWiederhergestellt }) {
         </div>
       )}
 
-      <div className="berichte-bereich">
-        <button className="bereich-kopf" onClick={() => setBerichteOffen(!berichteOffen)}>
-          {berichteOffen ? '▾' : '▸'} {tb.ueberschrift} ({berichte.length})
-        </button>
-        {berichteOffen && (
-          <>
-            {berichte.length === 0 && <p className="feld-hinweis">{tb.keine}</p>}
-            {berichte.map((bericht) => (
-              <Laufbericht key={bericht.id} bericht={bericht} />
-            ))}
-          </>
-        )}
-      </div>
+      {tab === 'berichte' && (
+        <div className="berichte-bereich">
+          {berichte.length === 0 && <p className="feld-hinweis">{tb.keine}</p>}
+          {berichte.map((bericht) => (
+            <Laufbericht key={bericht.id} bericht={bericht} />
+          ))}
+        </div>
+      )}
 
-      <div className="berichte-bereich">
-        <button className="bereich-kopf" onClick={() => setPunkteOffen(!punkteOffen)}>
-          {punkteOffen ? '▾' : '▸'} {ts.ueberschrift} ({punkte.length})
-        </button>
-        {sicherungsMeldung && <p className="feld-hinweis">{sicherungsMeldung}</p>}
-        {punkteOffen && (
-          <>
-            {punkte.length === 0 && (
-              <>
-                <p className="feld-hinweis">{ts.keine}</p>
-                <p className="feld-hinweis">{ts.hinweis}</p>
-              </>
-            )}
-            {punkte.map((punkt) => (
-              <div key={punkt.id} className="punkt-zeile">
-                <span>
-                  {zeitText(punkt.zeit)} — {punkt.beschriftung}
-                </span>
-                <button
-                  className="knopf-klein"
-                  disabled={zustand === 'laeuft'}
-                  title={zustand === 'laeuft' ? ts.fehlerWaehrendLauf : undefined}
-                  onClick={() => vorschauOeffnen(punkt)}
-                >
-                  {ts.wiederherstellen}
-                </button>
-              </div>
-            ))}
-          </>
-        )}
-      </div>
+      {tab === 'punkte' && (
+        <div className="berichte-bereich">
+          {sicherungsMeldung && <p className="feld-hinweis">{sicherungsMeldung}</p>}
+          {punkte.length === 0 && (
+            <>
+              <p className="feld-hinweis">{ts.keine}</p>
+              <p className="feld-hinweis">{ts.hinweis}</p>
+            </>
+          )}
+          {punkte.map((punkt) => (
+            <div key={punkt.id} className="punkt-zeile">
+              <span>
+                {zeitText(punkt.zeit)} — {punkt.beschriftung}
+              </span>
+              <button
+                className="knopf-klein"
+                disabled={zustand === 'laeuft'}
+                title={zustand === 'laeuft' ? ts.fehlerWaehrendLauf : undefined}
+                onClick={() => vorschauOeffnen(punkt)}
+              >
+                {ts.wiederherstellen}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
 
       {vorschau && (
         <div className="dialog-schleier">

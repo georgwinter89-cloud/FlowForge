@@ -166,14 +166,15 @@ Späher, Mini-Bauer, fairer und strenger Übungs-Prüfer, Karten-Probe, Rechte-P
 
 | Vorlage | Kette |
 |---|---|
-| **Neue App starten** | Spec-Interview (grillt den Nutzer, erzeugt erste Karten) → Paket schneiden → Angreifer → Bauer → Prüfer → Sessionende |
+| **Neue App starten** | Nur das Spec-Interview (grillt den Nutzer, erzeugt erste Karten) — Entscheidung Georg, 07.08.2026: Spec-Erfassung getrennt vom Bauen; gebaut wird danach mit „Feature hinzufügen" |
 | **Feature hinzufügen** | Kontext laden → Paket schneiden → Angreifer → Bauer → Prüfer → Sessionende |
 | **Bug jagen** | Kontext laden → Diagnose (Ursache belegen, bevor etwas angefasst wird) → Bauer (minimaler Fix) → Prüfer mit Rot-vor-Grün → Sessionende |
 
 Alle drei Vorlagen sind verfügbar (seit Bauschritt 9) — als ziehbare Vorlagen
-in der Blockbibliothek, ablegbar nur auf der leeren Leinwand. „Neue App
-starten" beginnt mit dem Spec-Interview statt Kontext laden (das Projekt ist
-noch leer); „Bug jagen" ersetzt Paket schneiden + Angreifer durch die Diagnose.
+in der Blockbibliothek. Liegt schon ein Schaubild auf der Leinwand, ersetzt die
+Vorlage es nach einer Rückfrage — so folgt auf das Spec-Interview direkt die
+Bau-Vorlage auf derselben Leinwand. „Bug jagen" ersetzt Paket schneiden +
+Angreifer durch die Diagnose.
 
 ### 4.5 Block-Editor
 
@@ -226,6 +227,13 @@ noch leer); „Bug jagen" ersetzt Paket schneiden + Angreifer durch die Diagnose
 | Programmbibliotheken installieren (offizielle Quellen) | Sonstige Internetzugriffe |
 | Tests ausführen | Alles Unumkehrbare |
 
+**Automodus** (Feedback Georg, 07.08.2026): In den Einstellungen wählbar —
+„Jedes Mal fragen" (Standard) oder „Automodus: automatisch erlauben". Im
+Automodus werden Rechte-Rückfragen ohne Nachfrage erlaubt und im Liveticker
+sowie im Laufbericht als „automatisch erlaubt" vermerkt. Die harten Sperren
+(Git, Verwaltungsdateien, „darf nur lesen") gelten unverändert — der Automodus
+betrifft nur die Rückfrage-Fälle.
+
 Befehls-Einstufung (seit Bauschritt 8): Kommandozeilen-Befehle, die mit einem bekannten
 Entwickler-Werkzeug beginnen (node, npm, npx, pnpm, yarn, tsc, vitest, jest, python,
 pip, pytest), laufen ohne Rückfrage — das deckt „Tests ausführen" und „Programm-
@@ -245,9 +253,14 @@ gibt es einen **„App starten"-Knopf**, der genau diese Anleitung ausführt (We
 
 - **Projektübersicht** beim Start: Projekte als Kacheln mit Zustand („läuft", „wartet auf
   Antwort", „letzter Lauf erfolgreich") + „Neues Projekt".
-- **Projektansicht** dreigeteilt: links **Karten-Seitenleiste** (filterbar), Mitte **Leinwand**
-  (Workflow; wird während eines Laufs zur Live-Ansicht), rechts **Blockbibliothek**
-  (Vorlagen + eigene Blöcke).
+- **Projektansicht** dreigeteilt: links **Karten-Seitenleiste** (filterbar), Mitte
+  **Leinwand**, rechts **Blockbibliothek** (Vorlagen + eigene Blöcke).
+- Die Mittelspalte hat **Tabs** (Feedback Georg, 07.08.2026 — vorher stapelte sich
+  alles mit Scrollleisten): **Schaubild** (Workflow bearbeiten, Start,
+  Kartenauswahl) · **Lauf** (Verbrauch, Stopp, Gespräch, Liveticker, Rohprotokoll,
+  Ergebnis) · **Laufberichte** · **Sicherungspunkte**. Beim Lauf-Start wechselt
+  die Ansicht automatisch zum Lauf-Tab; wartet dort eine Frage, zeigt der Tab
+  einen roten Punkt. Die laufende Block-Karte bleibt im Schaubild-Tab hervorgehoben.
 
 ## 10. Bewusst NICHT in V1
 

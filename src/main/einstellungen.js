@@ -12,7 +12,10 @@ export const ABO_MODUS_ERLAUBT = true
 const STANDARD = {
   motorModus: 'abo',
   apiSchluessel: '',
-  ausgabenObergrenzeUsd: 5
+  ausgabenObergrenzeUsd: 5,
+  // Automodus (Feedback Georg, 07.08.2026): Rechte-Rückfragen automatisch
+  // erlauben statt jedes Mal zu fragen. Harte Sperren bleiben unberührt.
+  rechteAutomatisch: false
 }
 
 function dateiPfad() {
@@ -43,7 +46,8 @@ export function einstellungenSpeichern(neu) {
   const daten = {
     motorModus: !ABO_MODUS_ERLAUBT ? 'api' : modus,
     apiSchluessel: schluessel,
-    ausgabenObergrenzeUsd: Number.isFinite(obergrenze) && obergrenze > 0 ? obergrenze : STANDARD.ausgabenObergrenzeUsd
+    ausgabenObergrenzeUsd: Number.isFinite(obergrenze) && obergrenze > 0 ? obergrenze : STANDARD.ausgabenObergrenzeUsd,
+    rechteAutomatisch: Boolean(neu.rechteAutomatisch)
   }
   const tmp = dateiPfad() + '.tmp'
   fs.writeFileSync(tmp, JSON.stringify(daten, null, 2), 'utf8')

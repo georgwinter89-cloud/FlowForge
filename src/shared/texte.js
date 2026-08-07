@@ -30,6 +30,13 @@ export const texte = {
   projektansicht: {
     zurueck: 'Zur Übersicht',
     leinwandTitel: 'Leinwand',
+    // Tabs der Mittelspalte (Feedback Georg, 07.08.2026): Schaubild, Lauf,
+    // Berichte und Sicherungspunkte gestapelt wurden unübersichtlich.
+    tabSchaubild: 'Schaubild',
+    tabLauf: 'Lauf',
+    tabBerichte: 'Laufberichte',
+    tabPunkte: 'Sicherungspunkte',
+    tabLaufLeer: 'Noch kein Lauf in dieser Sitzung. Starte den Workflow im Schaubild-Tab.',
     bibliothekTitel: 'Blockbibliothek',
     bibliothekHinweis: 'Zieh einen Block mit der Maus auf die Leinwand.',
     vorlagenTitel: 'Vorlagen',
@@ -71,8 +78,8 @@ export const texte = {
       `Beim Block „${blockName}" ist das Feld „${feld}" leer, und in der Kartenauswahl ist keine offene Aufgaben-Karte. Trag einen Wunsch ins Feld ein — oder leg links eine Aufgaben-Karte an. Sonst wüsste der Agent nicht, was gebaut werden soll.`,
     fehlerWaehrendLauf: 'Während ein Lauf läuft, kann die Kette nicht verändert werden.',
     unbekannterBlock: 'Diesen Block kennt FlowForge nicht.',
-    vorlageNurLeer:
-      'Eine Vorlage lässt sich nur auf eine leere Leinwand legen. Entferne erst die vorhandenen Blöcke — oder steck die Kette von Hand zusammen.'
+    vorlageErsetzenBestaetigung:
+      'Auf der Leinwand liegen schon Blöcke. Soll die Vorlage das vorhandene Schaubild ersetzen? Feldwerte und Verbindungen des alten Schaubilds gehen dabei verloren.'
   },
   entscheidung: {
     ueberschrift: 'Der Prüfer ist weiterhin nicht zufrieden',
@@ -202,6 +209,16 @@ export const texte = {
     apiSchluesselPlatzhalter: 'sk-ant-…',
     obergrenzeFeld: 'Ausgaben-Obergrenze pro Lauf (US-Dollar)',
     obergrenzeHinweis: 'Erreicht ein Lauf diese Grenze, hält der Motor von selbst an.',
+    rechteUeberschrift: 'Rechte-Rückfragen',
+    rechteFragen: 'Jedes Mal fragen (Standard)',
+    rechteFragenHinweis:
+      'Bei allem außerhalb des Projektordners, Internet und unbekannten Befehlen wirst du gefragt.',
+    rechteAutomatisch: 'Automodus: automatisch erlauben',
+    rechteAutomatischHinweis:
+      'Rückfragen werden ohne Nachfrage erlaubt und im Laufbericht vermerkt. Die harten Sperren ' +
+      '(Git, FlowForge-Verwaltungsdateien, „darf nur lesen") gelten weiterhin. Der Agent darf dann ' +
+      'aber z.B. außerhalb des Projektordners schreiben und ins Internet — nutze das nur, wenn du ' +
+      'dem Auftrag vertraust.',
     speichern: 'Speichern',
     abbrechen: 'Abbrechen',
     fehlerApiSchluesselFehlt: 'Für den API-Modus brauchst du einen API-Schlüssel.',
@@ -279,6 +296,7 @@ export const texte = {
     internet: (ziel) => `Internetzugriff: ${ziel}`,
     werkzeug: (name) => `Nutzt Werkzeug: ${name}`,
     rechteFrageGestellt: 'Rechte-Rückfrage an dich — bitte oben beantworten.',
+    rechteAutomatischErlaubt: (beschreibung) => `Automodus — automatisch erlaubt: ${beschreibung}`,
     rechteFrageErlaubt: 'Du hast es erlaubt.',
     rechteFrageAbgelehnt: 'Du hast es abgelehnt.',
     sanftAngefordert: 'Sanftes Anhalten angefordert — der laufende Block macht fertig.',
@@ -352,6 +370,7 @@ export const texte = {
     gespraechLabel: 'Gespräch',
     erlaubt: 'erlaubt',
     abgelehnt: 'abgelehnt',
+    automatischErlaubt: 'automatisch erlaubt (Automodus)',
     verlaufLabel: 'Verlauf'
   }
 }

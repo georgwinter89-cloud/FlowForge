@@ -1279,3 +1279,48 @@ body {
 .chip-optional {
   opacity: 0.65;
 }
+
+/* Tabs der Mittelspalte (Feedback Georg): Schaubild, Lauf, Berichte, Punkte. */
+.tab-leiste {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--rand);
+}
+
+.tab-knopf {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  background: none;
+  font-size: 14px;
+  color: var(--text-gedimmt);
+  cursor: pointer;
+}
+
+.tab-knopf:hover {
+  color: inherit;
+}
+
+.tab-aktiv {
+  border-color: var(--rand);
+  background: var(--flaeche);
+  color: inherit;
+  font-weight: 600;
+  margin-bottom: -1px;
+}
+
+.tab-marke {
+  font-size: 11px;
+  color: var(--akzent);
+}
+
+.tab-punkt {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #dc2626;
+}

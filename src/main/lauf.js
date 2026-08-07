@@ -249,6 +249,14 @@ export async function laufStarten(fenster, projektPfad, kartenIds) {
   const gesamtVerbrauch = { tokens: 0, kostenUsd: null }
 
   function rechteFrageStellen(frage) {
+    // Automodus (Feedback Georg, 07.08.2026): Rückfragen automatisch erlauben —
+    // sichtbar im Ticker und im Laufbericht. Harte Sperren (Git, Verwaltungs-
+    // dateien, „darf nur lesen") kommen hier gar nicht erst an.
+    if (einstellungen.rechteAutomatisch) {
+      bericht.rechteFragen.push({ beschreibung: frage.beschreibung, erlaubt: true, automatisch: true })
+      tickern(texte.ticker.rechteAutomatischErlaubt(frage.beschreibung.replace(/\s+/g, ' ').slice(0, 160)))
+      return Promise.resolve(true)
+    }
     return new Promise((antworten) => {
       if (fenster.isDestroyed()) return antworten(false)
       const frageId = crypto.randomUUID()
