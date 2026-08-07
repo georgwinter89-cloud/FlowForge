@@ -268,6 +268,13 @@ export const texte = {
   laufberichte: {
     ueberschrift: 'Laufberichte',
     keine: 'Noch keine Laufberichte.',
+    blockErgebnis: 'Letzter Lauf',
+    blockZustaende: {
+      erfolgreich: 'erledigt',
+      fehlgeschlagen: 'fehlgeschlagen',
+      'pruefung-bestanden': 'Prüfung bestanden',
+      'pruefung-nicht-bestanden': 'Prüfung nicht bestanden'
+    },
     details: 'Einzelheiten',
     schliessen: 'Zuklappen',
     fehlertextLabel: 'Fehler',

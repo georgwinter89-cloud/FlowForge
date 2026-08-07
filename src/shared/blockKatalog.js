@@ -119,3 +119,11 @@ export const BLOCK_KATALOG = [
 export function blockDefinition(blockId) {
   return BLOCK_KATALOG.find((b) => b.id === blockId) ?? null
 }
+
+// Farb-Kategorie eines Blocks für Leinwand und Bibliothek:
+// Prüfer blau, nur-lesende Blöcke grün, schreibende (Bauer) rot.
+export function blockKategorie(def) {
+  if (def.prueft) return 'pruefer'
+  if (def.nurLesen) return 'leser'
+  return 'bauer'
+}

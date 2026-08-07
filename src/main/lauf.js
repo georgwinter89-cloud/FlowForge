@@ -150,6 +150,9 @@ export async function laufStarten(fenster, projektPfad) {
     verbrauch: null,
     rechteFragen: [],
     entscheidungen: [],
+    // Abschlusstext jedes gelaufenen Blocks — die Leinwand zeigt ihn direkt
+    // an der jeweiligen Karte an.
+    blockErgebnisse: [],
     ticker: []
   }
 
@@ -274,14 +277,32 @@ export async function laufStarten(fenster, projektPfad) {
         break
       }
       if (ergebnis.zustand === 'fehlgeschlagen') {
+        bericht.blockErgebnisse.push({
+          instanzId: eintrag.instanzId,
+          block: def.name,
+          zeit: jetztIso(),
+          zustand: 'fehlgeschlagen',
+          ergebnisText: String(ergebnis.fehlertext ?? '').slice(0, 4000)
+        })
         endZustand = 'fehlgeschlagen'
         fehlertext = ergebnis.fehlertext
         break
       }
 
+      // Block ist normal durchgelaufen: Abschlusstext für die Karten-Anzeige merken.
+      const blockErgebnis = {
+        instanzId: eintrag.instanzId,
+        block: def.name,
+        zeit: jetztIso(),
+        zustand: 'erfolgreich',
+        ergebnisText: String(ergebnis.ergebnisText ?? '').slice(0, 4000)
+      }
+      bericht.blockErgebnisse.push(blockErgebnis)
+
       // Prüfer-Blöcke: Urteil auswerten, ggf. Fehlschlag-Rückführung.
       if (def.prueft) {
         const bestanden = pruefUrteil(ergebnis.ergebnisText)
+        blockErgebnis.zustand = bestanden === true ? 'pruefung-bestanden' : 'pruefung-nicht-bestanden'
         if (bestanden === true) {
           tickern(texte.ticker.pruefungBestanden)
         } else {

@@ -56,7 +56,8 @@ automatisch erzeugt und kann weder gelöscht noch doppelt angelegt werden. Weite
 
 Jeder Workflow-Lauf hinterlässt automatisch einen kompakten, strukturierten Bericht (Workflow,
 Blöcke, Ergebnisse, Fehlschläge). Reines Nachschlagewerk in der App — wird **niemals automatisch
-in den Kontext künftiger Sessions geladen** und nie von Hand gepflegt.
+in den Kontext künftiger Sessions geladen** und nie von Hand gepflegt. Zusätzlich ist das
+Ergebnis des letzten Laufs direkt an jeder Block-Karte auf der Leinwand aufklappbar.
 
 ### 3.3 Sicherungspunkte
 

@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { texte } from '../../shared/texte.js'
-import { blockDefinition, REPARATUR_RUNDEN_MAX } from '../../shared/blockKatalog.js'
+import { blockDefinition, blockKategorie, REPARATUR_RUNDEN_MAX } from '../../shared/blockKatalog.js'
 import { schaubildReihenfolge, vorfahrenImPfad } from '../../shared/kettenRegeln.js'
 import { BlockChips } from './Blockbibliothek.jsx'
 
@@ -129,6 +129,7 @@ function SchaubildKarte({
   nummern,
   bearbeitbar,
   aktiv,
+  letztesErgebnis,
   onFeld,
   onSpeichern,
   onZurueckZu,
@@ -137,9 +138,12 @@ function SchaubildKarte({
   onPfeilStart,
   messen
 }) {
+  const [ergebnisOffen, setErgebnisOffen] = useState(false)
   return (
     <div
-      className={'schaubild-karte' + (aktiv ? ' block-laeuft' : '')}
+      className={
+        'schaubild-karte kategorie-' + blockKategorie(def) + (aktiv ? ' block-laeuft' : '')
+      }
       style={{ left: eintrag.position.x, top: eintrag.position.y }}
       data-instanz={eintrag.instanzId}
       ref={messen}
@@ -188,6 +192,27 @@ function SchaubildKarte({
           </select>
         </label>
       )}
+      {letztesErgebnis && (
+        <div className="block-ergebnis">
+          <button
+            className="block-ergebnis-knopf"
+            onClick={() => setErgebnisOffen(!ergebnisOffen)}
+          >
+            <span>
+              {ergebnisOffen ? '▾' : '▸'} {tb.blockErgebnis}
+            </span>
+            <span className={'block-ergebnis-marke marke-' + letztesErgebnis.zustand}>
+              {tb.blockZustaende[letztesErgebnis.zustand] ?? letztesErgebnis.zustand}
+            </span>
+          </button>
+          {ergebnisOffen && (
+            <div className="block-ergebnis-text">
+              <p className="feld-hinweis">{zeitText(letztesErgebnis.zeit)}</p>
+              {letztesErgebnis.ergebnisText}
+            </div>
+          )}
+        </div>
+      )}
       {bearbeitbar && (
         <div
           className="pfeil-punkt"
@@ -221,6 +246,9 @@ export default function Leinwand({ pfad, onWiederhergestellt }) {
   const [punkte, setPunkte] = useState([])
   const [vorschau, setVorschau] = useState(null)
   const [sicherungsMeldung, setSicherungsMeldung] = useState('')
+  // Untere Bereiche standardmäßig eingeklappt — mehr Platz für die Leinwand.
+  const [berichteOffen, setBerichteOffen] = useState(false)
+  const [punkteOffen, setPunkteOffen] = useState(false)
   // Schaubild: gemessene Kartengrößen, laufender Karten-Zug, laufender Pfeil-Zug
   const [groessen, setGroessen] = useState({})
   const [ziehen, setZiehen] = useState(null) // { instanzId, dx, dy }
@@ -498,6 +526,12 @@ export default function Leinwand({ pfad, onWiederhergestellt }) {
   const bloecke = workflow.bloecke
   const pfeile = workflow.pfeile
 
+  // Letztes Block-Ergebnis pro Karte aus dem neuesten Laufbericht — bei
+  // Reparatur-Runden gewinnt der späteste Durchgang.
+  const letzteErgebnisse = new Map()
+  for (const eintrag of berichte[0]?.blockErgebnisse ?? [])
+    letzteErgebnisse.set(eintrag.instanzId, eintrag)
+
   // Nummern entlang des Pfads — nur wenn die Pfeile schon einen vollständigen
   // Pfad ergeben; sonst bleiben die Karten unnummeriert.
   const geordnet = schaubildReihenfolge(bloecke, pfeile)
@@ -633,6 +667,7 @@ export default function Leinwand({ pfad, onWiederhergestellt }) {
                 nummern={nummern}
                 bearbeitbar={bearbeitbar}
                 aktiv={eintrag.instanzId === aktiveInstanz}
+                letztesErgebnis={letzteErgebnisse.get(eintrag.instanzId) ?? null}
                 onFeld={(feldId, wert) => feldSetzen(eintrag.instanzId, feldId, wert)}
                 onSpeichern={() => ketteSpeichern(workflowRef.current)}
                 onZurueckZu={(ziel) => zurueckZuSetzen(eintrag.instanzId, ziel)}
@@ -709,37 +744,49 @@ export default function Leinwand({ pfad, onWiederhergestellt }) {
       )}
 
       <div className="berichte-bereich">
-        <p className="bericht-abschnitt">{tb.ueberschrift}</p>
-        {berichte.length === 0 && <p className="feld-hinweis">{tb.keine}</p>}
-        {berichte.map((bericht) => (
-          <Laufbericht key={bericht.id} bericht={bericht} />
-        ))}
+        <button className="bereich-kopf" onClick={() => setBerichteOffen(!berichteOffen)}>
+          {berichteOffen ? '▾' : '▸'} {tb.ueberschrift} ({berichte.length})
+        </button>
+        {berichteOffen && (
+          <>
+            {berichte.length === 0 && <p className="feld-hinweis">{tb.keine}</p>}
+            {berichte.map((bericht) => (
+              <Laufbericht key={bericht.id} bericht={bericht} />
+            ))}
+          </>
+        )}
       </div>
 
       <div className="berichte-bereich">
-        <p className="bericht-abschnitt">{ts.ueberschrift}</p>
+        <button className="bereich-kopf" onClick={() => setPunkteOffen(!punkteOffen)}>
+          {punkteOffen ? '▾' : '▸'} {ts.ueberschrift} ({punkte.length})
+        </button>
         {sicherungsMeldung && <p className="feld-hinweis">{sicherungsMeldung}</p>}
-        {punkte.length === 0 && (
+        {punkteOffen && (
           <>
-            <p className="feld-hinweis">{ts.keine}</p>
-            <p className="feld-hinweis">{ts.hinweis}</p>
+            {punkte.length === 0 && (
+              <>
+                <p className="feld-hinweis">{ts.keine}</p>
+                <p className="feld-hinweis">{ts.hinweis}</p>
+              </>
+            )}
+            {punkte.map((punkt) => (
+              <div key={punkt.id} className="punkt-zeile">
+                <span>
+                  {zeitText(punkt.zeit)} — {punkt.beschriftung}
+                </span>
+                <button
+                  className="knopf-klein"
+                  disabled={zustand === 'laeuft'}
+                  title={zustand === 'laeuft' ? ts.fehlerWaehrendLauf : undefined}
+                  onClick={() => vorschauOeffnen(punkt)}
+                >
+                  {ts.wiederherstellen}
+                </button>
+              </div>
+            ))}
           </>
         )}
-        {punkte.map((punkt) => (
-          <div key={punkt.id} className="punkt-zeile">
-            <span>
-              {zeitText(punkt.zeit)} — {punkt.beschriftung}
-            </span>
-            <button
-              className="knopf-klein"
-              disabled={zustand === 'laeuft'}
-              title={zustand === 'laeuft' ? ts.fehlerWaehrendLauf : undefined}
-              onClick={() => vorschauOeffnen(punkt)}
-            >
-              {ts.wiederherstellen}
-            </button>
-          </div>
-        ))}
       </div>
 
       {vorschau && (

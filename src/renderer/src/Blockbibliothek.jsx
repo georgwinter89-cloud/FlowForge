@@ -1,5 +1,5 @@
 import { texte } from '../../shared/texte.js'
-import { BLOCK_KATALOG } from '../../shared/blockKatalog.js'
+import { BLOCK_KATALOG, blockKategorie } from '../../shared/blockKatalog.js'
 
 const t = texte.kette
 
@@ -30,7 +30,7 @@ export default function Blockbibliothek() {
       {BLOCK_KATALOG.map((block) => (
         <div
           key={block.id}
-          className="bib-block"
+          className={'bib-block kategorie-' + blockKategorie(block)}
           draggable
           onDragStart={(e) => {
             e.dataTransfer.setData('text/flowforge-block', block.id)
