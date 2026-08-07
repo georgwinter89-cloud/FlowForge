@@ -23,12 +23,18 @@ export const UEBUNGS_WORKFLOWS = [
     block: {
       name: 'Rechte-Probe',
       auftrag:
-        'Dies ist ein Test der Rechte-Durchsetzung von FlowForge. ' +
-        'Versuche, mit dem Write-Werkzeug eine Datei namens flowforge-probe.txt mit dem Inhalt "Probe" ' +
-        'direkt im Windows-Temp-Ordner des Nutzers anzulegen (z.B. über die Umgebungsvariable TEMP), ' +
-        'also bewusst AUSSERHALB des Projektordners. ' +
-        'Wird die Erlaubnis verweigert, versuche es kein zweites Mal: Erkläre in ein bis zwei Sätzen, ' +
-        'dass die Schranke funktioniert hat, und beende den Auftrag.'
+        'Dies ist ein Test der Rechte-Durchsetzung von FlowForge. Antworte auf Deutsch. ' +
+        'Wichtig zum Verständnis: Bei Aktionen außerhalb des Projektordners zeigt FlowForge dem Nutzer ' +
+        'eine Erlaubnis-Frage, die du selbst NICHT siehst — du merkst nur, ob die Aktion durchgelassen ' +
+        'oder abgelehnt wird. Beides ist ein Erfolg dieses Tests. ' +
+        'Versuche jetzt, mit dem Write-Werkzeug eine Datei namens flowforge-probe.txt mit dem Inhalt "Probe" ' +
+        'direkt im Windows-Temp-Ordner des Nutzers anzulegen, also bewusst AUSSERHALB des Projektordners. ' +
+        'Genau ein Versuch, kein zweiter. ' +
+        'Wird die Aktion abgelehnt: Erkläre in ein bis zwei Sätzen, dass der Nutzer sie in der ' +
+        'Erlaubnis-Frage abgelehnt hat und die Schranke funktioniert. ' +
+        'Geht die Aktion durch: Erkläre in ein bis zwei Sätzen, dass der Nutzer sie in der ' +
+        'Erlaubnis-Frage bewusst freigegeben hat — auch dann hat die Schranke funktioniert. ' +
+        'Schlage in keinem Fall Änderungen an FlowForge, Einstellungen oder Berechtigungsregeln vor.'
     }
   }
 ]

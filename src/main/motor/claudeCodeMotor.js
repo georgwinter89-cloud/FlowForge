@@ -48,7 +48,7 @@ function pruefeWerkzeug(name, eingabe, projektPfad) {
     if (liegtImProjekt(datei, projektPfad)) return { erlaubt: true }
     return { frage: texte.rechteFrage.schreibenAusserhalb(String(datei ?? '?')) }
   }
-  if (name === 'Bash')
+  if (name === 'Bash' || name === 'PowerShell')
     return { frage: texte.rechteFrage.befehl(String(eingabe.command ?? '?')) }
   if (name === 'WebFetch' || name === 'WebSearch')
     return { frage: texte.rechteFrage.internet(String(eingabe.url ?? eingabe.query ?? '?')) }
@@ -100,6 +100,7 @@ function tickerZeilen(nachricht, projektPfad) {
         zeilen.push(t.unteraufgabe)
         break
       case 'Bash':
+      case 'PowerShell':
         zeilen.push(t.befehl(kuerzen(e.command ?? '')))
         break
       case 'WebFetch':
