@@ -110,8 +110,11 @@ blockieren den Weiterlauf, Regeln stehen nicht nur als Text im Prompt.
 ### 4.3 Blockbibliothek V1
 
 **Arbeitsblöcke** (echte Arbeitsaufträge, seit Bauschritt 8): Kontext laden ·
-Paket schneiden (Pflichtfeld: der Wunsch) · Angreifer (nur lesend) · Bauer ·
-Prüfer · Sessionende (bringt die Karten auf Stand).
+Paket schneiden · Angreifer (nur lesend) · Bauer · Prüfer · Sessionende (bringt
+die Karten auf Stand). Auftragsquelle von Paket schneiden (Entscheidung Georg,
+07.08.2026): das Wunsch-Feld am Block **oder**, wenn es leer ist, die offenen
+Aufgaben-Karten der Kartenauswahl — sind beide leer, startet der Lauf gar nicht
+erst (freundlicher Hinweis).
 Noch ausstehend (Bauschritt 9): Spec-Interview · Diagnose · Frage an den Menschen
 (Folgen-Fragen, keine Technik-Fragen) · Audit.
 

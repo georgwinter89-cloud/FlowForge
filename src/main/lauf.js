@@ -145,6 +145,24 @@ export async function laufStarten(fenster, projektPfad, kartenIds) {
   // Sperren-Mechanik „Pflichtfeld leer = Lauf hält an" (SPEC §4.2).
   const feldFehler = pruefePflichtfelder(kette)
   if (feldFehler) return { ok: false, fehler: feldFehler }
+  // Auftragsquelle „Feld oder offene Aufgaben-Karten" (Entscheidung Georg,
+  // 07.08.2026): Sind Feld und Kartenauswahl leer, wüsste der Block nicht,
+  // was gebaut werden soll — der Lauf startet gar nicht erst.
+  for (const eintrag of kette) {
+    const def = blockDefinition(eintrag.blockId)
+    for (const feld of def.felder) {
+      if (!feld.oderOffeneAufgaben) continue
+      if ((eintrag.feldWerte?.[feld.id] ?? '').trim()) continue
+      const geladen = kartenLaden(projektPfad)
+      const offene = geladen.ok
+        ? geladen.karten.filter(
+            (k) => ausgewaehlt.includes(k.id) && k.sorte === 'aufgabe' && !k.erledigt
+          )
+        : []
+      if (offene.length === 0)
+        return { ok: false, fehler: texte.kette.fehlerAuftragsquelle(def.name, feld.label) }
+    }
+  }
 
   const { einstellungen } = einstellungenLaden()
   if (einstellungen.motorModus === 'abo' && !ABO_MODUS_ERLAUBT)

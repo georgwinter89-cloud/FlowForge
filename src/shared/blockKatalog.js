@@ -53,13 +53,20 @@ export const BLOCK_KATALOG = [
       {
         id: 'wunsch',
         label: 'Was soll gebaut werden?',
-        platzhalter: 'z.B. Beim Start soll eine Begrüßung mit Namen erscheinen',
-        pflicht: true
+        platzhalter: 'leer lassen = die offenen Aufgaben-Karten sind der Auftrag',
+        pflicht: false,
+        // Auftragsquelle (Entscheidung Georg, 07.08.2026): Feld ODER offene
+        // Aufgaben-Karten — sind beide leer, hält der Start an (lauf.js).
+        oderOffeneAufgaben: true
       }
     ],
     auftrag:
       'Du schneidest das nächste Arbeitspaket — du baust selbst nichts und veränderst nichts ' +
-      '(nur lesen). Antworte auf Deutsch. Der Wunsch des Nutzers lautet:\n{{wunsch}}\n' +
+      '(nur lesen). Antworte auf Deutsch. Der Wunsch des Nutzers steht in diesem Feld:\n' +
+      '{{wunsch}}\n' +
+      'Ist das Feld leer, sind die offenen Aufgaben-Karten der Wunsch — wähle daraus die ' +
+      'sinnvollste nächste Arbeit (ein Paket, nicht alle auf einmal) und benenne, welche ' +
+      'Karte du dir vornimmst. ' +
       'Prüfe anhand des Projekt-Überblicks und bei Bedarf durch eigenes Lesen im Projektordner, ' +
       'wie sich dieser Wunsch in EIN kleines, in einer Sitzung schaffbares Arbeitspaket fassen ' +
       'lässt. Ist der Wunsch zu groß, schneide das sinnvollste erste Paket heraus und benenne, ' +

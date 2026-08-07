@@ -66,6 +66,8 @@ export const texte = {
     fehlerLeereKette: 'Die Kette ist noch leer. Zieh zuerst Blöcke aus der Bibliothek auf die Leinwand.',
     fehlerPflichtfeld: (blockName, feld) =>
       `Beim Block „${blockName}" ist das Pflichtfeld „${feld}" leer. Bitte ausfüllen — sonst startet der Lauf nicht.`,
+    fehlerAuftragsquelle: (blockName, feld) =>
+      `Beim Block „${blockName}" ist das Feld „${feld}" leer, und in der Kartenauswahl ist keine offene Aufgaben-Karte. Trag einen Wunsch ins Feld ein — oder leg links eine Aufgaben-Karte an. Sonst wüsste der Agent nicht, was gebaut werden soll.`,
     fehlerWaehrendLauf: 'Während ein Lauf läuft, kann die Kette nicht verändert werden.',
     unbekannterBlock: 'Diesen Block kennt FlowForge nicht.',
     vorlageNurLeer:
