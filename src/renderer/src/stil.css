@@ -107,3 +107,335 @@ body {
   color: var(--text-gedimmt);
   font-size: 14px;
 }
+
+/* Projektkacheln */
+
+.kachel-raster {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+.projekt-kachel {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 18px;
+  border: 1px solid var(--rand);
+  border-radius: 10px;
+  background: var(--flaeche);
+  text-align: left;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.projekt-kachel:hover {
+  border-color: var(--akzent);
+}
+
+.kachel-fehlt {
+  cursor: default;
+  border-style: dashed;
+}
+
+.kachel-fehlt:hover {
+  border-color: var(--rand);
+}
+
+.kachel-name {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.kachel-pfad {
+  color: var(--text-gedimmt);
+  font-size: 12px;
+  word-break: break-all;
+}
+
+.kachel-warnung {
+  color: #b45309;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* Dialoge */
+
+.dialog-schleier {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(28, 36, 48, 0.4);
+  z-index: 10;
+}
+
+.dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 480px;
+  max-width: 90vw;
+  padding: 24px;
+  border-radius: 12px;
+  background: var(--flaeche);
+  box-shadow: 0 12px 40px rgba(28, 36, 48, 0.25);
+}
+
+.dialog h2 {
+  font-size: 18px;
+}
+
+.feld {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.feld input,
+.feld textarea,
+.feld select {
+  padding: 8px 10px;
+  border: 1px solid var(--rand);
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 400;
+  resize: vertical;
+}
+
+.feld-hinweis {
+  color: var(--text-gedimmt);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.zaehler-rot {
+  color: #dc2626;
+  font-weight: 600;
+}
+
+.ort-zeile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ort-pfad {
+  color: var(--text-gedimmt);
+  font-size: 12px;
+  font-weight: 400;
+  word-break: break-all;
+}
+
+.dialog-knoepfe {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.knopf-sekundaer {
+  padding: 8px 16px;
+  border: 1px solid var(--rand);
+  border-radius: 6px;
+  background: var(--flaeche);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.knopf-sekundaer:hover {
+  border-color: var(--akzent);
+}
+
+.knopf-klein {
+  padding: 4px 10px;
+  border: 1px solid var(--rand);
+  border-radius: 6px;
+  background: var(--flaeche);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.knopf-klein:hover {
+  border-color: var(--akzent);
+}
+
+.knopf-primaer.knopf-klein {
+  border: none;
+  background: var(--akzent);
+  color: #ffffff;
+}
+
+.fehlermeldung {
+  padding: 10px 14px;
+  border: 1px solid #fca5a5;
+  border-radius: 6px;
+  background: #fef2f2;
+  color: #b91c1c;
+  font-size: 14px;
+}
+
+/* Projektansicht */
+
+.projektansicht {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  height: 100%;
+}
+
+.ansicht-kopf {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.ansicht-kopf h1 {
+  font-size: 20px;
+}
+
+.drei-spalten {
+  display: grid;
+  grid-template-columns: 320px 1fr 260px;
+  gap: 16px;
+  flex: 1;
+  min-height: 0;
+}
+
+.spalte {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--rand);
+  border-radius: 10px;
+  background: var(--flaeche);
+  min-height: 0;
+}
+
+.spalten-kopf {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.spalten-kopf h2 {
+  font-size: 16px;
+}
+
+.filter-zeile {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.filter-chip {
+  padding: 3px 10px;
+  border: 1px solid var(--rand);
+  border-radius: 999px;
+  background: var(--flaeche);
+  color: var(--text-gedimmt);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.filter-aktiv {
+  border-color: var(--akzent);
+  background: var(--akzent);
+  color: #ffffff;
+}
+
+.karten-liste {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.karte {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid var(--rand);
+  border-left: 4px solid var(--rand);
+  border-radius: 8px;
+}
+
+.karte-status {
+  border-left-color: var(--akzent);
+  background: #eff6ff;
+}
+
+.karte-aufgabe {
+  border-left-color: #16a34a;
+}
+
+.karte-entscheidung {
+  border-left-color: #d97706;
+}
+
+.karte-wissen {
+  border-left-color: #7c3aed;
+}
+
+.karte-erledigt {
+  opacity: 0.55;
+}
+
+.karte-kopf {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.karte-sorte {
+  color: var(--text-gedimmt);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.karte-zustand {
+  color: var(--text-gedimmt);
+  font-size: 11px;
+}
+
+.karte-titel {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.karte-text {
+  font-size: 13px;
+  white-space: pre-wrap;
+}
+
+.karte-knoepfe {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.platzhalter {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex: 1;
+  border: 2px dashed var(--rand);
+  border-radius: 8px;
+  padding: 20px;
+  text-align: center;
+}

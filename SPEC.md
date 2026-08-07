@@ -47,8 +47,10 @@ Vier Sorten, als strukturierte Datensätze in der App — nicht als Textdateien 
 | **Wissen** | Fakten übers Projekt |
 | **Status** | Genau **eine** pro Projekt: „Wo stehen wir gerade" |
 
-**Harte Längengrenze pro Karte (Richtwert 3–5 Sätze) — gilt auch für den Agenten.** Wer mehr zu
-sagen hat, legt mehrere fokussierte Karten an. Weitere Sorten erst, wenn der Alltag sie einfordert.
+**Harte Längengrenze pro Karte (Richtwert 3–5 Sätze; durchgesetzt als 400 Zeichen Inhalt,
+80 Zeichen Titel) — gilt auch für den Agenten.** Wer mehr zu
+sagen hat, legt mehrere fokussierte Karten an. Die Status-Karte wird beim Anlegen des Projekts
+automatisch erzeugt und kann weder gelöscht noch doppelt angelegt werden. Weitere Sorten erst, wenn der Alltag sie einfordert.
 
 ### 3.2 Laufberichte
 
