@@ -1,0 +1,109 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  --hintergrund: #f5f6f8;
+  --flaeche: #ffffff;
+  --rand: #d9dde3;
+  --text: #1c2430;
+  --text-gedimmt: #6b7484;
+  --akzent: #2563eb;
+  --akzent-dunkel: #1d4ed8;
+}
+
+body {
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  color: var(--text);
+  background: var(--hintergrund);
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.kopfleiste {
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  height: 48px;
+  background: var(--flaeche);
+  border-bottom: 1px solid var(--rand);
+}
+
+.app-name {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.inhalt {
+  flex: 1;
+  overflow-y: auto;
+  padding: 32px;
+}
+
+.projektuebersicht {
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+.uebersicht-kopf {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+
+.uebersicht-kopf h1 {
+  font-size: 24px;
+}
+
+.knopf-primaer {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  background: var(--akzent);
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.knopf-primaer:hover {
+  background: var(--akzent-dunkel);
+}
+
+.hinweis {
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  border: 1px solid var(--rand);
+  border-radius: 6px;
+  background: var(--flaeche);
+  color: var(--text-gedimmt);
+  font-size: 14px;
+}
+
+.leer-zustand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 80px 20px;
+  border: 2px dashed var(--rand);
+  border-radius: 12px;
+  text-align: center;
+}
+
+.leer-titel {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.leer-untertitel {
+  color: var(--text-gedimmt);
+  font-size: 14px;
+}

@@ -1,0 +1,17 @@
+appId: de.georgwinter.flowforge
+productName: FlowForge
+directories:
+  output: dist
+files:
+  - out/**
+  - package.json
+npmRebuild: false
+win:
+  target: nsis
+nsis:
+  artifactName: FlowForge-Setup-${version}.${ext}
+  shortcutName: FlowForge
+  uninstallDisplayName: FlowForge
+  createDesktopShortcut: always
+  oneClick: true
+  language: 1031
