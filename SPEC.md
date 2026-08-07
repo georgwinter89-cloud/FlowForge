@@ -121,10 +121,16 @@ der Lauf gar nicht erst (freundlicher Hinweis). Ein früherer Block, der selbst
 Aufgaben-Karten erzeugt (Spec-Interview), zählt dabei als Quelle; seine neuen
 offenen Aufgaben rutschen nach seinem Lauf automatisch in die Kartenauswahl.
 
-**Spec-Interview:** grillt den Nutzer über das Gespräch (§6) in mehreren
-Frage-Runden — Folgen-Fragen mit Empfehlung, keine Technik-Fragen — und legt
-das Ergebnis als erste Karten an (Entscheidungen, Aufgaben, Status); der
-Abschlusstext ist der Projekt-Überblick für die Folgeblöcke.
+**Spec-Interview:** grillt den Nutzer über das Gespräch (§6) nach der
+Entscheidungsbaum-Methode (Entscheidung Georg, 07.08.2026: originalgetreu nach
+Matt Pococks Grilling-Vorgehen): Jede Festlegung verzweigt in Folge-Entscheidungen;
+pro Runde kommt die komplette „Front" — alle Fragen, deren Voraussetzungen schon
+geklärt sind — nummeriert auf einmal, jede mit Empfehlung (❓/➡️-Muster). Fakten
+recherchiert der Agent selbst, nur Entscheidungen gehen an den Nutzer; Folgen-Fragen
+in Alltagssprache, keine Technik-Fragen. Fertig erst, wenn keine Frage mehr offen
+ist und der Nutzer das zusammengefasste Verständnis bestätigt hat; dann legt das
+Interview das Ergebnis als erste Karten an (Entscheidungen, Aufgaben, Status);
+der Abschlusstext ist der Projekt-Überblick für die Folgeblöcke.
 
 **Diagnose:** belegt die Ursache eines Fehlers (nur lesend, mit Fundort und
 Herleitung), bevor etwas angefasst wird, und liefert als Arbeitspaket den

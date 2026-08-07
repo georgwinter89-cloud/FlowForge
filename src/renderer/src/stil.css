@@ -1261,13 +1261,18 @@ body {
   gap: 8px;
 }
 
-.gespraech-zeile input {
+.gespraech-zeile textarea {
   flex: 1;
   padding: 8px 10px;
   border: 1px solid var(--rand);
   border-radius: 6px;
   font-family: inherit;
   font-size: 14px;
+  resize: vertical;
+}
+
+.gespraech-zeile .knopf-primaer {
+  align-self: flex-end;
 }
 
 /* Optionaler Bedarf (falls da): blasser als ein harter braucht-Chip. */

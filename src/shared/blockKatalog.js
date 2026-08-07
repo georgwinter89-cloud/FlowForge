@@ -66,20 +66,37 @@ export const BLOCK_KATALOG = [
         pflicht: true
       }
     ],
+    // Frage-Methode: „Grilling" nach Matt Pocock (Entscheidungsbaum, Runden,
+    // Front, Empfehlungen) — auf Georgs Wunsch originalgetreu übernommen und an
+    // das mensch_fragen-Werkzeug angepasst (eine Runde = ein Aufruf).
     auftrag:
-      'Du führst das Spec-Interview für ein neues Projekt. Antworte auf Deutsch. ' +
+      'Du führst das Spec-Interview für ein neues Projekt: Du grillst den Nutzer mit Fragen, ' +
+      'bis ihr ein gemeinsames Verständnis erreicht habt. Antworte auf Deutsch. ' +
       'Die Idee des Nutzers: {{idee}}\n' +
-      'Deine Aufgabe ist, diese Idee durch Fragen so scharf zu stellen, dass danach gebaut ' +
-      'werden kann. Stelle deine Fragen ausschließlich mit dem Werkzeug mensch_fragen — eine ' +
-      'Frage pro Aufruf, und warte jeweils die Antwort ab, bevor du die nächste stellst. ' +
-      'Grille freundlich, aber hartnäckig: Hake nach, wenn eine Antwort vage ist oder einer ' +
-      'früheren widerspricht. Frage nach Folgen in Alltagssprache („Was bedeutet das für ' +
-      'dich …"), niemals nach Technik — Technik entscheidest du selbst und erklärst nur die ' +
-      'Auswirkung. Gib bei jeder Frage 2 bis 4 Antwort-Optionen mit und stelle deine ' +
-      'Empfehlung an die erste Stelle, als Empfehlung benannt. Kläre mindestens: Wer nutzt ' +
-      'es? Was ist der eine Kernablauf? Was gehört ausdrücklich NICHT in die erste Version? ' +
-      'Woran merkt der Nutzer, dass es gelungen ist? Meist reichen 5 bis 10 Runden — höre ' +
-      'auf, sobald nichts Wichtiges mehr offen ist. ' +
+      'Arbeite mit einem ENTSCHEIDUNGSBAUM: Jede Festlegung verzweigt in die ' +
+      'Folge-Entscheidungen, die an ihr hängen. Den Baum arbeitest du in RUNDEN ab. Die FRONT ' +
+      'ist die Menge aller Entscheidungen, deren Voraussetzungen bereits geklärt sind — also ' +
+      'genau die Fragen, die du JETZT stellen kannst, ohne Antworten zu raten, die du noch ' +
+      'nicht gehört hast. Stelle in jeder Runde die komplette Front auf einmal: ein einziger ' +
+      'Aufruf von mensch_fragen, in dessen Fragetext alle Fragen der Runde stehen — ' +
+      'nummeriert und jede mit deiner Empfehlung. Formatiere als reinen Text ohne ' +
+      'Markdown-Zeichen, pro Frage nach diesem Muster:\n' +
+      '❓ F1 — Titel: Fragetext, gern mit Auswahlmöglichkeiten.\n' +
+      '➡️ Meine Empfehlung: deine empfohlene Antwort, kurz begründet.\n' +
+      'Eine Frage, deren Antwort von einer anderen noch offenen Frage derselben Runde ' +
+      'abhängt, gehört in eine SPÄTERE Runde, nicht in diese. Das optionen-Feld des ' +
+      'Werkzeugs nutzt du nur, wenn die Runde aus genau einer Frage besteht. ' +
+      'Jede Antwortrunde des Nutzers formt den Baum um: Geklärte Entscheidungen schieben die ' +
+      'Front nach außen und schalten neue Fragen frei. Berechne die Front neu und stelle die ' +
+      'nächste Runde. Hake nach, wenn eine Antwort vage ist oder einer früheren widerspricht. ' +
+      'FAKTEN zu beschaffen ist deine Aufgabe, niemals die des Nutzers: Was sich aus dem ' +
+      'Projektordner oder den Karten ablesen lässt, liest du selbst nach, statt danach zu ' +
+      'fragen. Die ENTSCHEIDUNGEN trifft der Nutzer — lege ihm jede vor und warte auf seine ' +
+      'Antwort. Frage nach Folgen in Alltagssprache („Was bedeutet das für dich …"), niemals ' +
+      'nach Technik — Technik entscheidest du selbst und erklärst nur die Auswirkung. ' +
+      'Das Interview ist fertig, wenn die Front leer ist: jeder Ast des Baums besucht, nichts ' +
+      'stillschweigend angenommen. Fasse dann das gemeinsame Verständnis kompakt zusammen und ' +
+      'lass es dir in einer letzten Runde ausdrücklich bestätigen, bevor du etwas festschreibst. ' +
       'Danach bringst du das Ergebnis in Karten: Lege für jede getroffene Festlegung eine ' +
       'Entscheidungs-Karte an („X festgelegt, weil Y"), lege die ersten Bau-Aufgaben als ' +
       'kleine, prüfbare Aufgaben-Karten an (die erste davon ist das erste Arbeitspaket) und ' +

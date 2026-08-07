@@ -120,12 +120,18 @@ function Gespraech({ verlauf, frage, onAntwort }) {
             <p className="feld-hinweis">{tg.freitextHinweis}</p>
           )}
           <div className="gespraech-zeile">
-            <input
+            <textarea
+              rows={3}
               value={antwortText}
               placeholder={tg.antwortPlatzhalter}
               onChange={(e) => setAntwortText(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter') senden(antwortText)
+                // Enter schickt ab; Shift+Enter macht eine neue Zeile — bei
+                // Runden mit mehreren Fragen braucht die Antwort mehrere Zeilen.
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault()
+                  senden(antwortText)
+                }
               }}
             />
             <button
