@@ -14,6 +14,9 @@ Produktdefinition: [SPEC.md](SPEC.md) · Bauschritte: [BAUPLAN.md](BAUPLAN.md)
 ## Sessionende (Pflicht — einplanen, bevor der Kontext knapp wird)
 - Der Alltagstest des Schritts (siehe BAUPLAN) ist von Georg durchführbar; Anleitung
   dafür in Alltagssprache ausgeben.
+- Versionsnummer in package.json an den Bauschritt koppeln: Bauschritt N → 0.N.0
+  (Zwischen-Sessions ohne Bauschritt erhöhen die dritte Stelle). Erst dann bauen —
+  Georg erkennt den Stand am Dateinamen der Setup-Datei.
 - Installierbare Version bauen; Build-Befehle sind die in package.json definierten Scripts.
 - Abschluss-Commit: „Bauschritt N: <Titel>".
 
