@@ -15,8 +15,18 @@ Sitzungen hinweg Software entsteht — ohne dass dem Agenten der Kontext überl�
 
 - **Desktop-App mit eigenem Fenster und Installer ab V1** (Technik: Electron — wie VS Code, Slack).
 - **Motor-Anschluss:** Eine feste Adapter-Schnittstelle trennt FlowForge vom ausführenden
-  KI-Agenten. Die Schnittstelle liefert u.a. den **echten Kontext-Füllstand** als Messwert.
-  - **V1-Motor:** Claude Code / Claude Agent SDK — läuft über Georgs Max-Abo, keine API-Kosten.
+  KI-Agenten. Die Schnittstelle liefert u.a. den **Kontext-Füllstand** (berechnet aus den
+  Token-Verbrauchsdaten des Motors) als Messwert.
+  - **V1-Motor:** Die offizielle Claude-Code-CLI, von FlowForge im Hintergrund gestartet,
+    unter Georgs eigenem Login (Max-Abo-Kontingent). **Nur für den privaten Eigengebrauch
+    des Kontoinhabers** — Anthropics Bedingungen erlauben Abo-Login nicht in Apps für
+    Dritte. Fest verdrahtete Regel: In jeder weitergegebenen Version ist der Abo-Modus
+    deaktiviert; Dritte nutzen eigene API-Schlüssel/Anbieter. Risiko bewusst akzeptiert
+    (Entscheidung Georg, 07.08.2026): Sollte Anthropic die Abo-Nutzung technisch
+    unterbinden, greift die Rückfalllinie.
+  - **Rückfalllinie ab V1:** Derselbe Motor läuft wahlweise mit **API-Schlüssel**
+    (Umschalter in den Einstellungen, kein Umbau). Im API-Modus gilt statt der
+    Kontingent-Pause eine einstellbare **Ausgaben-Obergrenze** pro Lauf.
   - **V2-Motoren:** eigene Agenten-Kreisläufe gegen beliebige Anbieter-APIs sowie lokale KI
     (z.B. Ollama). Die restliche App merkt nicht, welcher Motor dranhängt.
 
@@ -76,7 +86,8 @@ blockieren den Weiterlauf, Regeln stehen nicht nur als Text im Prompt.
 ### 4.3 Blockbibliothek V1
 
 Kontext laden · Spec-Interview · Paket schneiden · Angreifer (nur lesend) · Bauer ·
-Prüfer (erzwungen ≠ Bauer, schreibt eigene Tests, liefert Rot-vor-Grün-Beleg) · Diagnose ·
+Prüfer (schreibt eigene Tests, liefert Rot-vor-Grün-Beleg; „≠ Bauer" heißt technisch:
+frische Session ohne das Arbeitswissen des Bauers) · Diagnose ·
 Frage an den Menschen (Folgen-Fragen, keine Technik-Fragen) · Audit · Sessionende.
 
 ### 4.4 Vorlagen-Workflows
@@ -104,7 +115,8 @@ Frage an den Menschen (Folgen-Fragen, keine Technik-Fragen) · Audit · Sessione
   frische Session (Status-Karte + relevante Karten + Position) und arbeitet nahtlos weiter —
   bis der Workflow fertig ist. Kein zu frühes Stoppen mehr.
 - **Übertrags-Grenze pro Workflow einstellbar:** Zahl (z.B. „max. 5") oder „unbegrenzt".
-- **Abo-Kontingent erschöpft:** Verhalten in den **Projekteinstellungen** wählbar —
+- **Abo-Kontingent erschöpft** (bzw. Ausgaben-Obergrenze erreicht im API-Modus):
+  Verhalten in den **Projekteinstellungen** wählbar —
   (a) automatisch pausieren, bei Fenster-Erneuerung selbstständig weitermachen (+ Benachrichtigung)
   oder (b) stoppen und auf manuellen Neustart warten.
 - **Kontext-Zuführung:** Beim Start wählt die App relevante Karten automatisch vor (Status-Karte

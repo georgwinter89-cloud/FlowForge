@@ -1,0 +1,139 @@
+# FlowForge — Bauplan V1
+
+Stand: 07.08.2026 · Grundlage: [SPEC.md](SPEC.md) · Status: nach Angreifer-Prüfung
+(2 Angriffslisten eingearbeitet; 21 Funde, davon 3 blockierend — alle aufgelöst.
+Motor-Entscheidung durch Georg am 07.08.2026: Abo-Modus für Eigengebrauch, Details SPEC §2)
+
+**Regeln:** Jeder Bauschritt endet mit etwas, das Georg selbst anfassen und prüfen kann
+(Alltagstest). Nach jedem Schritt gibt es eine installierbare Version. Ein Schritt pro
+Bausession, nichts stapeln. Jeder Block-Arbeitsauftrag gilt erst als fertig, wenn er
+einzeln im Ein-Block-Workflow erprobt wurde (nie im Ernstfall zum ersten Mal).
+
+## Bauschritte
+
+### 1 — App-Gerüst & Installer
+Electron-App mit eigenem Fenster, deutsche Oberflächen-Hülle (Texte zentral), leere
+Projektübersicht, Setup-Datei wird automatisch gebaut.
+Bekannt & akzeptiert für V1: Der Installer ist unsigniert — Windows SmartScreen zeigt
+eine Warnung, die Georg einmalig wegklickt (Signierung: V2).
+**Alltagstest:** Georg installiert FlowForge per Setup-Datei (inkl. dokumentiertem
+SmartScreen-Klick) und sieht die Projektübersicht.
+
+### 2 — Projekte & Karten
+Projekt anlegen mit freier Ordnerwahl; Projektansicht dreigeteilt (Karten links, Leinwand
+Mitte, Bibliothek rechts — Leinwand/Bibliothek noch als Platzhalter); Karten aller vier
+Sorten anlegen/bearbeiten/erledigen; harte Längengrenze; genau eine Status-Karte.
+**Alltagstest:** Projekt anlegen, Karten pflegen; eine zu lange Karte wird abgelehnt.
+
+### 3 — Motor-Anschluss & Durchstich
+Motor-Schnittstelle definiert; erster Motor angebunden: die offizielle Claude-Code-CLI,
+headless gestartet unter Georgs Login, mit **Umschalter Abo-Login/API-Schlüssel** von
+Anfang an (SPEC §2). Von Anfang an Teil der Schnittstelle — nicht Deko, sondern
+durchgesetzt:
+- **Rechte-Durchsetzung:** Schreiben nur im Projektordner; alles außerhalb, sonstiges
+  Internet und Unumkehrbares → Rückfrage (SPEC §7). Kein Agent läuft je ohne Schranken.
+- **Verbrauchs-Messung:** Kontext-Füllstand wird aus den Token-Verbrauchsdaten des Motors
+  berechnet (Fenstergröße ist bekannt; Anzeige als Toleranzbereich, nicht Punktwert).
+  Dazu Kosten-/Kontingent-Zähler pro Lauf.
+- **Stopp-Mechanik:** Sanft über die Unterbrechungs-Funktion des Motors; hart über
+  Prozessbaum-Abbruch (Windows: `taskkill /T /F`) + danach automatisch zurück auf den
+  letzten Sicherungspunkt.
+- **Windows-Härtung:** absoluter Pfad zur CLI, Shell-Aufruf korrekt (.cmd-Shim),
+  keine aufblitzenden Konsolenfenster.
+Ein Ein-Block-Workflow (Mini-Bauer) läuft: Klartext-Liveticker, einklappbares
+Rohprotokoll; Laufberichte werden abgelegt und als **einfache Liste** angezeigt.
+**Alltagstest:** Georg startet den Mini-Workflow (erzeugt eine kleine Datei im
+Projektordner), verfolgt den Liveticker, stoppt einmal sanft und einmal hart, und
+provoziert eine Rechte-Rückfrage (Agent soll außerhalb des Projektordners schreiben).
+
+### 4 — Sicherungspunkte & Wiederherstellen
+Automatischer Sicherungspunkt nach jedem erfolgreichen Block; Liste in Alltagssprache;
+Wiederherstellen-Knopf mit Vorschau.
+Kollisionsschutz: Die Checkpoint-Verwaltung nutzt ein **eigenes, verstecktes Git-Verzeichnis
+außerhalb des Projektordners** (Projekt darf selbst ein Git-Repo sein/werden); dem Agenten
+ist Git-Benutzung per Sperre untersagt.
+**Alltagstest:** Georg lässt den Mini-Bauer etwas ändern, stellt den Stand von vorher
+wieder her und sieht die Änderung verschwinden — auch nachdem er zwischendurch die App
+neu gestartet hat.
+
+### 5 — Leinwand & Blockbibliothek
+Blöcke per Drag & Drop zur geraden Kette stecken; braucht/liefert-Prüfung beim
+Zusammenstecken; laufender Block wird auf der Leinwand hervorgehoben; Sperren-Mechanik
+(nur-lesen, Pflichtfeld leer = Halt); Fehlschlag-Rückführung „zurück zu Block X" mit
+Standard 2 Runden, danach Folgen-Frage (inkl. Option „Stand wiederherstellen" — die
+Sicherungspunkte aus Schritt 4 existieren dann schon).
+Getestet wird mit **bewusst trivialen Übungs-Blöcken** (Dummy-Arbeitsaufträge) — die
+echten Arbeitsaufträge kommen in Schritt 7/8.
+**Alltagstest:** Georg steckt selbst eine 3-Block-Kette und lässt sie laufen; ein
+absichtlich strenger Übungs-Prüfer schickt den Lauf zweimal zurück, dann kommt die
+Folgen-Frage.
+
+### 6 — Agent-Karten-Brücke
+Der Agent bekommt Werkzeuge, um Karten zu **lesen und zu schreiben** (anlegen, erledigen,
+aktualisieren) — mit denselben harten Regeln wie für Menschen: Längengrenze durchgesetzt,
+genau eine Status-Karte. Kartenvorauswahl beim Lauf-Start festgenagelt auf: **Status-Karte
++ offene Aufgaben-Karten, alles Weitere manuell per Drag & Drop.**
+**Alltagstest:** Ein Ein-Block-Workflow liest die Status-Karte vor und legt eine
+Aufgaben-Karte an; eine zu lange Agenten-Karte wird sichtbar abgelehnt.
+
+### 7 — Erste echte Kette: „Feature hinzufügen"
+Die Arbeitsaufträge Kontext laden, Paket schneiden, Angreifer (nur lesend), Bauer,
+Prüfer (frische Session ohne Bauer-Kontext, eigene Tests, Rot-vor-Grün-Beleg) und
+Sessionende — **jeder einzeln im Ein-Block-Workflow erprobt**, dann als Kette.
+Ehrlichkeits-Notiz zur SPEC: „Prüfer ≠ Bauer" heißt technisch „frische Session ohne
+Bauer-Kontext", nicht „anderes Gehirn" — wird in SPEC §4.3 so präzisiert.
+**Alltagstest:** Georg lässt an einem Übungsprojekt ein kleines Feature bauen; im
+Laufbericht sind Angriffsliste, Prüfbeleg und Rot-vor-Grün-Nachweis sichtbar.
+
+### 8 — Spec-Interview, Diagnose & Frage an den Menschen
+Gesprächsoberfläche für mehrrundige Dialoge (das Spec-Interview „grillt" wie eine Chat-
+Ansicht innerhalb des Laufs); Frage-an-den-Menschen-Block (Einzelfrage, Folgen-Sprache);
+Diagnose-Arbeitsauftrag (Ursache belegen, bevor etwas angefasst wird). Damit stehen die
+Vorlagen **„Neue App starten"** und **„Bug jagen"**.
+**Alltagstest:** Georg startet „Neue App starten", wird in mehreren Runden gegrillt, und
+am Ende liegen Entscheidungs-, Aufgaben- und Status-Karten im Projekt.
+
+### 9 — Startanleitung & „App starten"-Knopf
+Startanleitung als Pflichtartefakt jedes Bau-Workflows (maschinenlesbar); „App starten"-
+Knopf führt sie aus (Web-App → Browser; Kommandozeilen-Programm → Fenster; usw.).
+**Alltagstest:** Georg baut mit „Neue App starten" eine Mini-App von der Idee bis zum
+Klick auf „App starten" — ohne Kommandozeile.
+
+### 10 — Sessions & automatischer Übertrag
+Kontext-Füllstand live anzeigen; Übertrag bei ~85 % (bevorzugt an Blockgrenzen: Karten
+aktualisieren, Workflow-Position samt Teilschritt notieren, frische Session, nahtlos
+weiter); Übertragsgrenze pro Workflow (Zahl/unbegrenzt); Kontingent-/Kostenpausen-
+Verhalten in Projekteinstellungen; Windows-Benachrichtigungen; Wiederaufnahme-Angebot
+nach App-/Rechner-Neustart mitten im Lauf.
+**Testbarkeit eingebaut:** Test-Schalter „Übertrag schon bei 10 %", und jeder Übertrag
+hinterlässt ein Übertrags-Protokoll in Alltagssprache im Laufbericht.
+**Alltagstest:** Georg setzt den Test-Schalter, startet einen mittelgroßen Auftrag, sieht
+mindestens zwei Überträge im Protokoll und ein fertiges Ergebnis — ohne einzugreifen.
+
+### 11 — Parallelität & Warteschlange
+Bis zu 3 Läufe gleichzeitig in verschiedenen Projekten; pro Projekt nur ein schreibender
+Agent; Warteschlange mit automatischem Anlauf. Sichtbarer Hinweis: parallele Läufe
+vervielfachen den Verbrauch.
+**Alltagstest:** Zwei Läufe in zwei Projekten parallel; ein dritter Start im selben
+Projekt wartet sichtbar und startet von allein.
+
+### 12 — Block-Editor mit KI-Assistent
+Formular entlang der Block-Anatomie; Erstellungsassistent in 4 Schritten (inkl.
+Probelauf-Vorschau); eigene Blöcke in der Bibliothek, bearbeiten/löschen.
+**Alltagstest:** Georg erstellt per Assistent einen eigenen Block und nutzt ihn in
+einer Kette.
+
+### 13 — V1-Feinschliff
+Zustände auf der Projektübersicht („läuft", „wartet auf Antwort", …); Laufberichte-
+Ansicht ausgebaut (Filter, Details); Rechte-Standard sichtbar in Projekteinstellungen;
+Politur.
+**Alltagstest:** Georg führt einen kompletten Projektlebenslauf durch (neue App →
+Feature → Bug) und findet keine Stelle, an der er Kommandozeile oder Dateisystem-
+Handarbeit braucht.
+
+## Reihenfolge-Begründung (kurz)
+Motor-Durchstich früh (3), weil dort das größte technische Risiko liegt — inklusive
+Rechte-Durchsetzung und Verbrauchs-Messung, den zwei größten Adapter-Risiken.
+Sicherungspunkte (4) vor der ersten selbstgebauten Kette (5), damit das Sicherheitsnetz
+existiert, bevor Georg den Agenten frei laufen lässt. Erst die Brücke Agent↔Karten (6),
+dann echte Arbeitsaufträge (7/8) — jede Vorlage steht auf einzeln erprobten Blöcken.
