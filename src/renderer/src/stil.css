@@ -807,8 +807,10 @@ body {
 
 .schaubild {
   position: relative;
-  height: 480px;
-  flex-shrink: 0;
+  /* Volle Bildschirmhöhe (Feedback Georg, 07.08.2026): das Schaubild füllt den
+     restlichen Platz der Mittelspalte, statt bei fester Höhe zu enden. */
+  flex: 1;
+  min-height: 320px;
   overflow: auto;
   border: 1px solid var(--rand);
   border-radius: 8px;
@@ -817,6 +819,10 @@ body {
 
 .schaubild-flaeche {
   position: relative;
+  /* Punktraster und Ablagefläche bis an den Rand, auch wenn die Karten weniger
+     Platz brauchen als sichtbar ist. */
+  min-width: 100%;
+  min-height: 100%;
   background: radial-gradient(circle, #dfe3e9 1px, transparent 1px) 0 0 / 24px 24px;
 }
 
