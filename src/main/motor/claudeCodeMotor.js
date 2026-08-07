@@ -8,6 +8,7 @@ import { texte } from '../../shared/texte.js'
 import { TITEL_MAX, TEXT_MAX } from '../../shared/kartenRegeln.js'
 import { KONTEXT_FENSTER_STANDARD, kontextBand } from './schnittstelle.js'
 import { kartenWerkzeugServer } from './kartenWerkzeuge.js'
+import { menschWerkzeugServer } from './menschWerkzeuge.js'
 
 const laden = createRequire(import.meta.url)
 
@@ -49,6 +50,11 @@ const NUR_LESEN_ERLAUBT = new Set([
 // Sie setzen die harten Kartenregeln selbst durch — keine Rückfrage nötig.
 const KARTEN_PRAEFIX = 'mcp__karten__'
 const KARTEN_NUR_LESEN = 'mcp__karten__karten_uebersicht'
+
+// Mensch-Werkzeuge (BAUPLAN 9): eine Frage stellen verändert nichts am Projekt —
+// erlaubt ohne Rückfrage, auch unter der Sperre „darf nur lesen" (der
+// Frage-Block ist selbst nur-lesend).
+const MENSCH_PRAEFIX = 'mcp__mensch__'
 
 // FlowForges eigene Verwaltungsdateien im Projektordner: direkte Änderungen
 // würden die harten Regeln umgehen (z.B. die Karten-Längengrenze) — hartes Nein,
@@ -114,6 +120,7 @@ function liegtImProjekt(datei, projektPfad) {
 // Rückfrage laufen darf oder Georg gefragt werden muss. Alles Unbekannte fragt.
 // Mit Sperre „darf nur lesen": hartes Nein für alles außer Lese-Werkzeugen.
 function pruefeWerkzeug(name, eingabe, projektPfad, nurLesen) {
+  if (name.startsWith(MENSCH_PRAEFIX)) return { erlaubt: true }
   // Karten-Werkzeuge zuerst: die Übersicht ist rein lesend, alles andere
   // schreibt — und fällt damit unter die Sperre „darf nur lesen".
   if (name.startsWith(KARTEN_PRAEFIX)) {
@@ -173,6 +180,9 @@ function tickerZeilen(nachricht, projektPfad) {
       if (block.name === KARTEN_NUR_LESEN) zeilen.push(t.liestKarten)
       continue
     }
+    // Mensch-Fragen melden sich aus der Lauf-Verwaltung heraus (Frage + Antwort
+    // stehen im Gespräch) — keine doppelte Ticker-Zeile.
+    if (block.name.startsWith(MENSCH_PRAEFIX)) continue
     switch (block.name) {
       case 'Write':
         zeilen.push(t.schreibtDatei(kurzerPfad(e.file_path, projektPfad)))
@@ -235,7 +245,8 @@ export function starteMotorLauf(optionen) {
     ausgabenObergrenzeUsd,
     nurLesen = false,
     aufEreignis,
-    aufRechteFrage
+    aufRechteFrage,
+    aufMenschFrage
   } = optionen
 
   let kindProzess = null
@@ -275,6 +286,9 @@ export function starteMotorLauf(optionen) {
     // Agent-Karten-Brücke (BAUPLAN 7): Karten lesen/schreiben mit denselben
     // harten Regeln wie für Menschen — läuft im FlowForge-Prozess selbst.
     const kartenServer = await kartenWerkzeugServer({ projektPfad, aufEreignis })
+    // Frage an den Menschen (BAUPLAN 9): pausiert den Lauf, bis der Nutzer
+    // im Gespräch geantwortet hat.
+    const menschServer = await menschWerkzeugServer({ aufMenschFrage })
 
     // Saubere Umgebung: Alle ANTHROPIC_*/CLAUDE*-Variablen fliegen raus — sie
     // könnten Anmeldung oder Verhalten des Motors umleiten (z.B. wenn FlowForge
@@ -298,7 +312,7 @@ export function starteMotorLauf(optionen) {
         // Georgs persönliche Claude-Einstellungen bleiben außen vor:
         // der Motor läuft nur mit dem, was FlowForge ihm mitgibt.
         settingSources: [],
-        mcpServers: { karten: kartenServer },
+        mcpServers: { karten: kartenServer, mensch: menschServer },
         // Windows-Härtung: Die Shell des Motors zeigt POSIX-Pfade (/tmp/…, /c/…) an —
         // als Datei-Werkzeug-Pfade landen die auf Windows aber am falschen Ort und
         // lösen unnötige Rechte-Rückfragen aus.

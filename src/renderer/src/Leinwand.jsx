@@ -16,6 +16,7 @@ const te = texte.entscheidung
 const tf = texte.rechteFrage
 const tb = texte.laufberichte
 const ts = texte.sicherungen
+const tg = texte.gespraech
 
 // Solange eine Karte noch nicht gemessen ist, rechnen Pfeile mit dieser Größe.
 const KARTE_STANDARD = { w: 240, h: 140 }
@@ -72,6 +73,75 @@ function ZustandsMarke({ zustand }) {
   )
 }
 
+// Gespräch mit dem Agenten (BAUPLAN 9): Verlauf als Chat, offene Frage mit
+// Antwort-Optionen und Freitextfeld. Das Spec-Interview „grillt" hierüber.
+function Gespraech({ verlauf, frage, onAntwort }) {
+  const [antwortText, setAntwortText] = useState('')
+  const ende = useRef(null)
+  useEffect(() => {
+    ende.current?.scrollIntoView({ block: 'nearest' })
+  }, [verlauf.length, frage?.frageId])
+
+  function senden(text) {
+    const sauber = text.trim()
+    if (!sauber || !frage) return
+    setAntwortText('')
+    onAntwort(frage.frageId, sauber)
+  }
+
+  if (verlauf.length === 0 && !frage) return null
+  return (
+    <div className="gespraech">
+      <p className="gespraech-titel">
+        {frage ? tg.ueberschrift : tg.verlaufUeberschrift}
+      </p>
+      <div className="gespraech-verlauf">
+        {verlauf.map((runde, i) => (
+          <div key={i}>
+            <div className="gespraech-blase blase-agent">{runde.frage}</div>
+            <div className="gespraech-blase blase-mensch">{runde.antwort}</div>
+          </div>
+        ))}
+        {frage && <div className="gespraech-blase blase-agent blase-offen">{frage.frage}</div>}
+        <div ref={ende} />
+      </div>
+      {frage && (
+        <div className="gespraech-eingabe">
+          {(frage.optionen ?? []).length > 0 && (
+            <div className="gespraech-optionen">
+              {frage.optionen.map((option, i) => (
+                <button key={i} className="gespraech-option" onClick={() => senden(option)}>
+                  {option}
+                </button>
+              ))}
+            </div>
+          )}
+          {(frage.optionen ?? []).length > 0 && (
+            <p className="feld-hinweis">{tg.freitextHinweis}</p>
+          )}
+          <div className="gespraech-zeile">
+            <input
+              value={antwortText}
+              placeholder={tg.antwortPlatzhalter}
+              onChange={(e) => setAntwortText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') senden(antwortText)
+              }}
+            />
+            <button
+              className="knopf-primaer knopf-klein"
+              disabled={!antwortText.trim()}
+              onClick={() => senden(antwortText)}
+            >
+              {tg.antworten}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function Laufbericht({ bericht }) {
   const [offen, setOffen] = useState(false)
   const wahlLabels = {
@@ -101,6 +171,16 @@ function Laufbericht({ bericht }) {
               {bericht.rechteFragen.map((frage, i) => (
                 <p key={i} className="bericht-zeile">
                   {frage.beschreibung} — <strong>{frage.erlaubt ? tb.erlaubt : tb.abgelehnt}</strong>
+                </p>
+              ))}
+            </div>
+          )}
+          {(bericht.gespraech ?? []).length > 0 && (
+            <div>
+              <p className="bericht-abschnitt">{tb.gespraechLabel}</p>
+              {bericht.gespraech.map((runde, i) => (
+                <p key={i} className="bericht-zeile">
+                  {runde.frage} — <strong>{runde.antwort}</strong>
                 </p>
               ))}
             </div>
@@ -244,6 +324,9 @@ export default function Leinwand({ pfad, karten, onWiederhergestellt }) {
   const [verbrauch, setVerbrauch] = useState(null)
   const [frage, setFrage] = useState(null)
   const [entscheidung, setEntscheidung] = useState(null)
+  // Gespräch mit dem Agenten: offene Frage + bisheriger Verlauf dieses Laufs.
+  const [menschFrage, setMenschFrage] = useState(null)
+  const [gespraech, setGespraech] = useState([])
   const [ergebnis, setErgebnis] = useState(null)
   const [fehler, setFehler] = useState('')
   const [berichte, setBerichte] = useState([])
@@ -296,6 +379,8 @@ export default function Leinwand({ pfad, karten, onWiederhergestellt }) {
       setAktiveInstanz(e.blockInstanzId ?? null)
       if (e.frage) setFrage(e.frage)
       if (e.entscheidung) setEntscheidung(e.entscheidung)
+      if (e.menschFrage) setMenschFrage(e.menschFrage)
+      if (e.gespraech) setGespraech(e.gespraech)
     })
     const abmelden = window.flowforge.aufLaufEreignis((ereignis) => {
       if (ereignis.projektPfad !== pfad) return
@@ -315,12 +400,24 @@ export default function Leinwand({ pfad, karten, onWiederhergestellt }) {
           runden: ereignis.runden
         })
       if (ereignis.art === 'entscheidung-erledigt') setEntscheidung(null)
+      if (ereignis.art === 'mensch-frage')
+        setMenschFrage({
+          frageId: ereignis.frageId,
+          frage: ereignis.frage,
+          optionen: ereignis.optionen
+        })
+      if (ereignis.art === 'mensch-frage-erledigt') {
+        setMenschFrage(null)
+        if (ereignis.antwort != null)
+          setGespraech((alt) => [...alt, { frage: ereignis.frage, antwort: ereignis.antwort }])
+      }
       if (ereignis.art === 'fertig') {
         setZustand('fertig')
         setErgebnis({ zustand: ereignis.zustand, fehlertext: ereignis.fehlertext })
         setAktiveInstanz(null)
         setFrage(null)
         setEntscheidung(null)
+        setMenschFrage(null)
         berichteLaden()
         punkteLaden()
         // Nach hartem Abbruch oder Wiederherstellung wurde der Projektordner
@@ -553,6 +650,8 @@ export default function Leinwand({ pfad, karten, onWiederhergestellt }) {
     setVerbrauch(null)
     setErgebnis(null)
     setAktiveInstanz(null)
+    setMenschFrage(null)
+    setGespraech([])
     const kartenIds = kontextAuswahl()
       .filter((k) => k.sorte !== 'status')
       .map((k) => k.id)
@@ -814,6 +913,12 @@ export default function Leinwand({ pfad, karten, onWiederhergestellt }) {
               </button>
             </div>
           )}
+
+          <Gespraech
+            verlauf={gespraech}
+            frage={menschFrage}
+            onAntwort={(frageId, antwort) => window.flowforge.laufMenschAntworten(frageId, antwort)}
+          />
 
           <div className="ticker">
             {ticker.map((zeile, i) => (

@@ -18,6 +18,7 @@ import {
   laufHartStoppen,
   laufFrageAntworten,
   laufEntscheidungAntworten,
+  laufMenschAntworten,
   laufZustand,
   laufberichteLaden
 } from './lauf.js'
@@ -93,6 +94,9 @@ function registriereIpc() {
   ipcMain.handle('lauf-entscheidung-antworten', (_e, { frageId, wahl }) =>
     laufEntscheidungAntworten(frageId, wahl)
   )
+  ipcMain.handle('lauf-mensch-antworten', (_e, { frageId, antwort }) =>
+    laufMenschAntworten(frageId, antwort)
+  )
   ipcMain.handle('lauf-zustand', (_e, pfad) => laufZustand(pfad))
   ipcMain.handle('laufberichte-laden', (_e, pfad) => laufberichteLaden(pfad))
 
@@ -109,6 +113,9 @@ function registriereIpc() {
 }
 
 app.whenReady().then(() => {
+  // Ohne gesetzte App-ID zeigt Windows keine Benachrichtigungen von FlowForge
+  // (SPEC §6: Frage-Blöcke melden sich per Windows-Benachrichtigung).
+  app.setAppUserModelId('de.georgwinter.flowforge')
   registriereIpc()
   createWindow()
 

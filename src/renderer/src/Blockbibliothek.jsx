@@ -15,6 +15,11 @@ export function BlockChips({ def }) {
           {t.brauchtLabel}: {bedarf}
         </span>
       ))}
+      {(def.brauchtOptional ?? []).map((bedarf) => (
+        <span key={bedarf} className="block-chip chip-braucht chip-optional">
+          {t.brauchtLabel}: {bedarf} ({t.fallsDaZusatz})
+        </span>
+      ))}
       {def.liefert.map((gabe) => (
         <span key={gabe} className="block-chip chip-liefert">
           {t.liefertLabel}: {gabe}

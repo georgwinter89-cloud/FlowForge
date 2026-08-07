@@ -9,6 +9,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'node:crypto'
+import { Notification } from 'electron'
 import { texte } from '../shared/texte.js'
 import { blockDefinition } from '../shared/blockKatalog.js'
 import {
@@ -106,7 +107,9 @@ const LIEFERUNG_MAX = 8000
 
 function uebergabenText(def, lieferungen) {
   const eintraege = []
-  for (const etikett of def.braucht) {
+  // Optionale Bedarfe (z.B. Angriffsliste beim Bauer) werden mitgereicht,
+  // wenn ein Block davor sie geliefert hat — verlangt werden sie nicht.
+  for (const etikett of [...def.braucht, ...(def.brauchtOptional ?? [])]) {
     const lieferung = lieferungen.get(etikett)
     if (lieferung)
       eintraege.push(texte.agentenUebergabe.eintrag(etikett, lieferung.block, lieferung.text))
@@ -148,11 +151,20 @@ export async function laufStarten(fenster, projektPfad, kartenIds) {
   // Auftragsquelle „Feld oder offene Aufgaben-Karten" (Entscheidung Georg,
   // 07.08.2026): Sind Feld und Kartenauswahl leer, wüsste der Block nicht,
   // was gebaut werden soll — der Lauf startet gar nicht erst.
-  for (const eintrag of kette) {
+  for (const [kettenIndex, eintrag] of kette.entries()) {
     const def = blockDefinition(eintrag.blockId)
     for (const feld of def.felder) {
       if (!feld.oderOffeneAufgaben) continue
       if ((eintrag.feldWerte?.[feld.id] ?? '').trim()) continue
+      // Ein früherer Block, der selbst Aufgaben-Karten erzeugt (Spec-Interview),
+      // zählt als Auftragsquelle — bei „Neue App starten" gibt es beim Start
+      // noch keine Karten, die Aufgaben entstehen erst im Lauf.
+      if (
+        kette
+          .slice(0, kettenIndex)
+          .some((e) => blockDefinition(e.blockId).erzeugtAufgaben)
+      )
+        continue
       const geladen = kartenLaden(projektPfad)
       const offene = geladen.ok
         ? geladen.karten.filter(
@@ -177,11 +189,16 @@ export async function laufStarten(fenster, projektPfad, kartenIds) {
     motor: null,
     fragen: new Map(),
     entscheidungen: new Map(),
+    menschFragen: new Map(),
     sanft: false,
     hart: false,
     aktuelleInstanzId: null,
     offeneFrage: null,
-    offeneEntscheidung: null
+    offeneEntscheidung: null,
+    offeneMenschFrage: null,
+    // Gesprächsverlauf dieses Laufs (Fragen des Agenten + Antworten) — die
+    // Ansicht stellt ihn nach einem Wechsel daraus wieder her.
+    gespraech: []
   }
   const lauf = aktiverLauf
 
@@ -210,6 +227,8 @@ export async function laufStarten(fenster, projektPfad, kartenIds) {
     verbrauch: null,
     rechteFragen: [],
     entscheidungen: [],
+    // Gespräch mit dem Agenten (BAUPLAN 9): jede Frage samt Antwort.
+    gespraech: [],
     // Abschlusstext jedes gelaufenen Blocks — die Leinwand zeigt ihn direkt
     // an der jeweiligen Karte an.
     blockErgebnisse: [],
@@ -245,6 +264,36 @@ export async function laufStarten(fenster, projektPfad, kartenIds) {
     })
   }
 
+  // Frage an den Menschen (BAUPLAN 9, SPEC §6): pausiert den Lauf, bis die
+  // Antwort aus dem Gespräch kommt. Löst mit dem Antwort-Text auf — oder mit
+  // null, wenn der Lauf vorher endet (das Werkzeug meldet das dem Agenten).
+  function menschFrageStellen({ frage, optionen }, blockName) {
+    return new Promise((antworten) => {
+      if (fenster.isDestroyed()) return antworten(null)
+      tickern(texte.ticker.menschFrageGestellt)
+      // Windows-Benachrichtigung (SPEC §6) — nur wenn Georg gerade woanders ist.
+      if (!fenster.isFocused() && Notification.isSupported())
+        new Notification({
+          title: texte.benachrichtigung.frageTitel,
+          body: frage.length > 200 ? frage.slice(0, 200) + ' …' : frage
+        }).show()
+      const frageId = crypto.randomUUID()
+      lauf.menschFragen.set(frageId, (antwortText) => {
+        lauf.menschFragen.delete(frageId)
+        lauf.offeneMenschFrage = null
+        if (antwortText != null) {
+          bericht.gespraech.push({ block: blockName, frage, antwort: antwortText })
+          lauf.gespraech.push({ frage, optionen, antwort: antwortText })
+          tickern(texte.ticker.menschGeantwortet)
+        }
+        senden({ art: 'mensch-frage-erledigt', frageId, frage, antwort: antwortText })
+        antworten(antwortText)
+      })
+      lauf.offeneMenschFrage = { frageId, frage, optionen }
+      senden({ art: 'mensch-frage', frageId, frage, optionen })
+    })
+  }
+
   // Folgen-Frage nach verbrauchten Reparatur-Runden (SPEC §4.1).
   function entscheidungStellen(blockName, runden) {
     return new Promise((aufloesen) => {
@@ -263,19 +312,20 @@ export async function laufStarten(fenster, projektPfad, kartenIds) {
     })
   }
 
-  function blockAusfuehren(auftrag, nurLesen) {
+  function blockAusfuehren(auftrag, def) {
     const motor = starteMotorLauf({
       projektPfad,
       auftrag,
       modus: einstellungen.motorModus,
       apiSchluessel: einstellungen.apiSchluessel,
       ausgabenObergrenzeUsd: einstellungen.ausgabenObergrenzeUsd,
-      nurLesen,
+      nurLesen: def.nurLesen,
       aufEreignis(e) {
         if (e.art === 'ticker') bericht.ticker.push({ zeit: jetztIso(), text: e.text })
         senden(e)
       },
-      aufRechteFrage: rechteFrageStellen
+      aufRechteFrage: rechteFrageStellen,
+      aufMenschFrage: (daten) => menschFrageStellen(daten, def.name)
     })
     lauf.motor = motor
     return motor.fertig.catch((fehler) => ({
@@ -324,7 +374,7 @@ export async function laufStarten(fenster, projektPfad, kartenIds) {
         rueckmeldung = ''
       }
 
-      const ergebnis = await blockAusfuehren(auftrag, def.nurLesen)
+      const ergebnis = await blockAusfuehren(auftrag, def)
       lauf.motor = null
       if (ergebnis.verbrauch) {
         gesamtVerbrauch.tokens += ergebnis.verbrauch.tokens ?? 0
@@ -374,6 +424,17 @@ export async function laufStarten(fenster, projektPfad, kartenIds) {
         ergebnisText: String(ergebnis.ergebnisText ?? '').slice(0, 4000)
       }
       bericht.blockErgebnisse.push(blockErgebnis)
+
+      // Hat der Block Aufgaben-Karten erzeugt (Spec-Interview), gehören seine
+      // neuen offenen Aufgaben ab jetzt zur Kartenauswahl des Laufs — die
+      // Folgeblöcke arbeiten ja genau damit (festgenagelte Vorauswahl, SPEC §5).
+      if (def.erzeugtAufgaben) {
+        const frisch = kartenLaden(projektPfad)
+        if (frisch.ok)
+          for (const karte of frisch.karten)
+            if (karte.sorte === 'aufgabe' && !karte.erledigt && !ausgewaehlt.includes(karte.id))
+              ausgewaehlt.push(karte.id)
+      }
 
       // Prüfer-Blöcke: Urteil auswerten, ggf. Fehlschlag-Rückführung.
       if (def.prueft) {
@@ -431,6 +492,7 @@ export async function laufStarten(fenster, projektPfad, kartenIds) {
     // Offene Fragen auflösen, damit nichts ewig hängt.
     for (const antworten of [...lauf.fragen.values()]) antworten(false)
     for (const aufloesen of [...lauf.entscheidungen.values()]) aufloesen('zurueckstellen')
+    for (const antworten of [...lauf.menschFragen.values()]) antworten(null)
 
     bericht.beendetAm = jetztIso()
     bericht.zustand = endZustand
@@ -468,6 +530,9 @@ export function laufHartStoppen(projektPfad) {
   if (!aktiverLauf || aktiverLauf.projektPfad !== projektPfad)
     return { ok: false, fehler: texte.fehler.unbekannt }
   aktiverLauf.hart = true
+  // Eine offene Mensch-Frage würde den Werkzeug-Aufruf im FlowForge-Prozess
+  // ewig hängen lassen — sofort auflösen.
+  for (const antworten of [...aktiverLauf.menschFragen.values()]) antworten(null)
   if (aktiverLauf.motor) aktiverLauf.motor.hartStoppen()
   else aktiverLauf.tickern?.(texte.ticker.hartAbgebrochen)
   return { ok: true }
@@ -477,6 +542,15 @@ export function laufFrageAntworten(frageId, erlaubt) {
   const antworten = aktiverLauf?.fragen.get(frageId)
   if (!antworten) return { ok: false, fehler: texte.fehler.unbekannt }
   antworten(Boolean(erlaubt))
+  return { ok: true }
+}
+
+export function laufMenschAntworten(frageId, antwortText) {
+  const antworten = aktiverLauf?.menschFragen.get(frageId)
+  if (!antworten) return { ok: false, fehler: texte.fehler.unbekannt }
+  const text = String(antwortText ?? '').trim()
+  if (!text) return { ok: false, fehler: texte.fehler.unbekannt }
+  antworten(text)
   return { ok: true }
 }
 
@@ -500,6 +574,8 @@ export function laufZustand(projektPfad) {
     aktiv: true,
     blockInstanzId: aktiverLauf.aktuelleInstanzId,
     frage: aktiverLauf.offeneFrage,
-    entscheidung: aktiverLauf.offeneEntscheidung
+    entscheidung: aktiverLauf.offeneEntscheidung,
+    menschFrage: aktiverLauf.offeneMenschFrage,
+    gespraech: aktiverLauf.gespraech
   }
 }

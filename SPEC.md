@@ -109,19 +109,37 @@ blockieren den Weiterlauf, Regeln stehen nicht nur als Text im Prompt.
 
 ### 4.3 Blockbibliothek V1
 
-**Arbeitsblöcke** (echte Arbeitsaufträge, seit Bauschritt 8): Kontext laden ·
-Paket schneiden · Angreifer (nur lesend) · Bauer · Prüfer · Sessionende (bringt
-die Karten auf Stand). Auftragsquelle von Paket schneiden (Entscheidung Georg,
-07.08.2026): das Wunsch-Feld am Block **oder**, wenn es leer ist, die offenen
-Aufgaben-Karten der Kartenauswahl — sind beide leer, startet der Lauf gar nicht
-erst (freundlicher Hinweis).
-Noch ausstehend (Bauschritt 9): Spec-Interview · Diagnose · Frage an den Menschen
-(Folgen-Fragen, keine Technik-Fragen) · Audit.
+**Arbeitsblöcke** (echte Arbeitsaufträge, seit Bauschritt 8/9): Kontext laden ·
+Spec-Interview · Paket schneiden · Angreifer (nur lesend) · Diagnose (nur
+lesend) · Bauer · Prüfer · Frage an den Menschen (nur lesend) · Sessionende
+(bringt die Karten auf Stand). Noch ausstehend: Audit (parallele Prüfer,
+Bauschritt 13).
+Auftragsquelle von Paket schneiden und Diagnose (Entscheidung Georg,
+07.08.2026): das Wunsch- bzw. Fehlerbild-Feld am Block **oder**, wenn es leer
+ist, die offenen Aufgaben-Karten der Kartenauswahl — sind beide leer, startet
+der Lauf gar nicht erst (freundlicher Hinweis). Ein früherer Block, der selbst
+Aufgaben-Karten erzeugt (Spec-Interview), zählt dabei als Quelle; seine neuen
+offenen Aufgaben rutschen nach seinem Lauf automatisch in die Kartenauswahl.
+
+**Spec-Interview:** grillt den Nutzer über das Gespräch (§6) in mehreren
+Frage-Runden — Folgen-Fragen mit Empfehlung, keine Technik-Fragen — und legt
+das Ergebnis als erste Karten an (Entscheidungen, Aufgaben, Status); der
+Abschlusstext ist der Projekt-Überblick für die Folgeblöcke.
+
+**Diagnose:** belegt die Ursache eines Fehlers (nur lesend, mit Fundort und
+Herleitung), bevor etwas angefasst wird, und liefert als Arbeitspaket den
+minimalen Fix samt Fertig-Kriterien (inkl. Rot-vor-Grün-Test des Fehlers).
+
+**Frage an den Menschen:** stellt genau eine Folgen-Frage mit Antwort-Optionen
+und Empfehlung über das Gespräch (§6) und liefert die Antwort an die Folgeblöcke.
 
 **Übergaben:** braucht/liefert ist nicht nur eine Steck-Regel, sondern die
 Datenweitergabe im Lauf — der Abschlusstext eines Blocks wird unter seinen
 liefert-Etiketten gespeichert und jedem Folgeblock mit passendem braucht in den
-Auftrag gereicht (gekürzt auf 8.000 Zeichen je Übergabe).
+Auftrag gereicht (gekürzt auf 8.000 Zeichen je Übergabe). Daneben gibt es
+**optionale Bedarfe** („falls da"): Der Bauer verlangt nur das Arbeitspaket;
+eine Angriffsliste wird mitgereicht und muss eingearbeitet werden, wenn ein
+Block davor eine liefert — so kommt „Bug jagen" ohne Angreifer aus.
 
 **Prüfer:** schreibt eigene Tests als Testdateien im Projekt, führt sie aus und
 liefert einen Rot-vor-Grün-Beleg: mindestens ein Test wird einmal mit absichtlich
@@ -142,9 +160,10 @@ Späher, Mini-Bauer, fairer und strenger Übungs-Prüfer, Karten-Probe, Rechte-P
 | **Feature hinzufügen** | Kontext laden → Paket schneiden → Angreifer → Bauer → Prüfer → Sessionende |
 | **Bug jagen** | Kontext laden → Diagnose (Ursache belegen, bevor etwas angefasst wird) → Bauer (minimaler Fix) → Prüfer mit Rot-vor-Grün → Sessionende |
 
-Verfügbar seit Bauschritt 8: **„Feature hinzufügen"** — als ziehbare Vorlage in der
-Blockbibliothek, ablegbar nur auf der leeren Leinwand. „Neue App starten" und
-„Bug jagen" folgen mit Bauschritt 9 (brauchen Spec-Interview bzw. Diagnose).
+Alle drei Vorlagen sind verfügbar (seit Bauschritt 9) — als ziehbare Vorlagen
+in der Blockbibliothek, ablegbar nur auf der leeren Leinwand. „Neue App
+starten" beginnt mit dem Spec-Interview statt Kontext laden (das Projekt ist
+noch leer); „Bug jagen" ersetzt Paket schneiden + Angreifer durch die Diagnose.
 
 ### 4.5 Block-Editor
 
@@ -182,7 +201,12 @@ Blockbibliothek, ablegbar nur auf der leeren Leinwand. „Neue App starten" und
 - **Stopp in zwei Stufen:** „Sanft anhalten" (laufender Block macht fertig, Halt am
   Sicherungspunkt) und „Sofort abbrechen" (Block gilt als nicht gelaufen; der Projektordner
   springt automatisch auf den letzten Sicherungspunkt zurück).
-- **Frage-an-den-Menschen-Blöcke** pausieren den Lauf; Windows-Benachrichtigung, Antwort in der App.
+- **Gespräch** (seit Bauschritt 9): Stellt der Agent eine Frage (Frage-Block,
+  Spec-Interview — über das eingebaute mensch-Werkzeug), pausiert der Lauf und
+  die Lauf-Ansicht zeigt eine Chat-Ansicht: Verlauf aus Fragen und Antworten,
+  Antwort per Options-Klick oder Freitext. Ist das Fenster nicht im Vordergrund,
+  kommt eine Windows-Benachrichtigung. Das Gespräch steht auch im Laufbericht.
+  Fragen stellen ist auch unter der Sperre „darf nur lesen" erlaubt.
 
 ## 7. Rechte des Agenten (Standard, später pro Projekt verstellbar)
 

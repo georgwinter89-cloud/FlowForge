@@ -9,6 +9,14 @@
 //
 // Prüfer-Blöcke (prueft: true) müssen ihr Urteil als letzte Zeile ausgeben:
 // „PRUEFUNG: BESTANDEN" oder „PRUEFUNG: FEHLGESCHLAGEN" — FlowForge wertet das aus.
+//
+// brauchtOptional (seit Bauschritt 9): Übergaben, die der Block nutzt, wenn ein
+// Block davor sie liefert — aber nicht verlangt (die Steck-Regel prüft nur braucht).
+// So kommt der Bauer in „Bug jagen" ohne Angreifer aus.
+//
+// erzeugtAufgaben (seit Bauschritt 9): Der Block legt selbst Aufgaben-Karten an
+// (Spec-Interview). Er zählt damit als Auftragsquelle für spätere Blöcke, und
+// seine neuen offenen Aufgaben rutschen automatisch in die Kartenauswahl des Laufs.
 
 export const REPARATUR_RUNDEN_STANDARD = 2
 export const REPARATUR_RUNDEN_MAX = 9
@@ -37,6 +45,49 @@ export const BLOCK_KATALOG = [
       '2. Womit es gebaut, getestet und gestartet wird (falls erkennbar). ' +
       '3. Was Status-Karte, offene Aufgaben und Entscheidungs-Karten sagen. ' +
       '4. Besonderheiten, die man beim Ändern kennen muss.'
+  },
+  {
+    id: 'spec-interview',
+    name: 'Spec-Interview',
+    symbol: '🎙️',
+    beschreibung:
+      'Grillt dich in mehreren Frage-Runden, bis klar ist, was gebaut werden soll — und legt die ersten Karten an.',
+    braucht: [],
+    liefert: ['Projekt-Überblick'],
+    nurLesen: false,
+    prueft: false,
+    uebung: false,
+    erzeugtAufgaben: true,
+    felder: [
+      {
+        id: 'idee',
+        label: 'Deine Idee in einem Satz',
+        platzhalter: 'z.B. Eine App, die meine Ausgaben sortiert',
+        pflicht: true
+      }
+    ],
+    auftrag:
+      'Du führst das Spec-Interview für ein neues Projekt. Antworte auf Deutsch. ' +
+      'Die Idee des Nutzers: {{idee}}\n' +
+      'Deine Aufgabe ist, diese Idee durch Fragen so scharf zu stellen, dass danach gebaut ' +
+      'werden kann. Stelle deine Fragen ausschließlich mit dem Werkzeug mensch_fragen — eine ' +
+      'Frage pro Aufruf, und warte jeweils die Antwort ab, bevor du die nächste stellst. ' +
+      'Grille freundlich, aber hartnäckig: Hake nach, wenn eine Antwort vage ist oder einer ' +
+      'früheren widerspricht. Frage nach Folgen in Alltagssprache („Was bedeutet das für ' +
+      'dich …"), niemals nach Technik — Technik entscheidest du selbst und erklärst nur die ' +
+      'Auswirkung. Gib bei jeder Frage 2 bis 4 Antwort-Optionen mit und stelle deine ' +
+      'Empfehlung an die erste Stelle, als Empfehlung benannt. Kläre mindestens: Wer nutzt ' +
+      'es? Was ist der eine Kernablauf? Was gehört ausdrücklich NICHT in die erste Version? ' +
+      'Woran merkt der Nutzer, dass es gelungen ist? Meist reichen 5 bis 10 Runden — höre ' +
+      'auf, sobald nichts Wichtiges mehr offen ist. ' +
+      'Danach bringst du das Ergebnis in Karten: Lege für jede getroffene Festlegung eine ' +
+      'Entscheidungs-Karte an („X festgelegt, weil Y"), lege die ersten Bau-Aufgaben als ' +
+      'kleine, prüfbare Aufgaben-Karten an (die erste davon ist das erste Arbeitspaket) und ' +
+      'aktualisiere die Status-Karte. Beachte die harten Längengrenzen — lieber mehrere ' +
+      'fokussierte Karten als eine lange. Dateien im Projektordner fasst du nicht an. ' +
+      'Dein Abschlusstext ist der Projekt-Überblick für die folgenden Blöcke — kompakt ' +
+      '(höchstens etwa 25 Zeilen): 1. Was gebaut wird und für wen. 2. Der Kernablauf. ' +
+      '3. Was bewusst draußen bleibt. 4. Die angelegten Aufgaben in der geplanten Reihenfolge.'
   },
   {
     id: 'paket-schneiden',
@@ -105,12 +156,52 @@ export const BLOCK_KATALOG = [
       'Suche nichts, schreibe das ehrlich als leere Angriffsliste — erfinde keine Funde.'
   },
   {
+    id: 'diagnose',
+    name: 'Diagnose',
+    symbol: '🩺',
+    beschreibung:
+      'Belegt die Ursache eines Fehlers, bevor etwas angefasst wird — und schneidet daraus den minimalen Fix.',
+    braucht: ['Projekt-Überblick'],
+    liefert: ['Arbeitspaket'],
+    nurLesen: true,
+    prueft: false,
+    uebung: false,
+    felder: [
+      {
+        id: 'fehlerbild',
+        label: 'Was geht kaputt oder klemmt?',
+        platzhalter: 'leer lassen = die offenen Aufgaben-Karten beschreiben den Fehler',
+        pflicht: false,
+        oderOffeneAufgaben: true
+      }
+    ],
+    auftrag:
+      'Du bist die Diagnose: Du belegst die Ursache eines Fehlers, BEVOR irgendetwas ' +
+      'angefasst wird. Du darfst nichts verändern — nur lesen. Antworte auf Deutsch. ' +
+      'Das Fehlerbild steht in diesem Feld:\n' +
+      '{{fehlerbild}}\n' +
+      'Ist das Feld leer, beschreiben die offenen Aufgaben-Karten den Fehler — wähle die ' +
+      'passende und benenne sie. ' +
+      'Verfolge den Fehler im Code: Lies die beteiligten Stellen, verfolge den Weg der Daten ' +
+      'und finde die Ursache — nicht nur das Symptom. Belege die Ursache mit Fundort (Datei ' +
+      'und Stelle) und einer kurzen Herleitung, warum genau dort das beobachtete Verhalten ' +
+      'entsteht. Prüfe ehrlich, ob eine andere Erklärung ebenso gut passt — wenn ja, benenne ' +
+      'beide und was sie unterscheiden würde. Rate nicht: Kannst du die Ursache nicht belegen, ' +
+      'schreibe das offen und benenne, welche Information fehlt. ' +
+      'Dein Abschlusstext ist das Arbeitspaket für den Bauer — kompakt (höchstens etwa 25 ' +
+      'Zeilen): 1. Das Fehlerbild in einem Satz. 2. Die belegte Ursache mit Fundort und ' +
+      'Herleitung. 3. Der minimale Fix: möglichst kleine Schritte, betroffene Dateien. ' +
+      '4. Was ausdrücklich NICHT angefasst wird. 5. Fertig-Kriterien für den Prüfer — ' +
+      'darunter: ein Test, der den Fehler nachstellt, ist vor dem Fix rot und danach grün.'
+  },
+  {
     id: 'bauer',
     name: 'Bauer',
     symbol: '🔨',
     beschreibung:
-      'Setzt genau das Arbeitspaket um und räumt dabei die Funde der Angriffsliste aus.',
-    braucht: ['Arbeitspaket', 'Angriffsliste'],
+      'Setzt genau das Arbeitspaket um und räumt dabei die Funde der Angriffsliste aus, falls eine da ist.',
+    braucht: ['Arbeitspaket'],
+    brauchtOptional: ['Angriffsliste'],
     liefert: ['Umsetzungsbericht'],
     nurLesen: false,
     prueft: false,
@@ -118,7 +209,8 @@ export const BLOCK_KATALOG = [
     felder: [],
     auftrag:
       'Du bist der Bauer: Du setzt genau das Arbeitspaket um — nicht mehr und nicht weniger. ' +
-      'Antworte auf Deutsch. Arbeite die Angriffsliste von Anfang an ein: Räume jeden Fund aus ' +
+      'Antworte auf Deutsch. Liegt dir eine Angriffsliste vor, arbeite sie von Anfang an ein: ' +
+      'Räume jeden Fund aus ' +
       'oder begründe, warum er dieses Paket nicht trifft. Halte dich an Stil und Aufbau des ' +
       'bestehenden Codes und bleibe im Projektordner. Was das Arbeitspaket ausdrücklich ' +
       'ausschließt, baust du nicht — auch nicht nebenbei. Projektkarten fasst du nicht an, ' +
@@ -127,7 +219,7 @@ export const BLOCK_KATALOG = [
       'Dein Abschlusstext ist die Übergabe an den Prüfer — kompakt (höchstens etwa 25 Zeilen): ' +
       '1. Was du umgesetzt hast. ' +
       '2. Welche Dateien du angelegt oder geändert hast. ' +
-      '3. Wie du mit jedem Fund der Angriffsliste umgegangen bist. ' +
+      '3. Wie du mit jedem Fund der Angriffsliste umgegangen bist (falls es eine gab). ' +
       '4. Wie man das Ergebnis startet oder ausprobiert. ' +
       '5. Was du bewusst nicht getan hast.'
   },
@@ -161,6 +253,37 @@ export const BLOCK_KATALOG = [
       '2. Der Rot-vor-Grün-Beleg mit den Ausgaben. 3. Beanstandungen mit Fundort — oder dass ' +
       'es keine gibt. Deine allerletzte Zeile muss exakt lauten: ' +
       'PRUEFUNG: BESTANDEN oder PRUEFUNG: FEHLGESCHLAGEN'
+  },
+  {
+    id: 'frage-mensch',
+    name: 'Frage an den Menschen',
+    symbol: '💬',
+    beschreibung:
+      'Hält den Lauf an und stellt dir genau eine Frage — als Folgen-Frage mit Empfehlung. Deine Antwort geht an die nächsten Blöcke.',
+    braucht: [],
+    liefert: ['Antwort des Menschen'],
+    nurLesen: true,
+    prueft: false,
+    uebung: false,
+    felder: [
+      {
+        id: 'thema',
+        label: 'Worum geht es bei der Frage?',
+        platzhalter: 'z.B. Soll die App auch offline funktionieren?',
+        pflicht: true
+      }
+    ],
+    auftrag:
+      'Du stellst dem Nutzer GENAU EINE Frage — mit dem Werkzeug mensch_fragen — und wartest ' +
+      'auf die Antwort. Antworte auf Deutsch. Worum es geht:\n' +
+      '{{thema}}\n' +
+      'Sieh dir vorher an, was du dazu wissen kannst (Projektkarten, bei Bedarf Dateien lesen), ' +
+      'damit die Frage konkret wird. Formuliere eine Folgen-Frage in Alltagssprache: Was ' +
+      'bedeutet die Wahl für den Nutzer und sein Projekt — keine Technik-Frage. Gib 2 bis 4 ' +
+      'Antwort-Optionen mit und stelle deine Empfehlung an die erste Stelle, als Empfehlung ' +
+      'benannt. Du veränderst nichts und baust nichts. ' +
+      'Dein Abschlusstext ist die Übergabe an die folgenden Blöcke: die Frage, die Antwort ' +
+      'des Nutzers wortgetreu, und in ein bis zwei Sätzen, was daraus für die weitere Arbeit folgt.'
   },
   {
     id: 'sessionende',
@@ -322,14 +445,25 @@ export const BLOCK_KATALOG = [
 ]
 
 // Vorlagen-Workflows (SPEC §4.4): fertige Ketten, die per Drag & Drop auf die
-// leere Leinwand gelegt werden. „Neue App starten" und „Bug jagen" folgen mit
-// Bauschritt 9 (brauchen Spec-Interview bzw. Diagnose).
+// leere Leinwand gelegt werden.
 export const VORLAGEN = [
+  {
+    id: 'neue-app-starten',
+    name: 'Neue App starten',
+    symbol: '🌱',
+    kette: ['spec-interview', 'paket-schneiden', 'angreifer', 'bauer', 'pruefer', 'sessionende']
+  },
   {
     id: 'feature-hinzufuegen',
     name: 'Feature hinzufügen',
     symbol: '🧩',
     kette: ['kontext-laden', 'paket-schneiden', 'angreifer', 'bauer', 'pruefer', 'sessionende']
+  },
+  {
+    id: 'bug-jagen',
+    name: 'Bug jagen',
+    symbol: '🐞',
+    kette: ['kontext-laden', 'diagnose', 'bauer', 'pruefer', 'sessionende']
   }
 ]
 

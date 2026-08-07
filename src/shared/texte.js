@@ -61,6 +61,7 @@ export const texte = {
     liefertLabel: 'liefert',
     nurLesenMarke: 'darf nur lesen',
     prueftMarke: 'Prüfer',
+    fallsDaZusatz: 'falls da',
     fehlerBraucht: (blockName, bedarf) =>
       `„${blockName}" braucht „${bedarf}" — aber kein Block davor liefert das.`,
     fehlerLeereKette: 'Die Kette ist noch leer. Zieh zuerst Blöcke aus der Bibliothek auf die Leinwand.',
@@ -139,7 +140,25 @@ export const texte = {
     immerDabei: 'immer dabei',
     entfernen: 'Aus der Auswahl nehmen'
   },
+  // Gespräch mit dem Agenten (BAUPLAN 9): Frage-Blöcke und das Spec-Interview
+  // stellen Fragen über das mensch-Werkzeug — beantwortet wird hier.
+  gespraech: {
+    ueberschrift: 'Der Agent hat eine Frage an dich',
+    verlaufUeberschrift: 'Gespräch',
+    antwortPlatzhalter: 'Deine Antwort …',
+    antworten: 'Antworten',
+    freitextHinweis: 'Du kannst eine Option anklicken — oder frei antworten.'
+  },
+  benachrichtigung: {
+    frageTitel: 'FlowForge — der Agent hat eine Frage',
+  },
   // Texte, die an den Agenten gehen (nicht an Georg) — zentral wie alle anderen.
+  agentenMensch: {
+    antwort: (text) => `Antwort des Nutzers:\n${text}`,
+    keineAntwort:
+      'Der Lauf wurde angehalten — auf diese Frage kommt keine Antwort mehr. ' +
+      'Beende deinen Auftrag ohne weitere Fragen.'
+  },
   agentenKarten: {
     kontext: (liste) =>
       'Aktuelle Projektkarten (von FlowForge für diesen Lauf ausgewählt):\n' +
@@ -284,6 +303,8 @@ export const texte = {
     rueckfuehrung: (name, runde, gesamt) =>
       `Zurück zu „${name}" — Reparatur-Runde ${runde} von ${gesamt}.`,
     entscheidungGestellt: 'Folgen-Frage an dich — bitte im Fenster beantworten.',
+    menschFrageGestellt: 'Frage an dich — bitte im Gespräch antworten.',
+    menschGeantwortet: 'Deine Antwort ist beim Agenten.',
     entscheidungWeitermachen: 'Du hast entschieden: weitermachen.',
     entscheidungZurueckgestellt: 'Du hast entschieden: zurückstellen.',
     entscheidungWiederhergestellt: 'Du hast entschieden: Stand von vor dem Lauf wiederherstellen.'
@@ -328,6 +349,7 @@ export const texte = {
     fehlertextLabel: 'Fehler',
     rechteFragenLabel: 'Rechte-Rückfragen',
     entscheidungenLabel: 'Folgen-Fragen',
+    gespraechLabel: 'Gespräch',
     erlaubt: 'erlaubt',
     abgelehnt: 'abgelehnt',
     verlaufLabel: 'Verlauf'

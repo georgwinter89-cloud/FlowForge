@@ -1178,3 +1178,99 @@ body {
   padding: 20px;
   text-align: center;
 }
+
+/* Gespräch mit dem Agenten (Bauschritt 9): Chat-Ansicht innerhalb des Laufs. */
+.gespraech {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--akzent);
+  border-radius: 8px;
+  background: var(--flaeche);
+}
+
+.gespraech-titel {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.gespraech-verlauf {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 340px;
+  overflow-y: auto;
+}
+
+.gespraech-blase {
+  max-width: 85%;
+  padding: 8px 12px;
+  border-radius: 12px;
+  font-size: 14px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.blase-agent {
+  align-self: flex-start;
+  background: #eef2f7;
+  border-bottom-left-radius: 4px;
+}
+
+.blase-mensch {
+  align-self: flex-end;
+  margin-top: 8px;
+  background: var(--akzent);
+  color: #ffffff;
+  border-bottom-right-radius: 4px;
+}
+
+.blase-offen {
+  border: 1px solid var(--akzent);
+}
+
+.gespraech-eingabe {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.gespraech-optionen {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.gespraech-option {
+  padding: 8px 12px;
+  border: 1px solid var(--rand);
+  border-radius: 8px;
+  background: var(--flaeche);
+  text-align: left;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.gespraech-option:hover {
+  border-color: var(--akzent);
+}
+
+.gespraech-zeile {
+  display: flex;
+  gap: 8px;
+}
+
+.gespraech-zeile input {
+  flex: 1;
+  padding: 8px 10px;
+  border: 1px solid var(--rand);
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 14px;
+}
+
+/* Optionaler Bedarf (falls da): blasser als ein harter braucht-Chip. */
+.chip-optional {
+  opacity: 0.65;
+}
