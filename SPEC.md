@@ -90,7 +90,11 @@ Ergebnis des letzten Laufs direkt an jeder Block-Karte auf der Leinwand aufklapp
   **Pfeile**, die die Reihenfolge bestimmen. Datenformat: Karten + Pfeile.
 - **Ein-Pfad-Regel bis zur Freischaltung paralleler Zweige** (BAUPLAN Schritt 13): Ein
   Workflow ist ein durchgehender Pfad — ein zweiter Pfeil aus derselben Karte wird mit
-  freundlichem Hinweis abgelehnt. Danach sind **parallele Zweige** erlaubt: gleichzeitig
+  freundlichem Hinweis abgelehnt. **Zwischenstände beim Umbauen sind erlaubt:** Beim
+  Bearbeiten darf der Pfad vorübergehend in Stücke zerfallen (z.B. um einen Block aus
+  der Mitte zu nehmen); die braucht/liefert-Steck-Prüfung greift, sobald die Pfeile
+  wieder alle Karten zu einem Pfad verbinden — und spätestens beim Start, der immer
+  streng prüft. Danach sind **parallele Zweige** erlaubt: gleichzeitig
   laufen dürfen mehrere lesende Blöcke, aber höchstens ein schreibender (§5); Zweige werden
   vor dem nächsten gemeinsamen Schritt zusammengeführt. Parallelität existiert außerdem
   **innerhalb** von Blöcken (z.B. Audit-Block startet intern zwei Prüfer).

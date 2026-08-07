@@ -13,9 +13,14 @@ function blockName(bloecke, instanzId) {
 // Schaubild-Regeln beim Bearbeiten — liefert null oder eine Fehlermeldung.
 // Ein-Pfad-Regel (SPEC §4.1): höchstens ein Pfeil aus und in jede Karte
 // (parallele Zweige: BAUPLAN Schritt 13). Kreise sind verboten. braucht/liefert
-// wird entlang der Pfeile geprüft; noch unverbundene Karten prüft erst der Start.
+// wird erst geprüft, wenn die Pfeile alle Karten zu einem durchgehenden Pfad
+// verbinden — vorher ist das Schaubild ein Zwischenstand beim Umbauen (z.B.
+// einen Block aus der Mitte nehmen), und Lücken sind ausdrücklich erlaubt;
+// spätestens der Start prüft streng.
 export function pruefeSchaubild(bloecke, pfeile) {
   const ids = new Set(bloecke.map((b) => b.instanzId))
+  for (const block of bloecke)
+    if (!blockDefinition(block.blockId)) return texte.kette.unbekannterBlock
   const ausgehend = new Map()
   const eingehend = new Map()
   for (const pfeil of pfeile) {
@@ -40,23 +45,28 @@ export function pruefeSchaubild(bloecke, pfeile) {
   }
   for (const block of bloecke)
     if (!erreichbar.has(block.instanzId)) return texte.kette.fehlerKreis
-  // braucht/liefert entlang jedes Pfad-Stücks. Der Anfang eines Stücks bleibt
-  // ungeprüft — er kann später noch einen Vorgänger bekommen.
+  // braucht/liefert nur am vollständigen Pfad: Erst wenn ein Pfad-Stück alle
+  // Karten umfasst, steht fest, wer wirklich vor wem liegt — vorher könnte
+  // jedes Stück noch einen Vorgänger bekommen, der das Fehlende liefert.
   const proId = new Map(bloecke.map((b) => [b.instanzId, b]))
   for (const block of bloecke) {
     if (eingehend.has(block.instanzId)) continue
-    const geliefert = new Set()
+    const stueck = []
     let id = block.instanzId
-    let anfang = true
     while (id) {
-      const def = blockDefinition(proId.get(id).blockId)
-      if (!def) return texte.kette.unbekannterBlock
+      stueck.push(proId.get(id))
+      id = ausgehend.get(id)
+    }
+    if (stueck.length < bloecke.length) continue
+    const geliefert = new Set()
+    let anfang = true
+    for (const eintrag of stueck) {
+      const def = blockDefinition(eintrag.blockId)
       if (!anfang)
         for (const bedarf of def.braucht)
           if (!geliefert.has(bedarf)) return texte.kette.fehlerBraucht(def.name, bedarf)
       for (const gabe of def.liefert) geliefert.add(gabe)
       anfang = false
-      id = ausgehend.get(id)
     }
   }
   return null
