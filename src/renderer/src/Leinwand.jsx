@@ -627,12 +627,17 @@ export default function Leinwand({ pfad, karten, onWiederhergestellt }) {
   // --- Kartenvorauswahl für den Lauf ---------------------------------------
 
   function kontextAuswahl() {
-    return (karten ?? []).filter(
-      (k) =>
-        k.sorte === 'status' ||
-        kontextZusatz.has(k.id) ||
-        (k.sorte === 'aufgabe' && !k.erledigt && !kontextRaus.has(k.id))
-    )
+    // Feste Sortierung nach Sorte (Feedback Georg, 07.08.2026): Status zuerst,
+    // dann Aufgaben, Entscheidungen, Wissen — statt Anlege-Reihenfolge.
+    const sortenReihenfolge = { status: 0, aufgabe: 1, entscheidung: 2, wissen: 3 }
+    return (karten ?? [])
+      .filter(
+        (k) =>
+          k.sorte === 'status' ||
+          kontextZusatz.has(k.id) ||
+          (k.sorte === 'aufgabe' && !k.erledigt && !kontextRaus.has(k.id))
+      )
+      .sort((a, b) => (sortenReihenfolge[a.sorte] ?? 9) - (sortenReihenfolge[b.sorte] ?? 9))
   }
 
   function kontextAufnehmen(e) {
@@ -820,10 +825,16 @@ export default function Leinwand({ pfad, karten, onWiederhergestellt }) {
         >
           <span className="kontext-titel">{ta.ueberschrift}:</span>
           {kontextAuswahl().map((karte) => (
-            <span key={karte.id} className={'kontext-chip chip-' + karte.sorte}>
-              {texte.karten.sorten[karte.sorte]}: {karte.titel}
+            <span
+              key={karte.id}
+              className={'kontext-chip chip-' + karte.sorte}
+              title={texte.karten.sorten[karte.sorte] + ': ' + karte.titel}
+            >
+              <span className="chip-text">
+                {texte.karten.sorten[karte.sorte]}: {karte.titel}
+              </span>
               {karte.sorte === 'status' ? (
-                <em className="chip-fest"> · {ta.immerDabei}</em>
+                <em className="chip-fest">{ta.immerDabei}</em>
               ) : (
                 <button
                   className="chip-entfernen"

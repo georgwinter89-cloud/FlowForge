@@ -734,14 +734,13 @@ body {
   align-items: center;
   gap: 4px;
   max-width: 260px;
-  padding: 2px 8px;
+  padding: 3px 8px;
   border: 1px solid var(--rand);
   border-left: 4px solid var(--rand);
   border-radius: 999px;
   background: #fff;
   font-size: 12px;
   white-space: nowrap;
-  overflow: hidden;
   text-overflow: ellipsis;
 }
 
@@ -761,12 +760,21 @@ body {
   border-left-color: #7c3aed;
 }
 
+/* Der Kartentext kürzt sich mit … — das × und der Rahmen bleiben immer sichtbar. */
+.chip-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .chip-fest {
+  flex-shrink: 0;
   color: var(--text-gedimmt);
   font-style: normal;
 }
 
 .chip-entfernen {
+  flex-shrink: 0;
   border: none;
   background: none;
   padding: 0 2px;
