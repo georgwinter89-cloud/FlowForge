@@ -13,6 +13,8 @@ import { texte } from '../shared/texte.js'
 import { blockDefinition } from '../shared/blockKatalog.js'
 import {
   pruefeKette,
+  pruefeSchaubild,
+  schaubildReihenfolge,
   pruefePflichtfelder,
   auftragMitFeldern,
   rueckfuehrungsZiel
@@ -88,11 +90,18 @@ export async function laufStarten(fenster, projektPfad) {
   const geladen = workflowLaden(projektPfad)
   if (!geladen.ok) return geladen
   const workflow = geladen.workflow
-  if (workflow.bloecke.length === 0) return { ok: false, fehler: texte.kette.fehlerLeereKette }
-  const ketteFehler = pruefeKette(workflow.bloecke)
+  // Reihenfolge aus dem Schaubild ableiten (SPEC §4.1): die Pfeile müssen alle
+  // Karten zu genau einem durchgehenden Pfad verbinden.
+  const schaubildFehler = pruefeSchaubild(workflow.bloecke, workflow.pfeile)
+  if (schaubildFehler) return { ok: false, fehler: schaubildFehler }
+  const geordnet = schaubildReihenfolge(workflow.bloecke, workflow.pfeile)
+  if (geordnet.fehler) return { ok: false, fehler: geordnet.fehler }
+  const kette = geordnet.reihenfolge
+  // Beim Start streng: auch der erste Block muss versorgt sein.
+  const ketteFehler = pruefeKette(kette)
   if (ketteFehler) return { ok: false, fehler: ketteFehler }
   // Sperren-Mechanik „Pflichtfeld leer = Lauf hält an" (SPEC §4.2).
-  const feldFehler = pruefePflichtfelder(workflow.bloecke)
+  const feldFehler = pruefePflichtfelder(kette)
   if (feldFehler) return { ok: false, fehler: feldFehler }
 
   const { einstellungen } = einstellungenLaden()
@@ -118,7 +127,7 @@ export async function laufStarten(fenster, projektPfad) {
 
   // Sicherheitsnetz vor dem Lauf: der Stand von jetzt ist immer wiederholbar —
   // und die Folgen-Frage kann genau hierauf zurücksetzen.
-  const namen = workflow.bloecke.map((b) => blockDefinition(b.blockId).name)
+  const namen = kette.map((b) => blockDefinition(b.blockId).name)
   const sicherung = await sicherungspunktAnlegen(
     projektPfad,
     texte.sicherungen.beschriftungVorLauf(namen[0])
@@ -217,7 +226,6 @@ export async function laufStarten(fenster, projektPfad) {
   // Die eigentliche Ketten-Schleife — läuft im Hintergrund weiter, laufStarten
   // kehrt sofort zurück.
   ;(async () => {
-    const kette = workflow.bloecke
     let i = 0
     let rundenUebrig = workflow.reparaturRunden
     let rueckmeldung = ''

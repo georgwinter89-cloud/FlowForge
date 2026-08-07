@@ -1,9 +1,111 @@
-// Harte Regeln für Workflow-Ketten (SPEC §4): braucht/liefert-Prüfung beim
-// Zusammenstecken, Pflichtfelder vor dem Start, Arbeitsauftrag mit Feldwerten.
+// Harte Regeln für Workflow-Schaubilder (SPEC §4.1): Karten + Pfeile, Ein-Pfad-Regel,
+// braucht/liefert-Prüfung, Pflichtfelder vor dem Start, Arbeitsauftrag mit Feldwerten.
 // Geprüft wird im Hauptprozess; die Oberfläche nutzt dieselben Regeln für
-// sofortige Rückmeldung beim Stecken.
+// sofortige Rückmeldung beim Verbinden.
 import { texte } from './texte.js'
 import { blockDefinition } from './blockKatalog.js'
+
+function blockName(bloecke, instanzId) {
+  const eintrag = bloecke.find((b) => b.instanzId === instanzId)
+  return blockDefinition(eintrag?.blockId)?.name ?? '?'
+}
+
+// Schaubild-Regeln beim Bearbeiten — liefert null oder eine Fehlermeldung.
+// Ein-Pfad-Regel (SPEC §4.1): höchstens ein Pfeil aus und in jede Karte
+// (parallele Zweige: BAUPLAN Schritt 13). Kreise sind verboten. braucht/liefert
+// wird entlang der Pfeile geprüft; noch unverbundene Karten prüft erst der Start.
+export function pruefeSchaubild(bloecke, pfeile) {
+  const ids = new Set(bloecke.map((b) => b.instanzId))
+  const ausgehend = new Map()
+  const eingehend = new Map()
+  for (const pfeil of pfeile) {
+    if (!ids.has(pfeil.von) || !ids.has(pfeil.nach) || pfeil.von === pfeil.nach)
+      return texte.kette.fehlerPfeilUngueltig
+    if (ausgehend.has(pfeil.von)) return texte.kette.einPfadAusgehend(blockName(bloecke, pfeil.von))
+    if (eingehend.has(pfeil.nach)) return texte.kette.einPfadEingehend(blockName(bloecke, pfeil.nach))
+    ausgehend.set(pfeil.von, pfeil.nach)
+    eingehend.set(pfeil.nach, pfeil.von)
+  }
+  // Kreis-Prüfung: Bei höchstens einem Pfeil pro Richtung ist jede Karte, die von
+  // keinem Pfad-Anfang aus erreichbar ist, aber einen eingehenden Pfeil hat, Teil
+  // eines Kreises.
+  const erreichbar = new Set()
+  for (const block of bloecke) {
+    if (eingehend.has(block.instanzId)) continue
+    let id = block.instanzId
+    while (id && !erreichbar.has(id)) {
+      erreichbar.add(id)
+      id = ausgehend.get(id)
+    }
+  }
+  for (const block of bloecke)
+    if (!erreichbar.has(block.instanzId)) return texte.kette.fehlerKreis
+  // braucht/liefert entlang jedes Pfad-Stücks. Der Anfang eines Stücks bleibt
+  // ungeprüft — er kann später noch einen Vorgänger bekommen.
+  const proId = new Map(bloecke.map((b) => [b.instanzId, b]))
+  for (const block of bloecke) {
+    if (eingehend.has(block.instanzId)) continue
+    const geliefert = new Set()
+    let id = block.instanzId
+    let anfang = true
+    while (id) {
+      const def = blockDefinition(proId.get(id).blockId)
+      if (!def) return texte.kette.unbekannterBlock
+      if (!anfang)
+        for (const bedarf of def.braucht)
+          if (!geliefert.has(bedarf)) return texte.kette.fehlerBraucht(def.name, bedarf)
+      for (const gabe of def.liefert) geliefert.add(gabe)
+      anfang = false
+      id = ausgehend.get(id)
+    }
+  }
+  return null
+}
+
+// Reihenfolge für den Lauf: die Pfeile müssen alle Karten zu genau einem
+// durchgehenden Pfad verbinden. Liefert { reihenfolge } oder { fehler }.
+export function schaubildReihenfolge(bloecke, pfeile) {
+  if (bloecke.length === 0) return { fehler: texte.kette.fehlerLeereKette }
+  const ausgehend = new Map(pfeile.map((p) => [p.von, p.nach]))
+  const eingehend = new Set(pfeile.map((p) => p.nach))
+  const proId = new Map(bloecke.map((b) => [b.instanzId, b]))
+  let beste = []
+  for (const start of bloecke) {
+    if (eingehend.has(start.instanzId)) continue
+    const pfad = []
+    const besucht = new Set()
+    let id = start.instanzId
+    while (id && proId.has(id) && !besucht.has(id)) {
+      besucht.add(id)
+      pfad.push(proId.get(id))
+      id = ausgehend.get(id)
+    }
+    if (pfad.length > beste.length) beste = pfad
+  }
+  if (beste.length === 0) return { fehler: texte.kette.fehlerKreis }
+  if (beste.length < bloecke.length) {
+    const imPfad = new Set(beste.map((b) => b.instanzId))
+    const fehlend = bloecke.find((b) => !imPfad.has(b.instanzId))
+    return { fehler: texte.kette.fehlerNichtVerbunden(blockName(bloecke, fehlend.instanzId)) }
+  }
+  return { reihenfolge: beste }
+}
+
+// Alle Vorfahren einer Karte entlang der Pfeile, vom Pfad-Anfang bis zum
+// direkten Vorgänger — die Auswahl für „bei Fehlschlag zurück zu".
+export function vorfahrenImPfad(bloecke, pfeile, instanzId) {
+  const eingehend = new Map(pfeile.map((p) => [p.nach, p.von]))
+  const proId = new Map(bloecke.map((b) => [b.instanzId, b]))
+  const kette = []
+  const besucht = new Set([instanzId])
+  let id = eingehend.get(instanzId)
+  while (id && proId.has(id) && !besucht.has(id)) {
+    besucht.add(id)
+    kette.unshift(proId.get(id))
+    id = eingehend.get(id)
+  }
+  return kette
+}
 
 // Liefert null, wenn die Kette zusammenpasst — sonst eine Fehlermeldung.
 // Regel: Alles, was ein Block braucht, muss ein Block davor liefern.

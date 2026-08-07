@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { texte } from '../../shared/texte.js'
 import { blockDefinition, REPARATUR_RUNDEN_MAX } from '../../shared/blockKatalog.js'
+import { schaubildReihenfolge, vorfahrenImPfad } from '../../shared/kettenRegeln.js'
 import { BlockChips } from './Blockbibliothek.jsx'
 
 const t = texte.lauf
@@ -10,8 +11,25 @@ const tf = texte.rechteFrage
 const tb = texte.laufberichte
 const ts = texte.sicherungen
 
+// Solange eine Karte noch nicht gemessen ist, rechnen Pfeile mit dieser Größe.
+const KARTE_STANDARD = { w: 240, h: 140 }
+
 function zeitText(zeitstempel) {
   return new Date(zeitstempel).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })
+}
+
+// Punkt auf dem Rand eines Karten-Rechtecks, vom Mittelpunkt aus in Richtung
+// ziel — dort setzen Pfeile an, statt mitten in der Karte zu verschwinden.
+function randSchnitt(rect, ziel) {
+  const mx = rect.x + rect.w / 2
+  const my = rect.y + rect.h / 2
+  const dx = ziel.x - mx
+  const dy = ziel.y - my
+  if (dx === 0 && dy === 0) return { x: mx, y: my }
+  const sx = dx !== 0 ? rect.w / 2 / Math.abs(dx) : Infinity
+  const sy = dy !== 0 ? rect.h / 2 / Math.abs(dy) : Infinity
+  const s = Math.min(sx, sy)
+  return { x: mx + dx * s, y: my + dy * s }
 }
 
 function VorschauGruppe({ ueberschrift, eintraege }) {
@@ -103,51 +121,32 @@ function Laufbericht({ bericht }) {
   )
 }
 
-function AblageZone({ onAblegen }) {
-  const [aktiv, setAktiv] = useState(false)
-  return (
-    <div
-      className={'ablage-zone' + (aktiv ? ' ablage-aktiv' : '')}
-      onDragOver={(e) => {
-        e.preventDefault()
-        setAktiv(true)
-      }}
-      onDragLeave={() => setAktiv(false)}
-      onDrop={(e) => {
-        setAktiv(false)
-        onAblegen(e)
-      }}
-    >
-      {tk.hierAblegen}
-    </div>
-  )
-}
-
-function KettenBlock({
+function SchaubildKarte({
   eintrag,
-  index,
-  bloecke,
+  def,
+  nummer,
+  vorfahren,
+  nummern,
   bearbeitbar,
   aktiv,
   onFeld,
   onSpeichern,
   onZurueckZu,
-  onEntfernen
+  onEntfernen,
+  onGreifen,
+  onPfeilStart,
+  messen
 }) {
-  const def = blockDefinition(eintrag.blockId)
-  if (!def) return null
-  const davor = bloecke.slice(0, index)
   return (
-    <div className={'ketten-block' + (aktiv ? ' block-laeuft' : '')}>
-      <div
-        className="ketten-block-kopf"
-        draggable={bearbeitbar}
-        onDragStart={(e) => {
-          e.dataTransfer.setData('text/flowforge-instanz', eintrag.instanzId)
-          e.dataTransfer.effectAllowed = 'move'
-        }}
-      >
-        <span className="block-nummer">{index + 1}</span>
+    <div
+      className={'schaubild-karte' + (aktiv ? ' block-laeuft' : '')}
+      style={{ left: eintrag.position.x, top: eintrag.position.y }}
+      data-instanz={eintrag.instanzId}
+      ref={messen}
+      onPointerDown={bearbeitbar ? onGreifen : undefined}
+    >
+      <div className={'ketten-block-kopf' + (bearbeitbar ? ' schaubild-griff' : '')}>
+        {nummer != null && <span className="block-nummer">{nummer}</span>}
         <span className="karte-titel">
           {def.symbol} {def.name}
         </span>
@@ -172,28 +171,38 @@ function KettenBlock({
           />
         </label>
       ))}
-      {def.prueft && davor.length > 0 && (
+      {def.prueft && vorfahren.length > 0 && (
         <label className="feld feld-kompakt">
           {tk.zurueckZuLabel}
           <select
             disabled={!bearbeitbar}
-            value={eintrag.zurueckZu ?? davor[davor.length - 1].instanzId}
+            value={eintrag.zurueckZu ?? vorfahren[vorfahren.length - 1].instanzId}
             onChange={(e) => onZurueckZu(e.target.value)}
           >
-            {davor.map((d, di) => (
+            {vorfahren.map((d) => (
               <option key={d.instanzId} value={d.instanzId}>
-                {di + 1}. {blockDefinition(d.blockId)?.name}
+                {nummern.get(d.instanzId) != null ? nummern.get(d.instanzId) + '. ' : ''}
+                {blockDefinition(d.blockId)?.name}
               </option>
             ))}
           </select>
         </label>
+      )}
+      {bearbeitbar && (
+        <div
+          className="pfeil-punkt"
+          title={tk.pfeilZiehenHinweis}
+          onPointerDown={onPfeilStart}
+        >
+          ↓
+        </div>
       )}
     </div>
   )
 }
 
 export default function Leinwand({ pfad, onWiederhergestellt }) {
-  // zustand: 'bereit' (Kette bearbeiten) | 'laeuft' | 'fertig'
+  // zustand: 'bereit' (Schaubild bearbeiten) | 'laeuft' | 'fertig'
   const [zustand, setZustand] = useState('bereit')
   const [workflow, setWorkflow] = useState(null)
   const [meldung, setMeldung] = useState('')
@@ -212,7 +221,20 @@ export default function Leinwand({ pfad, onWiederhergestellt }) {
   const [punkte, setPunkte] = useState([])
   const [vorschau, setVorschau] = useState(null)
   const [sicherungsMeldung, setSicherungsMeldung] = useState('')
+  // Schaubild: gemessene Kartengrößen, laufender Karten-Zug, laufender Pfeil-Zug
+  const [groessen, setGroessen] = useState({})
+  const [ziehen, setZiehen] = useState(null) // { instanzId, dx, dy }
+  const [pfeilZug, setPfeilZug] = useState(null) // { von, x, y }
   const tickerEnde = useRef(null)
+  const flaecheRef = useRef(null)
+  const kartenRefs = useRef(new Map())
+  // Aktuelle Werte für die Fenster-Listener (sonst arbeiten sie mit altem Stand).
+  const workflowRef = useRef(null)
+  workflowRef.current = workflow
+  const ziehenRef = useRef(null)
+  ziehenRef.current = ziehen
+  const pfeilZugRef = useRef(null)
+  pfeilZugRef.current = pfeilZug
 
   function berichteLaden() {
     window.flowforge.laufberichteLaden(pfad).then((e) => e.ok && setBerichte(e.berichte))
@@ -275,7 +297,66 @@ export default function Leinwand({ pfad, onWiederhergestellt }) {
     tickerEnde.current?.scrollIntoView({ block: 'nearest' })
   }, [ticker])
 
-  // --- Kette bearbeiten ---------------------------------------------------
+  // Kartengrößen nach jedem Rendern messen — die Pfeile setzen am Kartenrand an.
+  useLayoutEffect(() => {
+    const neu = {}
+    for (const [id, el] of kartenRefs.current) neu[id] = { w: el.offsetWidth, h: el.offsetHeight }
+    setGroessen((alt) => {
+      const altIds = Object.keys(alt)
+      const neuIds = Object.keys(neu)
+      const gleich =
+        altIds.length === neuIds.length &&
+        neuIds.every((id) => alt[id]?.w === neu[id].w && alt[id]?.h === neu[id].h)
+      return gleich ? alt : neu
+    })
+  })
+
+  // Karten-Zug und Pfeil-Zug laufen über Fenster-Listener, damit sie auch beim
+  // Verlassen der Karte weitergehen. Gespeichert wird erst beim Loslassen.
+  useEffect(() => {
+    if (!ziehen && !pfeilZug) return
+    function bewegen(e) {
+      const rect = flaecheRef.current?.getBoundingClientRect()
+      if (!rect) return
+      const z = ziehenRef.current
+      if (z) {
+        const x = Math.max(0, Math.round(e.clientX - rect.left - z.dx))
+        const y = Math.max(0, Math.round(e.clientY - rect.top - z.dy))
+        setWorkflow((alt) => ({
+          ...alt,
+          bloecke: alt.bloecke.map((b) =>
+            b.instanzId === z.instanzId ? { ...b, position: { x, y } } : b
+          )
+        }))
+      } else if (pfeilZugRef.current) {
+        setPfeilZug((alt) => alt && { ...alt, x: e.clientX - rect.left, y: e.clientY - rect.top })
+      }
+    }
+    function loslassen(e) {
+      if (ziehenRef.current) {
+        setZiehen(null)
+        ketteSpeichern(workflowRef.current)
+      } else if (pfeilZugRef.current) {
+        const von = pfeilZugRef.current.von
+        setPfeilZug(null)
+        const ziel = document.elementFromPoint(e.clientX, e.clientY)?.closest('[data-instanz]')
+        const nach = ziel?.getAttribute('data-instanz')
+        if (nach && nach !== von)
+          ketteSpeichern({
+            ...workflowRef.current,
+            pfeile: [...workflowRef.current.pfeile, { von, nach }]
+          })
+      }
+    }
+    window.addEventListener('pointermove', bewegen)
+    window.addEventListener('pointerup', loslassen)
+    return () => {
+      window.removeEventListener('pointermove', bewegen)
+      window.removeEventListener('pointerup', loslassen)
+    }
+  }, [Boolean(ziehen), Boolean(pfeilZug)])
+
+  // --- Schaubild bearbeiten -----------------------------------------------
 
   async function ketteSpeichern(neu) {
     const antwort = await window.flowforge.workflowSpeichern(pfad, neu)
@@ -289,20 +370,53 @@ export default function Leinwand({ pfad, onWiederhergestellt }) {
     }
   }
 
-  function beimAblegen(e, zielIndex) {
+  function neuAblegen(e) {
     e.preventDefault()
     const blockId = e.dataTransfer.getData('text/flowforge-block')
-    const instanzId = e.dataTransfer.getData('text/flowforge-instanz')
-    const bloecke = [...workflow.bloecke]
-    if (blockId) {
-      bloecke.splice(zielIndex, 0, { blockId, feldWerte: {}, zurueckZu: null })
-    } else if (instanzId) {
-      const von = bloecke.findIndex((b) => b.instanzId === instanzId)
-      if (von === -1) return
-      const [verschoben] = bloecke.splice(von, 1)
-      bloecke.splice(von < zielIndex ? zielIndex - 1 : zielIndex, 0, verschoben)
-    } else return
-    ketteSpeichern({ ...workflow, bloecke })
+    if (!blockId) return
+    const rect = flaecheRef.current.getBoundingClientRect()
+    const position = {
+      x: Math.max(0, Math.round(e.clientX - rect.left - 120)),
+      y: Math.max(0, Math.round(e.clientY - rect.top - 16))
+    }
+    ketteSpeichern({
+      ...workflow,
+      bloecke: [
+        ...workflow.bloecke,
+        { instanzId: crypto.randomUUID(), blockId, feldWerte: {}, zurueckZu: null, position }
+      ]
+    })
+  }
+
+  function karteGreifen(e, eintrag) {
+    if (e.button !== 0) return
+    if (e.target.closest('input, select, button, label, .pfeil-punkt')) return
+    e.preventDefault()
+    const rect = flaecheRef.current.getBoundingClientRect()
+    setZiehen({
+      instanzId: eintrag.instanzId,
+      dx: e.clientX - rect.left - eintrag.position.x,
+      dy: e.clientY - rect.top - eintrag.position.y
+    })
+  }
+
+  function pfeilBeginnen(e, eintrag) {
+    if (e.button !== 0) return
+    e.preventDefault()
+    e.stopPropagation()
+    const rect = flaecheRef.current.getBoundingClientRect()
+    setPfeilZug({
+      von: eintrag.instanzId,
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top
+    })
+  }
+
+  function pfeilLoeschen(pfeil) {
+    ketteSpeichern({
+      ...workflow,
+      pfeile: workflow.pfeile.filter((p) => !(p.von === pfeil.von && p.nach === pfeil.nach))
+    })
   }
 
   function feldSetzen(instanzId, feldId, wert) {
@@ -324,7 +438,8 @@ export default function Leinwand({ pfad, onWiederhergestellt }) {
   function entfernen(instanzId) {
     ketteSpeichern({
       ...workflow,
-      bloecke: workflow.bloecke.filter((b) => b.instanzId !== instanzId)
+      bloecke: workflow.bloecke.filter((b) => b.instanzId !== instanzId),
+      pfeile: workflow.pfeile.filter((p) => p.von !== instanzId && p.nach !== instanzId)
     })
   }
 
@@ -381,6 +496,47 @@ export default function Leinwand({ pfad, onWiederhergestellt }) {
   if (!workflow) return null
   const bearbeitbar = zustand === 'bereit'
   const bloecke = workflow.bloecke
+  const pfeile = workflow.pfeile
+
+  // Nummern entlang des Pfads — nur wenn die Pfeile schon einen vollständigen
+  // Pfad ergeben; sonst bleiben die Karten unnummeriert.
+  const geordnet = schaubildReihenfolge(bloecke, pfeile)
+  const nummern = new Map(
+    geordnet.reihenfolge ? geordnet.reihenfolge.map((b, i) => [b.instanzId, i + 1]) : []
+  )
+
+  function karteRect(instanzId) {
+    const block = bloecke.find((b) => b.instanzId === instanzId)
+    if (!block) return null
+    const g = groessen[instanzId] ?? KARTE_STANDARD
+    return { x: block.position.x, y: block.position.y, w: g.w, h: g.h }
+  }
+
+  const pfeilLinien = pfeile
+    .map((pfeil) => {
+      const von = karteRect(pfeil.von)
+      const nach = karteRect(pfeil.nach)
+      if (!von || !nach) return null
+      const start = randSchnitt(von, { x: nach.x + nach.w / 2, y: nach.y + nach.h / 2 })
+      const ende = randSchnitt(nach, { x: von.x + von.w / 2, y: von.y + von.h / 2 })
+      return {
+        pfeil,
+        start,
+        ende,
+        mitte: { x: (start.x + ende.x) / 2, y: (start.y + ende.y) / 2 }
+      }
+    })
+    .filter(Boolean)
+
+  let flaecheBreite = 900
+  let flaecheHoehe = 480
+  for (const block of bloecke) {
+    const g = groessen[block.instanzId] ?? KARTE_STANDARD
+    flaecheBreite = Math.max(flaecheBreite, block.position.x + g.w + 80)
+    flaecheHoehe = Math.max(flaecheHoehe, block.position.y + g.h + 80)
+  }
+
+  const zugStart = pfeilZug && karteRect(pfeilZug.von)
 
   return (
     <div className="leinwand">
@@ -409,26 +565,101 @@ export default function Leinwand({ pfad, onWiederhergestellt }) {
         </div>
       )}
 
-      <div className="kette">
-        {bearbeitbar && <AblageZone onAblegen={(e) => beimAblegen(e, 0)} />}
-        {bloecke.map((eintrag, i) => (
-          <div key={eintrag.instanzId}>
-            {!bearbeitbar && i > 0 && <div className="kette-pfeil">↓</div>}
-            <KettenBlock
-              eintrag={eintrag}
-              index={i}
-              bloecke={bloecke}
-              bearbeitbar={bearbeitbar}
-              aktiv={eintrag.instanzId === aktiveInstanz}
-              onFeld={(feldId, wert) => feldSetzen(eintrag.instanzId, feldId, wert)}
-              onSpeichern={() => ketteSpeichern(workflow)}
-              onZurueckZu={(ziel) => zurueckZuSetzen(eintrag.instanzId, ziel)}
-              onEntfernen={() => entfernen(eintrag.instanzId)}
-            />
-            {bearbeitbar && <AblageZone onAblegen={(e) => beimAblegen(e, i + 1)} />}
-          </div>
-        ))}
-        {bloecke.length === 0 && <p className="feld-hinweis">{tk.leerHinweis}</p>}
+      <div
+        className="schaubild"
+        onDragOver={bearbeitbar ? (e) => e.preventDefault() : undefined}
+        onDrop={bearbeitbar ? neuAblegen : undefined}
+      >
+        <div
+          className="schaubild-flaeche"
+          ref={flaecheRef}
+          style={{ width: flaecheBreite, height: flaecheHoehe }}
+        >
+          <svg className="pfeil-ebene" width={flaecheBreite} height={flaecheHoehe}>
+            <defs>
+              <marker
+                id="pfeilspitze"
+                markerWidth="10"
+                markerHeight="8"
+                refX="9"
+                refY="4"
+                orient="auto"
+              >
+                <path d="M0,0 L10,4 L0,8 z" fill="#6b7484" />
+              </marker>
+              <marker
+                id="pfeilspitze-vorschau"
+                markerWidth="10"
+                markerHeight="8"
+                refX="9"
+                refY="4"
+                orient="auto"
+              >
+                <path d="M0,0 L10,4 L0,8 z" fill="#2563eb" />
+              </marker>
+            </defs>
+            {pfeilLinien.map((linie, i) => (
+              <line
+                key={i}
+                x1={linie.start.x}
+                y1={linie.start.y}
+                x2={linie.ende.x}
+                y2={linie.ende.y}
+                className="pfeil-linie"
+                markerEnd="url(#pfeilspitze)"
+              />
+            ))}
+            {pfeilZug && zugStart && (
+              <line
+                x1={randSchnitt(zugStart, pfeilZug).x}
+                y1={randSchnitt(zugStart, pfeilZug).y}
+                x2={pfeilZug.x}
+                y2={pfeilZug.y}
+                className="pfeil-linie pfeil-vorschau"
+                markerEnd="url(#pfeilspitze-vorschau)"
+              />
+            )}
+          </svg>
+          {bloecke.map((eintrag) => {
+            const def = blockDefinition(eintrag.blockId)
+            if (!def) return null
+            return (
+              <SchaubildKarte
+                key={eintrag.instanzId}
+                eintrag={eintrag}
+                def={def}
+                nummer={nummern.get(eintrag.instanzId) ?? null}
+                vorfahren={vorfahrenImPfad(bloecke, pfeile, eintrag.instanzId)}
+                nummern={nummern}
+                bearbeitbar={bearbeitbar}
+                aktiv={eintrag.instanzId === aktiveInstanz}
+                onFeld={(feldId, wert) => feldSetzen(eintrag.instanzId, feldId, wert)}
+                onSpeichern={() => ketteSpeichern(workflowRef.current)}
+                onZurueckZu={(ziel) => zurueckZuSetzen(eintrag.instanzId, ziel)}
+                onEntfernen={() => entfernen(eintrag.instanzId)}
+                onGreifen={(e) => karteGreifen(e, eintrag)}
+                onPfeilStart={(e) => pfeilBeginnen(e, eintrag)}
+                messen={(el) => {
+                  if (el) kartenRefs.current.set(eintrag.instanzId, el)
+                  else kartenRefs.current.delete(eintrag.instanzId)
+                }}
+              />
+            )
+          })}
+          {bearbeitbar &&
+            pfeilLinien.map((linie, i) => (
+              <button
+                key={'loeschen-' + i}
+                className="pfeil-loeschen"
+                style={{ left: linie.mitte.x, top: linie.mitte.y }}
+                title={tk.pfeilLoeschen}
+                onClick={() => pfeilLoeschen(linie.pfeil)}
+              >
+                ×
+              </button>
+            ))}
+          {bloecke.length === 0 && <p className="schaubild-leer">{tk.leerHinweis}</p>}
+        </div>
       </div>
 
       {zustand !== 'bereit' && (

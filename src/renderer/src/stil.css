@@ -729,52 +729,124 @@ body {
   font-size: 13px;
 }
 
-.kette {
-  display: flex;
-  flex-direction: column;
-}
+/* Schaubild-Leinwand (Bauschritt 6): frei platzierte Karten + Pfeile */
 
-.ablage-zone {
-  margin: 4px 0;
-  padding: 6px;
-  border: 2px dashed var(--rand);
+.schaubild {
+  position: relative;
+  height: 480px;
+  flex-shrink: 0;
+  overflow: auto;
+  border: 1px solid var(--rand);
   border-radius: 8px;
-  color: var(--text-gedimmt);
-  font-size: 11px;
-  text-align: center;
+  background: var(--hintergrund);
 }
 
-.ablage-aktiv {
-  border-color: var(--akzent);
-  background: #eff6ff;
-  color: var(--akzent);
+.schaubild-flaeche {
+  position: relative;
+  background: radial-gradient(circle, #dfe3e9 1px, transparent 1px) 0 0 / 24px 24px;
 }
 
-.kette-pfeil {
-  padding: 2px 0;
-  color: var(--text-gedimmt);
-  font-size: 14px;
-  text-align: center;
+.pfeil-ebene {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
 }
 
-.ketten-block {
+.pfeil-linie {
+  stroke: #6b7484;
+  stroke-width: 2;
+}
+
+.pfeil-vorschau {
+  stroke: var(--akzent);
+  stroke-dasharray: 6 4;
+}
+
+.schaubild-karte {
+  position: absolute;
   display: flex;
   flex-direction: column;
   gap: 8px;
+  width: 240px;
   padding: 12px;
+  padding-bottom: 16px;
   border: 2px solid var(--rand);
   border-radius: 8px;
   background: var(--flaeche);
+  box-shadow: 0 2px 6px rgba(28, 36, 48, 0.08);
+  touch-action: none;
+}
+
+.schaubild-karte.block-laeuft {
+  border-color: var(--akzent);
+  background: #eff6ff;
+}
+
+.schaubild-griff {
+  cursor: grab;
+}
+
+.pfeil-punkt {
+  position: absolute;
+  left: 50%;
+  bottom: -12px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--akzent);
+  border-radius: 999px;
+  background: var(--flaeche);
+  color: var(--akzent);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.pfeil-punkt:hover {
+  background: var(--akzent);
+  color: #ffffff;
+}
+
+.pfeil-loeschen {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--rand);
+  border-radius: 999px;
+  background: var(--flaeche);
+  color: var(--text-gedimmt);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.pfeil-loeschen:hover {
+  border-color: #dc2626;
+  color: #dc2626;
+}
+
+.schaubild-leer {
+  position: absolute;
+  top: 40%;
+  left: 450px;
+  transform: translate(-50%, -50%);
+  width: 380px;
+  max-width: 80vw;
+  text-align: center;
+  color: var(--text-gedimmt);
+  font-size: 13px;
 }
 
 .ketten-block-kopf {
   display: flex;
   align-items: center;
   gap: 8px;
-}
-
-.ketten-block-kopf[draggable='true'] {
-  cursor: grab;
 }
 
 .ketten-block-entfernen {

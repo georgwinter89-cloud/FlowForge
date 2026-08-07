@@ -34,10 +34,20 @@ export const texte = {
     bibliothekHinweis: 'Zieh einen Block mit der Maus auf die Leinwand.'
   },
   kette: {
-    starten: 'Kette starten',
+    starten: 'Workflow starten',
     leerHinweis:
-      'Deine Kette ist noch leer. Zieh Blöcke aus der Bibliothek rechts hierher — sie laufen dann von oben nach unten.',
-    hierAblegen: 'Hier ablegen',
+      'Dein Schaubild ist noch leer. Zieh Blöcke aus der Bibliothek rechts hierher, schieb sie zurecht und verbinde sie mit Pfeilen — die Pfeile bestimmen die Reihenfolge.',
+    pfeilZiehenHinweis: 'Pfeil ziehen: hier drücken und zum nächsten Block ziehen',
+    pfeilLoeschen: 'Diesen Pfeil löschen',
+    einPfadAusgehend: (name) =>
+      `Von „${name}" geht schon ein Pfeil aus. Ein Workflow ist vorerst ein einziger durchgehender Pfad — parallele Zweige kommen in einem späteren Bauschritt. Lösch den vorhandenen Pfeil, wenn du neu verbinden willst.`,
+    einPfadEingehend: (name) =>
+      `Bei „${name}" kommt schon ein Pfeil an. Ein Workflow ist vorerst ein einziger durchgehender Pfad — parallele Zweige kommen in einem späteren Bauschritt. Lösch den vorhandenen Pfeil, wenn du neu verbinden willst.`,
+    fehlerKreis:
+      'Diese Pfeile ergeben einen Kreis — der Workflow hätte kein Ende. Bitte lösch einen der Pfeile.',
+    fehlerPfeilUngueltig: 'Dieser Pfeil lässt sich nicht setzen.',
+    fehlerNichtVerbunden: (name) =>
+      `„${name}" hängt noch nicht am Pfad. Verbinde alle Blöcke mit Pfeilen zu einem durchgehenden Pfad — oder entferne den Block.`,
     entfernen: 'Entfernen',
     reparaturRundenLabel: 'Reparatur-Runden',
     reparaturRundenHinweis:
