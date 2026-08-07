@@ -16,11 +16,16 @@ contextBridge.exposeInMainWorld('flowforge', {
   einstellungenLaden: () => ipcRenderer.invoke('einstellungen-laden'),
   einstellungenSpeichern: (neu) => ipcRenderer.invoke('einstellungen-speichern', neu),
 
-  laufStarten: (pfad, workflowId) => ipcRenderer.invoke('lauf-starten', { pfad, workflowId }),
+  workflowLaden: (pfad) => ipcRenderer.invoke('workflow-laden', pfad),
+  workflowSpeichern: (pfad, workflow) => ipcRenderer.invoke('workflow-speichern', { pfad, workflow }),
+
+  laufStarten: (pfad) => ipcRenderer.invoke('lauf-starten', { pfad }),
   laufSanftStoppen: (pfad) => ipcRenderer.invoke('lauf-sanft-stoppen', pfad),
   laufHartStoppen: (pfad) => ipcRenderer.invoke('lauf-hart-stoppen', pfad),
   laufFrageAntworten: (frageId, erlaubt) =>
     ipcRenderer.invoke('lauf-frage-antworten', { frageId, erlaubt }),
+  laufEntscheidungAntworten: (frageId, wahl) =>
+    ipcRenderer.invoke('lauf-entscheidung-antworten', { frageId, wahl }),
   laufZustand: (pfad) => ipcRenderer.invoke('lauf-zustand', pfad),
   laufberichteLaden: (pfad) => ipcRenderer.invoke('laufberichte-laden', pfad),
   sicherungspunkteLaden: (pfad) => ipcRenderer.invoke('sicherungspunkte-laden', pfad),

@@ -17,9 +17,11 @@ import {
   laufSanftStoppen,
   laufHartStoppen,
   laufFrageAntworten,
+  laufEntscheidungAntworten,
   laufZustand,
   laufberichteLaden
 } from './lauf.js'
+import { workflowLaden, workflowSpeichern } from './workflow.js'
 import {
   sicherungspunkteLaden,
   wiederherstellenVorschau,
@@ -73,13 +75,23 @@ function registriereIpc() {
   ipcMain.handle('einstellungen-laden', () => einstellungenLaden())
   ipcMain.handle('einstellungen-speichern', (_e, neu) => einstellungenSpeichern(neu))
 
-  ipcMain.handle('lauf-starten', (ereignis, { pfad, workflowId }) =>
-    laufStarten(BrowserWindow.fromWebContents(ereignis.sender), pfad, workflowId)
+  ipcMain.handle('workflow-laden', (_e, pfad) => workflowLaden(pfad))
+  ipcMain.handle('workflow-speichern', (_e, { pfad, workflow }) => {
+    // Kein Umbau eines Workflows, während er läuft (SPEC §10).
+    if (laufZustand(pfad).aktiv) return { ok: false, fehler: texte.kette.fehlerWaehrendLauf }
+    return workflowSpeichern(pfad, workflow)
+  })
+
+  ipcMain.handle('lauf-starten', (ereignis, { pfad }) =>
+    laufStarten(BrowserWindow.fromWebContents(ereignis.sender), pfad)
   )
   ipcMain.handle('lauf-sanft-stoppen', (_e, pfad) => laufSanftStoppen(pfad))
   ipcMain.handle('lauf-hart-stoppen', (_e, pfad) => laufHartStoppen(pfad))
   ipcMain.handle('lauf-frage-antworten', (_e, { frageId, erlaubt }) =>
     laufFrageAntworten(frageId, erlaubt)
+  )
+  ipcMain.handle('lauf-entscheidung-antworten', (_e, { frageId, wahl }) =>
+    laufEntscheidungAntworten(frageId, wahl)
   )
   ipcMain.handle('lauf-zustand', (_e, pfad) => laufZustand(pfad))
   ipcMain.handle('laufberichte-laden', (_e, pfad) => laufberichteLaden(pfad))

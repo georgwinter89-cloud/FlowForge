@@ -30,11 +30,46 @@ export const texte = {
   projektansicht: {
     zurueck: 'Zur Übersicht',
     leinwandTitel: 'Leinwand',
-    leinwandHinweis:
-      'Hier baust du später deine Workflows aus Blöcken zusammen. Das kommt in einem späteren Bauschritt.',
     bibliothekTitel: 'Blockbibliothek',
-    bibliothekHinweis:
-      'Hier erscheinen die Blöcke, die du auf die Leinwand ziehen kannst. Das kommt in einem späteren Bauschritt.'
+    bibliothekHinweis: 'Zieh einen Block mit der Maus auf die Leinwand.'
+  },
+  kette: {
+    starten: 'Kette starten',
+    leerHinweis:
+      'Deine Kette ist noch leer. Zieh Blöcke aus der Bibliothek rechts hierher — sie laufen dann von oben nach unten.',
+    hierAblegen: 'Hier ablegen',
+    entfernen: 'Entfernen',
+    reparaturRundenLabel: 'Reparatur-Runden',
+    reparaturRundenHinweis:
+      'So oft darf ein Prüfer den Lauf zur Reparatur zurückschicken, bevor du gefragt wirst.',
+    zurueckZuLabel: 'Bei Fehlschlag zurück zu:',
+    brauchtLabel: 'braucht',
+    liefertLabel: 'liefert',
+    nurLesenMarke: 'darf nur lesen',
+    prueftMarke: 'Prüfer',
+    fehlerBraucht: (blockName, bedarf) =>
+      `„${blockName}" braucht „${bedarf}" — aber kein Block davor liefert das.`,
+    fehlerLeereKette: 'Die Kette ist noch leer. Zieh zuerst Blöcke aus der Bibliothek auf die Leinwand.',
+    fehlerPflichtfeld: (blockName, feld) =>
+      `Beim Block „${blockName}" ist das Pflichtfeld „${feld}" leer. Bitte ausfüllen — sonst startet der Lauf nicht.`,
+    fehlerWaehrendLauf: 'Während ein Lauf läuft, kann die Kette nicht verändert werden.',
+    unbekannterBlock: 'Diesen Block kennt FlowForge nicht.'
+  },
+  entscheidung: {
+    ueberschrift: 'Der Prüfer ist weiterhin nicht zufrieden',
+    einleitung: (block, runden) =>
+      runden > 0
+        ? `„${block}" hat die Prüfung auch nach ${runden === 1 ? 'einer Reparatur-Runde' : runden + ' Reparatur-Runden'} nicht bestanden. Wie soll es weitergehen?`
+        : `„${block}" hat die Prüfung nicht bestanden, und Reparatur-Runden sind keine eingestellt. Wie soll es weitergehen?`,
+    weitermachen: 'Weitermachen',
+    weitermachenHinweis:
+      'Der Lauf macht trotz der nicht bestandenen Prüfung mit dem nächsten Block weiter.',
+    zurueckstellen: 'Zurückstellen',
+    zurueckstellenHinweis:
+      'Der Lauf hält hier an. Alles bisher Gebaute bleibt bestehen — du kannst später neu starten.',
+    wiederherstellen: 'Stand wiederherstellen',
+    wiederherstellenHinweis:
+      'Der Projektordner wird auf den Stand von vor diesem Lauf zurückgesetzt.'
   },
   karten: {
     ueberschrift: 'Karten',
@@ -105,12 +140,9 @@ export const texte = {
     fehlerObergrenze: 'Die Ausgaben-Obergrenze muss eine Zahl größer als 0 sein.'
   },
   lauf: {
-    uebungsHinweis:
-      'Die richtige Leinwand mit Drag & Drop kommt in einem späteren Bauschritt. Zum Ausprobieren des Motors gibt es zwei Übungs-Workflows:',
-    starten: 'Starten',
     laeuft: 'läuft …',
     sanftStoppen: 'Sanft anhalten',
-    sanftStoppenHinweis: 'Der laufende Schritt macht fertig, dann hält der Lauf an.',
+    sanftStoppenHinweis: 'Der laufende Block macht fertig, dann hält der Lauf an.',
     hartStoppen: 'Sofort abbrechen',
     hartStoppenBestaetigung:
       'Sofort abbrechen? Der Block gilt dann als nicht gelaufen — angefangene Änderungen werden auf den letzten Sicherungspunkt zurückgesetzt.',
@@ -125,16 +157,21 @@ export const texte = {
       erfolgreich: 'Erfolgreich',
       fehlgeschlagen: 'Fehlgeschlagen',
       'sanft-gestoppt': 'Sanft gestoppt',
-      'hart-abgebrochen': 'Sofort abgebrochen'
+      'hart-abgebrochen': 'Sofort abgebrochen',
+      zurueckgestellt: 'Zurückgestellt',
+      wiederhergestellt: 'Stand wiederhergestellt'
     },
-    fertigErfolgreich: 'Der Lauf ist fertig.',
+    fertigErfolgreich: 'Der Lauf ist fertig — alle Blöcke sind durch.',
     fertigFehlgeschlagen: 'Der Lauf ist fehlgeschlagen.',
-    fertigSanft: 'Der Lauf wurde sanft angehalten.',
+    fertigSanft: 'Der Lauf wurde sanft angehalten. Der Stand ist am letzten Sicherungspunkt.',
     fertigHart:
-      'Der Lauf wurde sofort abgebrochen. Der Block gilt als nicht gelaufen; angefangene Änderungen wurden auf den letzten Sicherungspunkt zurückgesetzt.',
+      'Der Lauf wurde sofort abgebrochen. Der laufende Block gilt als nicht gelaufen; angefangene Änderungen wurden auf den letzten Sicherungspunkt zurückgesetzt.',
+    fertigZurueckgestellt:
+      'Der Lauf wurde zurückgestellt. Alles bisher Gebaute bleibt bestehen — du kannst später neu starten.',
+    fertigWiederhergestellt:
+      'Der Projektordner wurde auf den Stand von vor dem Lauf zurückgesetzt.',
     okKnopf: 'Alles klar',
     schonAktiv: 'Es läuft schon ein Workflow. Bitte warte, bis er fertig ist.',
-    workflowUnbekannt: 'Diesen Workflow gibt es nicht.',
     aboNichtErlaubt:
       'Diese FlowForge-Version läuft nur mit API-Schlüssel. Bitte hinterlege einen in den Einstellungen.',
     motorNichtAngemeldet:
@@ -156,7 +193,9 @@ export const texte = {
     abgelehntFuerAgent:
       'Der Nutzer hat das nicht erlaubt. Suche einen anderen Weg innerhalb des Projektordners — oder beende den Auftrag mit einer kurzen Erklärung.',
     gitGesperrtFuerAgent:
-      'Git ist in FlowForge-Projekten gesperrt: Die App verwaltet Sicherungspunkte selbst. Arbeite ohne Git weiter.'
+      'Git ist in FlowForge-Projekten gesperrt: Die App verwaltet Sicherungspunkte selbst. Arbeite ohne Git weiter.',
+    nurLesenGesperrtFuerAgent:
+      'Dieser Block darf nur lesen. Schreiben, Befehle und Internet sind hier gesperrt. Beende den Auftrag nur mit Lese-Werkzeugen.'
   },
   ticker: {
     motorGestartet: (modell) => `Motor gestartet (${modell}).`,
@@ -172,12 +211,24 @@ export const texte = {
     rechteFrageGestellt: 'Rechte-Rückfrage an dich — bitte oben beantworten.',
     rechteFrageErlaubt: 'Du hast es erlaubt.',
     rechteFrageAbgelehnt: 'Du hast es abgelehnt.',
-    sanftAngefordert: 'Sanftes Anhalten angefordert — der laufende Schritt macht fertig.',
+    sanftAngefordert: 'Sanftes Anhalten angefordert — der laufende Block macht fertig.',
     hartAbgebrochen: 'Sofort abgebrochen.',
     gitGesperrt: 'Git-Befehl gesperrt — Sicherungspunkte übernimmt FlowForge.',
+    nurLesenGesperrt: 'Schreib-Versuch gestoppt — dieser Block darf nur lesen.',
     sicherungspunktAngelegt: 'Sicherungspunkt angelegt.',
     zurueckgesetzt: 'Projektordner auf den letzten Sicherungspunkt zurückgesetzt.',
-    fertigIn: (sekunden) => `Fertig nach ${sekunden} Sekunden.`
+    fertigIn: (sekunden) => `Fertig nach ${sekunden} Sekunden.`,
+    blockStartet: (nr, gesamt, name) => `Block ${nr} von ${gesamt}: „${name}" startet.`,
+    pruefungBestanden: 'Prüfung bestanden.',
+    pruefungNichtBestanden: 'Prüfung nicht bestanden.',
+    pruefungOhneErgebnis:
+      'Der Prüfer hat kein eindeutiges Ergebnis geliefert — das gilt als nicht bestanden.',
+    rueckfuehrung: (name, runde, gesamt) =>
+      `Zurück zu „${name}" — Reparatur-Runde ${runde} von ${gesamt}.`,
+    entscheidungGestellt: 'Folgen-Frage an dich — bitte im Fenster beantworten.',
+    entscheidungWeitermachen: 'Du hast entschieden: weitermachen.',
+    entscheidungZurueckgestellt: 'Du hast entschieden: zurückstellen.',
+    entscheidungWiederhergestellt: 'Du hast entschieden: Stand von vor dem Lauf wiederherstellen.'
   },
   sicherungen: {
     ueberschrift: 'Sicherungspunkte',
@@ -211,6 +262,7 @@ export const texte = {
     schliessen: 'Zuklappen',
     fehlertextLabel: 'Fehler',
     rechteFragenLabel: 'Rechte-Rückfragen',
+    entscheidungenLabel: 'Folgen-Fragen',
     erlaubt: 'erlaubt',
     abgelehnt: 'abgelehnt',
     verlaufLabel: 'Verlauf'

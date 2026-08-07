@@ -702,6 +702,201 @@ body {
   margin-left: auto;
 }
 
+/* Kette auf der Leinwand (Bauschritt 5) */
+
+.kette-kopf {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.runden-feld {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-gedimmt);
+}
+
+.runden-feld input {
+  width: 52px;
+  padding: 4px 6px;
+  border: 1px solid var(--rand);
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 13px;
+}
+
+.kette {
+  display: flex;
+  flex-direction: column;
+}
+
+.ablage-zone {
+  margin: 4px 0;
+  padding: 6px;
+  border: 2px dashed var(--rand);
+  border-radius: 8px;
+  color: var(--text-gedimmt);
+  font-size: 11px;
+  text-align: center;
+}
+
+.ablage-aktiv {
+  border-color: var(--akzent);
+  background: #eff6ff;
+  color: var(--akzent);
+}
+
+.kette-pfeil {
+  padding: 2px 0;
+  color: var(--text-gedimmt);
+  font-size: 14px;
+  text-align: center;
+}
+
+.ketten-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 2px solid var(--rand);
+  border-radius: 8px;
+  background: var(--flaeche);
+}
+
+.ketten-block-kopf {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ketten-block-kopf[draggable='true'] {
+  cursor: grab;
+}
+
+.ketten-block-entfernen {
+  margin-left: auto;
+}
+
+.block-nummer {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: var(--hintergrund);
+  border: 1px solid var(--rand);
+  color: var(--text-gedimmt);
+  font-size: 11px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.chip-zeile {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.block-chip {
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.chip-braucht {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.chip-liefert {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.chip-sperre {
+  background: #e0e7ff;
+  color: #3730a3;
+}
+
+.chip-pruefer {
+  background: #fae8ff;
+  color: #86198f;
+}
+
+.feld-kompakt {
+  font-size: 12px;
+}
+
+.feld-kompakt input,
+.feld-kompakt select {
+  padding: 6px 8px;
+  font-size: 13px;
+}
+
+/* Blockbibliothek */
+
+.bibliothek-liste {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.bib-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid var(--rand);
+  border-radius: 8px;
+  background: var(--flaeche);
+  cursor: grab;
+}
+
+.bib-block:hover {
+  border-color: var(--akzent);
+}
+
+/* Folgen-Frage */
+
+.entscheidung-optionen {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.entscheidung-option {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid var(--rand);
+  border-radius: 8px;
+  background: var(--flaeche);
+  font-family: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.entscheidung-option:hover {
+  border-color: var(--akzent);
+}
+
+.bericht-kopf-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .platzhalter {
   display: flex;
   flex-direction: column;

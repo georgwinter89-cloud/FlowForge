@@ -1,17 +1,34 @@
-// Lauf-Verwaltung: startet Workflow-Läufe über die Motor-Schnittstelle, reicht
-// Ereignisse an die Oberfläche weiter und legt Laufberichte ab (SPEC §3.2, §6).
+// Lauf-Verwaltung: führt die Workflow-Kette eines Projekts Block für Block über
+// die Motor-Schnittstelle aus, reicht Ereignisse an die Oberfläche weiter und
+// legt Laufberichte ab (SPEC §3.2, §4, §6).
+//
+// Fehlschlag-Rückführung (SPEC §4.1): Meldet ein Prüfer-Block „nicht bestanden",
+// springt der Lauf zurück zu Block X (Standard: der Block davor) — so oft, wie
+// Reparatur-Runden eingestellt sind. Danach hält der Lauf an und stellt die
+// Folgen-Frage: weitermachen, zurückstellen oder Stand wiederherstellen.
 import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'node:crypto'
 import { texte } from '../shared/texte.js'
-import { UEBUNGS_WORKFLOWS } from '../shared/uebungsWorkflows.js'
+import { blockDefinition } from '../shared/blockKatalog.js'
+import {
+  pruefeKette,
+  pruefePflichtfelder,
+  auftragMitFeldern,
+  rueckfuehrungsZiel
+} from '../shared/kettenRegeln.js'
 import { einstellungenLaden, ABO_MODUS_ERLAUBT } from './einstellungen.js'
 import { starteMotorLauf } from './motor/claudeCodeMotor.js'
-import { sicherungspunktAnlegen, aufLetztenPunktZuruecksetzen } from './sicherungspunkte.js'
+import {
+  sicherungspunktAnlegen,
+  aufLetztenPunktZuruecksetzen,
+  wiederherstellen
+} from './sicherungspunkte.js'
+import { workflowLaden } from './workflow.js'
 
 const BERICHTE_ORDNER = 'laufberichte'
 
-// V1 Schritt 3: höchstens ein Lauf gleichzeitig. Parallelität kommt in Schritt 11.
+// V1 Schritt 5: höchstens ein Lauf gleichzeitig. Parallelität kommt in Schritt 11.
 let aktiverLauf = null
 
 function jetztIso() {
@@ -47,11 +64,36 @@ export function laufberichteLaden(projektPfad) {
   return { ok: true, berichte }
 }
 
-export async function laufStarten(fenster, projektPfad, workflowId) {
+// Prüfer-Urteil aus dem Abschlusstext lesen: die letzte Marke zählt.
+// true = bestanden, false = nicht bestanden, null = keine eindeutige Marke.
+function pruefUrteil(ergebnisText) {
+  const treffer = [...String(ergebnisText).matchAll(/PR(?:UE|Ü)FUNG:?\s*(BESTANDEN|FEHLGESCHLAGEN)/gi)]
+  if (!treffer.length) return null
+  return treffer[treffer.length - 1][1].toUpperCase() === 'BESTANDEN'
+}
+
+// Die Begründung des Prüfers (ohne die Urteils-Marke) — geht als Rückmeldung
+// an den Block, zu dem die Reparatur-Runde zurückspringt.
+function prueferKritik(ergebnisText) {
+  const ohneMarke = String(ergebnisText)
+    .replace(/PR(?:UE|Ü)FUNG:?\s*(BESTANDEN|FEHLGESCHLAGEN)/gi, '')
+    .trim()
+  return ohneMarke.length > 600 ? ohneMarke.slice(0, 600) + ' …' : ohneMarke
+}
+
+export async function laufStarten(fenster, projektPfad) {
   if (aktiverLauf) return { ok: false, fehler: texte.lauf.schonAktiv }
   if (!fs.existsSync(projektPfad)) return { ok: false, fehler: texte.fehler.projektNichtGefunden }
-  const workflow = UEBUNGS_WORKFLOWS.find((w) => w.id === workflowId)
-  if (!workflow) return { ok: false, fehler: texte.lauf.workflowUnbekannt }
+
+  const geladen = workflowLaden(projektPfad)
+  if (!geladen.ok) return geladen
+  const workflow = geladen.workflow
+  if (workflow.bloecke.length === 0) return { ok: false, fehler: texte.kette.fehlerLeereKette }
+  const ketteFehler = pruefeKette(workflow.bloecke)
+  if (ketteFehler) return { ok: false, fehler: ketteFehler }
+  // Sperren-Mechanik „Pflichtfeld leer = Lauf hält an" (SPEC §4.2).
+  const feldFehler = pruefePflichtfelder(workflow.bloecke)
+  if (feldFehler) return { ok: false, fehler: feldFehler }
 
   const { einstellungen } = einstellungenLaden()
   if (einstellungen.motorModus === 'abo' && !ABO_MODUS_ERLAUBT)
@@ -61,22 +103,36 @@ export async function laufStarten(fenster, projektPfad, workflowId) {
 
   // Projekt sofort belegen, damit ein Doppelklick auf „Starten" während der
   // Sicherung keinen zweiten Lauf startet.
-  aktiverLauf = { projektPfad, motor: null, fragen: new Map() }
+  aktiverLauf = {
+    projektPfad,
+    motor: null,
+    fragen: new Map(),
+    entscheidungen: new Map(),
+    sanft: false,
+    hart: false,
+    aktuelleInstanzId: null,
+    offeneFrage: null,
+    offeneEntscheidung: null
+  }
+  const lauf = aktiverLauf
 
-  // Sicherheitsnetz vor dem Lauf: der Stand von jetzt ist immer wiederholbar.
+  // Sicherheitsnetz vor dem Lauf: der Stand von jetzt ist immer wiederholbar —
+  // und die Folgen-Frage kann genau hierauf zurücksetzen.
+  const namen = workflow.bloecke.map((b) => blockDefinition(b.blockId).name)
   const sicherung = await sicherungspunktAnlegen(
     projektPfad,
-    texte.sicherungen.beschriftungVorLauf(workflow.block.name)
+    texte.sicherungen.beschriftungVorLauf(namen[0])
   )
   if (!sicherung.ok) {
     aktiverLauf = null
     return { ok: false, fehler: sicherung.fehler }
   }
+  const punktVorLauf = sicherung.id
 
   const bericht = {
     id: crypto.randomUUID(),
-    workflow: workflow.name,
-    block: workflow.block.name,
+    workflow: namen.join(' → '),
+    bloecke: namen,
     modus: einstellungen.motorModus,
     gestartetAm: jetztIso(),
     beendetAm: null,
@@ -84,6 +140,7 @@ export async function laufStarten(fenster, projektPfad, workflowId) {
     fehlertext: '',
     verbrauch: null,
     rechteFragen: [],
+    entscheidungen: [],
     ticker: []
   }
 
@@ -92,95 +149,222 @@ export async function laufStarten(fenster, projektPfad, workflowId) {
       fenster.webContents.send('lauf-ereignis', { projektPfad, ...ereignis })
   }
 
-  const fragen = new Map()
+  function tickern(text) {
+    bericht.ticker.push({ zeit: jetztIso(), text })
+    senden({ art: 'ticker', text })
+  }
+  lauf.tickern = tickern
 
-  const motor = starteMotorLauf({
-    projektPfad,
-    auftrag: workflow.block.auftrag,
-    modus: einstellungen.motorModus,
-    apiSchluessel: einstellungen.apiSchluessel,
-    ausgabenObergrenzeUsd: einstellungen.ausgabenObergrenzeUsd,
-    aufEreignis(e) {
-      if (e.art === 'ticker') bericht.ticker.push({ zeit: jetztIso(), text: e.text })
-      if (e.art === 'verbrauch') bericht.verbrauch = e.verbrauch
-      senden(e)
-    },
-    aufRechteFrage(frage) {
-      return new Promise((antworten) => {
-        if (fenster.isDestroyed()) return antworten(false)
-        const frageId = crypto.randomUUID()
-        fragen.set(frageId, (erlaubt) => {
-          fragen.delete(frageId)
-          bericht.rechteFragen.push({ beschreibung: frage.beschreibung, erlaubt })
-          senden({ art: 'frage-erledigt', frageId })
-          antworten(erlaubt)
-        })
-        senden({ art: 'frage', frageId, beschreibung: frage.beschreibung })
+  const gesamtVerbrauch = { tokens: 0, kostenUsd: null }
+
+  function rechteFrageStellen(frage) {
+    return new Promise((antworten) => {
+      if (fenster.isDestroyed()) return antworten(false)
+      const frageId = crypto.randomUUID()
+      lauf.fragen.set(frageId, (erlaubt) => {
+        lauf.fragen.delete(frageId)
+        lauf.offeneFrage = null
+        bericht.rechteFragen.push({ beschreibung: frage.beschreibung, erlaubt })
+        senden({ art: 'frage-erledigt', frageId })
+        antworten(erlaubt)
       })
-    }
-  })
+      lauf.offeneFrage = { frageId, beschreibung: frage.beschreibung }
+      senden({ art: 'frage', frageId, beschreibung: frage.beschreibung })
+    })
+  }
 
-  aktiverLauf = { projektPfad, motor, fragen }
+  // Folgen-Frage nach verbrauchten Reparatur-Runden (SPEC §4.1).
+  function entscheidungStellen(blockName, runden) {
+    return new Promise((aufloesen) => {
+      if (fenster.isDestroyed()) return aufloesen('zurueckstellen')
+      tickern(texte.ticker.entscheidungGestellt)
+      const frageId = crypto.randomUUID()
+      lauf.entscheidungen.set(frageId, (wahl) => {
+        lauf.entscheidungen.delete(frageId)
+        lauf.offeneEntscheidung = null
+        bericht.entscheidungen.push({ block: blockName, wahl })
+        senden({ art: 'entscheidung-erledigt', frageId })
+        aufloesen(wahl)
+      })
+      lauf.offeneEntscheidung = { frageId, blockName, runden }
+      senden({ art: 'entscheidung', frageId, blockName, runden })
+    })
+  }
 
-  motor.fertig
-    .catch((fehler) => ({
+  function blockAusfuehren(auftrag, nurLesen) {
+    const motor = starteMotorLauf({
+      projektPfad,
+      auftrag,
+      modus: einstellungen.motorModus,
+      apiSchluessel: einstellungen.apiSchluessel,
+      ausgabenObergrenzeUsd: einstellungen.ausgabenObergrenzeUsd,
+      nurLesen,
+      aufEreignis(e) {
+        if (e.art === 'ticker') bericht.ticker.push({ zeit: jetztIso(), text: e.text })
+        senden(e)
+      },
+      aufRechteFrage: rechteFrageStellen
+    })
+    lauf.motor = motor
+    return motor.fertig.catch((fehler) => ({
       zustand: 'fehlgeschlagen',
       fehlertext: String(fehler?.message ?? fehler),
-      verbrauch: bericht.verbrauch
+      ergebnisText: '',
+      verbrauch: null
     }))
-    .then(async (ergebnis) => {
-      // Offene Fragen auflösen, damit nichts ewig hängt.
-      for (const antworten of [...fragen.values()]) antworten(false)
+  }
 
-      function tickern(text) {
-        bericht.ticker.push({ zeit: jetztIso(), text })
-        senden({ art: 'ticker', text })
+  // Die eigentliche Ketten-Schleife — läuft im Hintergrund weiter, laufStarten
+  // kehrt sofort zurück.
+  ;(async () => {
+    const kette = workflow.bloecke
+    let i = 0
+    let rundenUebrig = workflow.reparaturRunden
+    let rueckmeldung = ''
+    let endZustand = null
+    let fehlertext = ''
+
+    while (i < kette.length && !endZustand) {
+      // Harter Stopp zwischen zwei Blöcken (Motor war gerade fertig): der
+      // nächste Block darf nicht mehr starten.
+      if (lauf.hart) {
+        const zurueck = await aufLetztenPunktZuruecksetzen(projektPfad)
+        if (zurueck.ok && zurueck.zurueckgesetzt) tickern(texte.ticker.zurueckgesetzt)
+        endZustand = 'hart-abgebrochen'
+        break
       }
-      if (ergebnis.zustand === 'erfolgreich') {
-        const punkt = await sicherungspunktAnlegen(
-          projektPfad,
-          texte.sicherungen.beschriftungNachBlock(workflow.block.name)
-        )
-        if (punkt.ok && punkt.neu) tickern(texte.ticker.sicherungspunktAngelegt)
+
+      const eintrag = kette[i]
+      const def = blockDefinition(eintrag.blockId)
+      lauf.aktuelleInstanzId = eintrag.instanzId
+      senden({ art: 'block', instanzId: eintrag.instanzId, index: i })
+      tickern(texte.ticker.blockStartet(i + 1, kette.length, def.name))
+
+      let auftrag = auftragMitFeldern(def, eintrag.feldWerte)
+      if (rueckmeldung) {
+        auftrag +=
+          '\n\nRückmeldung des Prüfers aus der letzten Runde (bitte beheben):\n' + rueckmeldung
+        rueckmeldung = ''
       }
+
+      const ergebnis = await blockAusfuehren(auftrag, def.nurLesen)
+      lauf.motor = null
+      if (ergebnis.verbrauch) {
+        gesamtVerbrauch.tokens += ergebnis.verbrauch.tokens ?? 0
+        if (ergebnis.verbrauch.kostenUsd != null)
+          gesamtVerbrauch.kostenUsd = (gesamtVerbrauch.kostenUsd ?? 0) + ergebnis.verbrauch.kostenUsd
+      }
+
       if (ergebnis.zustand === 'hart-abgebrochen') {
         const zurueck = await aufLetztenPunktZuruecksetzen(projektPfad)
         if (zurueck.ok && zurueck.zurueckgesetzt) tickern(texte.ticker.zurueckgesetzt)
+        endZustand = 'hart-abgebrochen'
+        break
+      }
+      if (ergebnis.zustand === 'sanft-gestoppt') {
+        endZustand = 'sanft-gestoppt'
+        break
+      }
+      if (ergebnis.zustand === 'fehlgeschlagen') {
+        endZustand = 'fehlgeschlagen'
+        fehlertext = ergebnis.fehlertext
+        break
       }
 
-      bericht.beendetAm = jetztIso()
-      bericht.zustand = ergebnis.zustand
-      bericht.fehlertext = ergebnis.fehlertext ?? ''
-      bericht.verbrauch = ergebnis.verbrauch ?? bericht.verbrauch
-      try {
-        berichtSpeichern(projektPfad, bericht)
-      } catch {
-        // Ein nicht speicherbarer Bericht darf das Laufende nicht verschlucken.
+      // Prüfer-Blöcke: Urteil auswerten, ggf. Fehlschlag-Rückführung.
+      if (def.prueft) {
+        const bestanden = pruefUrteil(ergebnis.ergebnisText)
+        if (bestanden === true) {
+          tickern(texte.ticker.pruefungBestanden)
+        } else {
+          tickern(bestanden === false ? texte.ticker.pruefungNichtBestanden : texte.ticker.pruefungOhneErgebnis)
+          const ziel = rueckfuehrungsZiel(kette, i)
+          if (rundenUebrig > 0 && ziel !== null && !lauf.sanft && !lauf.hart) {
+            rundenUebrig--
+            const genutzt = workflow.reparaturRunden - rundenUebrig
+            const zielName = blockDefinition(kette[ziel].blockId).name
+            rueckmeldung = prueferKritik(ergebnis.ergebnisText)
+            tickern(texte.ticker.rueckfuehrung(zielName, genutzt, workflow.reparaturRunden))
+            i = ziel
+            continue
+          }
+          const wahl = await entscheidungStellen(def.name, workflow.reparaturRunden)
+          if (wahl === 'zurueckstellen') {
+            tickern(texte.ticker.entscheidungZurueckgestellt)
+            endZustand = 'zurueckgestellt'
+            break
+          }
+          if (wahl === 'wiederherstellen') {
+            tickern(texte.ticker.entscheidungWiederhergestellt)
+            const zurueck = await wiederherstellen(projektPfad, punktVorLauf)
+            if (zurueck.ok) tickern(texte.ticker.zurueckgesetzt)
+            endZustand = 'wiederhergestellt'
+            break
+          }
+          tickern(texte.ticker.entscheidungWeitermachen)
+        }
       }
-      aktiverLauf = null
-      senden({
-        art: 'fertig',
-        zustand: bericht.zustand,
-        fehlertext: bericht.fehlertext,
-        bericht
-      })
+
+      // Block erfolgreich: Sicherungspunkt nach jedem gelungenen Block (SPEC §3.3).
+      const punkt = await sicherungspunktAnlegen(
+        projektPfad,
+        texte.sicherungen.beschriftungNachBlock(def.name)
+      )
+      if (punkt.ok && punkt.neu) tickern(texte.ticker.sicherungspunktAngelegt)
+
+      // Sanftes Anhalten: der laufende Block hat fertig gemacht — Halt am
+      // Sicherungspunkt (SPEC §6).
+      if (lauf.sanft) {
+        endZustand = 'sanft-gestoppt'
+        break
+      }
+      i++
+    }
+
+    if (!endZustand) endZustand = 'erfolgreich'
+
+    // Offene Fragen auflösen, damit nichts ewig hängt.
+    for (const antworten of [...lauf.fragen.values()]) antworten(false)
+    for (const aufloesen of [...lauf.entscheidungen.values()]) aufloesen('zurueckstellen')
+
+    bericht.beendetAm = jetztIso()
+    bericht.zustand = endZustand
+    bericht.fehlertext = fehlertext
+    bericht.verbrauch = { ...gesamtVerbrauch }
+    try {
+      berichtSpeichern(projektPfad, bericht)
+    } catch {
+      // Ein nicht speicherbarer Bericht darf das Laufende nicht verschlucken.
+    }
+    aktiverLauf = null
+    senden({
+      art: 'fertig',
+      zustand: bericht.zustand,
+      fehlertext: bericht.fehlertext,
+      bericht
     })
+  })()
 
-  senden({ art: 'zustand', zustand: 'laeuft', workflowId, blockName: workflow.block.name })
-  return { ok: true, workflowId, blockName: workflow.block.name }
+  senden({ art: 'zustand', zustand: 'laeuft' })
+  return { ok: true }
 }
 
 export function laufSanftStoppen(projektPfad) {
   if (!aktiverLauf || aktiverLauf.projektPfad !== projektPfad)
     return { ok: false, fehler: texte.fehler.unbekannt }
-  aktiverLauf.motor.sanftStoppen()
+  if (!aktiverLauf.sanft && !aktiverLauf.hart) {
+    aktiverLauf.sanft = true
+    aktiverLauf.tickern?.(texte.ticker.sanftAngefordert)
+  }
   return { ok: true }
 }
 
 export function laufHartStoppen(projektPfad) {
   if (!aktiverLauf || aktiverLauf.projektPfad !== projektPfad)
     return { ok: false, fehler: texte.fehler.unbekannt }
-  aktiverLauf.motor.hartStoppen()
+  aktiverLauf.hart = true
+  if (aktiverLauf.motor) aktiverLauf.motor.hartStoppen()
+  else aktiverLauf.tickern?.(texte.ticker.hartAbgebrochen)
   return { ok: true }
 }
 
@@ -191,7 +375,26 @@ export function laufFrageAntworten(frageId, erlaubt) {
   return { ok: true }
 }
 
-// Für die Oberfläche: Läuft in diesem Projekt gerade etwas?
+export function laufEntscheidungAntworten(frageId, wahl) {
+  const aufloesen = aktiverLauf?.entscheidungen.get(frageId)
+  if (!aufloesen) return { ok: false, fehler: texte.fehler.unbekannt }
+  if (!['weitermachen', 'zurueckstellen', 'wiederherstellen'].includes(wahl))
+    return { ok: false, fehler: texte.fehler.unbekannt }
+  aufloesen(wahl)
+  return { ok: true }
+}
+
+// Für die Oberfläche: Läuft in diesem Projekt gerade etwas — und wo steht es?
+// Offene Fragen kommen mit, damit die Ansicht sie nach einem Wechsel zur
+// Projektübersicht und zurück wieder anzeigen kann.
 export function laufZustand(projektPfad) {
-  return { ok: true, aktiv: Boolean(aktiverLauf && aktiverLauf.projektPfad === projektPfad) }
+  const aktiv = Boolean(aktiverLauf && aktiverLauf.projektPfad === projektPfad)
+  if (!aktiv) return { ok: true, aktiv: false }
+  return {
+    ok: true,
+    aktiv: true,
+    blockInstanzId: aktiverLauf.aktuelleInstanzId,
+    frage: aktiverLauf.offeneFrage,
+    entscheidung: aktiverLauf.offeneEntscheidung
+  }
 }

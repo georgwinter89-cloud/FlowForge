@@ -58,7 +58,8 @@ function alleDateien(wurzel, unter = '') {
 }
 
 // Legt einen Sicherungspunkt an — aber nur, wenn sich seit dem letzten etwas
-// geändert hat. Gibt zurück, ob wirklich ein neuer Punkt entstanden ist.
+// geändert hat. Gibt zurück, ob wirklich ein neuer Punkt entstanden ist, und
+// die id des Punkts, der den jetzigen Stand festhält (neu oder schon vorhanden).
 export async function sicherungspunktAnlegen(projektPfad, beschriftung) {
   try {
     const gitdir = await repoOeffnen(projektPfad)
@@ -86,9 +87,9 @@ export async function sicherungspunktAnlegen(projektPfad, beschriftung) {
         if (imPunkt !== 1 || imOrdner !== 1) geaendert = true
       }
     }
-    if (!geaendert) return { ok: true, neu: false }
-    await git.commit({ fs, dir: projektPfad, gitdir, message: beschriftung, author: AUTOR })
-    return { ok: true, neu: true }
+    if (!geaendert) return { ok: true, neu: false, id: kopf?.oid ?? null }
+    const id = await git.commit({ fs, dir: projektPfad, gitdir, message: beschriftung, author: AUTOR })
+    return { ok: true, neu: true, id }
   } catch {
     return { ok: false, fehler: texte.sicherungen.fehlerAnlegen }
   }

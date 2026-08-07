@@ -30,6 +30,19 @@ const OHNE_RUECKFRAGE = new Set([
 
 const SCHREIB_WERKZEUGE = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit'])
 
+// Sperre „darf nur lesen" (SPEC §4.2): nur diese Werkzeuge sind dann erlaubt.
+// Bewusst ohne Task (Unteraufgaben könnten indirekt schreiben) und ohne Bash.
+const NUR_LESEN_ERLAUBT = new Set([
+  'Read',
+  'Glob',
+  'Grep',
+  'TodoWrite',
+  'NotebookRead',
+  'BashOutput',
+  'KillShell',
+  'ExitPlanMode'
+])
+
 function liegtImProjekt(datei, projektPfad) {
   if (!datei) return false
   // Windows vergleicht Pfade ohne Groß/Klein-Unterscheidung.
@@ -41,7 +54,10 @@ function liegtImProjekt(datei, projektPfad) {
 
 // Rechte-Durchsetzung (SPEC §7): entscheidet pro Werkzeugaufruf, ob er ohne
 // Rückfrage laufen darf oder Georg gefragt werden muss. Alles Unbekannte fragt.
-function pruefeWerkzeug(name, eingabe, projektPfad) {
+// Mit Sperre „darf nur lesen": hartes Nein für alles außer Lese-Werkzeugen.
+function pruefeWerkzeug(name, eingabe, projektPfad, nurLesen) {
+  if (nurLesen && !NUR_LESEN_ERLAUBT.has(name))
+    return { gesperrt: texte.rechteFrage.nurLesenGesperrtFuerAgent, tickerText: texte.ticker.nurLesenGesperrt }
   if (OHNE_RUECKFRAGE.has(name)) return { erlaubt: true }
   if (SCHREIB_WERKZEUGE.has(name)) {
     const datei = eingabe.file_path ?? eingabe.notebook_path
@@ -52,7 +68,8 @@ function pruefeWerkzeug(name, eingabe, projektPfad) {
     const befehl = String(eingabe.command ?? '?')
     // BAUPLAN 4: Git ist dem Agenten per Sperre untersagt — es würde mit der
     // Sicherungspunkt-Verwaltung von FlowForge kollidieren. Keine Rückfrage, hartes Nein.
-    if (/\bgit\b/i.test(befehl)) return { gesperrt: texte.rechteFrage.gitGesperrtFuerAgent }
+    if (/\bgit\b/i.test(befehl))
+      return { gesperrt: texte.rechteFrage.gitGesperrtFuerAgent, tickerText: texte.ticker.gitGesperrt }
     return { frage: texte.rechteFrage.befehl(befehl) }
   }
   if (name === 'WebFetch' || name === 'WebSearch')
@@ -142,6 +159,7 @@ export function starteMotorLauf(optionen) {
     modus,
     apiSchluessel,
     ausgabenObergrenzeUsd,
+    nurLesen = false,
     aufEreignis,
     aufRechteFrage
   } = optionen
@@ -232,10 +250,10 @@ export function starteMotorLauf(optionen) {
           return kindProzess
         },
         canUseTool: async (name, eingabeDaten) => {
-          const urteil = pruefeWerkzeug(name, eingabeDaten ?? {}, projektPfad)
+          const urteil = pruefeWerkzeug(name, eingabeDaten ?? {}, projektPfad, nurLesen)
           if (urteil.erlaubt) return { behavior: 'allow', updatedInput: eingabeDaten }
           if (urteil.gesperrt) {
-            aufEreignis({ art: 'ticker', text: texte.ticker.gitGesperrt })
+            aufEreignis({ art: 'ticker', text: urteil.tickerText })
             return { behavior: 'deny', message: urteil.gesperrt }
           }
           aufEreignis({ art: 'ticker', text: texte.ticker.rechteFrageGestellt })
@@ -288,22 +306,28 @@ export function starteMotorLauf(optionen) {
         return {
           zustand: sanftAngefordert ? 'sanft-gestoppt' : 'fehlgeschlagen',
           fehlertext: fehlertextAusErgebnis(null, stderrPuffer || String(fehler?.message ?? '')),
+          ergebnisText: '',
           verbrauch
         }
     } finally {
       eingabeSchliessen()
     }
 
+    // Der Abschlusstext des Agenten — daraus liest FlowForge z.B. Prüfer-Urteile.
+    const ergebnisText = typeof ergebnis?.result === 'string' ? ergebnis.result : ''
+
     if (hartAngefordert)
-      return { zustand: 'hart-abgebrochen', fehlertext: '', verbrauch }
-    if (sanftAngefordert) return { zustand: 'sanft-gestoppt', fehlertext: '', verbrauch }
+      return { zustand: 'hart-abgebrochen', fehlertext: '', ergebnisText: '', verbrauch }
+    if (sanftAngefordert)
+      return { zustand: 'sanft-gestoppt', fehlertext: '', ergebnisText, verbrauch }
     // Achtung: subtype 'success' heißt nur „sauber durchgelaufen" — Fehler wie
     // eine fehlende Anmeldung kommen trotzdem mit is_error zurück.
     if (ergebnis?.subtype === 'success' && !ergebnis.is_error)
-      return { zustand: 'erfolgreich', fehlertext: '', verbrauch }
+      return { zustand: 'erfolgreich', fehlertext: '', ergebnisText, verbrauch }
     return {
       zustand: 'fehlgeschlagen',
       fehlertext: fehlertextAusErgebnis(ergebnis, stderrPuffer),
+      ergebnisText,
       verbrauch
     }
   })()

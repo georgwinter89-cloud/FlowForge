@@ -9,6 +9,8 @@
 //     modus                  'abo' | 'api'
 //     apiSchluessel          nur im API-Modus
 //     ausgabenObergrenzeUsd  nur im API-Modus; der Motor bricht darüber selbst ab
+//     nurLesen               Sperre „darf nur lesen" (SPEC §4.2): alles außer
+//                            Lese-Werkzeugen wird hart abgelehnt, ohne Rückfrage
 //     aufEreignis(e)         e = { art: 'ticker', text }
 //                              | { art: 'roh', zeile }
 //                              | { art: 'verbrauch', verbrauch }
@@ -16,9 +18,11 @@
 //   }
 //
 //   Rückgabe = {
-//     fertig            Promise<{ zustand, fehlertext, verbrauch }>
+//     fertig            Promise<{ zustand, fehlertext, ergebnisText, verbrauch }>
 //                       zustand: 'erfolgreich' | 'fehlgeschlagen'
 //                              | 'sanft-gestoppt' | 'hart-abgebrochen'
+//                       ergebnisText: Abschlusstext des Agenten — daraus liest
+//                       FlowForge z.B. Prüfer-Urteile (PRUEFUNG: BESTANDEN/…)
 //     sanftStoppen()    Motor unterbricht geordnet (Unterbrechungs-Funktion)
 //     hartStoppen()     Prozessbaum sofort beenden
 //   }

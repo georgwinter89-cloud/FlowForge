@@ -101,6 +101,12 @@ Prüfer (schreibt eigene Tests, liefert Rot-vor-Grün-Beleg; „≠ Bauer" heiß
 frische Session ohne das Arbeitswissen des Bauers) · Diagnose ·
 Frage an den Menschen (Folgen-Fragen, keine Technik-Fragen) · Audit · Sessionende.
 
+Übergangszustand, bis diese echten Arbeitsaufträge stehen (Bauschritt 7/8): Die
+Bibliothek enthält bewusst triviale Übungs-Blöcke (Späher, Mini-Bauer, fairer und
+strenger Übungs-Prüfer, Rechte-Probe), an denen Kette, Sperren und
+Fehlschlag-Rückführung erprobt werden. Prüfer-Blöcke melden ihr Urteil als letzte
+Zeile ihres Abschlusstexts („PRUEFUNG: BESTANDEN/FEHLGESCHLAGEN").
+
 ### 4.4 Vorlagen-Workflows
 
 | Vorlage | Kette |
@@ -154,8 +160,11 @@ Frage an den Menschen (Folgen-Fragen, keine Technik-Fragen) · Audit · Sessione
 | Tests ausführen | Alles Unumkehrbare |
 
 Übergangsregel, bis die echten Arbeitsauftrags-Blöcke stehen (Bauschritt 7): Kommandozeilen-
-Befehle lösen **immer** eine Rückfrage aus — auch Tests und Installationen. Sicherer Standard,
-solange die Blöcke die Befehle noch nicht einordnen können.
+Befehle lösen eine Rückfrage aus — auch Tests und Installationen. Ausnahme: Befehle, die der
+Motor selbst zweifelsfrei als **rein lesend** einstuft (z.B. Verzeichnis auflisten), laufen
+ohne Rückfrage durch. Sicherer Standard, solange die Blöcke die Befehle noch nicht einordnen
+können. Die Sperre „darf nur lesen" (§4.2) steht darüber: Sie stoppt jeden nicht rein
+lesenden Werkzeugaufruf hart, ohne Rückfrage.
 
 ## 8. Ergebnis erleben
 

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { texte } from '../../shared/texte.js'
 import KartenFormular from './KartenFormular.jsx'
 import Leinwand from './Leinwand.jsx'
+import Blockbibliothek from './Blockbibliothek.jsx'
 
 const t = texte.projektansicht
 const tk = texte.karten
@@ -157,10 +158,10 @@ export default function Projektansicht({ pfad, onZurueck }) {
           <Leinwand pfad={pfad} onWiederhergestellt={projektLaden} />
         </div>
         <aside className="spalte spalte-bibliothek">
-          <div className="platzhalter">
-            <p className="leer-titel">{t.bibliothekTitel}</p>
-            <p className="leer-untertitel">{t.bibliothekHinweis}</p>
+          <div className="spalten-kopf">
+            <h2>{t.bibliothekTitel}</h2>
           </div>
+          <Blockbibliothek />
         </aside>
       </div>
       {formular && (
