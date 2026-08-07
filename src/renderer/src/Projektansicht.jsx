@@ -6,6 +6,7 @@ import Blockbibliothek from './Blockbibliothek.jsx'
 
 const t = texte.projektansicht
 const tk = texte.karten
+const tst = texte.startanleitung
 
 function Karte({ karte, onBearbeiten, onErledigt, onLoeschen }) {
   const istStatus = karte.sorte === 'status'
@@ -56,6 +57,10 @@ export default function Projektansicht({ pfad, onZurueck }) {
   const [filter, setFilter] = useState('alle')
   // false = zu, 'neu' = neue Karte, sonst die Karte, die bearbeitet wird
   const [formular, setFormular] = useState(false)
+  // Startanleitung (SPEC §8): null = noch keine — der Knopf bleibt grau.
+  const [anleitung, setAnleitung] = useState(null)
+  const [startLaeuft, setStartLaeuft] = useState(false)
+  const [startFehler, setStartFehler] = useState('')
 
   function projektLaden() {
     window.flowforge.projektOeffnen(pfad).then((ergebnis) => {
@@ -63,17 +68,39 @@ export default function Projektansicht({ pfad, onZurueck }) {
       setProjekt(ergebnis.projekt)
       setKarten(ergebnis.karten)
     })
+    // Auch nach einer Wiederherstellung kann die Startanleitung auftauchen
+    // oder verschwinden — deshalb hier mitgeladen.
+    window.flowforge.startanleitungLaden(pfad).then((ergebnis) => {
+      if (ergebnis.ok) setAnleitung(ergebnis.anleitung)
+    })
   }
 
   useEffect(projektLaden, [pfad])
 
-  // Der Agent kann Karten mitten im Lauf anlegen/ändern (BAUPLAN 7) —
-  // die Seitenleiste zieht sofort nach.
+  // Der Agent kann Karten und Startanleitung mitten im Lauf ändern —
+  // Seitenleiste und „App starten"-Knopf ziehen sofort nach.
   useEffect(() => {
     return window.flowforge.aufLaufEreignis((ereignis) => {
-      if (ereignis.projektPfad === pfad && ereignis.art === 'karten') setKarten(ereignis.karten)
+      if (ereignis.projektPfad !== pfad) return
+      if (ereignis.art === 'karten') setKarten(ereignis.karten)
+      if (ereignis.art === 'startanleitung') setAnleitung(ereignis.anleitung)
+      // Nach dem Laufende sicherheitshalber frisch laden — ein harter Abbruch
+      // kann die Startanleitung per Sicherungspunkt zurückgedreht haben.
+      if (ereignis.art === 'fertig')
+        window.flowforge.startanleitungLaden(pfad).then((ergebnis) => {
+          if (ergebnis.ok) setAnleitung(ergebnis.anleitung)
+        })
     })
   }, [pfad])
+
+  async function appStarten() {
+    if (startLaeuft) return
+    setStartFehler('')
+    setStartLaeuft(true)
+    const ergebnis = await window.flowforge.appStarten(pfad)
+    setStartLaeuft(false)
+    if (!ergebnis.ok) setStartFehler(ergebnis.fehler)
+  }
 
   // Jede Kartenänderung liefert den neuen Gesamtstand zurück.
   function uebernehmen(ergebnis) {
@@ -127,6 +154,17 @@ export default function Projektansicht({ pfad, onZurueck }) {
           ← {t.zurueck}
         </button>
         <h1>{projekt?.name}</h1>
+        <div className="kopf-rechts">
+          {startFehler && <span className="start-fehler">{startFehler}</span>}
+          <button
+            className="knopf-primaer"
+            disabled={!anleitung || startLaeuft}
+            title={anleitung ? anleitung.beschreibung : tst.keineHinweis}
+            onClick={appStarten}
+          >
+            ▶ {startLaeuft ? tst.startet : tst.knopf}
+          </button>
+        </div>
       </div>
       <div className="drei-spalten">
         <aside className="spalte spalte-karten">

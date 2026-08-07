@@ -23,6 +23,7 @@ import {
 import { einstellungenLaden, ABO_MODUS_ERLAUBT } from './einstellungen.js'
 import { kartenLaden } from './projekte.js'
 import { starteMotorLauf } from './motor/claudeCodeMotor.js'
+import { startanleitungVorhanden } from './startanleitung.js'
 import { kartenZeile } from './motor/kartenWerkzeuge.js'
 import {
   sicherungspunktAnlegen,
@@ -350,6 +351,10 @@ export async function laufStarten(fenster, projektPfad, kartenIds) {
     let i = 0
     let rundenUebrig = workflow.reparaturRunden
     let rueckmeldung = ''
+    // Startanleitungs-Pflicht (SPEC §8): genau eine Nachbesserungs-Runde pro
+    // Lauf — unabhängig von den Reparatur-Runden des Prüfers.
+    let startanleitungNachgefordert = false
+    let startanleitungNachforderung = false
     let endZustand = null
     let fehlertext = ''
     // Übergaben dieses Laufs: liefert-Etikett → Abschlusstext des Blocks.
@@ -380,6 +385,10 @@ export async function laufStarten(fenster, projektPfad, kartenIds) {
       if (rueckmeldung) {
         auftrag += texte.agentenUebergabe.prueferRueckmeldung(rueckmeldung)
         rueckmeldung = ''
+      }
+      if (startanleitungNachforderung) {
+        auftrag += texte.agentenUebergabe.startanleitungNachforderung
+        startanleitungNachforderung = false
       }
 
       const ergebnis = await blockAusfuehren(auftrag, def)
@@ -442,6 +451,21 @@ export async function laufStarten(fenster, projektPfad, kartenIds) {
           for (const karte of frisch.karten)
             if (karte.sorte === 'aufgabe' && !karte.erledigt && !ausgewaehlt.includes(karte.id))
               ausgewaehlt.push(karte.id)
+      }
+
+      // Startanleitung als Pflicht-Artefakt (SPEC §8): Ein Bau-Block ist erst
+      // fertig, wenn die maschinenlesbare Startanleitung existiert. Fehlt sie,
+      // läuft derselbe Block genau einmal mit einer Nachforderung erneut;
+      // fehlt sie danach immer noch, macht der Lauf ehrlich vermerkt weiter.
+      if (def.startanleitungPflicht && !startanleitungVorhanden(projektPfad)) {
+        blockErgebnis.zustand = 'startanleitung-fehlt'
+        if (!startanleitungNachgefordert && !lauf.sanft && !lauf.hart) {
+          startanleitungNachgefordert = true
+          startanleitungNachforderung = true
+          tickern(texte.ticker.startanleitungNachgefordert(def.name))
+          continue
+        }
+        tickern(texte.ticker.startanleitungWeiterOhne)
       }
 
       // Prüfer-Blöcke: Urteil auswerten, ggf. Fehlschlag-Rückführung.

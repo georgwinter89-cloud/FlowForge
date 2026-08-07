@@ -187,7 +187,38 @@ export const texte = {
     eintrag: (etikett, blockName, text) => `### ${etikett} — von Block „${blockName}"\n${text}\n\n`,
     auftragEinleitung: 'Dein Arbeitsauftrag:\n',
     prueferRueckmeldung: (kritik) =>
-      '\n\nRückmeldung des Prüfers aus der letzten Runde (bitte beheben):\n' + kritik
+      '\n\nRückmeldung des Prüfers aus der letzten Runde (bitte beheben):\n' + kritik,
+    startanleitungNachforderung:
+      '\n\nNachforderung von FlowForge: Dieser Auftrag ist schon umgesetzt, aber die ' +
+      'Startanleitung des Projekts fehlt noch. Lege sie jetzt mit dem Werkzeug ' +
+      'startanleitung_setzen an (beschreibung, dazu befehl und/oder adresse). ' +
+      'Ändere sonst nichts am Projekt.'
+  },
+  // Startanleitung & „App starten"-Knopf (SPEC §8, BAUPLAN 10).
+  startanleitung: {
+    knopf: 'App starten',
+    startet: 'startet …',
+    keineHinweis:
+      'Noch keine Startanleitung. Ein Bau-Workflow (z.B. „Feature hinzufügen") legt sie an — danach startet deine App hier mit einem Klick.',
+    fehlerKeine:
+      'Es gibt noch keine Startanleitung. Lass zuerst einen Bau-Workflow laufen — er legt sie als Pflicht-Artefakt an.',
+    fehlerDateiFehlt: (datei) =>
+      `Die Startanleitung zeigt auf „${datei}" — diese Datei gibt es nicht (mehr). Lass einen Bau-Workflow die Anleitung erneuern.`,
+    fehlerOeffnen: 'Die App ließ sich nicht öffnen. Bitte versuch es noch einmal.'
+  },
+  // Texte des start-Werkzeugs an den Agenten.
+  agentenStart: {
+    gesetzt: (anleitung) =>
+      `Startanleitung festgelegt: ${anleitung.beschreibung}` +
+      (anleitung.befehl ? ` · Befehl: ${anleitung.befehl}` : '') +
+      (anleitung.adresse ? ` · Adresse: ${anleitung.adresse}` : ''),
+    fehlerBeschreibung: (max) =>
+      `Die beschreibung fehlt oder ist zu lang (höchstens ${max} Zeichen) — ein Satz in Alltagssprache genügt.`,
+    fehlerQuelleFehlt:
+      'Gib mindestens eines an: befehl (Kommandozeile im Projektordner) und/oder adresse (http(s)-Adresse oder Datei im Projektordner).',
+    fehlerZuLang: 'befehl oder adresse ist zu lang — halte beides kurz und konkret.',
+    fehlerAdresse:
+      'Die adresse muss mit http:// oder https:// beginnen — oder eine Datei im Projektordner sein (relativer Pfad, kein Ausbruch per „..").'
   },
   fehler: {
     projektNichtGefunden: 'Der Projektordner ist nicht mehr da. Wurde er verschoben oder gelöscht?',
@@ -310,6 +341,12 @@ export const texte = {
     aufgabeErledigt: (titel) => `Aufgabe abgehakt: „${titel}"`,
     aufgabeGeoeffnet: (titel) => `Aufgabe wieder geöffnet: „${titel}"`,
     karteAbgelehnt: (grund) => `Karten-Änderung abgelehnt: ${grund}`,
+    startanleitungGesetzt: 'Startanleitung festgelegt — „App starten" ist bereit.',
+    startanleitungAbgelehnt: (grund) => `Startanleitung abgelehnt: ${grund}`,
+    startanleitungNachgefordert: (block) =>
+      `Die Startanleitung fehlt — „${block}" bekommt eine Nachbesserungs-Runde.`,
+    startanleitungWeiterOhne:
+      'Die Startanleitung fehlt weiterhin — der Lauf macht weiter, „App starten" bleibt aus.',
     sicherungspunktAngelegt: 'Sicherungspunkt angelegt.',
     zurueckgesetzt: 'Projektordner auf den letzten Sicherungspunkt zurückgesetzt.',
     fertigIn: (sekunden) => `Fertig nach ${sekunden} Sekunden.`,
@@ -360,7 +397,8 @@ export const texte = {
       erfolgreich: 'erledigt',
       fehlgeschlagen: 'fehlgeschlagen',
       'pruefung-bestanden': 'Prüfung bestanden',
-      'pruefung-nicht-bestanden': 'Prüfung nicht bestanden'
+      'pruefung-nicht-bestanden': 'Prüfung nicht bestanden',
+      'startanleitung-fehlt': 'Startanleitung fehlte'
     },
     details: 'Einzelheiten',
     schliessen: 'Zuklappen',

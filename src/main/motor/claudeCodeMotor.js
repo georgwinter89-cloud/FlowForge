@@ -9,6 +9,7 @@ import { TITEL_MAX, TEXT_MAX } from '../../shared/kartenRegeln.js'
 import { KONTEXT_FENSTER_STANDARD, kontextBand } from './schnittstelle.js'
 import { kartenWerkzeugServer } from './kartenWerkzeuge.js'
 import { menschWerkzeugServer } from './menschWerkzeuge.js'
+import { startWerkzeugServer } from './startWerkzeuge.js'
 
 const laden = createRequire(import.meta.url)
 
@@ -56,10 +57,19 @@ const KARTEN_NUR_LESEN = 'mcp__karten__karten_uebersicht'
 // Frage-Block ist selbst nur-lesend).
 const MENSCH_PRAEFIX = 'mcp__mensch__'
 
+// Startanleitungs-Werkzeug (BAUPLAN 10): schreibt validiert ins Projekt —
+// unter der Sperre „darf nur lesen" deshalb tabu.
+const START_PRAEFIX = 'mcp__start__'
+
 // FlowForges eigene Verwaltungsdateien im Projektordner: direkte Änderungen
-// würden die harten Regeln umgehen (z.B. die Karten-Längengrenze) — hartes Nein,
-// der Agent nutzt die Karten-Werkzeuge.
-const VERWALTUNGS_DATEIEN = new Set(['projekt.json', 'karten.json', 'workflow.json'])
+// würden die harten Regeln umgehen (z.B. die Karten-Längengrenze oder die
+// Startanleitungs-Validierung) — hartes Nein, der Agent nutzt die Werkzeuge.
+const VERWALTUNGS_DATEIEN = new Set([
+  'projekt.json',
+  'karten.json',
+  'workflow.json',
+  'startanleitung.json'
+])
 const BERICHTE_ORDNER = 'laufberichte'
 
 // Befehls-Einstufung (SPEC §7, seit Bauschritt 8): Befehle bekannter
@@ -121,6 +131,13 @@ function liegtImProjekt(datei, projektPfad) {
 // Mit Sperre „darf nur lesen": hartes Nein für alles außer Lese-Werkzeugen.
 function pruefeWerkzeug(name, eingabe, projektPfad, nurLesen) {
   if (name.startsWith(MENSCH_PRAEFIX)) return { erlaubt: true }
+  // Startanleitung setzen schreibt ins Projekt — validiert im Werkzeug selbst,
+  // aber unter der Sperre „darf nur lesen" gesperrt.
+  if (name.startsWith(START_PRAEFIX)) {
+    if (nurLesen)
+      return { gesperrt: texte.rechteFrage.nurLesenGesperrtFuerAgent, tickerText: texte.ticker.nurLesenGesperrt }
+    return { erlaubt: true }
+  }
   // Karten-Werkzeuge zuerst: die Übersicht ist rein lesend, alles andere
   // schreibt — und fällt damit unter die Sperre „darf nur lesen".
   if (name.startsWith(KARTEN_PRAEFIX)) {
@@ -181,8 +198,10 @@ function tickerZeilen(nachricht, projektPfad) {
       continue
     }
     // Mensch-Fragen melden sich aus der Lauf-Verwaltung heraus (Frage + Antwort
-    // stehen im Gespräch) — keine doppelte Ticker-Zeile.
+    // stehen im Gespräch) — keine doppelte Ticker-Zeile. Das Startanleitungs-
+    // Werkzeug meldet sein Ergebnis ebenfalls selbst (festgelegt/abgelehnt).
     if (block.name.startsWith(MENSCH_PRAEFIX)) continue
+    if (block.name.startsWith(START_PRAEFIX)) continue
     switch (block.name) {
       case 'Write':
         zeilen.push(t.schreibtDatei(kurzerPfad(e.file_path, projektPfad)))
@@ -289,6 +308,9 @@ export function starteMotorLauf(optionen) {
     // Frage an den Menschen (BAUPLAN 9): pausiert den Lauf, bis der Nutzer
     // im Gespräch geantwortet hat.
     const menschServer = await menschWerkzeugServer({ aufMenschFrage })
+    // Startanleitung (BAUPLAN 10): das Pflicht-Artefakt der Bau-Blöcke wird
+    // ausschließlich über dieses validierende Werkzeug geschrieben.
+    const startServer = await startWerkzeugServer({ projektPfad, aufEreignis })
 
     // Saubere Umgebung: Alle ANTHROPIC_*/CLAUDE*-Variablen fliegen raus — sie
     // könnten Anmeldung oder Verhalten des Motors umleiten (z.B. wenn FlowForge
@@ -312,7 +334,7 @@ export function starteMotorLauf(optionen) {
         // Georgs persönliche Claude-Einstellungen bleiben außen vor:
         // der Motor läuft nur mit dem, was FlowForge ihm mitgibt.
         settingSources: [],
-        mcpServers: { karten: kartenServer, mensch: menschServer },
+        mcpServers: { karten: kartenServer, mensch: menschServer, start: startServer },
         // Windows-Härtung: Die Shell des Motors zeigt POSIX-Pfade (/tmp/…, /c/…) an —
         // als Datei-Werkzeug-Pfade landen die auf Windows aber am falschen Ort und
         // lösen unnötige Rechte-Rückfragen aus.

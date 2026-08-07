@@ -28,6 +28,7 @@ import {
   wiederherstellenVorschau,
   wiederherstellen
 } from './sicherungspunkte.js'
+import { startanleitungLaden, appStarten } from './startanleitung.js'
 
 function createWindow() {
   const fenster = new BrowserWindow({
@@ -99,6 +100,10 @@ function registriereIpc() {
   )
   ipcMain.handle('lauf-zustand', (_e, pfad) => laufZustand(pfad))
   ipcMain.handle('laufberichte-laden', (_e, pfad) => laufberichteLaden(pfad))
+
+  // Startanleitung & „App starten"-Knopf (SPEC §8, BAUPLAN 10).
+  ipcMain.handle('startanleitung-laden', (_e, pfad) => startanleitungLaden(pfad))
+  ipcMain.handle('app-starten', (_e, pfad) => appStarten(pfad))
 
   ipcMain.handle('sicherungspunkte-laden', (_e, pfad) => sicherungspunkteLaden(pfad))
   ipcMain.handle('wiederherstellen-vorschau', (_e, { pfad, punktId }) => {

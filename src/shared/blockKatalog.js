@@ -223,6 +223,9 @@ export const BLOCK_KATALOG = [
     nurLesen: false,
     prueft: false,
     uebung: false,
+    // Startanleitung als Pflicht-Artefakt (SPEC §8, BAUPLAN 10): Fehlt sie nach
+    // dem Block, fordert der Lauf sie in einer Nachbesserungs-Runde ein.
+    startanleitungPflicht: true,
     felder: [],
     auftrag:
       'Du bist der Bauer: Du setzt genau das Arbeitspaket um — nicht mehr und nicht weniger. ' +
@@ -233,6 +236,11 @@ export const BLOCK_KATALOG = [
       'ausschließt, baust du nicht — auch nicht nebenbei. Projektkarten fasst du nicht an, ' +
       'das übernimmt der Sessionende-Block. ' +
       'Kommt vom Prüfer eine Rückmeldung aus einer Reparatur-Runde, hat deren Behebung Vorrang. ' +
+      'Pflicht-Artefakt Startanleitung: Bevor du fertig bist, lege mit dem Werkzeug ' +
+      'startanleitung_setzen fest, wie man das gebaute Ergebnis startet — beschreibung (ein ' +
+      'Satz), dazu befehl (Kommandozeile im Projektordner) und/oder adresse (http(s)-Adresse ' +
+      'oder Datei im Projektordner für den Browser). Stimmt die vorhandene Startanleitung noch, ' +
+      'setze sie unverändert erneut — ohne gültige Startanleitung gilt dein Auftrag als nicht fertig. ' +
       'Dein Abschlusstext ist die Übergabe an den Prüfer — kompakt (höchstens etwa 25 Zeilen): ' +
       '1. Was du umgesetzt hast. ' +
       '2. Welche Dateien du angelegt oder geändert hast. ' +

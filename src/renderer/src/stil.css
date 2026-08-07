@@ -302,6 +302,23 @@ body {
   font-size: 20px;
 }
 
+/* „App starten"-Knopf samt Fehlerzeile rechts im Kopf (SPEC §8). */
+.kopf-rechts {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.start-fehler {
+  color: #b91c1c;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .drei-spalten {
   display: grid;
   grid-template-columns: 320px 1fr 260px;
@@ -995,6 +1012,11 @@ body {
 .marke-pruefung-nicht-bestanden {
   background: #fee2e2;
   color: #b91c1c;
+}
+
+.marke-startanleitung-fehlt {
+  background: #fef3c7;
+  color: #b45309;
 }
 
 .block-ergebnis-text {

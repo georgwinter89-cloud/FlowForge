@@ -245,9 +245,21 @@ hart, ohne Rückfrage — Kommandozeilen-Befehle sind dann ganz gesperrt.
 
 ## 8. Ergebnis erleben
 
-Jeder Bau-Workflow muss eine **Startanleitung** als Pflicht-Artefakt hinterlassen. Pro Projekt
-gibt es einen **„App starten"-Knopf**, der genau diese Anleitung ausführt (Web-App → Browser
-öffnet sich; Kommandozeilen-Programm → Fenster mit laufendem Programm; usw.).
+Jeder Bau-Workflow muss eine **Startanleitung** als Pflicht-Artefakt hinterlassen (seit
+Bauschritt 10): ein maschinenlesbarer Datensatz (startanleitung.json) aus **Beschreibung**
+(ein Satz), **Befehl** (Kommandozeile im Projektordner) und/oder **Adresse** (http(s)-Adresse
+oder Datei im Projektordner). Der Agent schreibt sie ausschließlich über das eingebaute
+Werkzeug `startanleitung_setzen` (hart validiert; die Datei selbst ist für ihn gesperrt wie
+alle Verwaltungsdateien, §3.1). Durchsetzung beim Bauer-Block: Fehlt die Startanleitung nach
+seinem Lauf, bekommt er genau eine Nachbesserungs-Runde (unabhängig von den Reparatur-Runden);
+fehlt sie danach immer noch, macht der Lauf weiter und vermerkt das ehrlich im Ticker und am
+Block-Ergebnis.
+
+Pro Projekt gibt es einen **„App starten"-Knopf** (im Kopf der Projektansicht), der genau
+diese Anleitung ausführt: Befehl → eigenes sichtbares Konsolenfenster im Projektordner;
+Adresse → Browser (bei Web-Apps mit eigenem Server wartet FlowForge bis zu 30 Sekunden,
+bis die Adresse antwortet, und öffnet den Browser erst dann); Datei-Adresse → Standard-
+programm der Datei. Ohne Startanleitung ist der Knopf grau und erklärt, wie sie entsteht.
 
 ## 9. GUI-Grundaufbau
 
