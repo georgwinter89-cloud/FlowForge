@@ -20,6 +20,11 @@ import {
   laufZustand,
   laufberichteLaden
 } from './lauf.js'
+import {
+  sicherungspunkteLaden,
+  wiederherstellenVorschau,
+  wiederherstellen
+} from './sicherungspunkte.js'
 
 function createWindow() {
   const fenster = new BrowserWindow({
@@ -78,6 +83,17 @@ function registriereIpc() {
   )
   ipcMain.handle('lauf-zustand', (_e, pfad) => laufZustand(pfad))
   ipcMain.handle('laufberichte-laden', (_e, pfad) => laufberichteLaden(pfad))
+
+  ipcMain.handle('sicherungspunkte-laden', (_e, pfad) => sicherungspunkteLaden(pfad))
+  ipcMain.handle('wiederherstellen-vorschau', (_e, { pfad, punktId }) => {
+    if (laufZustand(pfad).aktiv) return { ok: false, fehler: texte.sicherungen.fehlerWaehrendLauf }
+    return wiederherstellenVorschau(pfad, punktId)
+  })
+  ipcMain.handle('wiederherstellen', (_e, { pfad, punktId }) => {
+    // Während ein Agent im Projekt schreibt, wird nichts zurückgesetzt.
+    if (laufZustand(pfad).aktiv) return { ok: false, fehler: texte.sicherungen.fehlerWaehrendLauf }
+    return wiederherstellen(pfad, punktId)
+  })
 }
 
 app.whenReady().then(() => {

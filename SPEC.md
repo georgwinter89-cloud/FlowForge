@@ -60,9 +60,18 @@ in den Kontext künftiger Sessions geladen** und nie von Hand gepflegt.
 
 ### 3.3 Sicherungspunkte
 
-- Nach jedem erfolgreichen Block automatisch ein Sicherungspunkt des Projektordners
-  (technisch Git, für den Nutzer unsichtbar — sichtbar nur als Liste: „14:32 — Prüfer bestanden").
-- **Wiederherstellen-Knopf** mit Vorschau: Projektstand von jedem Sicherungspunkt zurückholen.
+- Automatische Sicherungspunkte des Projektordners: beim Anlegen des Projekts, **vor jedem
+  Lauf** und **nach jedem erfolgreichen Block** (technisch Git, für den Nutzer unsichtbar —
+  sichtbar nur als Liste: „14:32 — Prüfer bestanden").
+- Technik-Absicherung: Die Verwaltung nutzt ein eigenes, verstecktes Git-Verzeichnis
+  **außerhalb** des Projektordners — das Projekt darf selbst ein Git-Repo sein oder werden.
+  Dem Agenten ist Git-Benutzung per Sperre untersagt (hartes Nein, keine Rückfrage).
+- Ausgenommen von Sicherung und Wiederherstellung: Laufberichte (bleiben immer erhalten)
+  und `node_modules` (per Installation wiederherstellbar).
+- **Wiederherstellen-Knopf** mit Vorschau (was ändert sich, was verschwindet, was kommt
+  zurück): Projektstand von jedem Sicherungspunkt zurückholen. Vorher wird der jetzige
+  Stand automatisch gesichert — eine Wiederherstellung ist selbst wieder rückgängig machbar.
+  Während ein Lauf aktiv ist, ist Wiederherstellen gesperrt.
 - Rechner-Neustart mitten im Lauf → App bietet an, am letzten Sicherungspunkt weiterzumachen.
 
 ## 4. Workflows & Blöcke
@@ -132,7 +141,8 @@ Frage an den Menschen (Folgen-Fragen, keine Technik-Fragen) · Audit · Sessione
 - **Klartext-Liveticker** + hervorgehobener laufender Block auf der Leinwand.
 - **Rohprotokoll** einklappbar für den Blick hinter die Kulissen.
 - **Stopp in zwei Stufen:** „Sanft anhalten" (laufender Block macht fertig, Halt am
-  Sicherungspunkt) und „Sofort abbrechen" (Block gilt als nicht gelaufen).
+  Sicherungspunkt) und „Sofort abbrechen" (Block gilt als nicht gelaufen; der Projektordner
+  springt automatisch auf den letzten Sicherungspunkt zurück).
 - **Frage-an-den-Menschen-Blöcke** pausieren den Lauf; Windows-Benachrichtigung, Antwort in der App.
 
 ## 7. Rechte des Agenten (Standard, später pro Projekt verstellbar)

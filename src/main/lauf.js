@@ -7,6 +7,7 @@ import { texte } from '../shared/texte.js'
 import { UEBUNGS_WORKFLOWS } from '../shared/uebungsWorkflows.js'
 import { einstellungenLaden, ABO_MODUS_ERLAUBT } from './einstellungen.js'
 import { starteMotorLauf } from './motor/claudeCodeMotor.js'
+import { sicherungspunktAnlegen, aufLetztenPunktZuruecksetzen } from './sicherungspunkte.js'
 
 const BERICHTE_ORDNER = 'laufberichte'
 
@@ -46,7 +47,7 @@ export function laufberichteLaden(projektPfad) {
   return { ok: true, berichte }
 }
 
-export function laufStarten(fenster, projektPfad, workflowId) {
+export async function laufStarten(fenster, projektPfad, workflowId) {
   if (aktiverLauf) return { ok: false, fehler: texte.lauf.schonAktiv }
   if (!fs.existsSync(projektPfad)) return { ok: false, fehler: texte.fehler.projektNichtGefunden }
   const workflow = UEBUNGS_WORKFLOWS.find((w) => w.id === workflowId)
@@ -57,6 +58,20 @@ export function laufStarten(fenster, projektPfad, workflowId) {
     return { ok: false, fehler: texte.lauf.aboNichtErlaubt }
   if (einstellungen.motorModus === 'api' && !einstellungen.apiSchluessel)
     return { ok: false, fehler: texte.einstellungen.fehlerApiSchluesselFehlt }
+
+  // Projekt sofort belegen, damit ein Doppelklick auf „Starten" während der
+  // Sicherung keinen zweiten Lauf startet.
+  aktiverLauf = { projektPfad, motor: null, fragen: new Map() }
+
+  // Sicherheitsnetz vor dem Lauf: der Stand von jetzt ist immer wiederholbar.
+  const sicherung = await sicherungspunktAnlegen(
+    projektPfad,
+    texte.sicherungen.beschriftungVorLauf(workflow.block.name)
+  )
+  if (!sicherung.ok) {
+    aktiverLauf = null
+    return { ok: false, fehler: sicherung.fehler }
+  }
 
   const bericht = {
     id: crypto.randomUUID(),
@@ -113,9 +128,26 @@ export function laufStarten(fenster, projektPfad, workflowId) {
       fehlertext: String(fehler?.message ?? fehler),
       verbrauch: bericht.verbrauch
     }))
-    .then((ergebnis) => {
+    .then(async (ergebnis) => {
       // Offene Fragen auflösen, damit nichts ewig hängt.
       for (const antworten of [...fragen.values()]) antworten(false)
+
+      function tickern(text) {
+        bericht.ticker.push({ zeit: jetztIso(), text })
+        senden({ art: 'ticker', text })
+      }
+      if (ergebnis.zustand === 'erfolgreich') {
+        const punkt = await sicherungspunktAnlegen(
+          projektPfad,
+          texte.sicherungen.beschriftungNachBlock(workflow.block.name)
+        )
+        if (punkt.ok && punkt.neu) tickern(texte.ticker.sicherungspunktAngelegt)
+      }
+      if (ergebnis.zustand === 'hart-abgebrochen') {
+        const zurueck = await aufLetztenPunktZuruecksetzen(projektPfad)
+        if (zurueck.ok && zurueck.zurueckgesetzt) tickern(texte.ticker.zurueckgesetzt)
+      }
+
       bericht.beendetAm = jetztIso()
       bericht.zustand = ergebnis.zustand
       bericht.fehlertext = ergebnis.fehlertext ?? ''

@@ -6,6 +6,7 @@ import path from 'node:path'
 import crypto from 'node:crypto'
 import { texte } from '../shared/texte.js'
 import { pruefeKarteneingabe } from '../shared/kartenRegeln.js'
+import { sicherungspunktAnlegen } from './sicherungspunkte.js'
 
 const PROJEKT_DATEI = 'projekt.json'
 const KARTEN_DATEI = 'karten.json'
@@ -57,7 +58,7 @@ function ordnernameAusProjektname(name) {
     .trim()
 }
 
-export function projektAnlegen(name, ablageort) {
+export async function projektAnlegen(name, ablageort) {
   const projektName = (name ?? '').trim()
   if (!projektName) return { ok: false, fehler: texte.neuesProjekt.fehlerKeinName }
   if (!ablageort || !fs.existsSync(ablageort))
@@ -87,6 +88,9 @@ export function projektAnlegen(name, ablageort) {
   const registry = ladeRegistry()
   registry.push({ pfad })
   speichereRegistry(registry)
+  // Erster Sicherungspunkt direkt beim Anlegen — schlägt er fehl, bleibt das
+  // Projekt trotzdem nutzbar; spätestens der nächste Lauf sichert erneut.
+  await sicherungspunktAnlegen(pfad, texte.sicherungen.beschriftungProjektAngelegt)
   return { ok: true, pfad }
 }
 

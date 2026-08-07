@@ -23,6 +23,10 @@ contextBridge.exposeInMainWorld('flowforge', {
     ipcRenderer.invoke('lauf-frage-antworten', { frageId, erlaubt }),
   laufZustand: (pfad) => ipcRenderer.invoke('lauf-zustand', pfad),
   laufberichteLaden: (pfad) => ipcRenderer.invoke('laufberichte-laden', pfad),
+  sicherungspunkteLaden: (pfad) => ipcRenderer.invoke('sicherungspunkte-laden', pfad),
+  wiederherstellenVorschau: (pfad, punktId) =>
+    ipcRenderer.invoke('wiederherstellen-vorschau', { pfad, punktId }),
+  wiederherstellen: (pfad, punktId) => ipcRenderer.invoke('wiederherstellen', { pfad, punktId }),
   aufLaufEreignis: (rueckruf) => {
     const empfaenger = (_ereignis, daten) => rueckruf(daten)
     ipcRenderer.on('lauf-ereignis', empfaenger)

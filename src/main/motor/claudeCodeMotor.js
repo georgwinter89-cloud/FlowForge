@@ -48,8 +48,13 @@ function pruefeWerkzeug(name, eingabe, projektPfad) {
     if (liegtImProjekt(datei, projektPfad)) return { erlaubt: true }
     return { frage: texte.rechteFrage.schreibenAusserhalb(String(datei ?? '?')) }
   }
-  if (name === 'Bash' || name === 'PowerShell')
-    return { frage: texte.rechteFrage.befehl(String(eingabe.command ?? '?')) }
+  if (name === 'Bash' || name === 'PowerShell') {
+    const befehl = String(eingabe.command ?? '?')
+    // BAUPLAN 4: Git ist dem Agenten per Sperre untersagt — es würde mit der
+    // Sicherungspunkt-Verwaltung von FlowForge kollidieren. Keine Rückfrage, hartes Nein.
+    if (/\bgit\b/i.test(befehl)) return { gesperrt: texte.rechteFrage.gitGesperrtFuerAgent }
+    return { frage: texte.rechteFrage.befehl(befehl) }
+  }
   if (name === 'WebFetch' || name === 'WebSearch')
     return { frage: texte.rechteFrage.internet(String(eingabe.url ?? eingabe.query ?? '?')) }
   return { frage: texte.rechteFrage.unbekanntesWerkzeug(name) }
@@ -197,6 +202,18 @@ export function starteMotorLauf(optionen) {
         // Georgs persönliche Claude-Einstellungen bleiben außen vor:
         // der Motor läuft nur mit dem, was FlowForge ihm mitgibt.
         settingSources: [],
+        // Windows-Härtung: Die Shell des Motors zeigt POSIX-Pfade (/tmp/…, /c/…) an —
+        // als Datei-Werkzeug-Pfade landen die auf Windows aber am falschen Ort und
+        // lösen unnötige Rechte-Rückfragen aus.
+        systemPrompt: {
+          type: 'preset',
+          preset: 'claude_code',
+          append:
+            `Der Projektordner ist: ${projektPfad}\n` +
+            'Verwende bei Datei-Werkzeugen (Read/Write/Edit) ausschließlich Pfade relativ ' +
+            'zum Projektordner oder diesen absoluten Windows-Pfad. Niemals POSIX-Pfade ' +
+            'wie /tmp/… oder /c/… verwenden — sie zeigen auf Windows auf falsche Orte.'
+        },
         maxTurns: 50,
         ...(modus === 'api' && ausgabenObergrenzeUsd > 0
           ? { maxBudgetUsd: ausgabenObergrenzeUsd }
@@ -217,6 +234,10 @@ export function starteMotorLauf(optionen) {
         canUseTool: async (name, eingabeDaten) => {
           const urteil = pruefeWerkzeug(name, eingabeDaten ?? {}, projektPfad)
           if (urteil.erlaubt) return { behavior: 'allow', updatedInput: eingabeDaten }
+          if (urteil.gesperrt) {
+            aufEreignis({ art: 'ticker', text: texte.ticker.gitGesperrt })
+            return { behavior: 'deny', message: urteil.gesperrt }
+          }
           aufEreignis({ art: 'ticker', text: texte.ticker.rechteFrageGestellt })
           const erlaubt = await aufRechteFrage({ beschreibung: urteil.frage })
           aufEreignis({

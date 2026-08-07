@@ -5,6 +5,25 @@ import { UEBUNGS_WORKFLOWS } from '../../shared/uebungsWorkflows.js'
 const t = texte.lauf
 const tf = texte.rechteFrage
 const tb = texte.laufberichte
+const ts = texte.sicherungen
+
+function zeitText(zeitstempel) {
+  return new Date(zeitstempel).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })
+}
+
+function VorschauGruppe({ ueberschrift, eintraege }) {
+  if (eintraege.length === 0) return null
+  return (
+    <div>
+      <p className="bericht-abschnitt">{ueberschrift}</p>
+      {eintraege.map((eintrag) => (
+        <p key={eintrag.pfad} className="bericht-zeile">
+          {eintrag.pfad}
+        </p>
+      ))}
+    </div>
+  )
+}
 
 function VerbrauchZeile({ verbrauch, modus }) {
   if (!verbrauch) return null
@@ -69,7 +88,7 @@ function Laufbericht({ bericht }) {
   )
 }
 
-export default function Leinwand({ pfad }) {
+export default function Leinwand({ pfad, onWiederhergestellt }) {
   // zustand: 'bereit' | 'laeuft' | 'fertig'
   const [zustand, setZustand] = useState('bereit')
   const [blockName, setBlockName] = useState('')
@@ -82,14 +101,23 @@ export default function Leinwand({ pfad }) {
   const [fehler, setFehler] = useState('')
   const [berichte, setBerichte] = useState([])
   const [modus, setModus] = useState('abo')
+  // Vorschau: null = zu, sonst { punkt, unterschiede } (unterschiede erst nach Laden)
+  const [punkte, setPunkte] = useState([])
+  const [vorschau, setVorschau] = useState(null)
+  const [sicherungsMeldung, setSicherungsMeldung] = useState('')
   const tickerEnde = useRef(null)
 
   function berichteLaden() {
     window.flowforge.laufberichteLaden(pfad).then((e) => e.ok && setBerichte(e.berichte))
   }
 
+  function punkteLaden() {
+    window.flowforge.sicherungspunkteLaden(pfad).then((e) => e.ok && setPunkte(e.punkte))
+  }
+
   useEffect(() => {
     berichteLaden()
+    punkteLaden()
     window.flowforge.einstellungenLaden().then((e) => e.ok && setModus(e.einstellungen.motorModus))
     window.flowforge.laufZustand(pfad).then((e) => {
       if (e.ok && e.aktiv) setZustand('laeuft')
@@ -112,6 +140,9 @@ export default function Leinwand({ pfad }) {
         setErgebnis({ zustand: ereignis.zustand, fehlertext: ereignis.fehlertext })
         setFrage(null)
         berichteLaden()
+        punkteLaden()
+        // Nach hartem Abbruch wurde der Projektordner zurückgesetzt — Karten neu laden.
+        if (ereignis.zustand === 'hart-abgebrochen') onWiederhergestellt?.()
       }
     })
     return abmelden
@@ -141,6 +172,23 @@ export default function Leinwand({ pfad }) {
     if (z === 'sanft-gestoppt') return t.fertigSanft
     if (z === 'hart-abgebrochen') return t.fertigHart
     return t.fertigFehlgeschlagen
+  }
+
+  async function vorschauOeffnen(punkt) {
+    setSicherungsMeldung('')
+    const antwort = await window.flowforge.wiederherstellenVorschau(pfad, punkt.id)
+    if (!antwort.ok) return setSicherungsMeldung(antwort.fehler)
+    setVorschau({ punkt, unterschiede: antwort.unterschiede })
+  }
+
+  async function wiederherstellenBestaetigen() {
+    const punkt = vorschau.punkt
+    const antwort = await window.flowforge.wiederherstellen(pfad, punkt.id)
+    setVorschau(null)
+    if (!antwort.ok) return setSicherungsMeldung(antwort.fehler)
+    setSicherungsMeldung(ts.erledigt(zeitText(punkt.zeit)))
+    punkteLaden()
+    onWiederhergestellt?.()
   }
 
   return (
@@ -228,6 +276,72 @@ export default function Leinwand({ pfad }) {
           <Laufbericht key={bericht.id} bericht={bericht} />
         ))}
       </div>
+
+      <div className="berichte-bereich">
+        <p className="bericht-abschnitt">{ts.ueberschrift}</p>
+        {sicherungsMeldung && <p className="feld-hinweis">{sicherungsMeldung}</p>}
+        {punkte.length === 0 && (
+          <>
+            <p className="feld-hinweis">{ts.keine}</p>
+            <p className="feld-hinweis">{ts.hinweis}</p>
+          </>
+        )}
+        {punkte.map((punkt) => (
+          <div key={punkt.id} className="punkt-zeile">
+            <span>
+              {zeitText(punkt.zeit)} — {punkt.beschriftung}
+            </span>
+            <button
+              className="knopf-klein"
+              disabled={zustand === 'laeuft'}
+              title={zustand === 'laeuft' ? ts.fehlerWaehrendLauf : undefined}
+              onClick={() => vorschauOeffnen(punkt)}
+            >
+              {ts.wiederherstellen}
+            </button>
+          </div>
+        ))}
+      </div>
+
+      {vorschau && (
+        <div className="dialog-schleier">
+          <div className="dialog">
+            <h2>{ts.vorschauUeberschrift}</h2>
+            <p className="frage-text">{ts.vorschauEinleitung(zeitText(vorschau.punkt.zeit))}</p>
+            {vorschau.unterschiede.length === 0 ? (
+              <p className="feld-hinweis">{ts.identisch}</p>
+            ) : (
+              <div className="vorschau-listen">
+                <VorschauGruppe
+                  ueberschrift={ts.gruppeAnders}
+                  eintraege={vorschau.unterschiede.filter((u) => u.art === 'anders')}
+                />
+                <VorschauGruppe
+                  ueberschrift={ts.gruppeVerschwindet}
+                  eintraege={vorschau.unterschiede.filter((u) => u.art === 'nur-ordner')}
+                />
+                <VorschauGruppe
+                  ueberschrift={ts.gruppeKommtZurueck}
+                  eintraege={vorschau.unterschiede.filter((u) => u.art === 'nur-sicherung')}
+                />
+              </div>
+            )}
+            {vorschau.unterschiede.length > 0 && (
+              <p className="feld-hinweis">{ts.laufberichteBleiben}</p>
+            )}
+            <div className="dialog-knoepfe">
+              <button className="knopf-sekundaer" onClick={() => setVorschau(null)}>
+                {ts.abbrechen}
+              </button>
+              {vorschau.unterschiede.length > 0 && (
+                <button className="knopf-primaer" onClick={wiederherstellenBestaetigen}>
+                  {ts.jetztWiederherstellen}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {frage && (
         <div className="dialog-schleier">

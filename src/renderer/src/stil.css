@@ -663,6 +663,29 @@ body {
   word-break: break-all;
 }
 
+.punkt-zeile {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--rand);
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.punkt-zeile button {
+  flex-shrink: 0;
+}
+
+.vorschau-listen {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 40vh;
+  overflow: auto;
+}
+
 .wahl-zeile {
   display: flex;
   align-items: flex-start;

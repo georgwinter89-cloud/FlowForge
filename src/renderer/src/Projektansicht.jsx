@@ -46,13 +46,15 @@ export default function Projektansicht({ pfad, onZurueck }) {
   // false = zu, 'neu' = neue Karte, sonst die Karte, die bearbeitet wird
   const [formular, setFormular] = useState(false)
 
-  useEffect(() => {
+  function projektLaden() {
     window.flowforge.projektOeffnen(pfad).then((ergebnis) => {
       if (!ergebnis.ok) return setFehler(ergebnis.fehler)
       setProjekt(ergebnis.projekt)
       setKarten(ergebnis.karten)
     })
-  }, [pfad])
+  }
+
+  useEffect(projektLaden, [pfad])
 
   // Jede Kartenänderung liefert den neuen Gesamtstand zurück.
   function uebernehmen(ergebnis) {
@@ -151,7 +153,8 @@ export default function Projektansicht({ pfad, onZurueck }) {
           <div className="spalten-kopf">
             <h2>{t.leinwandTitel}</h2>
           </div>
-          <Leinwand pfad={pfad} />
+          {/* Nach einer Wiederherstellung kann sich karten.json geändert haben. */}
+          <Leinwand pfad={pfad} onWiederhergestellt={projektLaden} />
         </div>
         <aside className="spalte spalte-bibliothek">
           <div className="platzhalter">

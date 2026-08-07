@@ -113,7 +113,7 @@ export const texte = {
     sanftStoppenHinweis: 'Der laufende Schritt macht fertig, dann hält der Lauf an.',
     hartStoppen: 'Sofort abbrechen',
     hartStoppenBestaetigung:
-      'Sofort abbrechen? Der Block gilt dann als nicht gelaufen — angefangene Änderungen können unfertig zurückbleiben.',
+      'Sofort abbrechen? Der Block gilt dann als nicht gelaufen — angefangene Änderungen werden auf den letzten Sicherungspunkt zurückgesetzt.',
     rohProtokollZeigen: 'Rohprotokoll einblenden',
     rohProtokollVerbergen: 'Rohprotokoll ausblenden',
     tickerUeberschrift: 'Liveticker',
@@ -130,7 +130,8 @@ export const texte = {
     fertigErfolgreich: 'Der Lauf ist fertig.',
     fertigFehlgeschlagen: 'Der Lauf ist fehlgeschlagen.',
     fertigSanft: 'Der Lauf wurde sanft angehalten.',
-    fertigHart: 'Der Lauf wurde sofort abgebrochen. Der Block gilt als nicht gelaufen.',
+    fertigHart:
+      'Der Lauf wurde sofort abgebrochen. Der Block gilt als nicht gelaufen; angefangene Änderungen wurden auf den letzten Sicherungspunkt zurückgesetzt.',
     okKnopf: 'Alles klar',
     schonAktiv: 'Es läuft schon ein Workflow. Bitte warte, bis er fertig ist.',
     workflowUnbekannt: 'Diesen Workflow gibt es nicht.',
@@ -153,7 +154,9 @@ export const texte = {
     unbekanntesWerkzeug: (name) =>
       `Der Agent möchte ein Werkzeug nutzen, das FlowForge nicht kennt: ${name}`,
     abgelehntFuerAgent:
-      'Der Nutzer hat das nicht erlaubt. Suche einen anderen Weg innerhalb des Projektordners — oder beende den Auftrag mit einer kurzen Erklärung.'
+      'Der Nutzer hat das nicht erlaubt. Suche einen anderen Weg innerhalb des Projektordners — oder beende den Auftrag mit einer kurzen Erklärung.',
+    gitGesperrtFuerAgent:
+      'Git ist in FlowForge-Projekten gesperrt: Die App verwaltet Sicherungspunkte selbst. Arbeite ohne Git weiter.'
   },
   ticker: {
     motorGestartet: (modell) => `Motor gestartet (${modell}).`,
@@ -171,7 +174,35 @@ export const texte = {
     rechteFrageAbgelehnt: 'Du hast es abgelehnt.',
     sanftAngefordert: 'Sanftes Anhalten angefordert — der laufende Schritt macht fertig.',
     hartAbgebrochen: 'Sofort abgebrochen.',
+    gitGesperrt: 'Git-Befehl gesperrt — Sicherungspunkte übernimmt FlowForge.',
+    sicherungspunktAngelegt: 'Sicherungspunkt angelegt.',
+    zurueckgesetzt: 'Projektordner auf den letzten Sicherungspunkt zurückgesetzt.',
     fertigIn: (sekunden) => `Fertig nach ${sekunden} Sekunden.`
+  },
+  sicherungen: {
+    ueberschrift: 'Sicherungspunkte',
+    keine: 'Noch keine Sicherungspunkte.',
+    hinweis: 'FlowForge sichert den Projektordner automatisch — vor jedem Lauf und nach jedem gelungenen Block.',
+    wiederherstellen: 'Wiederherstellen',
+    vorschauUeberschrift: 'Diesen Stand wiederherstellen?',
+    vorschauEinleitung: (zeit) => `Das Projekt wird auf den Stand von ${zeit} zurückgesetzt.`,
+    identisch: 'Der jetzige Stand ist mit diesem Sicherungspunkt identisch — es gibt nichts zurückzusetzen.',
+    gruppeAnders: 'Wird zurückgesetzt:',
+    gruppeVerschwindet: 'Verschwindet:',
+    gruppeKommtZurueck: 'Kommt zurück:',
+    laufberichteBleiben: 'Laufberichte bleiben in jedem Fall erhalten. Vorher wird der jetzige Stand automatisch gesichert — du kannst also auch das Wiederherstellen rückgängig machen.',
+    jetztWiederherstellen: 'Jetzt wiederherstellen',
+    abbrechen: 'Abbrechen',
+    erledigt: (zeit) => `Stand von ${zeit} wiederhergestellt.`,
+    beschriftungProjektAngelegt: 'Projekt angelegt',
+    beschriftungVorLauf: (block) => `Stand vor „${block}"`,
+    beschriftungNachBlock: (block) => `„${block}" fertig`,
+    beschriftungVorWiederherstellung: 'Stand vor der Wiederherstellung',
+    beschriftungWiederhergestellt: (zeit) => `Zurückgeholt: Stand von ${zeit}`,
+    fehlerAnlegen: 'Der Sicherungspunkt konnte nicht angelegt werden. Der Lauf wurde sicherheitshalber nicht gestartet.',
+    fehlerVorschau: 'Die Vorschau konnte nicht erstellt werden.',
+    fehlerWiederherstellen: 'Das Wiederherstellen hat nicht geklappt. Der Projektordner wurde nicht verändert.',
+    fehlerWaehrendLauf: 'Während ein Workflow läuft, kann nichts wiederhergestellt werden.'
   },
   laufberichte: {
     ueberschrift: 'Laufberichte',
