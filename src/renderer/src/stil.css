@@ -711,6 +711,80 @@ body {
   gap: 12px;
 }
 
+/* Kartenvorauswahl für den Lauf (SPEC §5): Chips + Ablagefläche für gezogene Karten */
+.kontext-bereich {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px dashed var(--rand);
+  border-radius: 8px;
+  background: var(--flaeche);
+}
+
+.kontext-titel {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-gedimmt);
+}
+
+.kontext-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 260px;
+  padding: 2px 8px;
+  border: 1px solid var(--rand);
+  border-left: 4px solid var(--rand);
+  border-radius: 999px;
+  background: #fff;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.kontext-chip.chip-status {
+  border-left-color: var(--akzent);
+}
+
+.kontext-chip.chip-aufgabe {
+  border-left-color: #16a34a;
+}
+
+.kontext-chip.chip-entscheidung {
+  border-left-color: #d97706;
+}
+
+.kontext-chip.chip-wissen {
+  border-left-color: #7c3aed;
+}
+
+.chip-fest {
+  color: var(--text-gedimmt);
+  font-style: normal;
+}
+
+.chip-entfernen {
+  border: none;
+  background: none;
+  padding: 0 2px;
+  cursor: pointer;
+  color: var(--text-gedimmt);
+  font-size: 13px;
+  line-height: 1;
+}
+
+.chip-entfernen:hover {
+  color: #dc2626;
+}
+
+/* Karten in der Seitenleiste lassen sich in die Vorauswahl ziehen */
+.karte[draggable='true'] {
+  cursor: grab;
+}
+
 .runden-feld {
   display: flex;
   align-items: center;

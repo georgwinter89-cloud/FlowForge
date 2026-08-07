@@ -11,7 +11,17 @@ function Karte({ karte, onBearbeiten, onErledigt, onLoeschen }) {
   const istStatus = karte.sorte === 'status'
   const istAufgabe = karte.sorte === 'aufgabe'
   return (
-    <div className={'karte karte-' + karte.sorte + (karte.erledigt ? ' karte-erledigt' : '')}>
+    <div
+      className={'karte karte-' + karte.sorte + (karte.erledigt ? ' karte-erledigt' : '')}
+      // Kartenvorauswahl (SPEC §5): Karten lassen sich in den Lauf-Kontext auf
+      // der Leinwand ziehen. Die Status-Karte ist ohnehin immer dabei.
+      draggable={!istStatus}
+      onDragStart={
+        istStatus
+          ? undefined
+          : (e) => e.dataTransfer.setData('text/flowforge-karte', karte.id)
+      }
+    >
       <div className="karte-kopf">
         <span className="karte-sorte">{tk.sorten[karte.sorte]}</span>
         {istAufgabe && (
@@ -56,6 +66,14 @@ export default function Projektansicht({ pfad, onZurueck }) {
   }
 
   useEffect(projektLaden, [pfad])
+
+  // Der Agent kann Karten mitten im Lauf anlegen/ändern (BAUPLAN 7) —
+  // die Seitenleiste zieht sofort nach.
+  useEffect(() => {
+    return window.flowforge.aufLaufEreignis((ereignis) => {
+      if (ereignis.projektPfad === pfad && ereignis.art === 'karten') setKarten(ereignis.karten)
+    })
+  }, [pfad])
 
   // Jede Kartenänderung liefert den neuen Gesamtstand zurück.
   function uebernehmen(ergebnis) {
@@ -155,7 +173,7 @@ export default function Projektansicht({ pfad, onZurueck }) {
             <h2>{t.leinwandTitel}</h2>
           </div>
           {/* Nach einer Wiederherstellung kann sich karten.json geändert haben. */}
-          <Leinwand pfad={pfad} onWiederhergestellt={projektLaden} />
+          <Leinwand pfad={pfad} karten={karten} onWiederhergestellt={projektLaden} />
         </div>
         <aside className="spalte spalte-bibliothek">
           <div className="spalten-kopf">

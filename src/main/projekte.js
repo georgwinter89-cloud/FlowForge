@@ -46,6 +46,18 @@ function ladeKarten(projektPfad) {
   return daten
 }
 
+// Karten eines Projekts lesen — genutzt von den Agenten-Werkzeugen (BAUPLAN 7)
+// und der Kartenvorauswahl beim Lauf-Start.
+export function kartenLaden(projektPfad) {
+  if (!istBekanntesProjekt(projektPfad) || !fs.existsSync(projektPfad))
+    return { ok: false, fehler: texte.fehler.projektNichtGefunden }
+  try {
+    return { ok: true, karten: ladeKarten(projektPfad) }
+  } catch {
+    return { ok: false, fehler: texte.fehler.kartenDateiKaputt }
+  }
+}
+
 function speichereKarten(projektPfad, karten) {
   schreibeJsonAtomar(path.join(projektPfad, KARTEN_DATEI), karten)
 }

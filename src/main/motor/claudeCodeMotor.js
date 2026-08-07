@@ -5,7 +5,9 @@ import { spawn } from 'node:child_process'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import { texte } from '../../shared/texte.js'
+import { TITEL_MAX, TEXT_MAX } from '../../shared/kartenRegeln.js'
 import { KONTEXT_FENSTER_STANDARD, kontextBand } from './schnittstelle.js'
+import { kartenWerkzeugServer } from './kartenWerkzeuge.js'
 
 const laden = createRequire(import.meta.url)
 
@@ -43,6 +45,25 @@ const NUR_LESEN_ERLAUBT = new Set([
   'ExitPlanMode'
 ])
 
+// Karten-Werkzeuge (BAUPLAN 7): in-Prozess-Werkzeuge des „karten"-Servers.
+// Sie setzen die harten Kartenregeln selbst durch — keine Rückfrage nötig.
+const KARTEN_PRAEFIX = 'mcp__karten__'
+const KARTEN_NUR_LESEN = 'mcp__karten__karten_uebersicht'
+
+// FlowForges eigene Verwaltungsdateien im Projektordner: direkte Änderungen
+// würden die harten Regeln umgehen (z.B. die Karten-Längengrenze) — hartes Nein,
+// der Agent nutzt die Karten-Werkzeuge.
+const VERWALTUNGS_DATEIEN = new Set(['projekt.json', 'karten.json', 'workflow.json'])
+const BERICHTE_ORDNER = 'laufberichte'
+
+function istVerwaltungsdatei(datei, projektPfad) {
+  if (!datei) return false
+  const relativ = path
+    .relative(path.resolve(projektPfad), path.resolve(projektPfad, String(datei)))
+    .toLowerCase()
+  return VERWALTUNGS_DATEIEN.has(relativ) || relativ.startsWith(BERICHTE_ORDNER + path.sep)
+}
+
 function liegtImProjekt(datei, projektPfad) {
   if (!datei) return false
   // Windows vergleicht Pfade ohne Groß/Klein-Unterscheidung.
@@ -56,11 +77,20 @@ function liegtImProjekt(datei, projektPfad) {
 // Rückfrage laufen darf oder Georg gefragt werden muss. Alles Unbekannte fragt.
 // Mit Sperre „darf nur lesen": hartes Nein für alles außer Lese-Werkzeugen.
 function pruefeWerkzeug(name, eingabe, projektPfad, nurLesen) {
+  // Karten-Werkzeuge zuerst: die Übersicht ist rein lesend, alles andere
+  // schreibt — und fällt damit unter die Sperre „darf nur lesen".
+  if (name.startsWith(KARTEN_PRAEFIX)) {
+    if (nurLesen && name !== KARTEN_NUR_LESEN)
+      return { gesperrt: texte.rechteFrage.nurLesenGesperrtFuerAgent, tickerText: texte.ticker.nurLesenGesperrt }
+    return { erlaubt: true }
+  }
   if (nurLesen && !NUR_LESEN_ERLAUBT.has(name))
     return { gesperrt: texte.rechteFrage.nurLesenGesperrtFuerAgent, tickerText: texte.ticker.nurLesenGesperrt }
   if (OHNE_RUECKFRAGE.has(name)) return { erlaubt: true }
   if (SCHREIB_WERKZEUGE.has(name)) {
     const datei = eingabe.file_path ?? eingabe.notebook_path
+    if (istVerwaltungsdatei(datei, projektPfad))
+      return { gesperrt: texte.rechteFrage.verwaltungGesperrtFuerAgent, tickerText: texte.ticker.verwaltungGesperrt }
     if (liegtImProjekt(datei, projektPfad)) return { erlaubt: true }
     return { frage: texte.rechteFrage.schreibenAusserhalb(String(datei ?? '?')) }
   }
@@ -99,6 +129,12 @@ function tickerZeilen(nachricht, projektPfad) {
     if (block.type === 'text' && block.text?.trim()) zeilen.push(block.text.trim())
     if (block.type !== 'tool_use') continue
     const e = block.input ?? {}
+    // Karten-Werkzeuge: die Übersicht meldet sich hier, Änderungen melden ihr
+    // Ergebnis selbst aus dem Werkzeug heraus (angelegt/abgelehnt).
+    if (block.name.startsWith(KARTEN_PRAEFIX)) {
+      if (block.name === KARTEN_NUR_LESEN) zeilen.push(t.liestKarten)
+      continue
+    }
     switch (block.name) {
       case 'Write':
         zeilen.push(t.schreibtDatei(kurzerPfad(e.file_path, projektPfad)))
@@ -198,6 +234,10 @@ export function starteMotorLauf(optionen) {
   const fertig = (async () => {
     const { query } = await import('@anthropic-ai/claude-agent-sdk')
 
+    // Agent-Karten-Brücke (BAUPLAN 7): Karten lesen/schreiben mit denselben
+    // harten Regeln wie für Menschen — läuft im FlowForge-Prozess selbst.
+    const kartenServer = await kartenWerkzeugServer({ projektPfad, aufEreignis })
+
     // Saubere Umgebung: Alle ANTHROPIC_*/CLAUDE*-Variablen fliegen raus — sie
     // könnten Anmeldung oder Verhalten des Motors umleiten (z.B. wenn FlowForge
     // selbst aus einer Claude-Code-Session heraus gestartet wurde). Im Abo-Modus
@@ -220,6 +260,7 @@ export function starteMotorLauf(optionen) {
         // Georgs persönliche Claude-Einstellungen bleiben außen vor:
         // der Motor läuft nur mit dem, was FlowForge ihm mitgibt.
         settingSources: [],
+        mcpServers: { karten: kartenServer },
         // Windows-Härtung: Die Shell des Motors zeigt POSIX-Pfade (/tmp/…, /c/…) an —
         // als Datei-Werkzeug-Pfade landen die auf Windows aber am falschen Ort und
         // lösen unnötige Rechte-Rückfragen aus.
@@ -230,7 +271,14 @@ export function starteMotorLauf(optionen) {
             `Der Projektordner ist: ${projektPfad}\n` +
             'Verwende bei Datei-Werkzeugen (Read/Write/Edit) ausschließlich Pfade relativ ' +
             'zum Projektordner oder diesen absoluten Windows-Pfad. Niemals POSIX-Pfade ' +
-            'wie /tmp/… oder /c/… verwenden — sie zeigen auf Windows auf falsche Orte.'
+            'wie /tmp/… oder /c/… verwenden — sie zeigen auf Windows auf falsche Orte.\n' +
+            'Projektkarten: FlowForge verwaltet strukturierte Karten (Status, Aufgabe, ' +
+            'Entscheidung, Wissen) als Gedächtnis des Projekts. Lies und schreibe sie ' +
+            'ausschließlich über die karten-Werkzeuge (karten_uebersicht, karte_anlegen, ' +
+            'karte_aktualisieren, karte_erledigen) — niemals über die Datei karten.json. ' +
+            `Harte Regeln: Titel höchstens ${TITEL_MAX} Zeichen, Inhalt höchstens ${TEXT_MAX} ` +
+            'Zeichen; wer mehr zu sagen hat, legt mehrere fokussierte Karten an. Es gibt ' +
+            'genau eine Status-Karte — sie kann weder gelöscht noch neu angelegt werden.'
         },
         maxTurns: 50,
         ...(modus === 'api' && ausgabenObergrenzeUsd > 0

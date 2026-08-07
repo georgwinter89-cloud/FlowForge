@@ -11,6 +11,11 @@
 //     ausgabenObergrenzeUsd  nur im API-Modus; der Motor bricht darüber selbst ab
 //     nurLesen               Sperre „darf nur lesen" (SPEC §4.2): alles außer
 //                            Lese-Werkzeugen wird hart abgelehnt, ohne Rückfrage
+//
+//   Jeder Motor stellt dem Agenten außerdem die Karten-Werkzeuge bereit
+//   (kartenWerkzeuge.js): Karten lesen, anlegen, aktualisieren, erledigen —
+//   mit denselben harten Regeln wie für Menschen (BAUPLAN 7). Erfolgreiche
+//   Änderungen melden sich als Ereignis { art: 'karten', karten }.
 //     aufEreignis(e)         e = { art: 'ticker', text }
 //                              | { art: 'roh', zeile }
 //                              | { art: 'verbrauch', verbrauch }

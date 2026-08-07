@@ -20,7 +20,9 @@ import {
   rueckfuehrungsZiel
 } from '../shared/kettenRegeln.js'
 import { einstellungenLaden, ABO_MODUS_ERLAUBT } from './einstellungen.js'
+import { kartenLaden } from './projekte.js'
 import { starteMotorLauf } from './motor/claudeCodeMotor.js'
+import { kartenZeile } from './motor/kartenWerkzeuge.js'
 import {
   sicherungspunktAnlegen,
   aufLetztenPunktZuruecksetzen,
@@ -83,9 +85,32 @@ function prueferKritik(ergebnisText) {
   return ohneMarke.length > 600 ? ohneMarke.slice(0, 600) + ' …' : ohneMarke
 }
 
-export async function laufStarten(fenster, projektPfad) {
+// Kartenvorauswahl (BAUPLAN 7, SPEC §5): Status-Karte immer + die beim Start
+// gewählten Karten. Wird vor jedem Block frisch gelesen — der Agent kann Karten
+// ja mitten im Lauf ändern.
+function kartenKontext(projektPfad, kartenIds) {
+  const geladen = kartenLaden(projektPfad)
+  if (!geladen.ok) return ''
+  const gewaehlt = geladen.karten.filter(
+    (k) => k.sorte === 'status' || kartenIds.includes(k.id)
+  )
+  if (gewaehlt.length === 0) return ''
+  return texte.agentenKarten.kontext(gewaehlt.map((k) => '- ' + kartenZeile(k)).join('\n'))
+}
+
+export async function laufStarten(fenster, projektPfad, kartenIds) {
   if (aktiverLauf) return { ok: false, fehler: texte.lauf.schonAktiv }
   if (!fs.existsSync(projektPfad)) return { ok: false, fehler: texte.fehler.projektNichtGefunden }
+
+  // Ohne ausdrückliche Auswahl gilt die festgenagelte Vorauswahl:
+  // Status-Karte (immer) + offene Aufgaben-Karten.
+  let ausgewaehlt = Array.isArray(kartenIds) ? kartenIds.filter((id) => typeof id === 'string') : null
+  if (!ausgewaehlt) {
+    const geladen = kartenLaden(projektPfad)
+    ausgewaehlt = geladen.ok
+      ? geladen.karten.filter((k) => k.sorte === 'aufgabe' && !k.erledigt).map((k) => k.id)
+      : []
+  }
 
   const geladen = workflowLaden(projektPfad)
   if (!geladen.ok) return geladen
@@ -251,7 +276,7 @@ export async function laufStarten(fenster, projektPfad) {
       senden({ art: 'block', instanzId: eintrag.instanzId, index: i })
       tickern(texte.ticker.blockStartet(i + 1, kette.length, def.name))
 
-      let auftrag = auftragMitFeldern(def, eintrag.feldWerte)
+      let auftrag = kartenKontext(projektPfad, ausgewaehlt) + auftragMitFeldern(def, eintrag.feldWerte)
       if (rueckmeldung) {
         auftrag +=
           '\n\nRückmeldung des Prüfers aus der letzten Runde (bitte beheben):\n' + rueckmeldung

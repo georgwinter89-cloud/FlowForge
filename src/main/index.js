@@ -82,8 +82,8 @@ function registriereIpc() {
     return workflowSpeichern(pfad, workflow)
   })
 
-  ipcMain.handle('lauf-starten', (ereignis, { pfad }) =>
-    laufStarten(BrowserWindow.fromWebContents(ereignis.sender), pfad)
+  ipcMain.handle('lauf-starten', (ereignis, { pfad, kartenIds }) =>
+    laufStarten(BrowserWindow.fromWebContents(ereignis.sender), pfad, kartenIds)
   )
   ipcMain.handle('lauf-sanft-stoppen', (_e, pfad) => laufSanftStoppen(pfad))
   ipcMain.handle('lauf-hart-stoppen', (_e, pfad) => laufHartStoppen(pfad))

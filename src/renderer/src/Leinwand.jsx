@@ -6,6 +6,7 @@ import { BlockChips } from './Blockbibliothek.jsx'
 
 const t = texte.lauf
 const tk = texte.kette
+const ta = texte.kartenAuswahl
 const te = texte.entscheidung
 const tf = texte.rechteFrage
 const tb = texte.laufberichte
@@ -226,7 +227,7 @@ function SchaubildKarte({
   )
 }
 
-export default function Leinwand({ pfad, onWiederhergestellt }) {
+export default function Leinwand({ pfad, karten, onWiederhergestellt }) {
   // zustand: 'bereit' (Schaubild bearbeiten) | 'laeuft' | 'fertig'
   const [zustand, setZustand] = useState('bereit')
   const [workflow, setWorkflow] = useState(null)
@@ -249,6 +250,11 @@ export default function Leinwand({ pfad, onWiederhergestellt }) {
   // Untere Bereiche standardmäßig eingeklappt — mehr Platz für die Leinwand.
   const [berichteOffen, setBerichteOffen] = useState(false)
   const [punkteOffen, setPunkteOffen] = useState(false)
+  // Kartenvorauswahl für den Lauf (SPEC §5, BAUPLAN 7): Status + offene Aufgaben
+  // sind vorausgewählt; Georg kann Karten dazuziehen (zusatz) oder vorausgewählte
+  // rauswerfen (raus). Beides gilt für den nächsten Start, wird nicht gespeichert.
+  const [kontextZusatz, setKontextZusatz] = useState(() => new Set())
+  const [kontextRaus, setKontextRaus] = useState(() => new Set())
   // Schaubild: gemessene Kartengrößen, laufender Karten-Zug, laufender Pfeil-Zug
   const [groessen, setGroessen] = useState({})
   const [ziehen, setZiehen] = useState(null) // { instanzId, dx, dy }
@@ -476,6 +482,39 @@ export default function Leinwand({ pfad, onWiederhergestellt }) {
     ketteSpeichern({ ...workflow, reparaturRunden: runden })
   }
 
+  // --- Kartenvorauswahl für den Lauf ---------------------------------------
+
+  function kontextAuswahl() {
+    return (karten ?? []).filter(
+      (k) =>
+        k.sorte === 'status' ||
+        kontextZusatz.has(k.id) ||
+        (k.sorte === 'aufgabe' && !k.erledigt && !kontextRaus.has(k.id))
+    )
+  }
+
+  function kontextAufnehmen(e) {
+    const id = e.dataTransfer.getData('text/flowforge-karte')
+    if (!id) return
+    e.preventDefault()
+    setKontextZusatz((alt) => new Set(alt).add(id))
+    setKontextRaus((alt) => {
+      const neu = new Set(alt)
+      neu.delete(id)
+      return neu
+    })
+  }
+
+  function kontextEntfernen(karte) {
+    if (kontextZusatz.has(karte.id))
+      setKontextZusatz((alt) => {
+        const neu = new Set(alt)
+        neu.delete(karte.id)
+        return neu
+      })
+    else setKontextRaus((alt) => new Set(alt).add(karte.id))
+  }
+
   // --- Lauf ---------------------------------------------------------------
 
   async function starten() {
@@ -486,7 +525,10 @@ export default function Leinwand({ pfad, onWiederhergestellt }) {
     setVerbrauch(null)
     setErgebnis(null)
     setAktiveInstanz(null)
-    const antwort = await window.flowforge.laufStarten(pfad)
+    const kartenIds = kontextAuswahl()
+      .filter((k) => k.sorte !== 'status')
+      .map((k) => k.id)
+    const antwort = await window.flowforge.laufStarten(pfad, kartenIds)
     if (!antwort.ok) setFehler(antwort.fehler)
   }
 
@@ -596,6 +638,35 @@ export default function Leinwand({ pfad, onWiederhergestellt }) {
               onChange={(e) => rundenSetzen(e.target.value)}
             />
           </label>
+        </div>
+      )}
+
+      {bearbeitbar && (
+        <div
+          className="kontext-bereich"
+          title={ta.hinweis}
+          onDragOver={(e) => {
+            if (e.dataTransfer.types.includes('text/flowforge-karte')) e.preventDefault()
+          }}
+          onDrop={kontextAufnehmen}
+        >
+          <span className="kontext-titel">{ta.ueberschrift}:</span>
+          {kontextAuswahl().map((karte) => (
+            <span key={karte.id} className={'kontext-chip chip-' + karte.sorte}>
+              {texte.karten.sorten[karte.sorte]}: {karte.titel}
+              {karte.sorte === 'status' ? (
+                <em className="chip-fest"> · {ta.immerDabei}</em>
+              ) : (
+                <button
+                  className="chip-entfernen"
+                  title={ta.entfernen}
+                  onClick={() => kontextEntfernen(karte)}
+                >
+                  ×
+                </button>
+              )}
+            </span>
+          ))}
         </div>
       )}
 

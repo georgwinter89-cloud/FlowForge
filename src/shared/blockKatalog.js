@@ -1,6 +1,6 @@
-// Blockbibliothek V1, Bauschritt 5: bewusst triviale Übungs-Blöcke (BAUPLAN 5) —
+// Blockbibliothek V1: bewusst triviale Übungs-Blöcke (BAUPLAN 5/7) —
 // die echten Arbeitsaufträge (Kontext laden, Angreifer, Bauer, Prüfer …) kommen in
-// Schritt 7/8. Anatomie eines Blocks laut SPEC §4.2: Name · Symbol · Arbeitsauftrag ·
+// Schritt 8/9. Anatomie eines Blocks laut SPEC §4.2: Name · Symbol · Arbeitsauftrag ·
 // braucht/liefert · Sperren (nur lesen, Pflichtfelder).
 //
 // Prüfer-Blöcke (prueft: true) müssen ihr Urteil als letzte Zeile ausgeben:
@@ -88,6 +88,27 @@ export const BLOCK_KATALOG = [
       'Sätzen. Diese Prüfung fällt grundsätzlich immer durch — egal wie gut die Datei ist. ' +
       'Du darfst nichts verändern — nur lesen. Deine allerletzte Zeile muss exakt lauten: ' +
       'PRUEFUNG: FEHLGESCHLAGEN'
+  },
+  {
+    id: 'karten-probe',
+    name: 'Karten-Probe',
+    symbol: '🗂️',
+    beschreibung:
+      'Liest die Status-Karte vor und legt eine Aufgaben-Karte an — inklusive Test, dass zu lange Karten abgelehnt werden.',
+    braucht: [],
+    liefert: [],
+    nurLesen: false,
+    prueft: false,
+    felder: [],
+    auftrag:
+      'Dies ist eine Übung für die Karten-Werkzeuge von FlowForge. Antworte auf Deutsch. ' +
+      'Schritt 1: Hol dir mit karten_uebersicht alle Karten und merke dir den Inhalt der Status-Karte. ' +
+      'Schritt 2: Versuche absichtlich, mit karte_anlegen eine Aufgaben-Karte anzulegen, deren Inhalt ' +
+      'deutlich länger als 400 Zeichen ist — die Ablehnung ist gewollt und Teil der Übung. Genau ein Versuch. ' +
+      'Schritt 3: Lege dann eine richtige Aufgaben-Karte an: Titel „Karten-Probe erledigt", Inhalt: zwei ' +
+      'kurze Sätze darüber, was diese Übung gezeigt hat. ' +
+      'Fasse am Ende in zwei bis drei Sätzen zusammen: den wörtlichen Inhalt der Status-Karte und ob die ' +
+      'Längengrenze in Schritt 2 gegriffen hat.'
   },
   {
     id: 'rechte-probe',

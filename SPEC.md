@@ -52,6 +52,12 @@ Vier Sorten, als strukturierte Datensätze in der App — nicht als Textdateien 
 sagen hat, legt mehrere fokussierte Karten an. Die Status-Karte wird beim Anlegen des Projekts
 automatisch erzeugt und kann weder gelöscht noch doppelt angelegt werden. Weitere Sorten erst, wenn der Alltag sie einfordert.
 
+Der Agent liest und schreibt Karten über eingebaute **Karten-Werkzeuge** (Übersicht, anlegen,
+aktualisieren, erledigen) — dieselben Regeln, hart durchgesetzt; abgelehnte Versuche sind im
+Liveticker sichtbar. FlowForges Verwaltungsdateien im Projektordner (projekt.json, karten.json,
+workflow.json, Laufberichte) sind für direkte Dateizugriffe des Agenten gesperrt (hartes Nein,
+keine Rückfrage) — sonst ließen sich die Kartenregeln umgehen.
+
 ### 3.2 Laufberichte
 
 Jeder Workflow-Lauf hinterlässt automatisch einen kompakten, strukturierten Bericht (Workflow,
@@ -110,8 +116,8 @@ Frage an den Menschen (Folgen-Fragen, keine Technik-Fragen) · Audit · Sessione
 
 Übergangszustand, bis diese echten Arbeitsaufträge stehen (Bauschritt 8/9): Die
 Bibliothek enthält bewusst triviale Übungs-Blöcke (Späher, Mini-Bauer, fairer und
-strenger Übungs-Prüfer, Rechte-Probe), an denen Kette, Sperren und
-Fehlschlag-Rückführung erprobt werden. Prüfer-Blöcke melden ihr Urteil als letzte
+strenger Übungs-Prüfer, Karten-Probe, Rechte-Probe), an denen Kette, Sperren,
+Karten-Werkzeuge und Fehlschlag-Rückführung erprobt werden. Prüfer-Blöcke melden ihr Urteil als letzte
 Zeile ihres Abschlusstexts („PRUEFUNG: BESTANDEN/FEHLGESCHLAGEN").
 
 ### 4.4 Vorlagen-Workflows
@@ -143,8 +149,10 @@ Zeile ihres Abschlusstexts („PRUEFUNG: BESTANDEN/FEHLGESCHLAGEN").
   Verhalten in den **Projekteinstellungen** wählbar —
   (a) automatisch pausieren, bei Fenster-Erneuerung selbstständig weitermachen (+ Benachrichtigung)
   oder (b) stoppen und auf manuellen Neustart warten.
-- **Kontext-Zuführung:** Beim Start wählt die App relevante Karten automatisch vor (Status-Karte
-  immer); der Nutzer kann per Drag & Drop hinzufügen/rauswerfen, dann Start.
+- **Kontext-Zuführung:** Beim Start wählt die App Karten automatisch vor — festgenagelt auf
+  **Status-Karte (immer) + offene Aufgaben-Karten**; der Nutzer kann weitere Karten per
+  Drag & Drop in die Auswahl ziehen und vorausgewählte per Klick rauswerfen, dann Start.
+  Die gewählten Karten bekommt der Agent zu Beginn **jedes Blocks** frisch mit.
 - **Parallelität:** Bis zu **3 Workflows gleichzeitig, aber nur in verschiedenen Projekten.**
   Pro Projekt schreibt immer nur **ein** Agent (mehrere lesende erlaubt). Weitere Starts landen
   in einer Warteschlange und laufen automatisch an.

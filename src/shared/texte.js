@@ -124,6 +124,28 @@ export const texte = {
     titel: 'Status',
     startText: 'Projekt frisch angelegt. Noch nichts gebaut.'
   },
+  kartenAuswahl: {
+    ueberschrift: 'Karten für den Lauf',
+    hinweis:
+      'Diese Karten bekommt der Agent zu Beginn jedes Blocks mit. Status-Karte und offene Aufgaben sind vorausgewählt — weitere Karten ziehst du aus der Seitenleiste hierher, rauswerfen per ×.',
+    immerDabei: 'immer dabei',
+    entfernen: 'Aus der Auswahl nehmen'
+  },
+  // Texte, die an den Agenten gehen (nicht an Georg) — zentral wie alle anderen.
+  agentenKarten: {
+    kontext: (liste) =>
+      'Aktuelle Projektkarten (von FlowForge für diesen Lauf ausgewählt):\n' +
+      liste +
+      '\n\nWeitere Karten kannst du über die karten-Werkzeuge lesen, anlegen, aktualisieren und erledigen.\n\nDein Arbeitsauftrag:\n',
+    angelegt: (karte) => `Karte angelegt: „${karte.titel}" (${karte.sorte}, id ${karte.id}).`,
+    aktualisiert: (karte) => `Karte aktualisiert: „${karte.titel}" (id ${karte.id}).`,
+    erledigtGesetzt: (karte, erledigt) =>
+      erledigt
+        ? `Aufgabe „${karte.titel}" ist jetzt als erledigt markiert.`
+        : `Aufgabe „${karte.titel}" ist wieder offen.`,
+    unbekannteId: (id) =>
+      `Keine Karte mit der id ${id} gefunden. Hol dir die aktuellen ids mit karten_uebersicht.`
+  },
   fehler: {
     projektNichtGefunden: 'Der Projektordner ist nicht mehr da. Wurde er verschoben oder gelöscht?',
     kartenDateiKaputt:
@@ -205,7 +227,9 @@ export const texte = {
     gitGesperrtFuerAgent:
       'Git ist in FlowForge-Projekten gesperrt: Die App verwaltet Sicherungspunkte selbst. Arbeite ohne Git weiter.',
     nurLesenGesperrtFuerAgent:
-      'Dieser Block darf nur lesen. Schreiben, Befehle und Internet sind hier gesperrt. Beende den Auftrag nur mit Lese-Werkzeugen.'
+      'Dieser Block darf nur lesen. Schreiben, Befehle und Internet sind hier gesperrt. Beende den Auftrag nur mit Lese-Werkzeugen.',
+    verwaltungGesperrtFuerAgent:
+      'Diese Datei verwaltet FlowForge selbst — sie ist für direkte Änderungen gesperrt. Karten liest und schreibst du über die karten-Werkzeuge.'
   },
   ticker: {
     motorGestartet: (modell) => `Motor gestartet (${modell}).`,
@@ -225,6 +249,13 @@ export const texte = {
     hartAbgebrochen: 'Sofort abgebrochen.',
     gitGesperrt: 'Git-Befehl gesperrt — Sicherungspunkte übernimmt FlowForge.',
     nurLesenGesperrt: 'Schreib-Versuch gestoppt — dieser Block darf nur lesen.',
+    verwaltungGesperrt: 'Schreib-Versuch auf eine FlowForge-Verwaltungsdatei gestoppt.',
+    liestKarten: 'Liest die Projektkarten.',
+    karteAngelegt: (titel) => `Karte angelegt: „${titel}"`,
+    karteAktualisiert: (titel) => `Karte aktualisiert: „${titel}"`,
+    aufgabeErledigt: (titel) => `Aufgabe abgehakt: „${titel}"`,
+    aufgabeGeoeffnet: (titel) => `Aufgabe wieder geöffnet: „${titel}"`,
+    karteAbgelehnt: (grund) => `Karten-Änderung abgelehnt: ${grund}`,
     sicherungspunktAngelegt: 'Sicherungspunkt angelegt.',
     zurueckgesetzt: 'Projektordner auf den letzten Sicherungspunkt zurückgesetzt.',
     fertigIn: (sekunden) => `Fertig nach ${sekunden} Sekunden.`,
