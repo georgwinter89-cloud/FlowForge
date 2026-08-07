@@ -1,6 +1,11 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { texte } from '../../shared/texte.js'
-import { blockDefinition, blockKategorie, REPARATUR_RUNDEN_MAX } from '../../shared/blockKatalog.js'
+import {
+  blockDefinition,
+  vorlageDefinition,
+  blockKategorie,
+  REPARATUR_RUNDEN_MAX
+} from '../../shared/blockKatalog.js'
 import { schaubildReihenfolge, vorfahrenImPfad } from '../../shared/kettenRegeln.js'
 import { BlockChips } from './Blockbibliothek.jsx'
 
@@ -406,6 +411,29 @@ export default function Leinwand({ pfad, karten, onWiederhergestellt }) {
 
   function neuAblegen(e) {
     e.preventDefault()
+    // Vorlage (SPEC §4.4): legt eine ganze Kette fertig verbunden ab — nur auf
+    // die leere Leinwand, damit sie nichts Bestehendes durcheinanderbringt.
+    const vorlageId = e.dataTransfer.getData('text/flowforge-vorlage')
+    if (vorlageId) {
+      const vorlage = vorlageDefinition(vorlageId)
+      if (!vorlage) return
+      if (workflow.bloecke.length > 0) {
+        setMeldung(tk.vorlageNurLeer)
+        return
+      }
+      const bloecke = vorlage.kette.map((blockId, i) => ({
+        instanzId: crypto.randomUUID(),
+        blockId,
+        feldWerte: {},
+        zurueckZu: null,
+        position: { x: 40 + (i % 2) * 300, y: 40 + i * 190 }
+      }))
+      const pfeile = bloecke
+        .slice(1)
+        .map((block, i) => ({ von: bloecke[i].instanzId, nach: block.instanzId }))
+      ketteSpeichern({ ...workflow, bloecke, pfeile })
+      return
+    }
     const blockId = e.dataTransfer.getData('text/flowforge-block')
     if (!blockId) return
     const rect = flaecheRef.current.getBoundingClientRect()

@@ -1,6 +1,6 @@
 {
   "name": "flowforge",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Coding-Workflows aus Blöcken bauen, die ein KI-Agent ausführt",
   "main": "out/main/index.js",
   "author": "Georg Winter",

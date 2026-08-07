@@ -56,6 +56,43 @@ const KARTEN_NUR_LESEN = 'mcp__karten__karten_uebersicht'
 const VERWALTUNGS_DATEIEN = new Set(['projekt.json', 'karten.json', 'workflow.json'])
 const BERICHTE_ORDNER = 'laufberichte'
 
+// Befehls-Einstufung (SPEC §7, seit Bauschritt 8): Befehle bekannter
+// Entwickler-Werkzeuge decken „Tests ausführen" und „Programmbibliotheken
+// installieren (offizielle Quellen)" ab und laufen ohne Rückfrage — ebenso rein
+// lesende Befehle. Alles andere fragt weiterhin; Git bleibt hart gesperrt.
+const BEFEHLE_OHNE_RUECKFRAGE = new Set([
+  // Entwickler-Werkzeuge: bauen, testen, installieren
+  'node', 'npm', 'npx', 'pnpm', 'yarn', 'tsc', 'vitest', 'jest',
+  'python', 'python3', 'py', 'pip', 'pip3', 'pytest',
+  // Rein lesend
+  'dir', 'ls', 'type', 'cat', 'findstr', 'grep', 'where', 'echo', 'pwd', 'head', 'tail', 'wc'
+])
+
+// Ein verketteter Befehl läuft nur dann ohne Rückfrage, wenn jedes Teilstück
+// mit einem bekannten Werkzeug beginnt — sonst entscheidet Georg.
+function befehlOhneRueckfrage(befehl) {
+  const teile = String(befehl).split(/&&|\|\||[;|\n]/)
+  let geprueft = 0
+  for (const teil of teile) {
+    // Reine Text-Ausgaben wie "ExitCode=$LASTEXITCODE" (übliches
+    // PowerShell-Anhängsel des Motors) führen nichts aus — außer sie enthalten
+    // eine $(…)-Unterausführung oder Backticks, dann zählen sie als Befehl.
+    const getrimmt = teil.trim()
+    if (/^"[^"`]*"$/.test(getrimmt) && !getrimmt.includes('$(')) continue
+    const erster = teil.trim().split(/\s+/)[0]
+    if (!erster) continue
+    const name = erster
+      .replace(/^["']|["']$/g, '')
+      .toLowerCase()
+      .split(/[\\/]/)
+      .pop()
+      .replace(/\.(exe|cmd|bat)$/, '')
+    if (!BEFEHLE_OHNE_RUECKFRAGE.has(name)) return false
+    geprueft++
+  }
+  return geprueft > 0
+}
+
 function istVerwaltungsdatei(datei, projektPfad) {
   if (!datei) return false
   const relativ = path
@@ -100,6 +137,7 @@ function pruefeWerkzeug(name, eingabe, projektPfad, nurLesen) {
     // Sicherungspunkt-Verwaltung von FlowForge kollidieren. Keine Rückfrage, hartes Nein.
     if (/\bgit\b/i.test(befehl))
       return { gesperrt: texte.rechteFrage.gitGesperrtFuerAgent, tickerText: texte.ticker.gitGesperrt }
+    if (befehlOhneRueckfrage(befehl)) return { erlaubt: true }
     return { frage: texte.rechteFrage.befehl(befehl) }
   }
   if (name === 'WebFetch' || name === 'WebSearch')
@@ -280,7 +318,9 @@ export function starteMotorLauf(optionen) {
             'Zeichen; wer mehr zu sagen hat, legt mehrere fokussierte Karten an. Es gibt ' +
             'genau eine Status-Karte — sie kann weder gelöscht noch neu angelegt werden.'
         },
-        maxTurns: 50,
+        // Echte Bau- und Prüf-Blöcke (BAUPLAN 8) brauchen deutlich mehr Runden
+        // als die Übungs-Blöcke — die echte Grenze ist das Kontextfenster.
+        maxTurns: 200,
         ...(modus === 'api' && ausgabenObergrenzeUsd > 0
           ? { maxBudgetUsd: ausgabenObergrenzeUsd }
           : {}),

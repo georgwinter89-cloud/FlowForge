@@ -1120,6 +1120,19 @@ body {
   border-color: var(--akzent);
 }
 
+.bibliothek-gruppe {
+  margin-top: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-schwach, #6b7484);
+}
+
+.bib-vorlage {
+  border-left: 4px solid #9333ea;
+}
+
 /* Folgen-Frage */
 
 .entscheidung-optionen {

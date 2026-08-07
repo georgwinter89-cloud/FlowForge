@@ -109,16 +109,27 @@ blockieren den Weiterlauf, Regeln stehen nicht nur als Text im Prompt.
 
 ### 4.3 Blockbibliothek V1
 
-Kontext laden · Spec-Interview · Paket schneiden · Angreifer (nur lesend) · Bauer ·
-Prüfer (schreibt eigene Tests, liefert Rot-vor-Grün-Beleg; „≠ Bauer" heißt technisch:
-frische Session ohne das Arbeitswissen des Bauers) · Diagnose ·
-Frage an den Menschen (Folgen-Fragen, keine Technik-Fragen) · Audit · Sessionende.
+**Arbeitsblöcke** (echte Arbeitsaufträge, seit Bauschritt 8): Kontext laden ·
+Paket schneiden (Pflichtfeld: der Wunsch) · Angreifer (nur lesend) · Bauer ·
+Prüfer · Sessionende (bringt die Karten auf Stand).
+Noch ausstehend (Bauschritt 9): Spec-Interview · Diagnose · Frage an den Menschen
+(Folgen-Fragen, keine Technik-Fragen) · Audit.
 
-Übergangszustand, bis diese echten Arbeitsaufträge stehen (Bauschritt 8/9): Die
-Bibliothek enthält bewusst triviale Übungs-Blöcke (Späher, Mini-Bauer, fairer und
-strenger Übungs-Prüfer, Karten-Probe, Rechte-Probe), an denen Kette, Sperren,
-Karten-Werkzeuge und Fehlschlag-Rückführung erprobt werden. Prüfer-Blöcke melden ihr Urteil als letzte
-Zeile ihres Abschlusstexts („PRUEFUNG: BESTANDEN/FEHLGESCHLAGEN").
+**Übergaben:** braucht/liefert ist nicht nur eine Steck-Regel, sondern die
+Datenweitergabe im Lauf — der Abschlusstext eines Blocks wird unter seinen
+liefert-Etiketten gespeichert und jedem Folgeblock mit passendem braucht in den
+Auftrag gereicht (gekürzt auf 8.000 Zeichen je Übergabe).
+
+**Prüfer:** schreibt eigene Tests als Testdateien im Projekt, führt sie aus und
+liefert einen Rot-vor-Grün-Beleg: mindestens ein Test wird einmal mit absichtlich
+verfälschter Erwartung ausgeführt (Rot) und danach unverändert echt (Grün) — ein
+Test, der nie rot war, beweist nichts. Ehrlichkeits-Notiz: „Prüfer ≠ Bauer" heißt
+technisch „frische Session ohne das Arbeitswissen des Bauers" — jeder Block läuft
+ohnehin als frische Motor-Session; es ist kein anderes Gehirn. Prüfer-Blöcke melden
+ihr Urteil als letzte Zeile ihres Abschlusstexts („PRUEFUNG: BESTANDEN/FEHLGESCHLAGEN").
+
+**Übungs-Blöcke** bleiben für Probeläufe in der Bibliothek (eigener Abschnitt):
+Späher, Mini-Bauer, fairer und strenger Übungs-Prüfer, Karten-Probe, Rechte-Probe.
 
 ### 4.4 Vorlagen-Workflows
 
@@ -127,6 +138,10 @@ Zeile ihres Abschlusstexts („PRUEFUNG: BESTANDEN/FEHLGESCHLAGEN").
 | **Neue App starten** | Spec-Interview (grillt den Nutzer, erzeugt erste Karten) → Paket schneiden → Angreifer → Bauer → Prüfer → Sessionende |
 | **Feature hinzufügen** | Kontext laden → Paket schneiden → Angreifer → Bauer → Prüfer → Sessionende |
 | **Bug jagen** | Kontext laden → Diagnose (Ursache belegen, bevor etwas angefasst wird) → Bauer (minimaler Fix) → Prüfer mit Rot-vor-Grün → Sessionende |
+
+Verfügbar seit Bauschritt 8: **„Feature hinzufügen"** — als ziehbare Vorlage in der
+Blockbibliothek, ablegbar nur auf der leeren Leinwand. „Neue App starten" und
+„Bug jagen" folgen mit Bauschritt 9 (brauchen Spec-Interview bzw. Diagnose).
 
 ### 4.5 Block-Editor
 
@@ -174,12 +189,14 @@ Zeile ihres Abschlusstexts („PRUEFUNG: BESTANDEN/FEHLGESCHLAGEN").
 | Programmbibliotheken installieren (offizielle Quellen) | Sonstige Internetzugriffe |
 | Tests ausführen | Alles Unumkehrbare |
 
-Übergangsregel, bis die echten Arbeitsauftrags-Blöcke stehen (Bauschritt 8): Kommandozeilen-
-Befehle lösen eine Rückfrage aus — auch Tests und Installationen. Ausnahme: Befehle, die der
-Motor selbst zweifelsfrei als **rein lesend** einstuft (z.B. Verzeichnis auflisten), laufen
-ohne Rückfrage durch. Sicherer Standard, solange die Blöcke die Befehle noch nicht einordnen
-können. Die Sperre „darf nur lesen" (§4.2) steht darüber: Sie stoppt jeden nicht rein
-lesenden Werkzeugaufruf hart, ohne Rückfrage.
+Befehls-Einstufung (seit Bauschritt 8): Kommandozeilen-Befehle, die mit einem bekannten
+Entwickler-Werkzeug beginnen (node, npm, npx, pnpm, yarn, tsc, vitest, jest, python,
+pip, pytest), laufen ohne Rückfrage — das deckt „Tests ausführen" und „Programm-
+bibliotheken installieren" ab. Rein lesende Befehle (dir, type, findstr …) ebenso.
+Verkettete Befehle laufen nur durch, wenn jedes Teilstück bekannt ist. Alle anderen
+Befehle lösen eine Rückfrage aus; Git bleibt hart gesperrt (§3.3). Die Sperre „darf
+nur lesen" (§4.2) steht darüber: Sie stoppt jeden nicht rein lesenden Werkzeugaufruf
+hart, ohne Rückfrage — Kommandozeilen-Befehle sind dann ganz gesperrt.
 
 ## 8. Ergebnis erleben
 

@@ -31,7 +31,11 @@ export const texte = {
     zurueck: 'Zur Übersicht',
     leinwandTitel: 'Leinwand',
     bibliothekTitel: 'Blockbibliothek',
-    bibliothekHinweis: 'Zieh einen Block mit der Maus auf die Leinwand.'
+    bibliothekHinweis: 'Zieh einen Block mit der Maus auf die Leinwand.',
+    vorlagenTitel: 'Vorlagen',
+    vorlageHinweis: 'Zieh die Vorlage auf die leere Leinwand — sie legt die ganze Kette fertig verbunden ab.',
+    arbeitsbloeckeTitel: 'Arbeitsblöcke',
+    uebungsbloeckeTitel: 'Übungs-Blöcke'
   },
   kette: {
     starten: 'Workflow starten',
@@ -63,7 +67,9 @@ export const texte = {
     fehlerPflichtfeld: (blockName, feld) =>
       `Beim Block „${blockName}" ist das Pflichtfeld „${feld}" leer. Bitte ausfüllen — sonst startet der Lauf nicht.`,
     fehlerWaehrendLauf: 'Während ein Lauf läuft, kann die Kette nicht verändert werden.',
-    unbekannterBlock: 'Diesen Block kennt FlowForge nicht.'
+    unbekannterBlock: 'Diesen Block kennt FlowForge nicht.',
+    vorlageNurLeer:
+      'Eine Vorlage lässt sich nur auf eine leere Leinwand legen. Entferne erst die vorhandenen Blöcke — oder steck die Kette von Hand zusammen.'
   },
   entscheidung: {
     ueberschrift: 'Der Prüfer ist weiterhin nicht zufrieden',
@@ -136,7 +142,7 @@ export const texte = {
     kontext: (liste) =>
       'Aktuelle Projektkarten (von FlowForge für diesen Lauf ausgewählt):\n' +
       liste +
-      '\n\nWeitere Karten kannst du über die karten-Werkzeuge lesen, anlegen, aktualisieren und erledigen.\n\nDein Arbeitsauftrag:\n',
+      '\n\nWeitere Karten kannst du über die karten-Werkzeuge lesen, anlegen, aktualisieren und erledigen.\n\n',
     angelegt: (karte) => `Karte angelegt: „${karte.titel}" (${karte.sorte}, id ${karte.id}).`,
     aktualisiert: (karte) => `Karte aktualisiert: „${karte.titel}" (id ${karte.id}).`,
     erledigtGesetzt: (karte, erledigt) =>
@@ -145,6 +151,15 @@ export const texte = {
         : `Aufgabe „${karte.titel}" ist wieder offen.`,
     unbekannteId: (id) =>
       `Keine Karte mit der id ${id} gefunden. Hol dir die aktuellen ids mit karten_uebersicht.`
+  },
+  // Übergaben zwischen Blöcken (SPEC §4.3): Der Abschlusstext eines Blocks wird
+  // Folgeblöcken mit passendem „braucht" in den Auftrag gereicht.
+  agentenUebergabe: {
+    ueberschrift: 'Übergaben aus den vorherigen Blöcken dieses Laufs:\n\n',
+    eintrag: (etikett, blockName, text) => `### ${etikett} — von Block „${blockName}"\n${text}\n\n`,
+    auftragEinleitung: 'Dein Arbeitsauftrag:\n',
+    prueferRueckmeldung: (kritik) =>
+      '\n\nRückmeldung des Prüfers aus der letzten Runde (bitte beheben):\n' + kritik
   },
   fehler: {
     projektNichtGefunden: 'Der Projektordner ist nicht mehr da. Wurde er verschoben oder gelöscht?',

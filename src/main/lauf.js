@@ -98,6 +98,23 @@ function kartenKontext(projektPfad, kartenIds) {
   return texte.agentenKarten.kontext(gewaehlt.map((k) => '- ' + kartenZeile(k)).join('\n'))
 }
 
+// Übergaben zwischen Blöcken (SPEC §4.3): Was ein Block „liefert", ist sein
+// Abschlusstext — Folgeblöcke mit passendem „braucht" bekommen ihn in den
+// Auftrag. Gekürzt, damit ein ausufernder Abschlusstext den Kontext des
+// nächsten Blocks nicht flutet.
+const LIEFERUNG_MAX = 8000
+
+function uebergabenText(def, lieferungen) {
+  const eintraege = []
+  for (const etikett of def.braucht) {
+    const lieferung = lieferungen.get(etikett)
+    if (lieferung)
+      eintraege.push(texte.agentenUebergabe.eintrag(etikett, lieferung.block, lieferung.text))
+  }
+  if (eintraege.length === 0) return ''
+  return texte.agentenUebergabe.ueberschrift + eintraege.join('')
+}
+
 export async function laufStarten(fenster, projektPfad, kartenIds) {
   if (aktiverLauf) return { ok: false, fehler: texte.lauf.schonAktiv }
   if (!fs.existsSync(projektPfad)) return { ok: false, fehler: texte.fehler.projektNichtGefunden }
@@ -259,6 +276,9 @@ export async function laufStarten(fenster, projektPfad, kartenIds) {
     let rueckmeldung = ''
     let endZustand = null
     let fehlertext = ''
+    // Übergaben dieses Laufs: liefert-Etikett → Abschlusstext des Blocks.
+    // Läuft ein Block erneut (Reparatur-Runde), ersetzt er seine Lieferung.
+    const lieferungen = new Map()
 
     while (i < kette.length && !endZustand) {
       // Harter Stopp zwischen zwei Blöcken (Motor war gerade fertig): der
@@ -276,10 +296,13 @@ export async function laufStarten(fenster, projektPfad, kartenIds) {
       senden({ art: 'block', instanzId: eintrag.instanzId, index: i })
       tickern(texte.ticker.blockStartet(i + 1, kette.length, def.name))
 
-      let auftrag = kartenKontext(projektPfad, ausgewaehlt) + auftragMitFeldern(def, eintrag.feldWerte)
+      let auftrag =
+        kartenKontext(projektPfad, ausgewaehlt) +
+        uebergabenText(def, lieferungen) +
+        texte.agentenUebergabe.auftragEinleitung +
+        auftragMitFeldern(def, eintrag.feldWerte)
       if (rueckmeldung) {
-        auftrag +=
-          '\n\nRückmeldung des Prüfers aus der letzten Runde (bitte beheben):\n' + rueckmeldung
+        auftrag += texte.agentenUebergabe.prueferRueckmeldung(rueckmeldung)
         rueckmeldung = ''
       }
 
@@ -314,7 +337,17 @@ export async function laufStarten(fenster, projektPfad, kartenIds) {
         break
       }
 
-      // Block ist normal durchgelaufen: Abschlusstext für die Karten-Anzeige merken.
+      // Block ist normal durchgelaufen: Abschlusstext als Lieferung für
+      // Folgeblöcke ablegen und für die Karten-Anzeige merken.
+      const abschlusstext = String(ergebnis.ergebnisText ?? '')
+      for (const etikett of def.liefert)
+        lieferungen.set(etikett, {
+          block: def.name,
+          text:
+            abschlusstext.length > LIEFERUNG_MAX
+              ? abschlusstext.slice(0, LIEFERUNG_MAX) + ' …'
+              : abschlusstext
+        })
       const blockErgebnis = {
         instanzId: eintrag.instanzId,
         block: def.name,
