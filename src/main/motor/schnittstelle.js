@@ -11,6 +11,14 @@
 //     ausgabenObergrenzeUsd  nur im API-Modus; der Motor bricht darüber selbst ab
 //     nurLesen               Sperre „darf nur lesen" (SPEC §4.2): alles außer
 //                            Lese-Werkzeugen wird hart abgelehnt, ohne Rückfrage
+//     kontextFenster         optional: bekannte Fenstergröße aus früheren Sessions
+//                            desselben Laufs (der Motor meldet die echte Größe erst
+//                            am Session-Ende — so stimmt die Schwelle von Anfang an)
+//     uebertrag              Automatischer Übertrag (SPEC §5): { aktiv, testModus, anweisung }.
+//                            Läuft der Kontext über die Schwelle, unterbricht der Motor
+//                            den Agenten, schickt ihm die anweisung (Karten aktualisieren,
+//                            Übergabe schreiben) und endet mit zustand 'uebertrag' —
+//                            der ergebnisText ist dann die Übergabe an die frische Session.
 //
 //   Jeder Motor stellt dem Agenten außerdem die Karten-Werkzeuge bereit
 //   (kartenWerkzeuge.js): Karten lesen, anlegen, aktualisieren, erledigen —
@@ -23,9 +31,12 @@
 //   }
 //
 //   Rückgabe = {
-//     fertig            Promise<{ zustand, fehlertext, ergebnisText, verbrauch }>
+//     fertig            Promise<{ zustand, fehlertext, fehlerArt, ergebnisText, verbrauch }>
 //                       zustand: 'erfolgreich' | 'fehlgeschlagen'
-//                              | 'sanft-gestoppt' | 'hart-abgebrochen'
+//                              | 'sanft-gestoppt' | 'hart-abgebrochen' | 'uebertrag'
+//                       fehlerArt (nur bei 'fehlgeschlagen'): 'kontingent' |
+//                       'obergrenze' | 'anmeldung' | null — die Lauf-Verwaltung
+//                       entscheidet daran z.B. über die Kontingent-Pause (SPEC §5)
 //                       ergebnisText: Abschlusstext des Agenten — daraus liest
 //                       FlowForge z.B. Prüfer-Urteile (PRUEFUNG: BESTANDEN/…)
 //     sanftStoppen()    Motor unterbricht geordnet (Unterbrechungs-Funktion)
@@ -37,6 +48,15 @@
 
 // Solange der Motor die echte Fenstergröße noch nicht gemeldet hat.
 export const KONTEXT_FENSTER_STANDARD = 200000
+
+// Automatischer Übertrag (SPEC §5): echte Schwelle als absoluter Füllstand.
+export const UEBERTRAG_SCHWELLE_PROZENT = 85
+
+// Test-Schalter „Übertrag schon bei 10 %" (BAUPLAN 11): Eine frische Session
+// startet schon mit ~8–10 % Grundlast (Systemtext, Werkzeuge) — eine absolute
+// 10-%-Schwelle würde sofort wieder feuern, ohne dass der Agent etwas schafft.
+// Im Testmodus gilt darum: Startfüllstand + 10 Prozentpunkte.
+export const UEBERTRAG_TEST_AUFSCHLAG_PUNKTE = 10
 
 const BAND_BREITE = 5 // Prozentpunkte
 

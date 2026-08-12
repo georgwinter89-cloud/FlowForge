@@ -15,7 +15,10 @@ const STANDARD = {
   ausgabenObergrenzeUsd: 5,
   // Automodus (Feedback Georg, 07.08.2026): Rechte-Rückfragen automatisch
   // erlauben statt jedes Mal zu fragen. Harte Sperren bleiben unberührt.
-  rechteAutomatisch: false
+  rechteAutomatisch: false,
+  // Test-Schalter (BAUPLAN 11): Übertrag schon nach ~10 Prozentpunkten
+  // Kontext-Verbrauch statt erst bei 85 % — nur zum Ausprobieren.
+  uebertragTest: false
 }
 
 function dateiPfad() {
@@ -47,7 +50,8 @@ export function einstellungenSpeichern(neu) {
     motorModus: !ABO_MODUS_ERLAUBT ? 'api' : modus,
     apiSchluessel: schluessel,
     ausgabenObergrenzeUsd: Number.isFinite(obergrenze) && obergrenze > 0 ? obergrenze : STANDARD.ausgabenObergrenzeUsd,
-    rechteAutomatisch: Boolean(neu.rechteAutomatisch)
+    rechteAutomatisch: Boolean(neu.rechteAutomatisch),
+    uebertragTest: Boolean(neu.uebertragTest)
   }
   const tmp = dateiPfad() + '.tmp'
   fs.writeFileSync(tmp, JSON.stringify(daten, null, 2), 'utf8')

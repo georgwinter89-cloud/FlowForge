@@ -6,6 +6,7 @@ import {
   projekteLaden,
   projektOeffnen,
   projektVergessen,
+  kontingentVerhaltenSetzen,
   karteAnlegen,
   karteAendern,
   karteErledigtSetzen,
@@ -14,6 +15,9 @@ import {
 import { einstellungenLaden, einstellungenSpeichern } from './einstellungen.js'
 import {
   laufStarten,
+  laufFortsetzen,
+  laufstandInfo,
+  laufstandVerwerfen,
   laufSanftStoppen,
   laufHartStoppen,
   laufFrageAntworten,
@@ -86,6 +90,16 @@ function registriereIpc() {
 
   ipcMain.handle('lauf-starten', (ereignis, { pfad, kartenIds }) =>
     laufStarten(BrowserWindow.fromWebContents(ereignis.sender), pfad, kartenIds)
+  )
+  // Wiederaufnahme nach Neustart mitten im Lauf (SPEC §3.3, BAUPLAN 11).
+  ipcMain.handle('laufstand-info', (_e, pfad) => laufstandInfo(pfad))
+  ipcMain.handle('laufstand-verwerfen', (_e, pfad) => laufstandVerwerfen(pfad))
+  ipcMain.handle('lauf-fortsetzen', (ereignis, pfad) =>
+    laufFortsetzen(BrowserWindow.fromWebContents(ereignis.sender), pfad)
+  )
+  // Kontingent-Verhalten pro Projekt (SPEC §5, BAUPLAN 11).
+  ipcMain.handle('kontingent-verhalten-setzen', (_e, { pfad, verhalten }) =>
+    kontingentVerhaltenSetzen(pfad, verhalten)
   )
   ipcMain.handle('lauf-sanft-stoppen', (_e, pfad) => laufSanftStoppen(pfad))
   ipcMain.handle('lauf-hart-stoppen', (_e, pfad) => laufHartStoppen(pfad))

@@ -188,15 +188,27 @@ Angreifer durch die Diagnose.
 
 - **Session = Abschnitt eines Workflow-Laufs.** Das **Sessionende** (Karten aktualisieren,
   Laufbericht schreiben) ist fest eingebaut, kein optionaler Block.
-- **Automatischer Übertrag:** Die App misst den echten Kontext-Füllstand. Bei ~85 % aktualisiert
-  der Agent die Karten, notiert die exakte Workflow-Position, die App startet automatisch eine
-  frische Session (Status-Karte + relevante Karten + Position) und arbeitet nahtlos weiter —
-  bis der Workflow fertig ist. Kein zu frühes Stoppen mehr.
-- **Übertrags-Grenze pro Workflow einstellbar:** Zahl (z.B. „max. 5") oder „unbegrenzt".
-- **Abo-Kontingent erschöpft** (bzw. Ausgaben-Obergrenze erreicht im API-Modus):
-  Verhalten in den **Projekteinstellungen** wählbar —
-  (a) automatisch pausieren, bei Fenster-Erneuerung selbstständig weitermachen (+ Benachrichtigung)
-  oder (b) stoppen und auf manuellen Neustart warten.
+- **Automatischer Übertrag** (seit Bauschritt 11): Die App misst den echten Kontext-Füllstand.
+  Bei ~85 % unterbricht sie den laufenden Block; der Agent aktualisiert die Karten (sofern der
+  Block schreiben darf), schreibt eine Übergabe (Erledigtes, nächster Schritt, Wissenswertes),
+  und derselbe Block arbeitet sofort als frische Session nahtlos weiter — bis der Workflow
+  fertig ist. Jeder Übertrag hinterlässt einen Eintrag in Alltagssprache im Laufbericht
+  (Abschnitt „Überträge"). Test-Schalter in den Einstellungen: „Übertrag schon bei etwa 10 %" —
+  greift beim Startfüllstand der Session plus 10 Prozentpunkte (eine frische Session hat schon
+  ~8–10 % Grundlast, eine absolute 10-%-Schwelle würde sofort wieder feuern).
+- **Übertrags-Grenze pro Workflow einstellbar** (im Schaubild-Kopf): Zahl (Standard 5) oder
+  unbegrenzt (Feld leer). Ist die Grenze erreicht, läuft der Block ohne weiteren Übertrag zu
+  Ende — ehrlich im Ticker vermerkt.
+- **Abo-Kontingent erschöpft:** Verhalten pro Projekt wählbar (im Schaubild-Kopf) —
+  (a) **pausieren** (Standard): Windows-Benachrichtigung, alle 10 Minuten ein neuer Versuch,
+  selbstständiges Weiterarbeiten sobald wieder Kontingent da ist (+ Benachrichtigung), oder
+  (b) **anhalten** und auf manuellen Neustart warten. Im API-Modus hält der Lauf bei erreichter
+  Ausgaben-Obergrenze immer an — automatisches Weiterlaufen würde die Obergrenze aushebeln,
+  weil jede frische Motor-Session sie neu zählt. Bei **überlasteten KI-Servern**
+  (vorübergehende Störung) pausiert der Lauf immer automatisch im 10-Minuten-Takt, unabhängig
+  von dieser Einstellung; Wiederholungsversuche des Motors sind im Liveticker sichtbar.
+- **Lauf-Ende-Benachrichtigung:** Ist das Fenster beim Laufende nicht im Vordergrund, meldet
+  sich FlowForge per Windows-Benachrichtigung.
 - **Kontext-Zuführung:** Beim Start wählt die App Karten automatisch vor — festgenagelt auf
   **Status-Karte (immer) + offene Aufgaben-Karten**; der Nutzer kann weitere Karten per
   Drag & Drop in die Auswahl ziehen und vorausgewählte per Klick rauswerfen, dann Start.

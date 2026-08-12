@@ -726,6 +726,7 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  flex-wrap: wrap;
 }
 
 /* Kartenvorauswahl für den Lauf (SPEC §5): Chips + Ablagefläche für gezogene Karten */
@@ -826,6 +827,15 @@ body {
   border-radius: 6px;
   font-family: inherit;
   font-size: 13px;
+}
+
+.runden-feld select {
+  padding: 4px 6px;
+  border: 1px solid var(--rand);
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 13px;
+  background: #fff;
 }
 
 /* Schaubild-Leinwand (Bauschritt 6): frei platzierte Karten + Pfeile */

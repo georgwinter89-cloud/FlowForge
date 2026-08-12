@@ -9,14 +9,22 @@ import { texte } from '../shared/texte.js'
 import {
   blockDefinition,
   REPARATUR_RUNDEN_STANDARD,
-  REPARATUR_RUNDEN_MAX
+  REPARATUR_RUNDEN_MAX,
+  UEBERTRAG_GRENZE_STANDARD,
+  UEBERTRAG_GRENZE_MAX
 } from '../shared/blockKatalog.js'
 import { pruefeSchaubild } from '../shared/kettenRegeln.js'
 
 const WORKFLOW_DATEI = 'workflow.json'
 
 function leererWorkflow() {
-  return { reparaturRunden: REPARATUR_RUNDEN_STANDARD, bloecke: [], pfeile: [] }
+  return {
+    reparaturRunden: REPARATUR_RUNDEN_STANDARD,
+    // Übertragsgrenze pro Workflow (SPEC §5): Zahl oder null = unbegrenzt.
+    uebertragGrenze: UEBERTRAG_GRENZE_STANDARD,
+    bloecke: [],
+    pfeile: []
+  }
 }
 
 // Nur Bekanntes übernehmen — die Datei liegt im Projektordner und könnte
@@ -26,6 +34,12 @@ function bereinigen(roh) {
   const runden = Number(roh?.reparaturRunden)
   if (Number.isInteger(runden) && runden >= 0 && runden <= REPARATUR_RUNDEN_MAX)
     sauber.reparaturRunden = runden
+  if (roh?.uebertragGrenze === null) sauber.uebertragGrenze = null
+  else {
+    const grenze = Number(roh?.uebertragGrenze)
+    if (Number.isInteger(grenze) && grenze >= 0 && grenze <= UEBERTRAG_GRENZE_MAX)
+      sauber.uebertragGrenze = grenze
+  }
   if (!Array.isArray(roh?.bloecke)) return sauber
   for (const eintrag of roh.bloecke) {
     const def = blockDefinition(eintrag?.blockId)

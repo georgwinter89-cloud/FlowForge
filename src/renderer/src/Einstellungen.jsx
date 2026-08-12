@@ -9,6 +9,7 @@ export default function Einstellungen({ onSchliessen }) {
   const [apiSchluessel, setApiSchluessel] = useState('')
   const [obergrenze, setObergrenze] = useState(5)
   const [rechteAutomatisch, setRechteAutomatisch] = useState(false)
+  const [uebertragTest, setUebertragTest] = useState(false)
   const [aboErlaubt, setAboErlaubt] = useState(true)
   const [fehler, setFehler] = useState('')
   const [geladen, setGeladen] = useState(false)
@@ -20,6 +21,7 @@ export default function Einstellungen({ onSchliessen }) {
       setApiSchluessel(e.einstellungen.apiSchluessel)
       setObergrenze(e.einstellungen.ausgabenObergrenzeUsd)
       setRechteAutomatisch(Boolean(e.einstellungen.rechteAutomatisch))
+      setUebertragTest(Boolean(e.einstellungen.uebertragTest))
       setAboErlaubt(e.aboErlaubt)
       setGeladen(true)
     })
@@ -30,7 +32,8 @@ export default function Einstellungen({ onSchliessen }) {
       motorModus: modus,
       apiSchluessel,
       ausgabenObergrenzeUsd: Number(obergrenze),
-      rechteAutomatisch
+      rechteAutomatisch,
+      uebertragTest
     })
     if (!ergebnis.ok) return setFehler(ergebnis.fehler)
     onSchliessen()
@@ -120,6 +123,20 @@ export default function Einstellungen({ onSchliessen }) {
             <span>
               {t.rechteAutomatisch}
               <span className="feld-hinweis"> — {t.rechteAutomatischHinweis}</span>
+            </span>
+          </label>
+        </div>
+        <p className="bericht-abschnitt">{t.uebertragUeberschrift}</p>
+        <div className="feld">
+          <label className="wahl-zeile">
+            <input
+              type="checkbox"
+              checked={uebertragTest}
+              onChange={(e) => setUebertragTest(e.target.checked)}
+            />
+            <span>
+              {t.uebertragTest}
+              <span className="feld-hinweis"> — {t.uebertragTestHinweis}</span>
             </span>
           </label>
         </div>

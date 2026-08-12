@@ -20,6 +20,11 @@ contextBridge.exposeInMainWorld('flowforge', {
   workflowSpeichern: (pfad, workflow) => ipcRenderer.invoke('workflow-speichern', { pfad, workflow }),
 
   laufStarten: (pfad, kartenIds) => ipcRenderer.invoke('lauf-starten', { pfad, kartenIds }),
+  laufstandInfo: (pfad) => ipcRenderer.invoke('laufstand-info', pfad),
+  laufstandVerwerfen: (pfad) => ipcRenderer.invoke('laufstand-verwerfen', pfad),
+  laufFortsetzen: (pfad) => ipcRenderer.invoke('lauf-fortsetzen', pfad),
+  kontingentVerhaltenSetzen: (pfad, verhalten) =>
+    ipcRenderer.invoke('kontingent-verhalten-setzen', { pfad, verhalten }),
   laufSanftStoppen: (pfad) => ipcRenderer.invoke('lauf-sanft-stoppen', pfad),
   laufHartStoppen: (pfad) => ipcRenderer.invoke('lauf-hart-stoppen', pfad),
   laufFrageAntworten: (frageId, erlaubt) =>

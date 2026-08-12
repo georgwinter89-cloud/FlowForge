@@ -21,6 +21,11 @@
 export const REPARATUR_RUNDEN_STANDARD = 2
 export const REPARATUR_RUNDEN_MAX = 9
 
+// Automatischer Übertrag (SPEC §5, BAUPLAN 11): so oft darf ein Lauf bei vollem
+// Kontext an eine frische Session übergeben. null = unbegrenzt.
+export const UEBERTRAG_GRENZE_STANDARD = 5
+export const UEBERTRAG_GRENZE_MAX = 99
+
 export const BLOCK_KATALOG = [
   {
     id: 'kontext-laden',

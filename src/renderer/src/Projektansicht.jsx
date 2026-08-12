@@ -128,6 +128,13 @@ export default function Projektansicht({ pfad, onZurueck }) {
     uebernehmen(await window.flowforge.karteLoeschen(pfad, karte.id))
   }
 
+  // Kontingent-Verhalten pro Projekt (SPEC §5): pausieren oder anhalten.
+  async function kontingentVerhaltenSetzen(verhalten) {
+    const ergebnis = await window.flowforge.kontingentVerhaltenSetzen(pfad, verhalten)
+    if (ergebnis.ok)
+      setProjekt((alt) => alt && { ...alt, kontingentVerhalten: ergebnis.kontingentVerhalten })
+  }
+
   if (fehler) {
     return (
       <section className="projektansicht">
@@ -211,7 +218,13 @@ export default function Projektansicht({ pfad, onZurueck }) {
             <h2>{t.leinwandTitel}</h2>
           </div>
           {/* Nach einer Wiederherstellung kann sich karten.json geändert haben. */}
-          <Leinwand pfad={pfad} karten={karten} onWiederhergestellt={projektLaden} />
+          <Leinwand
+            pfad={pfad}
+            karten={karten}
+            kontingentVerhalten={projekt?.kontingentVerhalten ?? 'pausieren'}
+            onKontingentVerhalten={kontingentVerhaltenSetzen}
+            onWiederhergestellt={projektLaden}
+          />
         </div>
         <aside className="spalte spalte-bibliothek">
           <div className="spalten-kopf">

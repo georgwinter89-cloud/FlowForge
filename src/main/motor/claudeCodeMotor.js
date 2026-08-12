@@ -6,7 +6,12 @@ import { createRequire } from 'node:module'
 import path from 'node:path'
 import { texte } from '../../shared/texte.js'
 import { TITEL_MAX, TEXT_MAX } from '../../shared/kartenRegeln.js'
-import { KONTEXT_FENSTER_STANDARD, kontextBand } from './schnittstelle.js'
+import {
+  KONTEXT_FENSTER_STANDARD,
+  kontextBand,
+  UEBERTRAG_SCHWELLE_PROZENT,
+  UEBERTRAG_TEST_AUFSCHLAG_PUNKTE
+} from './schnittstelle.js'
 import { kartenWerkzeugServer } from './kartenWerkzeuge.js'
 import { menschWerkzeugServer } from './menschWerkzeuge.js'
 import { startWerkzeugServer } from './startWerkzeuge.js'
@@ -68,7 +73,8 @@ const VERWALTUNGS_DATEIEN = new Set([
   'projekt.json',
   'karten.json',
   'workflow.json',
-  'startanleitung.json'
+  'startanleitung.json',
+  'laufstand.json'
 ])
 const BERICHTE_ORDNER = 'laufberichte'
 
@@ -185,6 +191,10 @@ function tickerZeilen(nachricht, projektPfad) {
   const t = texte.ticker
   if (nachricht.type === 'system' && nachricht.subtype === 'init')
     return [t.motorGestartet(nachricht.model ?? 'Claude')]
+  // Überlastete KI-Server: die CLI wiederholt selbst — ohne diese Zeile sähe
+  // Georg nur eine stumme App.
+  if (nachricht.type === 'system' && nachricht.subtype === 'api_retry')
+    return [t.motorWartet(nachricht.attempt ?? '?', nachricht.max_retries ?? '?')]
   if (nachricht.type !== 'assistant') return []
   const zeilen = []
   for (const block of nachricht.message?.content ?? []) {
@@ -239,7 +249,9 @@ function tickerZeilen(nachricht, projektPfad) {
   return zeilen
 }
 
-function fehlertextAusErgebnis(ergebnis, stderrRest) {
+// Fehlermeldung des Motors in Klartext übersetzen und einstufen — an der
+// fehlerArt entscheidet die Lauf-Verwaltung z.B. über die Kontingent-Pause.
+function fehlerAusErgebnis(ergebnis, stderrRest) {
   const teile = []
   // Bei is_error steckt die eigentliche Meldung im result-Text.
   if (ergebnis?.is_error && typeof ergebnis.result === 'string' && ergebnis.result)
@@ -249,10 +261,17 @@ function fehlertextAusErgebnis(ergebnis, stderrRest) {
     teile.push(ergebnis.subtype)
   if (!teile.length && stderrRest) teile.push(kuerzen(stderrRest, 400))
   const text = teile.join(' · ')
+  // Server-Überlastung (529) — vorübergehend; die Lauf-Verwaltung pausiert dann.
+  if (/overloaded|\b529\b/i.test(text))
+    return { fehlertext: texte.lauf.serverUeberlastet, fehlerArt: 'ueberlastet' }
+  // Abo-Kontingent erschöpft (SPEC §5) — die typischen Formulierungen der CLI.
+  if (/usage limit|limit reached|rate.?limit|quota|out of extra usage/i.test(text))
+    return { fehlertext: texte.lauf.kontingentErschoepft, fehlerArt: 'kontingent' }
   if (/log ?in|logged|authent|api key|credentials/i.test(text))
-    return texte.lauf.motorNichtAngemeldet
-  if (/budget/i.test(text)) return texte.lauf.obergrenzeErreicht
-  return text || texte.fehler.unbekannt
+    return { fehlertext: texte.lauf.motorNichtAngemeldet, fehlerArt: 'anmeldung' }
+  if (/budget/i.test(text))
+    return { fehlertext: texte.lauf.obergrenzeErreicht, fehlerArt: 'obergrenze' }
+  return { fehlertext: text || texte.fehler.unbekannt, fehlerArt: null }
 }
 
 export function starteMotorLauf(optionen) {
@@ -263,6 +282,11 @@ export function starteMotorLauf(optionen) {
     apiSchluessel,
     ausgabenObergrenzeUsd,
     nurLesen = false,
+    uebertrag = { aktiv: false, testModus: false, anweisung: '' },
+    // Die echte Fenstergröße meldet der Motor erst am Session-Ende — ein
+    // Vorwissen aus früheren Blöcken desselben Laufs macht die
+    // Übertrags-Schwelle von Anfang an richtig.
+    kontextFenster = KONTEXT_FENSTER_STANDARD,
     aufEreignis,
     aufRechteFrage,
     aufMenschFrage
@@ -275,21 +299,47 @@ export function starteMotorLauf(optionen) {
   let abfrage = null
   const abbruch = new AbortController()
 
-  // Die Eingabe bleibt offen, bis das Ergebnis da ist — sonst könnte der Motor
-  // keine Unterbrechung (sanfter Stopp) mehr über die Steuerleitung empfangen.
-  let eingabeSchliessen
-  const eingabeOffen = new Promise((r) => (eingabeSchliessen = r))
+  // Die Eingabe ist eine Warteschlange und bleibt offen, bis das Ergebnis da
+  // ist — so kann der Motor Unterbrechungen empfangen und beim Übertrag die
+  // Übergabe-Anweisung als weitere Nachricht in dieselbe Session bekommen.
+  const eingabeSchlange = []
+  let eingabeEnde = false
+  let eingabeWecker = null
+  function eingabeNachschieben(text) {
+    eingabeSchlange.push(text)
+    eingabeWecker?.()
+  }
+  function eingabeSchliessen() {
+    eingabeEnde = true
+    eingabeWecker?.()
+  }
   async function* eingabe() {
     yield { type: 'user', message: { role: 'user', content: auftrag }, parent_tool_use_id: null }
-    await eingabeOffen
+    while (true) {
+      if (eingabeSchlange.length) {
+        const text = eingabeSchlange.shift()
+        yield { type: 'user', message: { role: 'user', content: text }, parent_tool_use_id: null }
+        continue
+      }
+      if (eingabeEnde) return
+      await new Promise((wecken) => (eingabeWecker = wecken))
+    }
   }
+
+  // Automatischer Übertrag (SPEC §5): null | 'angefordert' | 'uebergabe' | 'fertig'.
+  let uebertragPhase = null
+  // Füllstand der ersten Messung dieser Session — Bezugspunkt für den Testmodus.
+  let startProzent = null
 
   const verbrauch = {
     tokens: 0,
     kontextProzentVon: 0,
     kontextProzentBis: 5,
     kostenUsd: null,
-    kontextFenster: KONTEXT_FENSTER_STANDARD
+    kontextFenster: kontextFenster > 0 ? kontextFenster : KONTEXT_FENSTER_STANDARD,
+    // Beim Übertrag: der Füllstand im Moment der Auslösung — die endgültige
+    // Fenstergröße kommt erst später und würde ihn sonst verfälschen.
+    uebertragBand: null
   }
 
   function verbrauchMelden() {
@@ -407,32 +457,85 @@ export function starteMotorLauf(optionen) {
             (u.cache_read_input_tokens ?? 0) +
             (u.output_tokens ?? 0)
           verbrauchMelden()
+
+          // Übertrags-Schwelle (SPEC §5): läuft der Kontext voll, wird der
+          // Agent unterbrochen und zur Übergabe aufgefordert — genau einmal.
+          if (uebertrag.aktiv && uebertragPhase === null && !sanftAngefordert && !hartAngefordert) {
+            const fenster = verbrauch.kontextFenster || KONTEXT_FENSTER_STANDARD
+            const prozent = (verbrauch.tokens / fenster) * 100
+            if (startProzent === null) startProzent = prozent
+            const schwelle = uebertrag.testModus
+              ? Math.min(startProzent + UEBERTRAG_TEST_AUFSCHLAG_PUNKTE, UEBERTRAG_SCHWELLE_PROZENT)
+              : UEBERTRAG_SCHWELLE_PROZENT
+            if (prozent >= schwelle) {
+              uebertragPhase = 'angefordert'
+              verbrauch.uebertragBand = {
+                von: verbrauch.kontextProzentVon,
+                bis: verbrauch.kontextProzentBis
+              }
+              aufEreignis({
+                art: 'ticker',
+                text: texte.ticker.uebertragAngefordert(
+                  verbrauch.kontextProzentVon,
+                  verbrauch.kontextProzentBis
+                )
+              })
+              abfrage?.interrupt().catch(() => {})
+            }
+          }
         }
 
         if (nachricht.type === 'result') {
-          ergebnis = nachricht
           if (typeof nachricht.total_cost_usd === 'number')
             verbrauch.kostenUsd = nachricht.total_cost_usd
           for (const m of Object.values(nachricht.modelUsage ?? {}))
             if (m.contextWindow > 0) verbrauch.kontextFenster = m.contextWindow
           verbrauchMelden()
-          if (typeof nachricht.duration_ms === 'number')
-            aufEreignis({
-              art: 'ticker',
-              text: texte.ticker.fertigIn(Math.round(nachricht.duration_ms / 1000))
-            })
-          eingabeSchliessen()
+
+          if (uebertragPhase === 'angefordert' && !sanftAngefordert && !hartAngefordert) {
+            if (nachricht.subtype === 'success' && !nachricht.is_error) {
+              // Wettlauf: Der Block war beim Erreichen der Schwelle ohnehin
+              // fertig — dann ist das ein normales Ende, kein Übertrag.
+              uebertragPhase = null
+              ergebnis = nachricht
+            } else {
+              // Das ist das Ende des unterbrochenen Auftrags — jetzt bekommt
+              // dieselbe Session (voller Kontext!) die Übergabe-Anweisung.
+              uebertragPhase = 'uebergabe'
+              eingabeNachschieben(uebertrag.anweisung)
+            }
+          } else if (uebertragPhase === 'uebergabe' && !sanftAngefordert && !hartAngefordert) {
+            uebertragPhase = 'fertig'
+            ergebnis = nachricht
+          } else {
+            ergebnis = nachricht
+          }
+
+          if (ergebnis) {
+            if (typeof nachricht.duration_ms === 'number')
+              aufEreignis({
+                art: 'ticker',
+                text: texte.ticker.fertigIn(Math.round(nachricht.duration_ms / 1000))
+              })
+            eingabeSchliessen()
+          }
         }
       }
     } catch (fehler) {
       // Nach einem harten Abbruch ist ein Prozessfehler erwartet — kein echter Fehler.
-      if (!hartAngefordert && !ergebnis)
-        return {
-          zustand: sanftAngefordert ? 'sanft-gestoppt' : 'fehlgeschlagen',
-          fehlertext: fehlertextAusErgebnis(null, stderrPuffer || String(fehler?.message ?? '')),
-          ergebnisText: '',
-          verbrauch
-        }
+      if (!hartAngefordert && !ergebnis) {
+        if (sanftAngefordert)
+          return { zustand: 'sanft-gestoppt', fehlertext: '', fehlerArt: null, ergebnisText: '', verbrauch }
+        // Stirbt die Session mitten im Übertrag, geht nur die Übergabe verloren —
+        // die frische Session liest den Stand dann selbst aus Ordner und Karten.
+        if (uebertragPhase)
+          return { zustand: 'uebertrag', fehlertext: '', fehlerArt: null, ergebnisText: '', verbrauch }
+        const { fehlertext, fehlerArt } = fehlerAusErgebnis(
+          null,
+          stderrPuffer || String(fehler?.message ?? '')
+        )
+        return { zustand: 'fehlgeschlagen', fehlertext, fehlerArt, ergebnisText: '', verbrauch }
+      }
     } finally {
       eingabeSchliessen()
     }
@@ -441,18 +544,19 @@ export function starteMotorLauf(optionen) {
     const ergebnisText = typeof ergebnis?.result === 'string' ? ergebnis.result : ''
 
     if (hartAngefordert)
-      return { zustand: 'hart-abgebrochen', fehlertext: '', ergebnisText: '', verbrauch }
+      return { zustand: 'hart-abgebrochen', fehlertext: '', fehlerArt: null, ergebnisText: '', verbrauch }
     if (sanftAngefordert)
-      return { zustand: 'sanft-gestoppt', fehlertext: '', ergebnisText, verbrauch }
+      return { zustand: 'sanft-gestoppt', fehlertext: '', fehlerArt: null, ergebnisText, verbrauch }
+    // Übertrag (SPEC §5): der Abschlusstext ist die Übergabe an die frische Session.
+    if (uebertragPhase === 'fertig' || uebertragPhase === 'uebergabe')
+      return { zustand: 'uebertrag', fehlertext: '', fehlerArt: null, ergebnisText, verbrauch }
     // Achtung: subtype 'success' heißt nur „sauber durchgelaufen" — Fehler wie
     // eine fehlende Anmeldung kommen trotzdem mit is_error zurück.
     if (ergebnis?.subtype === 'success' && !ergebnis.is_error)
-      return { zustand: 'erfolgreich', fehlertext: '', ergebnisText, verbrauch }
-    return {
-      zustand: 'fehlgeschlagen',
-      fehlertext: fehlertextAusErgebnis(ergebnis, stderrPuffer),
-      ergebnisText,
-      verbrauch
+      return { zustand: 'erfolgreich', fehlertext: '', fehlerArt: null, ergebnisText, verbrauch }
+    {
+      const { fehlertext, fehlerArt } = fehlerAusErgebnis(ergebnis, stderrPuffer)
+      return { zustand: 'fehlgeschlagen', fehlertext, fehlerArt, ergebnisText, verbrauch }
     }
   })()
 

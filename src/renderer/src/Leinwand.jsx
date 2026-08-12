@@ -4,7 +4,8 @@ import {
   blockDefinition,
   vorlageDefinition,
   blockKategorie,
-  REPARATUR_RUNDEN_MAX
+  REPARATUR_RUNDEN_MAX,
+  UEBERTRAG_GRENZE_MAX
 } from '../../shared/blockKatalog.js'
 import { schaubildReihenfolge, vorfahrenImPfad } from '../../shared/kettenRegeln.js'
 import { BlockChips } from './Blockbibliothek.jsx'
@@ -17,6 +18,7 @@ const tf = texte.rechteFrage
 const tb = texte.laufberichte
 const ts = texte.sicherungen
 const tg = texte.gespraech
+const tw = texte.wiederaufnahme
 
 // Solange eine Karte noch nicht gemessen ist, rechnen Pfeile mit dieser Größe.
 const KARTE_STANDARD = { w: 240, h: 140 }
@@ -194,6 +196,17 @@ function Laufbericht({ bericht }) {
               ))}
             </div>
           )}
+          {(bericht.uebertraege ?? []).length > 0 && (
+            <div>
+              <p className="bericht-abschnitt">{tb.uebertraegeLabel}</p>
+              {bericht.uebertraege.map((eintrag, i) => (
+                <p key={i} className="bericht-zeile">
+                  {new Date(eintrag.zeit).toLocaleTimeString('de-DE')} — {eintrag.text}
+                </p>
+              ))}
+            </div>
+          )}
+          {bericht.fortgesetzt && <p className="bericht-zeile">{tb.fortgesetztHinweis}</p>}
           {(bericht.entscheidungen ?? []).length > 0 && (
             <div>
               <p className="bericht-abschnitt">{tb.entscheidungenLabel}</p>
@@ -321,7 +334,13 @@ function SchaubildKarte({
   )
 }
 
-export default function Leinwand({ pfad, karten, onWiederhergestellt }) {
+export default function Leinwand({
+  pfad,
+  karten,
+  kontingentVerhalten,
+  onKontingentVerhalten,
+  onWiederhergestellt
+}) {
   // zustand: 'bereit' (Schaubild bearbeiten) | 'laeuft' | 'fertig'
   const [zustand, setZustand] = useState('bereit')
   const [workflow, setWorkflow] = useState(null)
@@ -344,6 +363,9 @@ export default function Leinwand({ pfad, karten, onWiederhergestellt }) {
   const [punkte, setPunkte] = useState([])
   const [vorschau, setVorschau] = useState(null)
   const [sicherungsMeldung, setSicherungsMeldung] = useState('')
+  // Wiederaufnahme-Angebot nach Neustart mitten im Lauf (BAUPLAN 11):
+  // null = keins, sonst { gestartetAm, blockName }.
+  const [wiederaufnahme, setWiederaufnahme] = useState(null)
   // Tabs der Mittelspalte (Feedback Georg, 07.08.2026): Schaubild, Lauf,
   // Berichte und Sicherungspunkte gestapelt wurden unübersichtlich.
   const [tab, setTab] = useState('schaubild')
@@ -383,7 +405,16 @@ export default function Leinwand({ pfad, karten, onWiederhergestellt }) {
     // Läuft schon etwas? Dann Anzeige und offene Fragen wiederherstellen —
     // sonst hinge der Lauf nach einem Ansichtswechsel ewig an einem Dialog.
     window.flowforge.laufZustand(pfad).then((e) => {
-      if (!e.ok || !e.aktiv) return
+      if (!e.ok) return
+      if (!e.aktiv) {
+        // Kein aktiver Lauf, aber ein liegen gebliebener Laufstand? Dann wurde
+        // die App mitten im Lauf beendet — Wiederaufnahme anbieten (SPEC §3.3).
+        window.flowforge.laufstandInfo(pfad).then((info) => {
+          if (info.ok && info.vorhanden)
+            setWiederaufnahme({ gestartetAm: info.gestartetAm, blockName: info.blockName })
+        })
+        return
+      }
       setZustand('laeuft')
       setTab('lauf')
       setAktiveInstanz(e.blockInstanzId ?? null)
@@ -624,6 +655,34 @@ export default function Leinwand({ pfad, karten, onWiederhergestellt }) {
     ketteSpeichern({ ...workflow, reparaturRunden: runden })
   }
 
+  // Übertragsgrenze pro Workflow (SPEC §5): leeres Feld heißt unbegrenzt.
+  function grenzeSetzen(wert) {
+    if (String(wert).trim() === '') return ketteSpeichern({ ...workflow, uebertragGrenze: null })
+    const grenze = Math.max(0, Math.min(UEBERTRAG_GRENZE_MAX, Number(wert) || 0))
+    ketteSpeichern({ ...workflow, uebertragGrenze: grenze })
+  }
+
+  // --- Wiederaufnahme nach Neustart mitten im Lauf (BAUPLAN 11) -------------
+
+  async function wiederaufnahmeStarten() {
+    setWiederaufnahme(null)
+    setFehler('')
+    setTicker([])
+    setRoh([])
+    setVerbrauch(null)
+    setErgebnis(null)
+    setGespraech([])
+    const antwort = await window.flowforge.laufFortsetzen(pfad)
+    if (!antwort.ok) setFehler(antwort.fehler)
+    // Das Zurücksetzen auf den Sicherungspunkt kann Karten verändert haben.
+    onWiederhergestellt?.()
+  }
+
+  async function wiederaufnahmeVerwerfen() {
+    setWiederaufnahme(null)
+    await window.flowforge.laufstandVerwerfen(pfad)
+  }
+
   // --- Kartenvorauswahl für den Lauf ---------------------------------------
 
   function kontextAuswahl() {
@@ -692,6 +751,7 @@ export default function Leinwand({ pfad, karten, onWiederhergestellt }) {
     if (z === 'hart-abgebrochen') return t.fertigHart
     if (z === 'zurueckgestellt') return t.fertigZurueckgestellt
     if (z === 'wiederhergestellt') return t.fertigWiederhergestellt
+    if (z === 'kontingent-erschoepft') return t.fertigKontingent
     return t.fertigFehlgeschlagen
   }
 
@@ -810,6 +870,28 @@ export default function Leinwand({ pfad, karten, onWiederhergestellt }) {
               value={workflow.reparaturRunden}
               onChange={(e) => rundenSetzen(e.target.value)}
             />
+          </label>
+          <label className="runden-feld" title={tk.uebertragGrenzeHinweis}>
+            {tk.uebertragGrenzeLabel}
+            <input
+              type="number"
+              min="0"
+              max={UEBERTRAG_GRENZE_MAX}
+              placeholder="∞"
+              title={tk.uebertragUnbegrenzt}
+              value={workflow.uebertragGrenze ?? ''}
+              onChange={(e) => grenzeSetzen(e.target.value)}
+            />
+          </label>
+          <label className="runden-feld" title={tk.kontingentHinweis}>
+            {tk.kontingentLabel}
+            <select
+              value={kontingentVerhalten}
+              onChange={(e) => onKontingentVerhalten?.(e.target.value)}
+            >
+              <option value="pausieren">{tk.kontingentPausieren}</option>
+              <option value="stoppen">{tk.kontingentStoppen}</option>
+            </select>
           </label>
         </div>
       )}
@@ -1080,6 +1162,26 @@ export default function Leinwand({ pfad, karten, onWiederhergestellt }) {
                   {ts.jetztWiederherstellen}
                 </button>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {wiederaufnahme && zustand === 'bereit' && (
+        <div className="dialog-schleier">
+          <div className="dialog">
+            <h2>{tw.ueberschrift}</h2>
+            <p className="frage-text">
+              {tw.einleitung(zeitText(wiederaufnahme.gestartetAm), wiederaufnahme.blockName)}
+            </p>
+            <p className="feld-hinweis">{tw.verwerfenHinweis}</p>
+            <div className="dialog-knoepfe">
+              <button className="knopf-sekundaer" onClick={wiederaufnahmeVerwerfen}>
+                {tw.verwerfen}
+              </button>
+              <button className="knopf-primaer" onClick={wiederaufnahmeStarten}>
+                {tw.weitermachen}
+              </button>
             </div>
           </div>
         </div>

@@ -78,6 +78,15 @@ export const texte = {
       `Beim Block „${blockName}" ist das Feld „${feld}" leer, und in der Kartenauswahl ist keine offene Aufgaben-Karte. Trag einen Wunsch ins Feld ein — oder leg links eine Aufgaben-Karte an. Sonst wüsste der Agent nicht, was gebaut werden soll.`,
     fehlerWaehrendLauf: 'Während ein Lauf läuft, kann die Kette nicht verändert werden.',
     unbekannterBlock: 'Diesen Block kennt FlowForge nicht.',
+    uebertragGrenzeLabel: 'Überträge höchstens',
+    uebertragGrenzeHinweis:
+      'Läuft der Kontext eines Blocks voll (~85 %), übergibt der Agent an eine frische Session und arbeitet nahtlos weiter. So oft darf das pro Lauf passieren — Feld leer lassen heißt: unbegrenzt.',
+    uebertragUnbegrenzt: 'leer = unbegrenzt',
+    kontingentLabel: 'Kontingent erschöpft:',
+    kontingentHinweis:
+      'Was passieren soll, wenn dein Abo-Kontingent mitten im Lauf aufgebraucht ist. „Pausieren": FlowForge wartet und macht von selbst weiter, sobald es wieder Kontingent gibt. „Anhalten": der Lauf stoppt, du startest später selbst neu.',
+    kontingentPausieren: 'pausieren, von selbst weitermachen',
+    kontingentStoppen: 'anhalten, ich starte selbst neu',
     vorlageErsetzenBestaetigung:
       'Auf der Leinwand liegen schon Blöcke. Soll die Vorlage das vorhandene Schaubild ersetzen? Feldwerte und Verbindungen des alten Schaubilds gehen dabei verloren.'
   },
@@ -158,6 +167,30 @@ export const texte = {
   },
   benachrichtigung: {
     frageTitel: 'FlowForge — der Agent hat eine Frage',
+    fertigTitel: 'FlowForge — der Lauf ist beendet',
+    pauseTitel: 'FlowForge — Kontingent erschöpft',
+    pauseText:
+      'Dein Abo-Kontingent ist im Moment aufgebraucht. FlowForge pausiert und macht von selbst weiter, sobald es wieder Kontingent gibt.',
+    pauseGestopptText:
+      'Dein Abo-Kontingent ist im Moment aufgebraucht. Der Lauf hat angehalten — starte ihn neu, sobald dein Kontingent wieder da ist.',
+    weiterTitel: 'FlowForge — es geht weiter',
+    weiterText: 'Der Motor arbeitet wieder — der Lauf macht von selbst weiter.',
+    serverTitel: 'FlowForge — KI-Server überlastet',
+    serverText:
+      'Die KI-Server sind im Moment überlastet. FlowForge pausiert und macht von selbst weiter, sobald sie wieder erreichbar sind.'
+  },
+  // Wiederaufnahme nach App-/Rechner-Neustart mitten im Lauf (SPEC §3.3, BAUPLAN 11).
+  wiederaufnahme: {
+    ueberschrift: 'Ein Lauf wurde unterbrochen',
+    einleitung: (zeit, blockName) =>
+      `Beim letzten Mal wurde ein Lauf mitten in „${blockName}" unterbrochen (gestartet ${zeit}) — vermutlich durch einen Neustart. FlowForge kann den Projektordner auf den letzten Sicherungspunkt zurücksetzen und dort weitermachen.`,
+    weitermachen: 'Am letzten Sicherungspunkt weitermachen',
+    verwerfen: 'Nicht weitermachen',
+    verwerfenHinweis:
+      'Bei „Nicht weitermachen" bleibt alles wie es ist — du kannst den Workflow später ganz normal neu starten.',
+    fehlerVeraendert:
+      'Das Schaubild wurde seit der Unterbrechung verändert — der Lauf kann nicht fortgesetzt werden. Starte den Workflow einfach neu.',
+    fehlerKeinStand: 'Es gibt keinen unterbrochenen Lauf mehr, der fortgesetzt werden könnte.'
   },
   // Texte, die an den Agenten gehen (nicht an Georg) — zentral wie alle anderen.
   agentenMensch: {
@@ -192,7 +225,32 @@ export const texte = {
       '\n\nNachforderung von FlowForge: Dieser Auftrag ist schon umgesetzt, aber die ' +
       'Startanleitung des Projekts fehlt noch. Lege sie jetzt mit dem Werkzeug ' +
       'startanleitung_setzen an (beschreibung, dazu befehl und/oder adresse). ' +
-      'Ändere sonst nichts am Projekt.'
+      'Ändere sonst nichts am Projekt.',
+    // Automatischer Übertrag (SPEC §5, BAUPLAN 11): Anweisung an den laufenden
+    // Agenten, wenn sein Kontext fast voll ist …
+    uebertragAnweisung: (nurLesen) =>
+      'WICHTIG — Anweisung von FlowForge: Dein Kontextfenster ist fast voll. Beende die ' +
+      'Arbeit JETZT sauber an dieser Stelle — fang nichts Neues mehr an. ' +
+      (nurLesen
+        ? ''
+        : 'Aktualisiere zuerst über die karten-Werkzeuge die Status-Karte (wo genau stehst ' +
+          'du, was ist der nächste Schritt) und lege für offen Gebliebenes kurze ' +
+          'Aufgaben-Karten an. ') +
+      'Schreibe dann als Abschlusstext eine Übergabe an deinen Nachfolger — er bekommt ' +
+      'denselben Auftrag mit frischem Kontext und soll nahtlos weitermachen: ' +
+      '1. Was ist schon erledigt (mit den betroffenen Dateien)? ' +
+      '2. Was ist der nächste konkrete Schritt? ' +
+      '3. Was muss er wissen, um ohne Neuanfang weiterzuarbeiten?',
+    // … und die Übergabe an seinen Nachfolger in der frischen Session.
+    uebertragFortsetzung: (uebergabe) =>
+      '\n\nÜbergabe deines Vorgängers: Genau dieser Auftrag lief schon in einer früheren ' +
+      'Session, deren Kontext voll wurde. Setze die Arbeit nahtlos fort — beginne NICHT ' +
+      'von vorn und wiederhole keine erledigten Schritte. Die Übergabe:\n' + uebergabe,
+    uebertragOhneUebergabe:
+      '\n\nHinweis von FlowForge: Genau dieser Auftrag lief schon in einer früheren Session, ' +
+      'deren Kontext voll wurde — eine Übergabe liegt leider nicht vor. Prüfe zuerst den ' +
+      'Stand im Projektordner und an den Karten, und setze die Arbeit dann fort, ohne ' +
+      'Erledigtes zu wiederholen.'
   },
   // Startanleitung & „App starten"-Knopf (SPEC §8, BAUPLAN 10).
   startanleitung: {
@@ -240,6 +298,12 @@ export const texte = {
     apiSchluesselPlatzhalter: 'sk-ant-…',
     obergrenzeFeld: 'Ausgaben-Obergrenze pro Lauf (US-Dollar)',
     obergrenzeHinweis: 'Erreicht ein Lauf diese Grenze, hält der Motor von selbst an.',
+    uebertragUeberschrift: 'Sessions & Übertrag',
+    uebertragTest: 'Test-Schalter: Übertrag schon bei etwa 10 %',
+    uebertragTestHinweis:
+      'Nur zum Ausprobieren des automatischen Übertrags: Er greift dann schon, sobald ein Block ' +
+      'etwa 10 Prozentpunkte Kontext verbraucht hat — statt erst bei 85 %. Im Alltag ausschalten, ' +
+      'sonst wird unnötig oft übergeben.',
     rechteUeberschrift: 'Rechte-Rückfragen',
     rechteFragen: 'Jedes Mal fragen (Standard)',
     rechteFragenHinweis:
@@ -275,7 +339,8 @@ export const texte = {
       'sanft-gestoppt': 'Sanft gestoppt',
       'hart-abgebrochen': 'Sofort abgebrochen',
       zurueckgestellt: 'Zurückgestellt',
-      wiederhergestellt: 'Stand wiederhergestellt'
+      wiederhergestellt: 'Stand wiederhergestellt',
+      'kontingent-erschoepft': 'Kontingent erschöpft — angehalten'
     },
     fertigErfolgreich: 'Der Lauf ist fertig — alle Blöcke sind durch.',
     fertigFehlgeschlagen: 'Der Lauf ist fehlgeschlagen.',
@@ -286,13 +351,17 @@ export const texte = {
       'Der Lauf wurde zurückgestellt. Alles bisher Gebaute bleibt bestehen — du kannst später neu starten.',
     fertigWiederhergestellt:
       'Der Projektordner wurde auf den Stand von vor dem Lauf zurückgesetzt.',
+    fertigKontingent:
+      'Dein Abo-Kontingent ist im Moment erschöpft. Der Lauf hat angehalten — alles bisher Gebaute bleibt bestehen. Starte den Workflow neu, sobald dein Kontingent wieder da ist.',
     okKnopf: 'Alles klar',
     schonAktiv: 'Es läuft schon ein Workflow. Bitte warte, bis er fertig ist.',
     aboNichtErlaubt:
       'Diese FlowForge-Version läuft nur mit API-Schlüssel. Bitte hinterlege einen in den Einstellungen.',
     motorNichtAngemeldet:
       'Der Motor ist nicht angemeldet. Bitte melde dich einmal in der Claude-App bzw. mit „claude" an — oder hinterlege einen API-Schlüssel in den Einstellungen.',
-    obergrenzeErreicht: 'Die Ausgaben-Obergrenze für diesen Lauf wurde erreicht.'
+    obergrenzeErreicht: 'Die Ausgaben-Obergrenze für diesen Lauf wurde erreicht.',
+    kontingentErschoepft: 'Dein Abo-Kontingent ist im Moment aufgebraucht.',
+    serverUeberlastet: 'Die KI-Server sind im Moment überlastet.'
   },
   rechteFrage: {
     ueberschrift: 'Der Agent bittet um Erlaubnis',
@@ -362,7 +431,23 @@ export const texte = {
     menschGeantwortet: 'Deine Antwort ist beim Agenten.',
     entscheidungWeitermachen: 'Du hast entschieden: weitermachen.',
     entscheidungZurueckgestellt: 'Du hast entschieden: zurückstellen.',
-    entscheidungWiederhergestellt: 'Du hast entschieden: Stand von vor dem Lauf wiederherstellen.'
+    entscheidungWiederhergestellt: 'Du hast entschieden: Stand von vor dem Lauf wiederherstellen.',
+    uebertragAngefordert: (von, bis) =>
+      `Der Kontext ist zu etwa ${von}–${bis} % gefüllt — Übertrag: Der Agent notiert den Zwischenstand und übergibt.`,
+    uebertragWeiter: (nummer, grenze) =>
+      `Übergabe angekommen — eine frische Session macht nahtlos weiter (Übertrag ${nummer}${grenze != null ? ' von höchstens ' + grenze : ''}).`,
+    uebertragGrenzeErreicht: (grenze) =>
+      `Die Übertragsgrenze (${grenze}) ist erreicht — dieser Block läuft ohne weiteren Übertrag zu Ende.`,
+    kontingentPause:
+      'Dein Abo-Kontingent ist im Moment aufgebraucht — der Lauf pausiert und probiert es alle 10 Minuten von selbst wieder.',
+    serverPause:
+      'Die KI-Server sind überlastet — der Lauf pausiert und probiert es alle 10 Minuten von selbst wieder.',
+    kontingentVersuch: 'Pause vorbei: FlowForge versucht es jetzt wieder.',
+    kontingentWeiter: 'Es geht weiter — der Motor arbeitet wieder.',
+    motorWartet: (versuch, max) =>
+      `Die KI-Server sind gerade überlastet — der Motor versucht es weiter (Versuch ${versuch} von ${max}).`,
+    wiederaufnahme: (nummer, gesamt, name) =>
+      `Wiederaufnahme am letzten Sicherungspunkt — weiter mit Block ${nummer} von ${gesamt}: „${name}".`
   },
   sicherungen: {
     ueberschrift: 'Sicherungspunkte',
@@ -406,6 +491,13 @@ export const texte = {
     rechteFragenLabel: 'Rechte-Rückfragen',
     entscheidungenLabel: 'Folgen-Fragen',
     gespraechLabel: 'Gespräch',
+    uebertraegeLabel: 'Überträge (Kontext war voll)',
+    // Übertrags-Protokoll in Alltagssprache (BAUPLAN 11).
+    uebertragZeile: (block, von, bis, nummer, grenze) =>
+      `Der Kontext von „${block}" war zu etwa ${von}–${bis} % gefüllt. Der Agent hat den Zwischenstand notiert und übergeben; eine frische Session hat nahtlos weitergearbeitet (Übertrag ${nummer}${grenze != null ? ' von höchstens ' + grenze : ''}).`,
+    uebertragOhneUebergabeZeile: (block) =>
+      `Der Kontext von „${block}" war voll, aber die Übergabe ging verloren — die frische Session hat den Stand selbst aus Projektordner und Karten gelesen.`,
+    fortgesetztHinweis: 'Dieser Lauf wurde nach einer Unterbrechung am letzten Sicherungspunkt fortgesetzt.',
     erlaubt: 'erlaubt',
     abgelehnt: 'abgelehnt',
     automatischErlaubt: 'automatisch erlaubt (Automodus)',

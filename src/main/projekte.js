@@ -131,9 +131,39 @@ export function projektOeffnen(pfad) {
   try {
     const projekt = JSON.parse(fs.readFileSync(path.join(pfad, PROJEKT_DATEI), 'utf8'))
     const karten = ladeKarten(pfad)
-    return { ok: true, projekt: { pfad, name: projekt.name }, karten }
+    return {
+      ok: true,
+      projekt: { pfad, name: projekt.name, kontingentVerhalten: kontingentVerhaltenLaden(pfad) },
+      karten
+    }
   } catch {
     return { ok: false, fehler: texte.fehler.kartenDateiKaputt }
+  }
+}
+
+// Kontingent-Verhalten pro Projekt (SPEC §5): Was passiert, wenn das
+// Abo-Kontingent mitten im Lauf erschöpft ist — 'pausieren' (automatisch
+// weitermachen, sobald wieder Kontingent da ist) oder 'stoppen'.
+export function kontingentVerhaltenLaden(pfad) {
+  try {
+    const projekt = JSON.parse(fs.readFileSync(path.join(pfad, PROJEKT_DATEI), 'utf8'))
+    return projekt.kontingentVerhalten === 'stoppen' ? 'stoppen' : 'pausieren'
+  } catch {
+    return 'pausieren'
+  }
+}
+
+export function kontingentVerhaltenSetzen(pfad, verhalten) {
+  if (!istBekanntesProjekt(pfad) || !fs.existsSync(path.join(pfad, PROJEKT_DATEI)))
+    return { ok: false, fehler: texte.fehler.projektNichtGefunden }
+  try {
+    const datei = path.join(pfad, PROJEKT_DATEI)
+    const projekt = JSON.parse(fs.readFileSync(datei, 'utf8'))
+    projekt.kontingentVerhalten = verhalten === 'stoppen' ? 'stoppen' : 'pausieren'
+    schreibeJsonAtomar(datei, projekt)
+    return { ok: true, kontingentVerhalten: projekt.kontingentVerhalten }
+  } catch {
+    return { ok: false, fehler: texte.fehler.unbekannt }
   }
 }
 

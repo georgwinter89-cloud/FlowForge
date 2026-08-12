@@ -21,7 +21,7 @@ import {
   rueckfuehrungsZiel
 } from '../shared/kettenRegeln.js'
 import { einstellungenLaden, ABO_MODUS_ERLAUBT } from './einstellungen.js'
-import { kartenLaden } from './projekte.js'
+import { kartenLaden, kontingentVerhaltenLaden } from './projekte.js'
 import { starteMotorLauf } from './motor/claudeCodeMotor.js'
 import { startanleitungVorhanden } from './startanleitung.js'
 import { kartenZeile } from './motor/kartenWerkzeuge.js'
@@ -31,8 +31,13 @@ import {
   wiederherstellen
 } from './sicherungspunkte.js'
 import { workflowLaden } from './workflow.js'
+import { laufstandSpeichern, laufstandLaden, laufstandLoeschen } from './laufstand.js'
 
 const BERICHTE_ORDNER = 'laufberichte'
+
+// Kontingent-Pause (SPEC §5): so lange wartet FlowForge zwischen zwei
+// Versuchen, wenn das Abo-Kontingent erschöpft ist.
+const KONTINGENT_PAUSE_MS = 10 * 60 * 1000
 
 // V1 Schritt 5: höchstens ein Lauf gleichzeitig. Parallelität kommt in Schritt 11.
 let aktiverLauf = null
@@ -119,7 +124,10 @@ function uebergabenText(def, lieferungen) {
   return texte.agentenUebergabe.ueberschrift + eintraege.join('')
 }
 
-export async function laufStarten(fenster, projektPfad, kartenIds) {
+// fortsetzung (BAUPLAN 11): gespeicherter Laufstand einer Unterbrechung — der
+// Lauf startet dann nicht bei Block 1, sondern an der notierten Position mit
+// den notierten Übergaben. Kommt nur über laufFortsetzen() herein.
+export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung = null) {
   if (aktiverLauf) return { ok: false, fehler: texte.lauf.schonAktiv }
   if (!fs.existsSync(projektPfad)) return { ok: false, fehler: texte.fehler.projektNichtGefunden }
 
@@ -146,13 +154,29 @@ export async function laufStarten(fenster, projektPfad, kartenIds) {
   // Beim Start streng: auch der erste Block muss versorgt sein.
   const ketteFehler = pruefeKette(kette)
   if (ketteFehler) return { ok: false, fehler: ketteFehler }
+  // Wiederaufnahme nur, wenn das Schaubild noch dasselbe ist wie beim
+  // unterbrochenen Lauf — sonst passen Position und Übergaben nicht mehr.
+  if (fortsetzung) {
+    const passt =
+      Array.isArray(fortsetzung.kettenIds) &&
+      fortsetzung.kettenIds.length === kette.length &&
+      kette.every((eintrag, idx) => eintrag.instanzId === fortsetzung.kettenIds[idx]) &&
+      fortsetzung.index >= 0 &&
+      fortsetzung.index < kette.length
+    if (!passt) {
+      laufstandLoeschen(projektPfad)
+      return { ok: false, fehler: texte.wiederaufnahme.fehlerVeraendert }
+    }
+  }
   // Sperren-Mechanik „Pflichtfeld leer = Lauf hält an" (SPEC §4.2).
   const feldFehler = pruefePflichtfelder(kette)
   if (feldFehler) return { ok: false, fehler: feldFehler }
   // Auftragsquelle „Feld oder offene Aufgaben-Karten" (Entscheidung Georg,
   // 07.08.2026): Sind Feld und Kartenauswahl leer, wüsste der Block nicht,
-  // was gebaut werden soll — der Lauf startet gar nicht erst.
-  for (const [kettenIndex, eintrag] of kette.entries()) {
+  // was gebaut werden soll — der Lauf startet gar nicht erst. Bei einer
+  // Wiederaufnahme entfällt die Prüfung: frühere Blöcke sind schon gelaufen,
+  // ihre Aufgaben können bereits abgehakt sein.
+  for (const [kettenIndex, eintrag] of fortsetzung ? [] : kette.entries()) {
     const def = blockDefinition(eintrag.blockId)
     for (const feld of def.felder) {
       if (!feld.oderOffeneAufgaben) continue
@@ -230,6 +254,10 @@ export async function laufStarten(fenster, projektPfad, kartenIds) {
     entscheidungen: [],
     // Gespräch mit dem Agenten (BAUPLAN 9): jede Frage samt Antwort.
     gespraech: [],
+    // Übertrags-Protokoll in Alltagssprache (SPEC §5, BAUPLAN 11).
+    uebertraege: [],
+    // Wiederaufnahme nach Unterbrechung (BAUPLAN 11).
+    fortgesetzt: Boolean(fortsetzung),
     // Abschlusstext jedes gelaufenen Blocks — die Leinwand zeigt ihn direkt
     // an der jeweiligen Karte an.
     blockErgebnisse: [],
@@ -247,7 +275,17 @@ export async function laufStarten(fenster, projektPfad, kartenIds) {
   }
   lauf.tickern = tickern
 
+  // Windows-Benachrichtigungen (SPEC §5/§6): standardmäßig nur, wenn Georg
+  // gerade nicht im Fenster ist — Kontingent-Pausen melden sich immer.
+  function benachrichtigen(titel, inhalt, { immer = false } = {}) {
+    if (!immer && !fenster.isDestroyed() && fenster.isFocused()) return
+    if (Notification.isSupported()) new Notification({ title: titel, body: inhalt }).show()
+  }
+
   const gesamtVerbrauch = { tokens: 0, kostenUsd: null }
+  // Die echte Kontextfenster-Größe lernt der Lauf aus der ersten Motor-Session
+  // und reicht sie an alle weiteren durch — für eine richtige Übertrags-Schwelle.
+  let bekanntesKontextFenster = 0
 
   function rechteFrageStellen(frage) {
     // Automodus (Feedback Georg, 07.08.2026): Rückfragen automatisch erlauben —
@@ -321,7 +359,7 @@ export async function laufStarten(fenster, projektPfad, kartenIds) {
     })
   }
 
-  function blockAusfuehren(auftrag, def) {
+  function blockAusfuehren(auftrag, def, uebertragErlaubt) {
     const motor = starteMotorLauf({
       projektPfad,
       auftrag,
@@ -329,6 +367,14 @@ export async function laufStarten(fenster, projektPfad, kartenIds) {
       apiSchluessel: einstellungen.apiSchluessel,
       ausgabenObergrenzeUsd: einstellungen.ausgabenObergrenzeUsd,
       nurLesen: def.nurLesen,
+      // Automatischer Übertrag (SPEC §5): läuft der Kontext voll, übergibt der
+      // Agent an eine frische Session — sofern die Übertragsgrenze es erlaubt.
+      uebertrag: {
+        aktiv: uebertragErlaubt,
+        testModus: Boolean(einstellungen.uebertragTest),
+        anweisung: texte.agentenUebergabe.uebertragAnweisung(def.nurLesen)
+      },
+      ...(bekanntesKontextFenster > 0 ? { kontextFenster: bekanntesKontextFenster } : {}),
       aufEreignis(e) {
         if (e.art === 'ticker') bericht.ticker.push({ zeit: jetztIso(), text: e.text })
         senden(e)
@@ -340,6 +386,7 @@ export async function laufStarten(fenster, projektPfad, kartenIds) {
     return motor.fertig.catch((fehler) => ({
       zustand: 'fehlgeschlagen',
       fehlertext: String(fehler?.message ?? fehler),
+      fehlerArt: null,
       ergebnisText: '',
       verbrauch: null
     }))
@@ -355,13 +402,67 @@ export async function laufStarten(fenster, projektPfad, kartenIds) {
     // Lauf — unabhängig von den Reparatur-Runden des Prüfers.
     let startanleitungNachgefordert = false
     let startanleitungNachforderung = false
+    // Automatischer Übertrag (SPEC §5): Übergabe des Vorgängers an die frische
+    // Session desselben Blocks + Zähler gegen die Übertragsgrenze.
+    let uebergabe = ''
+    let uebergabeVerloren = false
+    let uebertraege = 0
+    // Kontingent-Pause (SPEC §5): merkt sich, ob gerade pausiert wurde —
+    // für die „es geht weiter"-Meldung.
+    let warPausiert = false
     let endZustand = null
     let fehlertext = ''
     // Übergaben dieses Laufs: liefert-Etikett → Abschlusstext des Blocks.
     // Läuft ein Block erneut (Reparatur-Runde), ersetzt er seine Lieferung.
     const lieferungen = new Map()
 
+    // Wartet die Kontingent-Pause ab — im Sekundentakt unterbrechbar, damit
+    // „Sanft anhalten" und „Sofort abbrechen" nicht 10 Minuten hängen.
+    async function kontingentWarten() {
+      const bis = Date.now() + KONTINGENT_PAUSE_MS
+      while (Date.now() < bis && !lauf.sanft && !lauf.hart)
+        await new Promise((weiter) => setTimeout(weiter, 1000))
+    }
+
+    // Wiederaufnahme (BAUPLAN 11): an der notierten Position weitermachen.
+    if (fortsetzung) {
+      i = fortsetzung.index
+      rundenUebrig = Number.isInteger(fortsetzung.rundenUebrig)
+        ? fortsetzung.rundenUebrig
+        : workflow.reparaturRunden
+      rueckmeldung = typeof fortsetzung.rueckmeldung === 'string' ? fortsetzung.rueckmeldung : ''
+      startanleitungNachgefordert = Boolean(fortsetzung.startanleitungNachgefordert)
+      startanleitungNachforderung = Boolean(fortsetzung.startanleitungNachforderung)
+      uebergabe = typeof fortsetzung.uebergabe === 'string' ? fortsetzung.uebergabe : ''
+      uebertraege = Number.isInteger(fortsetzung.uebertraege) ? fortsetzung.uebertraege : 0
+      for (const [etikett, lieferung] of Array.isArray(fortsetzung.lieferungen)
+        ? fortsetzung.lieferungen
+        : [])
+        if (typeof etikett === 'string' && lieferung?.text != null)
+          lieferungen.set(etikett, { block: String(lieferung.block ?? ''), text: String(lieferung.text) })
+      tickern(
+        texte.ticker.wiederaufnahme(i + 1, kette.length, blockDefinition(kette[i].blockId).name)
+      )
+      bericht.ticker.push({ zeit: jetztIso(), text: texte.laufberichte.fortgesetztHinweis })
+    }
+
     while (i < kette.length && !endZustand) {
+      // Laufstand festhalten (BAUPLAN 11): Bleibt die App mitten im Block
+      // stehen (Absturz, Neustart), kann FlowForge hier wieder aufsetzen.
+      laufstandSpeichern(projektPfad, {
+        gestartetAm: bericht.gestartetAm,
+        kettenIds: kette.map((eintrag) => eintrag.instanzId),
+        index: i,
+        kartenIds: ausgewaehlt,
+        rundenUebrig,
+        rueckmeldung,
+        uebergabe,
+        uebertraege,
+        startanleitungNachgefordert,
+        startanleitungNachforderung,
+        lieferungen: [...lieferungen.entries()]
+      })
+
       // Harter Stopp zwischen zwei Blöcken (Motor war gerade fertig): der
       // nächste Block darf nicht mehr starten.
       if (lauf.hart) {
@@ -377,26 +478,39 @@ export async function laufStarten(fenster, projektPfad, kartenIds) {
       senden({ art: 'block', instanzId: eintrag.instanzId, index: i })
       tickern(texte.ticker.blockStartet(i + 1, kette.length, def.name))
 
+      // Rückmeldung, Nachforderung und Übergabe werden hier bewusst NICHT
+      // gelöscht — kommt derselbe Block per Übertrag oder Kontingent-Pause
+      // erneut dran, gehören sie wieder in den Auftrag. Gelöscht wird erst,
+      // wenn der Block wirklich fertig ist.
       let auftrag =
         kartenKontext(projektPfad, ausgewaehlt) +
         uebergabenText(def, lieferungen) +
         texte.agentenUebergabe.auftragEinleitung +
         auftragMitFeldern(def, eintrag.feldWerte)
-      if (rueckmeldung) {
-        auftrag += texte.agentenUebergabe.prueferRueckmeldung(rueckmeldung)
-        rueckmeldung = ''
-      }
-      if (startanleitungNachforderung) {
-        auftrag += texte.agentenUebergabe.startanleitungNachforderung
-        startanleitungNachforderung = false
-      }
+      if (rueckmeldung) auftrag += texte.agentenUebergabe.prueferRueckmeldung(rueckmeldung)
+      if (startanleitungNachforderung) auftrag += texte.agentenUebergabe.startanleitungNachforderung
+      if (uebergabe) auftrag += texte.agentenUebergabe.uebertragFortsetzung(uebergabe)
+      else if (uebergabeVerloren) auftrag += texte.agentenUebergabe.uebertragOhneUebergabe
 
-      const ergebnis = await blockAusfuehren(auftrag, def)
+      const uebertragErlaubt =
+        workflow.uebertragGrenze == null || uebertraege < workflow.uebertragGrenze
+      const ergebnis = await blockAusfuehren(auftrag, def, uebertragErlaubt)
       lauf.motor = null
       if (ergebnis.verbrauch) {
         gesamtVerbrauch.tokens += ergebnis.verbrauch.tokens ?? 0
         if (ergebnis.verbrauch.kostenUsd != null)
           gesamtVerbrauch.kostenUsd = (gesamtVerbrauch.kostenUsd ?? 0) + ergebnis.verbrauch.kostenUsd
+        if (ergebnis.verbrauch.kontextFenster > 0)
+          bekanntesKontextFenster = ergebnis.verbrauch.kontextFenster
+      }
+
+      // Nach einer Kontingent-Pause: Der Motor arbeitet wieder — Bescheid geben.
+      if (warPausiert && ergebnis.zustand !== 'fehlgeschlagen') {
+        warPausiert = false
+        tickern(texte.ticker.kontingentWeiter)
+        benachrichtigen(texte.benachrichtigung.weiterTitel, texte.benachrichtigung.weiterText, {
+          immer: true
+        })
       }
 
       if (ergebnis.zustand === 'hart-abgebrochen') {
@@ -409,7 +523,72 @@ export async function laufStarten(fenster, projektPfad, kartenIds) {
         endZustand = 'sanft-gestoppt'
         break
       }
+
+      // Automatischer Übertrag (SPEC §5): Der Kontext war voll, der Agent hat
+      // übergeben — derselbe Block läuft sofort als frische Session weiter.
+      if (ergebnis.zustand === 'uebertrag') {
+        uebertraege++
+        const text = String(ergebnis.ergebnisText ?? '').trim()
+        uebergabeVerloren = !text
+        uebergabe = text.length > LIEFERUNG_MAX ? text.slice(0, LIEFERUNG_MAX) + ' …' : text
+        bericht.uebertraege.push({
+          zeit: jetztIso(),
+          block: def.name,
+          text: uebergabeVerloren
+            ? texte.laufberichte.uebertragOhneUebergabeZeile(def.name)
+            : texte.laufberichte.uebertragZeile(
+                def.name,
+                // Füllstand im Moment der Auslösung — nicht der am Session-Ende
+                // (die endgültige Fenstergröße würde ihn sonst kleinrechnen).
+                ergebnis.verbrauch?.uebertragBand?.von ?? ergebnis.verbrauch?.kontextProzentVon ?? '?',
+                ergebnis.verbrauch?.uebertragBand?.bis ?? ergebnis.verbrauch?.kontextProzentBis ?? '?',
+                uebertraege,
+                workflow.uebertragGrenze
+              )
+        })
+        tickern(texte.ticker.uebertragWeiter(uebertraege, workflow.uebertragGrenze))
+        if (workflow.uebertragGrenze != null && uebertraege >= workflow.uebertragGrenze)
+          tickern(texte.ticker.uebertragGrenzeErreicht(workflow.uebertragGrenze))
+        continue
+      }
+
       if (ergebnis.zustand === 'fehlgeschlagen') {
+        // Abo-Kontingent erschöpft (SPEC §5): je nach Projekt-Einstellung
+        // pausieren und von selbst weitermachen — oder ehrlich anhalten.
+        // Überlastete KI-Server (529) sind immer nur vorübergehend: da wird
+        // grundsätzlich pausiert statt aufgegeben.
+        const kontingentPause =
+          ergebnis.fehlerArt === 'kontingent' && einstellungen.motorModus === 'abo'
+        const serverPause = ergebnis.fehlerArt === 'ueberlastet'
+        if (kontingentPause && kontingentVerhaltenLaden(projektPfad) === 'stoppen') {
+          benachrichtigen(
+            texte.benachrichtigung.pauseTitel,
+            texte.benachrichtigung.pauseGestopptText,
+            { immer: true }
+          )
+          endZustand = 'kontingent-erschoepft'
+          fehlertext = ergebnis.fehlertext
+          break
+        }
+        if (kontingentPause || serverPause) {
+          if (!warPausiert) {
+            warPausiert = true
+            benachrichtigen(
+              serverPause ? texte.benachrichtigung.serverTitel : texte.benachrichtigung.pauseTitel,
+              serverPause ? texte.benachrichtigung.serverText : texte.benachrichtigung.pauseText,
+              { immer: true }
+            )
+          }
+          tickern(serverPause ? texte.ticker.serverPause : texte.ticker.kontingentPause)
+          await kontingentWarten()
+          if (lauf.hart) continue // der Schleifenkopf übernimmt den Abbruch
+          if (lauf.sanft) {
+            endZustand = 'sanft-gestoppt'
+            break
+          }
+          tickern(texte.ticker.kontingentVersuch)
+          continue
+        }
         bericht.blockErgebnisse.push({
           instanzId: eintrag.instanzId,
           block: def.name,
@@ -421,6 +600,13 @@ export async function laufStarten(fenster, projektPfad, kartenIds) {
         fehlertext = ergebnis.fehlertext
         break
       }
+
+      // Block ist wirklich fertig: mitgeschleppte Zusätze für den nächsten
+      // Anlauf sind damit erledigt.
+      rueckmeldung = ''
+      startanleitungNachforderung = false
+      uebergabe = ''
+      uebergabeVerloren = false
 
       // Block ist normal durchgelaufen: Abschlusstext als Lieferung für
       // Folgeblöcke ablegen und für die Karten-Anzeige merken.
@@ -535,7 +721,14 @@ export async function laufStarten(fenster, projektPfad, kartenIds) {
     } catch {
       // Ein nicht speicherbarer Bericht darf das Laufende nicht verschlucken.
     }
+    // Der Lauf ist geordnet zu Ende — es gibt nichts mehr wiederaufzunehmen.
+    laufstandLoeschen(projektPfad)
     aktiverLauf = null
+    // Lauf-Ende melden, wenn Georg gerade woanders ist (SPEC §5).
+    benachrichtigen(
+      texte.benachrichtigung.fertigTitel,
+      texte.lauf.zustandLabels[endZustand] ?? endZustand
+    )
     senden({
       art: 'fertig',
       zustand: bericht.zustand,
@@ -593,6 +786,40 @@ export function laufEntscheidungAntworten(frageId, wahl) {
     return { ok: false, fehler: texte.fehler.unbekannt }
   aufloesen(wahl)
   return { ok: true }
+}
+
+// Wiederaufnahme nach App-/Rechner-Neustart (SPEC §3.3, BAUPLAN 11): Liegt in
+// diesem Projekt ein unterbrochener Lauf, den die App fortsetzen kann?
+export function laufstandInfo(projektPfad) {
+  if (aktiverLauf && aktiverLauf.projektPfad === projektPfad) return { ok: true, vorhanden: false }
+  const stand = laufstandLaden(projektPfad)
+  if (!stand) return { ok: true, vorhanden: false }
+  let blockName = ''
+  const geladen = workflowLaden(projektPfad)
+  if (geladen.ok) {
+    const eintrag = geladen.workflow.bloecke.find(
+      (block) => block.instanzId === stand.kettenIds[stand.index]
+    )
+    if (eintrag) blockName = blockDefinition(eintrag.blockId)?.name ?? ''
+  }
+  return { ok: true, vorhanden: true, gestartetAm: stand.gestartetAm, blockName }
+}
+
+export function laufstandVerwerfen(projektPfad) {
+  laufstandLoeschen(projektPfad)
+  return { ok: true }
+}
+
+// Setzt einen unterbrochenen Lauf fort: Projektordner zurück auf den letzten
+// Sicherungspunkt (halbfertige Änderungen des abgebrochenen Blocks
+// verschwinden), dann weiter an der notierten Position.
+export async function laufFortsetzen(fenster, projektPfad) {
+  if (aktiverLauf) return { ok: false, fehler: texte.lauf.schonAktiv }
+  const stand = laufstandLaden(projektPfad)
+  if (!stand) return { ok: false, fehler: texte.wiederaufnahme.fehlerKeinStand }
+  const zurueck = await aufLetztenPunktZuruecksetzen(projektPfad)
+  if (!zurueck.ok) return zurueck
+  return laufStarten(fenster, projektPfad, stand.kartenIds, stand)
 }
 
 // Für die Oberfläche: Läuft in diesem Projekt gerade etwas — und wo steht es?

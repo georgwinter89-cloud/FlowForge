@@ -11,8 +11,10 @@ import { texte } from '../shared/texte.js'
 
 // Diese Ordner gehören nicht in Sicherungspunkte: .git (eigenes Repo des Projekts),
 // laufberichte (reines Nachschlagewerk — bleibt von Wiederherstellungen unberührt),
-// node_modules (per Installation wiederherstellbar, viel zu groß).
-const AUSGESCHLOSSEN = new Set(['.git', 'laufberichte', 'node_modules'])
+// node_modules (per Installation wiederherstellbar, viel zu groß),
+// laufstand.json (Zwischenstand des laufenden Laufs — eine Wiederherstellung
+// würde sonst einen veralteten „unterbrochenen Lauf" zurückholen).
+const AUSGESCHLOSSEN = new Set(['.git', 'laufberichte', 'node_modules', 'laufstand.json'])
 const ZWEIG = 'haupt'
 const AUTOR = { name: 'FlowForge', email: 'flowforge@lokal' }
 
