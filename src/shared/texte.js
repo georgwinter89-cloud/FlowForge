@@ -293,6 +293,12 @@ export const texte = {
     auftragEinleitung: 'Dein Arbeitsauftrag:\n',
     prueferRueckmeldung: (kritik) =>
       '\n\nRückmeldung des Prüfers aus der letzten Runde (bitte beheben):\n' + kritik,
+    // Reparatur-Runde beim Prüfer (Entscheidung Georg, 12.08.2026): nur die
+    // Beanstandungen der letzten Runde nachprüfen, keine erneute Vollprüfung.
+    prueferNachpruefung: (kritik) =>
+      '\n\nDies ist eine Reparatur-Runde: Der Bauer hat deine Beanstandungen aus der letzten ' +
+      'Runde behoben. Prüfe in dieser Runde NUR diese Beanstandungen nach — keine erneute ' +
+      'Vollprüfung, keine neuen Prüffelder. Deine Beanstandungen von letzter Runde:\n' + kritik,
     startanleitungNachforderung:
       '\n\nNachforderung von FlowForge: Dieser Auftrag ist schon umgesetzt, aber die ' +
       'Startanleitung des Projekts fehlt noch. Lege sie jetzt mit dem Werkzeug ' +
@@ -511,7 +517,15 @@ export const texte = {
     gitGesperrtFuerAgent:
       'Git ist in FlowForge-Projekten gesperrt: Die App verwaltet Sicherungspunkte selbst. Arbeite ohne Git weiter.',
     nurLesenGesperrtFuerAgent:
-      'Dieser Block darf nur lesen. Schreiben, Befehle und Internet sind hier gesperrt. Beende den Auftrag nur mit Lese-Werkzeugen.',
+      'Dieser Block darf nur lesen. Schreiben, verändernde Befehle und Internet sind hier gesperrt. Beende den Auftrag nur mit Lese-Werkzeugen.',
+    // Verfeinerte Lese-Sperre (Feedback Georg, 12.08.2026): rein lesende
+    // Befehle laufen durch — für alles andere sagt die Meldung ehrlich, warum.
+    nurLesenBefehlFuerAgent:
+      'Dieser Block darf nur lesen. Rein lesende Befehle (dir, ls, type, cat, findstr, grep, where, echo, pwd, head, tail, wc) laufen durch — dieser Befehl gehört nicht dazu, auch Ausführen von Programmen oder Tests zählt nicht als Lesen. Nutze die Lese-Werkzeuge oder einen rein lesenden Befehl.',
+    // Prüfmappen-Sperre (Feedback Georg, 12.08.2026): die Testdateien im
+    // Prüfordner gehören dem Prüfer — kein anderer Block ändert sie.
+    pruefmappeGesperrtFuerAgent:
+      'Der Prüfordner „pruefung" gehört dem Prüfer: Nur Prüf-Blöcke dürfen dort Dateien anlegen oder ändern. Lass die Prüfmappe unverändert — wenn eine Prüfung deiner Meinung nach falsch ist, schreibe das in deinen Abschlusstext.',
     verwaltungGesperrtFuerAgent:
       'Diese Datei verwaltet FlowForge selbst — sie ist für direkte Änderungen gesperrt. Karten liest und schreibst du über die karten-Werkzeuge.'
   },
@@ -534,6 +548,11 @@ export const texte = {
     hartAbgebrochen: 'Sofort abgebrochen.',
     gitGesperrt: 'Git-Befehl gesperrt — Sicherungspunkte übernimmt FlowForge.',
     nurLesenGesperrt: 'Schreib-Versuch gestoppt — dieser Block darf nur lesen.',
+    nurLesenBefehlGesperrt:
+      'Befehl gestoppt — dieser Block darf nur lesen (rein lesende Befehle laufen durch).',
+    pruefmappeGesperrt:
+      'Änderung an der Prüfmappe gestoppt — die Prüfdateien gehören dem Prüfer.',
+    arbeitsablageGeleert: 'Arbeitsablage geleert.',
     verwaltungGesperrt: 'Schreib-Versuch auf eine FlowForge-Verwaltungsdatei gestoppt.',
     liestKarten: 'Liest die Projektkarten.',
     karteAngelegt: (titel) => `Karte angelegt: „${titel}"`,

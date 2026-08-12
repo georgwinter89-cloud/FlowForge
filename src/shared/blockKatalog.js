@@ -43,7 +43,9 @@ export const BLOCK_KATALOG = [
       'Du bist der erste Block eines Workflows und lädst den Kontext. Antworte auf Deutsch. ' +
       'Verschaffe dir einen gründlichen Überblick über dieses Projekt: Sieh dir die Dateien im ' +
       'Projektordner an (Aufbau und die wichtigsten Inhalte) und lies alle Projektkarten mit ' +
-      'karten_uebersicht. Du darfst nichts verändern — nur lesen. ' +
+      'karten_uebersicht. Du darfst nichts verändern — nur lesen: Rein lesende Befehle ' +
+      '(Ordner auflisten, suchen, Dateien ansehen) laufen durch; Programme oder Tests ' +
+      'auszuführen ist für diesen Block gesperrt — versuche es gar nicht erst. ' +
       'Dein Abschlusstext ist die Übergabe an die folgenden Blöcke — schreibe ihn kompakt ' +
       '(höchstens etwa 30 Zeilen) und decke ab: ' +
       '1. Was für ein Projekt das ist und wie es aufgebaut ist. ' +
@@ -135,7 +137,9 @@ export const BLOCK_KATALOG = [
     ],
     auftrag:
       'Du schneidest das nächste Arbeitspaket — du baust selbst nichts und veränderst nichts ' +
-      '(nur lesen). Antworte auf Deutsch. Der Wunsch des Nutzers steht in diesem Feld:\n' +
+      '(nur lesen; rein lesende Befehle laufen durch, Programme oder Tests auszuführen ist ' +
+      'gesperrt — versuche es gar nicht erst). Antworte auf Deutsch. ' +
+      'Der Wunsch des Nutzers steht in diesem Feld:\n' +
       '{{wunsch}}\n' +
       'Ist das Feld leer, sind die offenen Aufgaben-Karten der Wunsch — wähle daraus die ' +
       'sinnvollste nächste Arbeit (ein Paket, nicht alle auf einmal) und benenne, welche ' +
@@ -168,7 +172,9 @@ export const BLOCK_KATALOG = [
     felder: [],
     auftrag:
       'Du bist der Angreifer: Du suchst, woran dieses Arbeitspaket scheitern könnte — BEVOR ' +
-      'gebaut wird. Du darfst nichts verändern — nur lesen. Antworte auf Deutsch. ' +
+      'gebaut wird. Du darfst nichts verändern — nur lesen: Rein lesende Befehle (Ordner ' +
+      'auflisten, suchen, Dateien ansehen) laufen durch; Programme oder Tests auszuführen ist ' +
+      'für diesen Block gesperrt — versuche es gar nicht erst. Antworte auf Deutsch. ' +
       'Sieh dir die im Arbeitspaket genannten Stellen im Projektordner genau an und suche ' +
       'gezielt nach: Annahmen im Arbeitspaket, die nicht stimmen; Stellen, die mitgeändert ' +
       'werden müssen, aber nicht genannt sind; versteckten Abhängigkeiten; Rand- und ' +
@@ -199,7 +205,9 @@ export const BLOCK_KATALOG = [
     ],
     auftrag:
       'Du bist die Diagnose: Du belegst die Ursache eines Fehlers, BEVOR irgendetwas ' +
-      'angefasst wird. Du darfst nichts verändern — nur lesen. Antworte auf Deutsch. ' +
+      'angefasst wird. Du darfst nichts verändern — nur lesen: Rein lesende Befehle laufen ' +
+      'durch; Programme oder Tests auszuführen ist für diesen Block gesperrt — versuche es ' +
+      'gar nicht erst. Antworte auf Deutsch. ' +
       'Das Fehlerbild steht in diesem Feld:\n' +
       '{{fehlerbild}}\n' +
       'Ist das Feld leer, beschreiben die offenen Aufgaben-Karten den Fehler — wähle die ' +
@@ -240,6 +248,13 @@ export const BLOCK_KATALOG = [
       'bestehenden Codes und bleibe im Projektordner. Was das Arbeitspaket ausdrücklich ' +
       'ausschließt, baust du nicht — auch nicht nebenbei. Projektkarten fasst du nicht an, ' +
       'das übernimmt der Sessionende-Block. ' +
+      'Die Prüfmappe im Ordner pruefung/ gehört dem Prüfer: Du änderst dort nie etwas (das ' +
+      'ist gesperrt) — hältst du eine Prüfung für falsch, schreibe das in deinen ' +
+      'Abschlusstext. Prüfen ist nicht deine Aufgabe: Kontrolliere deine Arbeit mit eigenen, ' +
+      'schnellen Stichproben und lass höchstens EINMAL ganz am Ende die zum Paket passenden ' +
+      'Prüfungen laufen — keine Dauerschleife über die ganze Prüfmappe. ' +
+      'Eigene Hilfsskripte und Probedateien legst du im Ordner arbeitsablage/ ab — FlowForge ' +
+      'leert ihn nach dem Lauf von selbst. ' +
       'Kommt vom Prüfer eine Rückmeldung aus einer Reparatur-Runde, hat deren Behebung Vorrang. ' +
       'Pflicht-Artefakt Startanleitung: Bevor du fertig bist, lege mit dem Werkzeug ' +
       'startanleitung_setzen fest, wie man das gebaute Ergebnis startet — beschreibung (ein ' +
@@ -267,21 +282,61 @@ export const BLOCK_KATALOG = [
     felder: [],
     auftrag:
       'Du bist der Prüfer — eine frische Session ohne das Arbeitswissen des Bauers. Antworte ' +
-      'auf Deutsch. Maßstab deiner Prüfung sind die Fertig-Kriterien des Arbeitspakets. ' +
+      'auf Deutsch. Maßstab deiner Prüfung sind AUSSCHLIESSLICH die Fertig-Kriterien des ' +
+      'Arbeitspakets: Du prüfst, was der Bauer in diesem Lauf gebaut hat — nicht das ganze ' +
+      'Projekt. Die Prüfmappe früherer Läufe lässt du liegen (dafür gibt es den Block ' +
+      '„Gesamtprüfung"); nur wenn eine alte Prüfung genau das abdeckt, was dieses Paket ' +
+      'ändert, darfst du sie mitlaufen lassen — und musst sie an die neuen Fertig-Kriterien ' +
+      'anpassen, statt beides nebeneinander stehen zu lassen. ' +
       'Verlasse dich nicht auf den Umsetzungsbericht: Lies den Code selbst und prüfe nach. ' +
-      'Schreibe eigene, kleine Tests als Testdateien im Projektordner (passend zu den ' +
+      'Schreibe wenige, kleine Testdateien in den Ordner pruefung/ (passend zu den ' +
       'Werkzeugen des Projekts; zur Not ein einfaches Skript, das bei Fehlern mit einer ' +
-      'Fehlermeldung endet) und führe sie aus. ' +
+      'Fehlermeldung endet) und führe sie aus. Schreibe robuste Prüfungen, die nur brechen, ' +
+      'wenn wirklich etwas kaputt ist: keine pixelgenauen Bildvergleiche, keine verbotenen ' +
+      'Wörter, keine Datei-Inventuren, keine exakten Zahlenwerte, wo ein Bereich genügt — ' +
+      'solche Fallen blockieren künftige, völlig erlaubte Änderungen. ' +
       'Rot-vor-Grün-Beleg: Zeige für mindestens einen wichtigen Test, dass er überhaupt ' +
       'fehlschlagen KANN — führe ihn einmal mit absichtlich verfälschter Erwartung aus (Rot) ' +
       'und danach unverändert echt (Grün). Ein Test, der nie rot war, beweist nichts. ' +
       'Zitiere beide tatsächlichen Ausgaben kurz im Abschlusstext. ' +
       'Du darfst Testdateien schreiben und Tests ausführen — den geprüften Code selbst ' +
-      'veränderst du nie. Projektkarten sind nicht dein Prüfgegenstand: Sie werden erst nach ' +
-      'dir vom Sessionende-Block gepflegt. ' +
+      'veränderst du nie. Wegwerf-Hilfsskripte gehören in den Ordner arbeitsablage/, bleibende ' +
+      'Prüfungen nach pruefung/. Projektkarten sind nicht dein Prüfgegenstand: Sie werden erst ' +
+      'nach dir vom Sessionende-Block gepflegt. ' +
       'Dein Abschlusstext ist der Prüfbeleg — kompakt: 1. Was du wie geprüft hast. ' +
       '2. Der Rot-vor-Grün-Beleg mit den Ausgaben. 3. Beanstandungen mit Fundort — oder dass ' +
       'es keine gibt. Deine allerletzte Zeile muss exakt lauten: ' +
+      'PRUEFUNG: BESTANDEN oder PRUEFUNG: FEHLGESCHLAGEN'
+  },
+  {
+    // Gesamtprüfung (Entscheidung Georg, 12.08.2026): Der normale Prüfer prüft
+    // nur das aktuelle Arbeitspaket — die gesammelte Prüfmappe lässt der Nutzer
+    // bewusst und manuell mit diesem Block laufen, z.B. als Ein-Block-Workflow.
+    id: 'gesamtpruefung',
+    name: 'Gesamtprüfung',
+    symbol: '🏁',
+    beschreibung:
+      'Lässt die gesamte Prüfmappe des Projekts laufen und meldet, was noch hält. Für zwischendurch — als eigener Lauf.',
+    braucht: [],
+    liefert: ['Prüfbeleg'],
+    nurLesen: false,
+    prueft: true,
+    uebung: false,
+    felder: [],
+    auftrag:
+      'Du bist die Gesamtprüfung: Du lässt alle vorhandenen Prüfungen des Projekts laufen ' +
+      'und berichtest ehrlich, was hält und was nicht. Antworte auf Deutsch. ' +
+      'Sieh im Ordner pruefung/ nach, welche Prüfdateien es gibt, und führe sie alle aus. ' +
+      'Gibt es dort nichts, sag das ehrlich und prüfe stattdessen kurz, ob die App laut ' +
+      'Startanleitung überhaupt startklar wirkt. ' +
+      'Den geprüften Code veränderst du nie und du reparierst nichts. Stößt du auf eine ' +
+      'Prüfung, die einer Entscheidungs-Karte des Projekts widerspricht oder erkennbar ' +
+      'veraltet ist, darfst du sie an den beschlossenen Stand anpassen — vermerke das im ' +
+      'Abschlusstext. Wegwerf-Hilfen gehören in den Ordner arbeitsablage/. ' +
+      'Dein Abschlusstext ist der Prüfbeleg — kompakt: 1. Welche Prüfungen gelaufen sind ' +
+      '(Anzahl genügt) und wie sie ausgingen. 2. Jeder Fehlschlag mit Fundort in ein bis ' +
+      'zwei Sätzen. 3. Was du an Prüfungen angepasst hast (falls etwas). ' +
+      'Deine allerletzte Zeile muss exakt lauten: ' +
       'PRUEFUNG: BESTANDEN oder PRUEFUNG: FEHLGESCHLAGEN'
   },
   {

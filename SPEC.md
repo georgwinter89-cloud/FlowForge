@@ -75,8 +75,9 @@ Ergebnis des letzten Laufs direkt an jeder Block-Karte auf der Leinwand aufklapp
 - Technik-Absicherung: Die Verwaltung nutzt ein eigenes, verstecktes Git-Verzeichnis
   **außerhalb** des Projektordners — das Projekt darf selbst ein Git-Repo sein oder werden.
   Dem Agenten ist Git-Benutzung per Sperre untersagt (hartes Nein, keine Rückfrage).
-- Ausgenommen von Sicherung und Wiederherstellung: Laufberichte (bleiben immer erhalten)
-  und `node_modules` (per Installation wiederherstellbar).
+- Ausgenommen von Sicherung und Wiederherstellung: Laufberichte (bleiben immer erhalten),
+  `node_modules` (per Installation wiederherstellbar) und `arbeitsablage`
+  (Wegwerf-Fläche der Agenten, wird am Lauf-Ende geleert).
 - **Wiederherstellen-Knopf** mit Vorschau (was ändert sich, was verschwindet, was kommt
   zurück): Projektstand von jedem Sicherungspunkt zurückholen. Vorher wird der jetzige
   Stand automatisch gesichert — eine Wiederherstellung ist selbst wieder rückgängig machbar.
@@ -159,13 +160,31 @@ passendem braucht in den Auftrag gereicht (gekürzt auf 8.000 Zeichen je
 eine Angriffsliste wird mitgereicht und muss eingearbeitet werden, wenn ein
 Block davor eine liefert — so kommt „Bug jagen" ohne Angreifer aus.
 
-**Prüfer:** schreibt eigene Tests als Testdateien im Projekt, führt sie aus und
-liefert einen Rot-vor-Grün-Beleg: mindestens ein Test wird einmal mit absichtlich
-verfälschter Erwartung ausgeführt (Rot) und danach unverändert echt (Grün) — ein
-Test, der nie rot war, beweist nichts. Ehrlichkeits-Notiz: „Prüfer ≠ Bauer" heißt
+**Prüfer:** prüft **nur das aktuelle Arbeitspaket** gegen dessen Fertig-Kriterien
+(Entscheidung Georg, 12.08.2026) — nicht das ganze Projekt; die Prüfmappe früherer
+Läufe bleibt liegen (dafür: Gesamtprüfung). Schreibt wenige, robuste Tests in den
+festen Ordner **`pruefung/`**, führt sie aus und liefert einen Rot-vor-Grün-Beleg:
+mindestens ein Test wird einmal mit absichtlich verfälschter Erwartung ausgeführt
+(Rot) und danach unverändert echt (Grün) — ein Test, der nie rot war, beweist nichts.
+Überstrenge Fallen (pixelgenaue Vergleiche, Wortverbote, Datei-Inventuren) sind per
+Auftrag untersagt; veraltete eigene Prüfungen passt er an, statt sie zu stapeln.
+In einer **Reparatur-Runde prüft er nur seine Beanstandungen der letzten Runde
+nach** — keine erneute Vollprüfung. Ehrlichkeits-Notiz: „Prüfer ≠ Bauer" heißt
 technisch „frische Session ohne das Arbeitswissen des Bauers" — jeder Block läuft
 ohnehin als frische Motor-Session; es ist kein anderes Gehirn. Prüfer-Blöcke melden
 ihr Urteil als letzte Zeile ihres Abschlusstexts („PRUEFUNG: BESTANDEN/FEHLGESCHLAGEN").
+
+**Gesamtprüfung** (seit 12.08.2026): eigener Prüf-Block für zwischendurch — lässt
+bewusst die **gesamte** Prüfmappe laufen und berichtet, was hält; veraltete
+Prüfungen darf er an die beschlossenen Entscheidungen anpassen. Gedacht als
+manueller Ein-Block-Lauf, nicht als Teil jeder Kette.
+
+**Prüfmappe & Arbeitsablage:** Der Ordner `pruefung/` gehört den Prüf-Blöcken —
+für alle anderen Blöcke ist er schreibgesperrt (hartes Nein; der Bauer darf die
+Prüfmappe höchstens einmal ganz am Ende laufen lassen, nicht als Dauerschleife).
+Der Ordner `arbeitsablage/` ist die Wegwerf-Fläche aller Agenten für Hilfsskripte
+und Probeläufe: von Sicherungspunkten ausgenommen, von FlowForge am Lauf-Ende
+automatisch geleert.
 
 **Übungs-Blöcke** bleiben für Probeläufe in der Bibliothek (eigener Abschnitt):
 Späher, Mini-Bauer, fairer und strenger Übungs-Prüfer, Karten-Probe, Rechte-Probe.
@@ -282,9 +301,13 @@ Entwickler-Werkzeug beginnen (node, npm, npx, pnpm, yarn, tsc, vitest, jest, pyt
 pip, pytest), laufen ohne Rückfrage — das deckt „Tests ausführen" und „Programm-
 bibliotheken installieren" ab. Rein lesende Befehle (dir, type, findstr …) ebenso.
 Verkettete Befehle laufen nur durch, wenn jedes Teilstück bekannt ist. Alle anderen
-Befehle lösen eine Rückfrage aus; Git bleibt hart gesperrt (§3.3). Die Sperre „darf
-nur lesen" (§4.2) steht darüber: Sie stoppt jeden nicht rein lesenden Werkzeugaufruf
-hart, ohne Rückfrage — Kommandozeilen-Befehle sind dann ganz gesperrt.
+Befehle lösen eine Rückfrage aus; Git bleibt hart gesperrt (§3.3), und die Prüfmappe
+`pruefung/` dürfen nur Prüf-Blöcke verändern (§4.3 — hartes Nein, auch für Befehle,
+die erkennbar hineinschreiben). Die Sperre „darf nur lesen" (§4.2) steht darüber:
+Sie stoppt jeden nicht rein lesenden Werkzeugaufruf hart, ohne Rückfrage. **Rein
+lesende Befehle laufen auch unter der Sperre durch** (seit 12.08.2026 — vorher war
+jeder Befehl gesperrt und die Abweisung hieß irreführend „Schreib-Versuch");
+Programme oder Tests auszuführen zählt nicht als Lesen und bleibt gesperrt.
 
 ## 8. Ergebnis erleben
 

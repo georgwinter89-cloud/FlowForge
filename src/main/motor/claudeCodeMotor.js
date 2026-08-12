@@ -82,37 +82,93 @@ const BERICHTE_ORDNER = 'laufberichte'
 // Entwickler-Werkzeuge decken „Tests ausführen" und „Programmbibliotheken
 // installieren (offizielle Quellen)" ab und laufen ohne Rückfrage — ebenso rein
 // lesende Befehle. Alles andere fragt weiterhin; Git bleibt hart gesperrt.
+// Rein lesende Befehle: erlaubt auch unter der Sperre „darf nur lesen"
+// (Feedback Georg, 12.08.2026 — vorher wurden Lese-Blöcke schon beim
+// Ordner-Auflisten abgewiesen). Ausführen von Programmen (node, python …)
+// zählt bewusst nicht als Lesen: ein Skriptlauf kann alles Mögliche schreiben.
+const LESE_BEFEHLE = new Set([
+  'dir', 'ls', 'type', 'cat', 'findstr', 'grep', 'where', 'echo', 'pwd', 'head', 'tail', 'wc',
+  'get-childitem', 'get-content', 'select-string', 'get-location', 'measure-object', 'select-object', 'sort-object'
+])
+
 const BEFEHLE_OHNE_RUECKFRAGE = new Set([
   // Entwickler-Werkzeuge: bauen, testen, installieren
   'node', 'npm', 'npx', 'pnpm', 'yarn', 'tsc', 'vitest', 'jest',
   'python', 'python3', 'py', 'pip', 'pip3', 'pytest',
-  // Rein lesend
-  'dir', 'ls', 'type', 'cat', 'findstr', 'grep', 'where', 'echo', 'pwd', 'head', 'tail', 'wc'
+  ...LESE_BEFEHLE
 ])
 
-// Ein verketteter Befehl läuft nur dann ohne Rückfrage, wenn jedes Teilstück
-// mit einem bekannten Werkzeug beginnt — sonst entscheidet Georg.
-function befehlOhneRueckfrage(befehl) {
-  const teile = String(befehl).split(/&&|\|\||[;|\n]/)
-  let geprueft = 0
-  for (const teil of teile) {
+// Zerlegt einen verketteten Befehl in seine Teilstücke und liefert die
+// Werkzeugnamen (cd-Vorspann wird übersprungen — er wechselt nur den Ordner).
+function befehlsNamen(befehl) {
+  const namen = []
+  for (const teil of String(befehl).split(/&&|\|\||[;|\n]/)) {
     // Reine Text-Ausgaben wie "ExitCode=$LASTEXITCODE" (übliches
     // PowerShell-Anhängsel des Motors) führen nichts aus — außer sie enthalten
     // eine $(…)-Unterausführung oder Backticks, dann zählen sie als Befehl.
     const getrimmt = teil.trim()
     if (/^"[^"`]*"$/.test(getrimmt) && !getrimmt.includes('$(')) continue
-    const erster = teil.trim().split(/\s+/)[0]
+    const erster = getrimmt.split(/\s+/)[0]
     if (!erster) continue
-    const name = erster
-      .replace(/^["']|["']$/g, '')
-      .toLowerCase()
-      .split(/[\\/]/)
-      .pop()
-      .replace(/\.(exe|cmd|bat)$/, '')
-    if (!BEFEHLE_OHNE_RUECKFRAGE.has(name)) return false
-    geprueft++
+    namen.push(
+      erster
+        .replace(/^["']|["']$/g, '')
+        .toLowerCase()
+        .split(/[\\/]/)
+        .pop()
+        .replace(/\.(exe|cmd|bat)$/, '')
+    )
   }
-  return geprueft > 0
+  return namen
+}
+
+// Ein verketteter Befehl läuft nur dann ohne Rückfrage, wenn jedes Teilstück
+// mit einem bekannten Werkzeug beginnt — sonst entscheidet Georg.
+function befehlOhneRueckfrage(befehl) {
+  const namen = befehlsNamen(befehl)
+  return namen.length > 0 && namen.every((name) => BEFEHLE_OHNE_RUECKFRAGE.has(name))
+}
+
+// Rein lesender Befehl: jedes Teilstück ist ein Lese-Werkzeug (cd davor ist
+// erlaubt), und nichts wird in eine Datei umgeleitet. `2>&1` und Umleitungen
+// ins Nichts (NUL, /dev/null) verändern keine Datei und bleiben erlaubt.
+function befehlNurLesend(befehl) {
+  const ohneHarmloseUmleitung = String(befehl)
+    .replace(/2>&1/g, '')
+    .replace(/>+\s*(\/dev\/null|nul)\b/gi, '')
+  if (ohneHarmloseUmleitung.includes('>')) return false
+  const namen = befehlsNamen(befehl).filter((name) => name !== 'cd')
+  return namen.length > 0 && namen.every((name) => LESE_BEFEHLE.has(name))
+}
+
+// Der Prüfordner (SPEC §4.3, Entscheidung Georg, 12.08.2026): Die Prüfmappe
+// gehört dem Prüfer — andere Blöcke dürfen dort nichts anlegen oder ändern,
+// sonst weicht der Bauer die Prüfungen auf, statt den Code zu reparieren.
+const PRUEF_ORDNER = 'pruefung'
+
+function liegtInPruefmappe(datei, projektPfad) {
+  if (!datei) return false
+  const relativ = path
+    .relative(path.resolve(projektPfad), path.resolve(projektPfad, String(datei)))
+    .toLowerCase()
+  return relativ === PRUEF_ORDNER || relativ.startsWith(PRUEF_ORDNER + path.sep)
+}
+
+// Befehle, die die Prüfmappe verändern könnten: Der Befehl nennt den Prüfordner
+// UND enthält ein veränderndes Werkzeug oder eine Datei-Umleitung. Das ist eine
+// Faustregel (Befehlstexte sind nicht sicher zerlegbar) — sie trifft genau die
+// beobachteten Aufweich-Versuche (sed -i auf Prüfdateien); reine Testläufe wie
+// „node pruefung/test.js" bleiben erlaubt.
+function befehlAendertPruefmappe(befehl) {
+  const text = String(befehl)
+  if (!new RegExp('\\b' + PRUEF_ORDNER + '\\b', 'i').test(text)) return false
+  const ohneHarmloseUmleitung = text
+    .replace(/2>&1/g, '')
+    .replace(/>+\s*(\/dev\/null|nul)\b/gi, '')
+  if (ohneHarmloseUmleitung.includes('>')) return true
+  return /\b(sed\s+-i|rm|del|mv|move|cp|copy|tee|touch|remove-item|set-content|add-content|out-file)\b/i.test(
+    text
+  )
 }
 
 function istVerwaltungsdatei(datei, projektPfad) {
@@ -134,8 +190,10 @@ function liegtImProjekt(datei, projektPfad) {
 
 // Rechte-Durchsetzung (SPEC §7): entscheidet pro Werkzeugaufruf, ob er ohne
 // Rückfrage laufen darf oder Georg gefragt werden muss. Alles Unbekannte fragt.
-// Mit Sperre „darf nur lesen": hartes Nein für alles außer Lese-Werkzeugen.
-function pruefeWerkzeug(name, eingabe, projektPfad, nurLesen) {
+// Mit Sperre „darf nur lesen": hartes Nein für alles außer Lese-Werkzeugen und
+// rein lesenden Befehlen. Die Prüfmappe dürfen nur Prüf-Blöcke verändern.
+// Exportiert, damit sich die Einstufung ohne laufenden Motor prüfen lässt.
+export function pruefeWerkzeug(name, eingabe, projektPfad, nurLesen, darfPruefen) {
   if (name.startsWith(MENSCH_PRAEFIX)) return { erlaubt: true }
   // Startanleitung setzen schreibt ins Projekt — validiert im Werkzeug selbst,
   // aber unter der Sperre „darf nur lesen" gesperrt.
@@ -151,6 +209,16 @@ function pruefeWerkzeug(name, eingabe, projektPfad, nurLesen) {
       return { gesperrt: texte.rechteFrage.nurLesenGesperrtFuerAgent, tickerText: texte.ticker.nurLesenGesperrt }
     return { erlaubt: true }
   }
+  // Unter „darf nur lesen" sind rein lesende Befehle erlaubt (Feedback Georg,
+  // 12.08.2026) — alles andere an Befehlen wird ehrlich als Befehl gestoppt,
+  // nicht fälschlich als „Schreib-Versuch" gemeldet.
+  if (nurLesen && (name === 'Bash' || name === 'PowerShell')) {
+    if (befehlNurLesend(String(eingabe.command ?? ''))) return { erlaubt: true }
+    return {
+      gesperrt: texte.rechteFrage.nurLesenBefehlFuerAgent,
+      tickerText: texte.ticker.nurLesenBefehlGesperrt
+    }
+  }
   if (nurLesen && !NUR_LESEN_ERLAUBT.has(name))
     return { gesperrt: texte.rechteFrage.nurLesenGesperrtFuerAgent, tickerText: texte.ticker.nurLesenGesperrt }
   if (OHNE_RUECKFRAGE.has(name)) return { erlaubt: true }
@@ -158,6 +226,9 @@ function pruefeWerkzeug(name, eingabe, projektPfad, nurLesen) {
     const datei = eingabe.file_path ?? eingabe.notebook_path
     if (istVerwaltungsdatei(datei, projektPfad))
       return { gesperrt: texte.rechteFrage.verwaltungGesperrtFuerAgent, tickerText: texte.ticker.verwaltungGesperrt }
+    // Die Prüfmappe gehört dem Prüfer (Entscheidung Georg, 12.08.2026).
+    if (!darfPruefen && liegtInPruefmappe(datei, projektPfad))
+      return { gesperrt: texte.rechteFrage.pruefmappeGesperrtFuerAgent, tickerText: texte.ticker.pruefmappeGesperrt }
     if (liegtImProjekt(datei, projektPfad)) return { erlaubt: true }
     return { frage: texte.rechteFrage.schreibenAusserhalb(String(datei ?? '?')) }
   }
@@ -167,6 +238,8 @@ function pruefeWerkzeug(name, eingabe, projektPfad, nurLesen) {
     // Sicherungspunkt-Verwaltung von FlowForge kollidieren. Keine Rückfrage, hartes Nein.
     if (/\bgit\b/i.test(befehl))
       return { gesperrt: texte.rechteFrage.gitGesperrtFuerAgent, tickerText: texte.ticker.gitGesperrt }
+    if (!darfPruefen && befehlAendertPruefmappe(befehl))
+      return { gesperrt: texte.rechteFrage.pruefmappeGesperrtFuerAgent, tickerText: texte.ticker.pruefmappeGesperrt }
     if (befehlOhneRueckfrage(befehl)) return { erlaubt: true }
     return { frage: texte.rechteFrage.befehl(befehl) }
   }
@@ -343,6 +416,8 @@ export function starteMotorLauf(optionen) {
     apiSchluessel,
     ausgabenObergrenzeUsd,
     nurLesen = false,
+    // Prüf-Blöcke (prueft: true) dürfen als einzige die Prüfmappe verändern.
+    darfPruefen = false,
     uebertrag = { aktiv: false, testModus: false, anweisung: '' },
     // Die echte Fenstergröße meldet der Motor erst am Session-Ende — ein
     // Vorwissen aus früheren Blöcken desselben Laufs macht die
@@ -485,7 +560,7 @@ export function starteMotorLauf(optionen) {
           return kindProzess
         },
         canUseTool: async (name, eingabeDaten) => {
-          const urteil = pruefeWerkzeug(name, eingabeDaten ?? {}, projektPfad, nurLesen)
+          const urteil = pruefeWerkzeug(name, eingabeDaten ?? {}, projektPfad, nurLesen, darfPruefen)
           if (urteil.erlaubt) return { behavior: 'allow', updatedInput: eingabeDaten }
           if (urteil.gesperrt) {
             aufEreignis({ art: 'ticker', text: urteil.tickerText })

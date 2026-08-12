@@ -531,6 +531,9 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           status: 'offen', // 'offen' | 'laeuft' | 'fertig'
           lieferung: null,
           rueckmeldung: '',
+          // Reparatur-Runde beim Prüfer (Entscheidung Georg, 12.08.2026): seine
+          // eigene Kritik der letzten Runde — er prüft dann nur diese Punkte nach.
+          nachpruefung: '',
           startanleitungNachforderung: false,
           uebergabe: '',
           uebergabeVerloren: false,
@@ -580,6 +583,9 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         rueckmeldungen: kettenIds
           .filter((id) => knoten.get(id).rueckmeldung)
           .map((id) => [id, knoten.get(id).rueckmeldung]),
+        nachpruefungen: kettenIds
+          .filter((id) => knoten.get(id).nachpruefung)
+          .map((id) => [id, knoten.get(id).nachpruefung]),
         nachforderungen: kettenIds.filter((id) => knoten.get(id).startanleitungNachforderung),
         uebergaben: kettenIds
           .filter((id) => knoten.get(id).uebergabe || knoten.get(id).uebergabeVerloren)
@@ -610,6 +616,8 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         if (knoten.has(id) && typeof text === 'string') knoten.get(id).lieferung = text
       for (const [id, text] of Array.isArray(fortsetzung.rueckmeldungen) ? fortsetzung.rueckmeldungen : [])
         if (knoten.has(id) && typeof text === 'string') knoten.get(id).rueckmeldung = text
+      for (const [id, text] of Array.isArray(fortsetzung.nachpruefungen) ? fortsetzung.nachpruefungen : [])
+        if (knoten.has(id) && typeof text === 'string') knoten.get(id).nachpruefung = text
       for (const id of Array.isArray(fortsetzung.nachforderungen) ? fortsetzung.nachforderungen : [])
         if (knoten.has(id)) knoten.get(id).startanleitungNachforderung = true
       for (const [id, u] of Array.isArray(fortsetzung.uebergaben) ? fortsetzung.uebergaben : [])
@@ -644,6 +652,9 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         apiSchluessel: einstellungen.apiSchluessel,
         ausgabenObergrenzeUsd: einstellungen.ausgabenObergrenzeUsd,
         nurLesen: k.def.nurLesen,
+        // Nur Prüf-Blöcke dürfen die Prüfmappe verändern (Entscheidung Georg,
+        // 12.08.2026) — der Bauer weicht sonst Prüfungen auf, statt zu reparieren.
+        darfPruefen: Boolean(k.def.prueft),
         // Automatischer Übertrag (SPEC §5): läuft der Kontext voll, übergibt der
         // Agent an eine frische Session — sofern die Übertragsgrenze es erlaubt.
         uebertrag: {
@@ -690,6 +701,7 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           texte.agentenUebergabe.auftragEinleitung +
           auftragMitFeldern(k.def, k.eintrag.feldWerte)
         if (k.rueckmeldung) auftrag += texte.agentenUebergabe.prueferRueckmeldung(k.rueckmeldung)
+        if (k.nachpruefung) auftrag += texte.agentenUebergabe.prueferNachpruefung(k.nachpruefung)
         if (k.startanleitungNachforderung)
           auftrag += texte.agentenUebergabe.startanleitungNachforderung
         if (k.uebergabe) auftrag += texte.agentenUebergabe.uebertragFortsetzung(k.uebergabe)
@@ -886,6 +898,7 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       // Anlauf sind damit erledigt.
       k.status = 'fertig'
       k.rueckmeldung = ''
+      k.nachpruefung = ''
       k.startanleitungNachforderung = false
       k.uebergabe = ''
       k.uebergabeVerloren = false
@@ -949,6 +962,9 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
               if (nk.status === 'fertig') nk.status = 'offen'
             }
             knoten.get(zielId).rueckmeldung = prueferKritik(ergebnis.ergebnisText)
+            // Der Prüfer selbst prüft in der nächsten Runde nur seine
+            // Beanstandungen nach — keine erneute Vollprüfung.
+            k.nachpruefung = prueferKritik(ergebnis.ergebnisText)
             const zielName = knoten.get(zielId).def.name
             tickern(texte.ticker.rueckfuehrung(zielName, genutzt, workflow.reparaturRunden))
             return
@@ -1016,6 +1032,20 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     for (const antworten of [...lauf.fragen.values()]) antworten(false)
     for (const aufloesen of [...lauf.entscheidungen.values()]) aufloesen('zurueckstellen')
     for (const antworten of [...lauf.menschFragen.values()]) antworten(null)
+
+    // Arbeitsablage leeren (Entscheidung Georg, 12.08.2026): Der Ordner
+    // arbeitsablage/ ist die Wegwerf-Fläche der Agenten für Hilfsskripte und
+    // Probeläufe — FlowForge räumt ihn zuverlässig am Lauf-Ende, statt das dem
+    // Agenten (und dessen Tokens) zu überlassen.
+    try {
+      const ablage = path.join(projektPfad, 'arbeitsablage')
+      if (fs.existsSync(ablage)) {
+        fs.rmSync(ablage, { recursive: true, force: true })
+        tickern(texte.ticker.arbeitsablageGeleert)
+      }
+    } catch {
+      // Eine klemmende Datei (z.B. noch geöffnet) darf das Laufende nicht stören.
+    }
 
     bericht.beendetAm = jetztIso()
     bericht.zustand = endZustand
