@@ -28,11 +28,15 @@ export const UEBERTRAG_GRENZE_MAX = 99
 
 export const BLOCK_KATALOG = [
   {
+    // Seit 12.08.2026 (Entscheidung Georg) nicht mehr Teil der Vorlagen: Jeder
+    // Block liest ohnehin selbst im Projekt — ein eigener Einlese-Block kostete
+    // nur eine volle Extra-Session. Bleibt in der Bibliothek für Schaubilder,
+    // die ihn noch nutzen oder bewusst wollen.
     id: 'kontext-laden',
     name: 'Kontext laden',
     symbol: '📖',
     beschreibung:
-      'Verschafft sich einen Überblick über Projekt und Karten — die Grundlage für alle folgenden Blöcke.',
+      'Verschafft sich einen Überblick über Projekt und Karten. Meist unnötig — jeder Block liest selbst; kostet eine eigene Session.',
     braucht: [],
     liefert: ['Projekt-Überblick'],
     nurLesen: true,
@@ -119,7 +123,10 @@ export const BLOCK_KATALOG = [
     symbol: '✂️',
     beschreibung:
       'Schneidet aus dem Wunsch ein kleines, in einer Sitzung schaffbares Arbeitspaket mit prüfbaren Fertig-Kriterien.',
-    braucht: ['Projekt-Überblick'],
+    braucht: [],
+    // Liegt ein Projekt-Überblick vor (z.B. vom Spec-Interview), wird er
+    // mitgereicht — verlangt wird er nicht: Der Block liest selbst (12.08.2026).
+    brauchtOptional: ['Projekt-Überblick'],
     liefert: ['Arbeitspaket'],
     nurLesen: true,
     prueft: false,
@@ -144,9 +151,10 @@ export const BLOCK_KATALOG = [
       'Ist das Feld leer, sind die offenen Aufgaben-Karten der Wunsch — wähle daraus die ' +
       'sinnvollste nächste Arbeit (ein Paket, nicht alle auf einmal) und benenne, welche ' +
       'Karte du dir vornimmst. ' +
-      'Prüfe anhand des Projekt-Überblicks und bei Bedarf durch eigenes Lesen im Projektordner, ' +
-      'wie sich dieser Wunsch in EIN kleines, in einer Sitzung schaffbares Arbeitspaket fassen ' +
-      'lässt. Ist der Wunsch zu groß, schneide das sinnvollste erste Paket heraus und benenne, ' +
+      'Prüfe durch eigenes Lesen im Projektordner (liegt dir ein Projekt-Überblick vor, nutze ' +
+      'ihn als Abkürzung), wie sich dieser Wunsch in EIN kleines, in einer Sitzung schaffbares ' +
+      'Arbeitspaket fassen lässt. ' +
+      'Ist der Wunsch zu groß, schneide das sinnvollste erste Paket heraus und benenne, ' +
       'was bewusst draußen bleibt. Projektkarten sind nie Teil des Pakets — sie pflegt der ' +
       'Sessionende-Block nach der Prüfung; nimm sie weder in die Schritte noch in die ' +
       'Fertig-Kriterien auf. ' +
@@ -189,7 +197,8 @@ export const BLOCK_KATALOG = [
     symbol: '🩺',
     beschreibung:
       'Belegt die Ursache eines Fehlers, bevor etwas angefasst wird — und schneidet daraus den minimalen Fix.',
-    braucht: ['Projekt-Überblick'],
+    braucht: [],
+    brauchtOptional: ['Projekt-Überblick'],
     liefert: ['Arbeitspaket'],
     nurLesen: true,
     prueft: false,
@@ -541,17 +550,19 @@ export const VORLAGEN = [
     symbol: '🌱',
     kette: ['spec-interview']
   },
+  // Ohne „Kontext laden" (Entscheidung Georg, 12.08.2026): Jeder Block liest
+  // ohnehin selbst im Projekt — der Einlese-Block kostete eine volle Session.
   {
     id: 'feature-hinzufuegen',
     name: 'Feature hinzufügen',
     symbol: '🧩',
-    kette: ['kontext-laden', 'paket-schneiden', 'angreifer', 'bauer', 'pruefer', 'sessionende']
+    kette: ['paket-schneiden', 'angreifer', 'bauer', 'pruefer', 'sessionende']
   },
   {
     id: 'bug-jagen',
     name: 'Bug jagen',
     symbol: '🐞',
-    kette: ['kontext-laden', 'diagnose', 'bauer', 'pruefer', 'sessionende']
+    kette: ['diagnose', 'bauer', 'pruefer', 'sessionende']
   }
 ]
 

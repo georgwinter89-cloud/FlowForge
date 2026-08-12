@@ -194,8 +194,13 @@ Späher, Mini-Bauer, fairer und strenger Übungs-Prüfer, Karten-Probe, Rechte-P
 | Vorlage | Kette |
 |---|---|
 | **Neue App starten** | Nur das Spec-Interview (grillt den Nutzer, erzeugt erste Karten) — Entscheidung Georg, 07.08.2026: Spec-Erfassung getrennt vom Bauen; gebaut wird danach mit „Feature hinzufügen" |
-| **Feature hinzufügen** | Kontext laden → Paket schneiden → Angreifer → Bauer → Prüfer → Sessionende |
-| **Bug jagen** | Kontext laden → Diagnose (Ursache belegen, bevor etwas angefasst wird) → Bauer (minimaler Fix) → Prüfer mit Rot-vor-Grün → Sessionende |
+| **Feature hinzufügen** | Paket schneiden → Angreifer → Bauer → Prüfer → Sessionende |
+| **Bug jagen** | Diagnose (Ursache belegen, bevor etwas angefasst wird) → Bauer (minimaler Fix) → Prüfer mit Rot-vor-Grün → Sessionende |
+
+Ohne „Kontext laden" (Entscheidung Georg, 12.08.2026): Jeder Block liest ohnehin
+selbst im Projekt — ein eigener Einlese-Block kostete nur eine volle Extra-Session.
+Der Block bleibt in der Bibliothek; Paket schneiden und Diagnose verlangen den
+Projekt-Überblick nicht mehr (nur noch „falls da", z.B. vom Spec-Interview).
 
 Alle drei Vorlagen sind verfügbar (seit Bauschritt 9) — als ziehbare Vorlagen
 in der Blockbibliothek. Liegt schon ein Schaubild auf der Leinwand, ersetzt die
