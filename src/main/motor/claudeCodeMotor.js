@@ -87,7 +87,8 @@ const BERICHTE_ORDNER = 'laufberichte'
 // Ordner-Auflisten abgewiesen). Ausführen von Programmen (node, python …)
 // zählt bewusst nicht als Lesen: ein Skriptlauf kann alles Mögliche schreiben.
 const LESE_BEFEHLE = new Set([
-  'dir', 'ls', 'type', 'cat', 'findstr', 'grep', 'where', 'echo', 'pwd', 'head', 'tail', 'wc',
+  'dir', 'ls', 'type', 'cat', 'findstr', 'grep', 'where', 'echo', 'printf', 'pwd', 'head', 'tail', 'wc',
+  'tr', 'sort', 'uniq', 'cut',
   'get-childitem', 'get-content', 'select-string', 'get-location', 'measure-object', 'select-object', 'sort-object'
 ])
 
@@ -98,8 +99,16 @@ const BEFEHLE_OHNE_RUECKFRAGE = new Set([
   ...LESE_BEFEHLE
 ])
 
+// Shell-Gerüstwörter: `do`/`then`/`else` leiten nur den eigentlichen Befehl
+// ein, `if`/`while`/`until`/`elif` prüfen den Befehl dahinter — eingestuft
+// wird jeweils, was danach kommt.
+const GERUEST_VORSILBEN = new Set(['do', 'then', 'else', 'if', 'while', 'until', 'elif'])
+
 // Zerlegt einen verketteten Befehl in seine Teilstücke und liefert die
 // Werkzeugnamen (cd-Vorspann wird übersprungen — er wechselt nur den Ordner).
+// Lese-Schleifen wie `for f in a.js b.js; do head $f; done` (Feedback Georg,
+// 12.08.2026): Das Schleifen-Gerüst führt selbst nichts aus und wird
+// übersprungen — eingestuft werden die Befehle im Schleifenkörper.
 function befehlsNamen(befehl) {
   const namen = []
   for (const teil of String(befehl).split(/&&|\|\||[;|\n]/)) {
@@ -108,7 +117,13 @@ function befehlsNamen(befehl) {
     // eine $(…)-Unterausführung oder Backticks, dann zählen sie als Befehl.
     const getrimmt = teil.trim()
     if (/^"[^"`]*"$/.test(getrimmt) && !getrimmt.includes('$(')) continue
-    const erster = getrimmt.split(/\s+/)[0]
+    // `for f in <feste Wörter>` führt nichts aus — aber nur ohne
+    // $(…)-Unterausführung und Backticks; sonst normal einstufen.
+    if (/^for\s+\S+\s+in\s[^$`]*$/i.test(getrimmt)) continue
+    if (/^(done|fi|esac)$/i.test(getrimmt)) continue
+    const woerter = getrimmt.split(/\s+/)
+    while (woerter.length > 0 && GERUEST_VORSILBEN.has(woerter[0].toLowerCase())) woerter.shift()
+    const erster = woerter[0]
     if (!erster) continue
     namen.push(
       erster

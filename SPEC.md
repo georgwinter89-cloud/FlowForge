@@ -319,8 +319,10 @@ Befehle lösen eine Rückfrage aus; Git bleibt hart gesperrt (§3.3), und die Pr
 die erkennbar hineinschreiben). Die Sperre „darf nur lesen" (§4.2) steht darüber:
 Sie stoppt jeden nicht rein lesenden Werkzeugaufruf hart, ohne Rückfrage. **Rein
 lesende Befehle laufen auch unter der Sperre durch** (seit 12.08.2026 — vorher war
-jeder Befehl gesperrt und die Abweisung hieß irreführend „Schreib-Versuch");
-Programme oder Tests auszuführen zählt nicht als Lesen und bleibt gesperrt.
+jeder Befehl gesperrt und die Abweisung hieß irreführend „Schreib-Versuch"); auch
+Lese-Schleifen („für jede Datei: zeig den Anfang") gelten als lesend, solange jeder
+Befehl darin ein Lese-Werkzeug ist. Programme oder Tests auszuführen zählt nicht
+als Lesen und bleibt gesperrt.
 
 ## 8. Ergebnis erleben
 
