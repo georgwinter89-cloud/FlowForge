@@ -1370,3 +1370,102 @@ body {
   border-radius: 50%;
   background: #dc2626;
 }
+
+/* Block-Editor mit KI-Assistent (SPEC §4.5, BAUPLAN 14) */
+
+.dialog-breit {
+  width: 640px;
+  max-height: 85vh;
+  overflow-y: auto;
+}
+
+.knoepfe-links {
+  justify-content: flex-start;
+}
+
+.feld-nebeneinander {
+  display: flex;
+  gap: 12px;
+}
+
+.feld-nebeneinander .feld {
+  flex: 1;
+}
+
+.feld-nebeneinander .feld-schmal {
+  flex: 0 0 130px;
+}
+
+/* Sperren-Schalter (Schritt 3): Kästchen und Erklärung nebeneinander. */
+.feld-schalter {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.feld-schalter input {
+  margin-top: 3px;
+}
+
+.feld-schalter .feld-hinweis {
+  display: block;
+  margin-top: 4px;
+}
+
+.etikett-eingabe {
+  display: flex;
+  gap: 8px;
+}
+
+.etikett-eingabe input {
+  flex: 1;
+  padding: 8px 10px;
+  border: 1px solid var(--rand);
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 400;
+}
+
+/* Chips im Editor tragen ein ×, in Bibliothek und Leinwand nicht. */
+.block-chip .chip-entfernen {
+  margin-left: 4px;
+  font-size: 12px;
+}
+
+/* Probelauf-Vorschau (Schritt 4) */
+.vorschau-block {
+  cursor: default;
+}
+
+.vorschau-label {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.vorschau-auftrag {
+  margin: 0;
+  padding: 12px;
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid var(--rand);
+  border-radius: 8px;
+  background: var(--hintergrund);
+  font-family: inherit;
+  font-size: 13px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.bibliothek-gruppe-zeile {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+/* Der Knopf in der Gruppenzeile erbt sonst die Großschreibung der Überschrift. */
+.bibliothek-gruppe-zeile button {
+  text-transform: none;
+  letter-spacing: normal;
+}

@@ -184,12 +184,25 @@ Vorlage es nach einer Rückfrage — so folgt auf das Spec-Interview direkt die
 Bau-Vorlage auf derselben Leinwand. „Bug jagen" ersetzt Paket schneiden +
 Angreifer durch die Diagnose.
 
-### 4.5 Block-Editor
+### 4.5 Block-Editor (seit Bauschritt 14)
 
-- Nutzer kann Blöcke **erstellen, bearbeiten, löschen** — als Formular entlang der Block-Anatomie.
-- **KI-Assistent:** Nutzer beschreibt in normaler Sprache, KI füllt das Formular.
+- Nutzer kann eigene Blöcke **erstellen, bearbeiten, löschen** — als Formular entlang der
+  Block-Anatomie (§4.2). Eigene Blöcke gelten **global** (Abschnitt „Eigene Blöcke" in der
+  Bibliothek jedes Projekts); sie sind nie Prüfer und haben keine Formularfelder.
 - **Erstellungsassistent in 4 Schritten:** Was soll der Block tun? → Was braucht/liefert er? →
-  Welche Sperren gelten? → Probelauf-Vorschau.
+  Welche Sperren gelten (nur „darf nur lesen")? → Probelauf-Vorschau (Blockkarte wie in der
+  Bibliothek + der exakte Arbeitsauftrag, den der Agent bekäme). Bearbeiten nutzt denselben
+  Assistenten mit vorbefüllten Feldern.
+- **KI-Assistent:** Nutzer beschreibt in normaler Sprache, die KI (der Motor, eine
+  Einmal-Frage ohne Werkzeuge) füllt das Formular — alles bleibt von Hand änderbar; die
+  harten Grenzen (Name 40, Beschreibung 200, Auftrag 4.000 Zeichen, je 5 Etiketten à 40)
+  setzt der Hauptprozess beim Speichern durch. Der Assistent bekommt die vorhandenen
+  braucht/liefert-Etiketten als Wortschatz, damit eigene Blöcke zu den vorhandenen stecken;
+  das Formular schlägt dieselben Etiketten vor.
+- **Schutz der Schaubilder:** Ein Block, der in irgendeinem bekannten Projekt auf der
+  Leinwand liegt, lässt sich nicht löschen (Hinweis nennt die Projekte — sonst würde er
+  beim nächsten Laden stillschweigend aus dem Schaubild fallen). Ändern ist gesperrt,
+  solange ein Projekt mit diesem Block läuft oder in der Warteschlange wartet.
 - Import/Export von Blöcken: V2.
 
 ## 5. Sessions & Autonomie

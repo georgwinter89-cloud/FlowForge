@@ -16,6 +16,11 @@ contextBridge.exposeInMainWorld('flowforge', {
   einstellungenLaden: () => ipcRenderer.invoke('einstellungen-laden'),
   einstellungenSpeichern: (neu) => ipcRenderer.invoke('einstellungen-speichern', neu),
 
+  eigeneBloeckeLaden: () => ipcRenderer.invoke('eigene-bloecke-laden'),
+  eigenenBlockSpeichern: (block) => ipcRenderer.invoke('eigener-block-speichern', block),
+  eigenenBlockLoeschen: (id) => ipcRenderer.invoke('eigener-block-loeschen', id),
+  blockAssistent: (beschreibung) => ipcRenderer.invoke('block-assistent', beschreibung),
+
   workflowLaden: (pfad) => ipcRenderer.invoke('workflow-laden', pfad),
   workflowSpeichern: (pfad, workflow) => ipcRenderer.invoke('workflow-speichern', { pfad, workflow }),
 

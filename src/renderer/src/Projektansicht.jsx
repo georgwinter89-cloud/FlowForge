@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
 import { texte } from '../../shared/texte.js'
+import { eigeneBloeckeSetzen } from '../../shared/blockKatalog.js'
 import KartenFormular from './KartenFormular.jsx'
 import Leinwand from './Leinwand.jsx'
 import Blockbibliothek from './Blockbibliothek.jsx'
+import BlockEditor from './BlockEditor.jsx'
 
 const t = texte.projektansicht
 const tk = texte.karten
@@ -61,6 +63,11 @@ export default function Projektansicht({ pfad, onZurueck }) {
   const [anleitung, setAnleitung] = useState(null)
   const [startLaeuft, setStartLaeuft] = useState(false)
   const [startFehler, setStartFehler] = useState('')
+  // Eigene Blöcke (SPEC §4.5, BAUPLAN 14): null = noch nicht geladen — erst
+  // dann rendert die Leinwand, sonst könnte sie eigene Blöcke im Schaubild
+  // nicht auflösen. false = Editor zu, 'neu' = neuer Block, sonst der Block.
+  const [eigene, setEigene] = useState(null)
+  const [blockEditor, setBlockEditor] = useState(false)
 
   function projektLaden() {
     window.flowforge.projektOeffnen(pfad).then((ergebnis) => {
@@ -76,6 +83,37 @@ export default function Projektansicht({ pfad, onZurueck }) {
   }
 
   useEffect(projektLaden, [pfad])
+
+  useEffect(() => {
+    window.flowforge.eigeneBloeckeLaden().then((ergebnis) => {
+      if (!ergebnis.ok) return
+      eigeneBloeckeSetzen(ergebnis.bloecke)
+      setEigene(ergebnis.bloecke)
+    })
+  }, [])
+
+  // Jede Änderung an eigenen Blöcken liefert den neuen Gesamtstand zurück —
+  // Registry zuerst, damit Leinwand und Regeln beim Neu-Rendern schon stimmen.
+  function eigeneUebernehmen(ergebnis) {
+    if (ergebnis.ok) {
+      eigeneBloeckeSetzen(ergebnis.bloecke)
+      setEigene(ergebnis.bloecke)
+      setBlockEditor(false)
+    }
+    return ergebnis
+  }
+
+  async function blockSpeichern(block) {
+    return eigeneUebernehmen(await window.flowforge.eigenenBlockSpeichern(block))
+  }
+
+  async function blockLoeschen(block) {
+    if (!window.confirm(texte.blockEditor.loeschenBestaetigung(block.name))) return
+    const ergebnis = eigeneUebernehmen(await window.flowforge.eigenenBlockLoeschen(block.id))
+    // Lösch-Sperre (BAUPLAN 14): liegt der Block noch auf einer Leinwand,
+    // lehnt der Hauptprozess ab — mit den Projektnamen.
+    if (!ergebnis.ok) window.alert(ergebnis.fehler)
+  }
 
   // Der Agent kann Karten und Startanleitung mitten im Lauf ändern —
   // Seitenleiste und „App starten"-Knopf ziehen sofort nach.
@@ -217,20 +255,29 @@ export default function Projektansicht({ pfad, onZurueck }) {
           <div className="spalten-kopf">
             <h2>{t.leinwandTitel}</h2>
           </div>
-          {/* Nach einer Wiederherstellung kann sich karten.json geändert haben. */}
-          <Leinwand
-            pfad={pfad}
-            karten={karten}
-            kontingentVerhalten={projekt?.kontingentVerhalten ?? 'pausieren'}
-            onKontingentVerhalten={kontingentVerhaltenSetzen}
-            onWiederhergestellt={projektLaden}
-          />
+          {/* Nach einer Wiederherstellung kann sich karten.json geändert haben.
+              Erst rendern, wenn die eigenen Blöcke in der Registry sind —
+              sonst könnte das Schaubild eigene Blöcke nicht auflösen. */}
+          {eigene !== null && (
+            <Leinwand
+              pfad={pfad}
+              karten={karten}
+              kontingentVerhalten={projekt?.kontingentVerhalten ?? 'pausieren'}
+              onKontingentVerhalten={kontingentVerhaltenSetzen}
+              onWiederhergestellt={projektLaden}
+            />
+          )}
         </div>
         <aside className="spalte spalte-bibliothek">
           <div className="spalten-kopf">
             <h2>{t.bibliothekTitel}</h2>
           </div>
-          <Blockbibliothek />
+          <Blockbibliothek
+            eigene={eigene ?? []}
+            onNeuerBlock={() => setBlockEditor('neu')}
+            onBearbeiten={setBlockEditor}
+            onLoeschen={blockLoeschen}
+          />
         </aside>
       </div>
       {formular && (
@@ -238,6 +285,13 @@ export default function Projektansicht({ pfad, onZurueck }) {
           karte={formular === 'neu' ? null : formular}
           onSpeichern={speichern}
           onAbbrechen={() => setFormular(false)}
+        />
+      )}
+      {blockEditor && (
+        <BlockEditor
+          block={blockEditor === 'neu' ? null : blockEditor}
+          onSpeichern={blockSpeichern}
+          onAbbrechen={() => setBlockEditor(false)}
         />
       )}
     </section>

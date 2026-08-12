@@ -504,8 +504,33 @@ export function vorlageDefinition(vorlageId) {
   return VORLAGEN.find((v) => v.id === vorlageId) ?? null
 }
 
+// Eigene Blöcke (SPEC §4.5, BAUPLAN 14): vom Nutzer gebaute Blöcke, global für
+// alle Projekte. Hauptprozess und Oberfläche befüllen diese Registry jeweils
+// selbst (main beim App-Start, die Oberfläche vor dem Rendern der Leinwand) —
+// danach löst blockDefinition sie überall genauso auf wie Katalog-Blöcke.
+let eigeneBloecke = []
+
+export function eigeneBloeckeSetzen(liste) {
+  eigeneBloecke = Array.isArray(liste) ? liste : []
+}
+
 export function blockDefinition(blockId) {
-  return BLOCK_KATALOG.find((b) => b.id === blockId) ?? null
+  return (
+    BLOCK_KATALOG.find((b) => b.id === blockId) ??
+    eigeneBloecke.find((b) => b.id === blockId) ??
+    null
+  )
+}
+
+// Wortschatz für braucht/liefert: die Etiketten der Arbeitsblöcke und der
+// eigenen Blöcke. Eigene Blöcke stecken nur zusammen, wenn ihre Etiketten zu
+// den vorhandenen passen — KI-Assistent und Formular schlagen deshalb diese vor.
+export function bekannteEtiketten() {
+  const menge = new Set()
+  for (const block of [...BLOCK_KATALOG.filter((b) => !b.uebung), ...eigeneBloecke])
+    for (const etikett of [...block.braucht, ...(block.brauchtOptional ?? []), ...block.liefert])
+      menge.add(etikett)
+  return [...menge]
 }
 
 // Farb-Kategorie eines Blocks für Leinwand und Bibliothek:

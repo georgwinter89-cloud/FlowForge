@@ -29,7 +29,7 @@ export function BlockChips({ def }) {
   )
 }
 
-function BibliothekBlock({ block }) {
+function BibliothekBlock({ block, onBearbeiten, onLoeschen }) {
   return (
     <div
       className={'bib-block kategorie-' + blockKategorie(block)}
@@ -44,11 +44,23 @@ function BibliothekBlock({ block }) {
       </p>
       <p className="feld-hinweis">{block.beschreibung}</p>
       <BlockChips def={block} />
+      {onBearbeiten && (
+        <div className="karte-knoepfe">
+          <button className="knopf-klein" onClick={() => onBearbeiten(block)}>
+            {texte.blockEditor.bearbeiten}
+          </button>
+          <button className="knopf-klein" onClick={() => onLoeschen(block)}>
+            {texte.blockEditor.loeschen}
+          </button>
+        </div>
+      )}
     </div>
   )
 }
 
-export default function Blockbibliothek() {
+// Eigene Blöcke (SPEC §4.5, BAUPLAN 14) kommen als Liste von der
+// Projektansicht — sie hält den Stand und öffnet den Block-Editor.
+export default function Blockbibliothek({ eigene, onNeuerBlock, onBearbeiten, onLoeschen }) {
   const arbeitsbloecke = BLOCK_KATALOG.filter((b) => !b.uebung)
   const uebungsbloecke = BLOCK_KATALOG.filter((b) => b.uebung)
   return (
@@ -76,6 +88,23 @@ export default function Blockbibliothek() {
       <p className="bibliothek-gruppe">{tp.arbeitsbloeckeTitel}</p>
       {arbeitsbloecke.map((block) => (
         <BibliothekBlock key={block.id} block={block} />
+      ))}
+      <div className="bibliothek-gruppe bibliothek-gruppe-zeile">
+        <span>{tp.eigeneBloeckeTitel}</span>
+        <button className="knopf-primaer knopf-klein" onClick={onNeuerBlock}>
+          + {texte.blockEditor.neuerBlock}
+        </button>
+      </div>
+      <p className="feld-hinweis">
+        {eigene.length === 0 ? tp.eigeneBloeckeLeer : tp.eigeneBloeckeHinweis}
+      </p>
+      {eigene.map((block) => (
+        <BibliothekBlock
+          key={block.id}
+          block={block}
+          onBearbeiten={onBearbeiten}
+          onLoeschen={onLoeschen}
+        />
       ))}
       <p className="bibliothek-gruppe">{tp.uebungsbloeckeTitel}</p>
       <p className="feld-hinweis">{tp.bibliothekHinweis}</p>

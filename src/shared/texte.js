@@ -42,7 +42,73 @@ export const texte = {
     vorlagenTitel: 'Vorlagen',
     vorlageHinweis: 'Zieh die Vorlage auf die leere Leinwand — sie legt die ganze Kette fertig verbunden ab.',
     arbeitsbloeckeTitel: 'Arbeitsblöcke',
+    eigeneBloeckeTitel: 'Eigene Blöcke',
+    eigeneBloeckeHinweis:
+      'Deine selbst gebauten Blöcke — sie stehen in allen Projekten zur Verfügung.',
+    eigeneBloeckeLeer: 'Noch keine eigenen Blöcke. Bau dir einen mit dem Knopf oben.',
     uebungsbloeckeTitel: 'Übungs-Blöcke'
+  },
+  // Block-Editor mit KI-Assistent (SPEC §4.5, BAUPLAN 14).
+  blockEditor: {
+    neuerBlock: 'Neuer Block',
+    ueberschriftNeu: 'Eigenen Block erstellen',
+    ueberschriftBearbeiten: 'Block bearbeiten',
+    schrittAnzeige: (nr, gesamt) => `Schritt ${nr} von ${gesamt}`,
+    schritt1Titel: 'Was soll der Block tun?',
+    schritt2Titel: 'Was braucht und liefert er?',
+    schritt3Titel: 'Welche Sperren gelten?',
+    schritt4Titel: 'Probelauf-Vorschau',
+    kiFeld: 'Beschreib in deinen Worten, was der Block tun soll',
+    kiPlatzhalter: 'z.B. Ein Block, der alle Texte im Projekt auf Rechtschreibfehler durchsieht',
+    kiKnopf: 'KI füllt das Formular aus',
+    kiLaeuft: 'Die KI füllt das Formular aus …',
+    kiHinweis:
+      'Die KI füllt alle Formularfelder für dich aus — du kannst danach noch alles von Hand ändern. Oder du füllst die Felder gleich selbst aus.',
+    nameFeld: 'Name',
+    symbolFeld: 'Symbol (ein Emoji)',
+    beschreibungFeld: 'Kurzbeschreibung für die Bibliothek',
+    auftragFeld: 'Arbeitsauftrag an den Agenten',
+    auftragHinweis:
+      'Das ist die Anweisung, die der Agent bekommt. Sag klar, was er tun soll, was nicht — und was am Ende in seinem Abschlusstext stehen soll.',
+    brauchtFeld: 'braucht — Übergaben, die der Block von vorherigen Blöcken benötigt',
+    brauchtHinweis:
+      'Nur eintragen, was wirklich nötig ist: Der Block lässt sich dann nur hinter Blöcke stecken, die das liefern. Ohne „braucht" kann er auch am Anfang stehen.',
+    liefertFeld: 'liefert — Etikett für den Abschlusstext dieses Blocks',
+    liefertHinweis:
+      'Unter diesem Etikett bekommen spätere Blöcke den Abschlusstext gereicht. Nutze möglichst die vorgeschlagenen Etiketten — dann passt der Block zu den vorhandenen.',
+    etikettPlatzhalter: 'Etikett eintippen oder Vorschlag wählen …',
+    etikettHinzufuegen: 'Hinzufügen',
+    nurLesenFeld: 'Sperre „darf nur lesen"',
+    nurLesenHinweis:
+      'Der Block darf dann nichts verändern: kein Schreiben, keine Befehle, kein Internet — nur lesen. Die sichere Wahl für alles, was nur ansehen und berichten soll. Nur-lesende Blöcke dürfen außerdem parallel zu einem schreibenden laufen.',
+    vorschauHinweis:
+      'So liegt der Block in der Bibliothek — und genau diesen Arbeitsauftrag bekommt der Agent. Passt alles? Dann speichern.',
+    vorschauAuftrag: 'Arbeitsauftrag an den Agenten',
+    zurueck: 'Zurück',
+    weiter: 'Weiter',
+    speichern: 'Block speichern',
+    abbrechen: 'Abbrechen',
+    bearbeiten: 'Bearbeiten',
+    loeschen: 'Löschen',
+    loeschenBestaetigung: (name) => `Den Block „${name}" wirklich löschen?`,
+    fehlerNochVerwendet: (namen) =>
+      `Dieser Block liegt noch auf der Leinwand von: ${namen.join(', ')}. Nimm ihn dort erst vom Schaubild — dann lässt er sich löschen.`,
+    fehlerWaehrendLauf: (name) =>
+      `Im Projekt „${name}" läuft oder wartet gerade ein Workflow mit diesem Block. Warte, bis er fertig ist — dann kannst du den Block ändern.`,
+    fehlerBeschreibungFehlt: 'Beschreib zuerst in ein paar Worten, was der Block tun soll.',
+    fehlerKeinVorschlag:
+      'Die KI hat kein brauchbares Formular geliefert. Versuch es noch einmal — oder füll die Felder von Hand aus.'
+  },
+  blockRegeln: {
+    nameFehlt: 'Bitte gib dem Block einen Namen.',
+    nameZuLang: (max) => `Der Name ist zu lang (höchstens ${max} Zeichen).`,
+    symbolZuLang: 'Als Symbol genügt ein einzelnes Emoji.',
+    beschreibungZuLang: (max) => `Die Kurzbeschreibung ist zu lang (höchstens ${max} Zeichen).`,
+    auftragFehlt: 'Der Arbeitsauftrag fehlt — ohne ihn wüsste der Agent nicht, was er tun soll.',
+    auftragZuLang: (max) => `Der Arbeitsauftrag ist zu lang (höchstens ${max} Zeichen).`,
+    etikettZuLang: (label, max) =>
+      `Ein „${label}"-Etikett ist zu lang (höchstens ${max} Zeichen).`,
+    zuVieleEtiketten: (label, max) => `Höchstens ${max} Etiketten bei „${label}".`
   },
   kette: {
     starten: 'Workflow starten',
@@ -250,6 +316,45 @@ export const texte = {
       'deren Kontext voll wurde — eine Übergabe liegt leider nicht vor. Prüfe zuerst den ' +
       'Stand im Projektordner und an den Karten, und setze die Arbeit dann fort, ohne ' +
       'Erledigtes zu wiederholen.'
+  },
+  // KI-Assistent des Block-Editors (SPEC §4.5, BAUPLAN 14) — Texte an den Motor.
+  agentenBlockAssistent: {
+    keineWerkzeuge:
+      'Für diese Aufgabe gibt es keine Werkzeuge. Antworte direkt mit dem geforderten JSON.',
+    auftrag: (beschreibung, etiketten) =>
+      'Du hilfst im Block-Editor von FlowForge, einer App, in der ein Nicht-Programmierer ' +
+      'Coding-Workflows aus Blöcken baut. Ein Block ist ein Arbeitsauftrag an einen ' +
+      'KI-Agenten, der in einem Projektordner arbeitet. Der Nutzer hat beschrieben, was ' +
+      'sein neuer Block tun soll — du füllst daraus das Block-Formular aus.\n\n' +
+      'Beschreibung des Nutzers:\n' +
+      beschreibung +
+      '\n\n' +
+      'Antworte AUSSCHLIESSLICH mit einem JSON-Objekt, ohne Erklärtext und ohne ' +
+      'Markdown-Zäune, mit genau diesen Feldern:\n' +
+      '{"name": "...", "symbol": "...", "beschreibung": "...", "auftrag": "...", ' +
+      '"braucht": ["..."], "liefert": ["..."], "nurLesen": true}\n\n' +
+      'Regeln:\n' +
+      '- name: kurzer deutscher Name (höchstens 40 Zeichen).\n' +
+      '- symbol: genau ein passendes Emoji.\n' +
+      '- beschreibung: ein Satz für die Blockbibliothek, verständlich für einen ' +
+      'Nicht-Programmierer (höchstens 200 Zeichen).\n' +
+      '- auftrag: der Arbeitsauftrag an den Agenten, auf Deutsch, in Du-Form (höchstens ' +
+      '4000 Zeichen). Sag klar, was er tun soll und was ausdrücklich nicht. Beginne mit ' +
+      'seiner Rolle („Du bist …"), verlange „Antworte auf Deutsch", und beende den ' +
+      'Auftrag mit einer Anweisung für den Abschlusstext: kompakt (höchstens etwa 25 ' +
+      'Zeilen), denn er ist die Übergabe an die folgenden Blöcke. Ist nurLesen true, ' +
+      'schreibe ausdrücklich hinein: „Du darfst nichts verändern — nur lesen."\n' +
+      '- braucht: Etiketten der Übergaben, die dieser Block von vorherigen Blöcken ' +
+      'zwingend benötigt (höchstens 5, je höchstens 40 Zeichen). Nur was wirklich nötig ' +
+      'ist — ein Block ohne braucht kann am Anfang des Workflows stehen.\n' +
+      '- liefert: Etiketten für den Abschlusstext dieses Blocks, wenn spätere Blöcke ihn ' +
+      'nutzen sollen (höchstens 5).\n' +
+      '- Verwende bei braucht/liefert möglichst diese vorhandenen Etiketten, statt neue ' +
+      'zu erfinden: ' +
+      etiketten.join(', ') +
+      '.\n' +
+      '- nurLesen: true, wenn der Block nichts am Projekt verändern muss (ansehen, ' +
+      'prüfen, berichten) — im Zweifel die sichere Wahl.'
   },
   // Startanleitung & „App starten"-Knopf (SPEC §8, BAUPLAN 10).
   startanleitung: {

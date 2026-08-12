@@ -274,6 +274,67 @@ function fehlerAusErgebnis(ergebnis, stderrRest) {
   return { fehlertext: text || texte.fehler.unbekannt, fehlerArt: null }
 }
 
+// Einmal-Frage an den Motor (SPEC §4.5, BAUPLAN 14): eine einzelne Frage ohne
+// Projekt, ohne Werkzeuge, ohne Liveticker — die Antwort ist reiner Text.
+// Der KI-Assistent des Block-Editors füllt damit das Formular aus.
+export async function starteMotorFrage({ frage, modus, apiSchluessel, ausgabenObergrenzeUsd, arbeitsOrdner }) {
+  const { query } = await import('@anthropic-ai/claude-agent-sdk')
+  let stderrPuffer = ''
+  // Saubere Umgebung wie beim Lauf: keine ANTHROPIC_*/CLAUDE*-Reste.
+  const umgebung = {}
+  for (const [name, wert] of Object.entries(process.env)) {
+    if (name.toUpperCase().startsWith('ANTHROPIC') || name.toUpperCase().startsWith('CLAUDE'))
+      continue
+    umgebung[name] = wert
+  }
+  if (modus === 'api') umgebung.ANTHROPIC_API_KEY = apiSchluessel
+
+  const abfrage = query({
+    prompt: frage,
+    options: {
+      cwd: arbeitsOrdner,
+      env: umgebung,
+      pathToClaudeCodeExecutable: claudeExePfad(),
+      settingSources: [],
+      // Ein paar Runden Spielraum: Versucht der Motor doch ein Werkzeug, wird
+      // es abgelehnt und er antwortet danach direkt.
+      maxTurns: 4,
+      ...(modus === 'api' && ausgabenObergrenzeUsd > 0
+        ? { maxBudgetUsd: ausgabenObergrenzeUsd }
+        : {}),
+      stderr: (text) => {
+        stderrPuffer = (stderrPuffer + text).slice(-4000)
+      },
+      spawnClaudeCodeProcess: (w) =>
+        spawn(w.command, w.args, {
+          cwd: w.cwd,
+          env: w.env,
+          signal: w.signal,
+          stdio: ['pipe', 'pipe', 'pipe'],
+          windowsHide: true
+        }),
+      canUseTool: async () => ({
+        behavior: 'deny',
+        message: texte.agentenBlockAssistent.keineWerkzeuge
+      })
+    }
+  })
+
+  let ergebnis = null
+  try {
+    for await (const nachricht of abfrage) {
+      if (nachricht.type === 'result') ergebnis = nachricht
+    }
+  } catch (fehler) {
+    const { fehlertext } = fehlerAusErgebnis(null, stderrPuffer || String(fehler?.message ?? ''))
+    return { ok: false, fehler: fehlertext }
+  }
+  if (ergebnis?.subtype === 'success' && !ergebnis.is_error)
+    return { ok: true, text: typeof ergebnis.result === 'string' ? ergebnis.result : '' }
+  const { fehlertext } = fehlerAusErgebnis(ergebnis, stderrPuffer)
+  return { ok: false, fehler: fehlertext }
+}
+
 export function starteMotorLauf(optionen) {
   const {
     projektPfad,

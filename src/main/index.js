@@ -34,6 +34,13 @@ import {
   wiederherstellen
 } from './sicherungspunkte.js'
 import { startanleitungLaden, appStarten } from './startanleitung.js'
+import {
+  eigeneBloeckeLaden,
+  eigeneBloeckeListe,
+  eigenenBlockSpeichern,
+  eigenenBlockLoeschen
+} from './eigeneBloecke.js'
+import { blockVorschlagErstellen } from './blockAssistent.js'
 
 function createWindow() {
   const fenster = new BrowserWindow({
@@ -81,6 +88,12 @@ function registriereIpc() {
 
   ipcMain.handle('einstellungen-laden', () => einstellungenLaden())
   ipcMain.handle('einstellungen-speichern', (_e, neu) => einstellungenSpeichern(neu))
+
+  // Block-Editor mit KI-Assistent (SPEC §4.5, BAUPLAN 14).
+  ipcMain.handle('eigene-bloecke-laden', () => eigeneBloeckeListe())
+  ipcMain.handle('eigener-block-speichern', (_e, block) => eigenenBlockSpeichern(block))
+  ipcMain.handle('eigener-block-loeschen', (_e, id) => eigenenBlockLoeschen(id))
+  ipcMain.handle('block-assistent', (_e, beschreibung) => blockVorschlagErstellen(beschreibung))
 
   ipcMain.handle('workflow-laden', (_e, pfad) => workflowLaden(pfad))
   ipcMain.handle('workflow-speichern', (_e, { pfad, workflow }) => {
@@ -148,6 +161,9 @@ app.whenReady().then(() => {
   // Ohne gesetzte App-ID zeigt Windows keine Benachrichtigungen von FlowForge
   // (SPEC §6: Frage-Blöcke melden sich per Windows-Benachrichtigung).
   app.setAppUserModelId('de.georgwinter.flowforge')
+  // Eigene Blöcke VOR der IPC-Registrierung laden: workflowLaden wirft Blöcke,
+  // die es nicht auflösen kann, stillschweigend aus dem Schaubild.
+  eigeneBloeckeLaden()
   registriereIpc()
   createWindow()
 
