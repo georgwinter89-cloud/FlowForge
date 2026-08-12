@@ -155,6 +155,41 @@ function Gespraech({ verlauf, frage, onAntwort }) {
   )
 }
 
+// Ein Block-Ergebnis in den Bericht-Details (BAUPLAN 15): Zeile mit Ausgang,
+// der Abschlusstext klappt auf Klick auf.
+function BlockErgebnisZeile({ eintrag }) {
+  const [offen, setOffen] = useState(false)
+  return (
+    <div className="block-ergebnis">
+      <button className="block-ergebnis-knopf" onClick={() => setOffen(!offen)}>
+        <span>
+          {offen ? '▾' : '▸'} {eintrag.block}
+        </span>
+        <span className={'block-ergebnis-marke marke-' + eintrag.zustand}>
+          {tb.blockZustaende[eintrag.zustand] ?? eintrag.zustand}
+        </span>
+      </button>
+      {offen && (
+        <div className="block-ergebnis-text">
+          <p className="feld-hinweis">{zeitText(eintrag.zeit)}</p>
+          {eintrag.ergebnisText}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Lauf-Dauer in Alltagssprache — Sekunden nur, solange es unter einer Minute war.
+function dauerText(bericht) {
+  if (!bericht.beendetAm) return null
+  const sekunden = Math.round(
+    (new Date(bericht.beendetAm) - new Date(bericht.gestartetAm)) / 1000
+  )
+  if (!Number.isFinite(sekunden) || sekunden < 0) return null
+  if (sekunden < 60) return tb.dauerSekunden(sekunden)
+  return tb.dauerMinuten(Math.round(sekunden / 60))
+}
+
 function Laufbericht({ bericht }) {
   const [offen, setOffen] = useState(false)
   const wahlLabels = {
@@ -162,6 +197,7 @@ function Laufbericht({ bericht }) {
     zurueckstellen: te.zurueckstellen,
     wiederherstellen: te.wiederherstellen
   }
+  const dauer = dauerText(bericht)
   return (
     <div className="bericht">
       <button className="bericht-kopf" onClick={() => setOffen(!offen)}>
@@ -172,7 +208,16 @@ function Laufbericht({ bericht }) {
       </button>
       {offen && (
         <div className="bericht-details">
+          {dauer && <p className="feld-hinweis">{dauer}</p>}
           <VerbrauchZeile verbrauch={bericht.verbrauch} modus={bericht.modus} />
+          {(bericht.blockErgebnisse ?? []).length > 0 && (
+            <div>
+              <p className="bericht-abschnitt">{tb.blockErgebnisseLabel}</p>
+              {bericht.blockErgebnisse.map((eintrag, i) => (
+                <BlockErgebnisZeile key={i} eintrag={eintrag} />
+              ))}
+            </div>
+          )}
           {bericht.fehlertext && (
             <p className="fehlermeldung">
               {tb.fehlertextLabel}: {bericht.fehlertext}
@@ -372,6 +417,8 @@ export default function Leinwand({
   const [ergebnis, setErgebnis] = useState(null)
   const [fehler, setFehler] = useState('')
   const [berichte, setBerichte] = useState([])
+  // Laufberichte-Filter nach Ausgang (BAUPLAN 15): 'alle' oder ein Zustand.
+  const [berichtFilter, setBerichtFilter] = useState('alle')
   const [modus, setModus] = useState('abo')
   // Vorschau: null = zu, sonst { punkt, unterschiede }
   const [punkte, setPunkte] = useState([])
@@ -1232,9 +1279,37 @@ export default function Leinwand({
       {tab === 'berichte' && (
         <div className="berichte-bereich">
           {berichte.length === 0 && <p className="feld-hinweis">{tb.keine}</p>}
-          {berichte.map((bericht) => (
-            <Laufbericht key={bericht.id} bericht={bericht} />
-          ))}
+          {berichte.length > 0 && (
+            <div className="filter-zeile">
+              {/* Als Filter erscheinen nur Ausgänge, die es wirklich gibt. */}
+              {[
+                ['alle', tb.filterAlle, berichte.length],
+                ...[...new Set(berichte.map((b) => b.zustand))].map((zustand) => [
+                  zustand,
+                  t.zustandLabels[zustand] ?? zustand,
+                  berichte.filter((b) => b.zustand === zustand).length
+                ])
+              ].map(([wert, titel, anzahl]) => (
+                <button
+                  key={wert}
+                  className={'filter-chip' + (berichtFilter === wert ? ' filter-aktiv' : '')}
+                  onClick={() => setBerichtFilter(wert)}
+                >
+                  {titel} ({anzahl})
+                </button>
+              ))}
+            </div>
+          )}
+          {(() => {
+            const gefiltert = berichte.filter(
+              (b) => berichtFilter === 'alle' || b.zustand === berichtFilter
+            )
+            if (berichte.length > 0 && gefiltert.length === 0)
+              return <p className="feld-hinweis">{tb.keineZumFilter}</p>
+            return gefiltert.map((bericht) => (
+              <Laufbericht key={bericht.id} bericht={bericht} />
+            ))
+          })()}
         </div>
       )}
 

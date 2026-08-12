@@ -1,8 +1,41 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { texte } from '../../shared/texte.js'
 
 const t = texte.projektuebersicht
 const tn = texte.neuesProjekt
+
+// Zustand einer Kachel (SPEC §9, BAUPLAN 15): läuft / wartet auf Antwort /
+// wartet in der Warteschlange — sonst der Ausgang des letzten Laufs.
+function KachelZustand({ zustand }) {
+  if (!zustand) return null
+  if (zustand.laeuft || zustand.wartet) {
+    return (
+      <span className="kachel-marken">
+        {zustand.brauchtAntwort ? (
+          <span className="zustand-marke zustand-antwort">{t.kachelWartetAntwort}</span>
+        ) : zustand.laeuft ? (
+          <span className="zustand-marke zustand-aktiv">{t.kachelLaeuft}</span>
+        ) : null}
+        {zustand.wartet && (
+          <span className="zustand-marke zustand-wartend">{t.kachelWarteschlange}</span>
+        )}
+      </span>
+    )
+  }
+  if (!zustand.letzterLauf) return <span className="feld-hinweis">{t.kachelKeinLauf}</span>
+  const zeit = new Date(zustand.letzterLauf.gestartetAm).toLocaleString('de-DE', {
+    dateStyle: 'short',
+    timeStyle: 'short'
+  })
+  return (
+    <span className="kachel-marken">
+      <span className="feld-hinweis">{t.kachelLetzterLauf(zeit)}</span>
+      <span className={'zustand-marke zustand-' + zustand.letzterLauf.zustand}>
+        {texte.lauf.zustandLabels[zustand.letzterLauf.zustand] ?? zustand.letzterLauf.zustand}
+      </span>
+    </span>
+  )
+}
 
 function NeuesProjektDialog({ onFertig, onAbbrechen }) {
   const [name, setName] = useState('')
@@ -61,15 +94,43 @@ function NeuesProjektDialog({ onFertig, onAbbrechen }) {
 
 export default function Projektuebersicht({ onOeffnen }) {
   const [projekte, setProjekte] = useState([])
+  const [zustaende, setZustaende] = useState({})
   const [dialogOffen, setDialogOffen] = useState(false)
+  // Für den Ereignis-Listener, der sonst mit dem Stand vom Mount arbeiten würde.
+  const projekteRef = useRef([])
+
+  async function zustaendeLaden(liste = projekteRef.current) {
+    const pfade = liste.filter((p) => p.gefunden).map((p) => p.pfad)
+    const ergebnis = await window.flowforge.projektZustaende(pfade)
+    if (ergebnis.ok) setZustaende(ergebnis.zustaende)
+  }
 
   async function laden() {
     const ergebnis = await window.flowforge.projekteLaden()
-    if (ergebnis.ok) setProjekte(ergebnis.projekte)
+    if (!ergebnis.ok) return
+    setProjekte(ergebnis.projekte)
+    projekteRef.current = ergebnis.projekte
+    zustaendeLaden(ergebnis.projekte)
   }
 
   useEffect(() => {
     laden()
+    // Die Kacheln bleiben aktuell, während Läufe im Hintergrund weiterlaufen —
+    // aber nur zustandsändernde Ereignisse zählen, nicht jede Ticker-Zeile.
+    const relevant = new Set([
+      'laeufe',
+      'zustand',
+      'frage',
+      'frage-erledigt',
+      'entscheidung',
+      'entscheidung-erledigt',
+      'mensch-frage',
+      'mensch-frage-erledigt',
+      'fertig'
+    ])
+    return window.flowforge.aufLaufEreignis((ereignis) => {
+      if (relevant.has(ereignis.art)) zustaendeLaden()
+    })
   }, [])
 
   async function vergessen(pfad) {
@@ -101,6 +162,7 @@ export default function Projektuebersicht({ onOeffnen }) {
               >
                 <span className="kachel-name">{projekt.name}</span>
                 <span className="kachel-pfad">{projekt.pfad}</span>
+                <KachelZustand zustand={zustaende[projekt.pfad]} />
               </button>
             ) : (
               <div key={projekt.pfad} className="projekt-kachel kachel-fehlt">

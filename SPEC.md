@@ -265,6 +265,11 @@ Angreifer durch die Diagnose.
 | Programmbibliotheken installieren (offizielle Quellen) | Sonstige Internetzugriffe |
 | Tests ausführen | Alles Unumkehrbare |
 
+Der Rechte-Standard ist sichtbar (seit Bauschritt 15): Der Knopf
+**„Projekt-Einstellungen"** im Kopf der Projektansicht zeigt die drei Gruppen
+(ohne Rückfrage · nur mit Erlaubnis · immer gesperrt) in Alltagssprache — in V1
+nur zum Nachlesen, verstellbar pro Projekt in V2.
+
 **Automodus** (Feedback Georg, 07.08.2026): In den Einstellungen wählbar —
 „Jedes Mal fragen" (Standard) oder „Automodus: automatisch erlauben". Im
 Automodus werden Rechte-Rückfragen ohne Nachfrage erlaubt und im Liveticker
@@ -301,14 +306,17 @@ programm der Datei. Ohne Startanleitung ist der Knopf grau und erklärt, wie sie
 
 ## 9. GUI-Grundaufbau
 
-- **Projektübersicht** beim Start: Projekte als Kacheln mit Zustand („läuft", „wartet auf
-  Antwort", „letzter Lauf erfolgreich") + „Neues Projekt".
+- **Projektübersicht** beim Start: Projekte als Kacheln mit Zustand (seit Bauschritt 15:
+  „läuft", „wartet auf deine Antwort", „wartet in der Warteschlange", sonst der Ausgang
+  des letzten Laufs samt Zeitpunkt) + „Neues Projekt". Die Zustände aktualisieren sich
+  live, während Läufe im Hintergrund weiterlaufen.
 - **Projektansicht** dreigeteilt: links **Karten-Seitenleiste** (filterbar), Mitte
   **Leinwand**, rechts **Blockbibliothek** (Vorlagen + eigene Blöcke).
 - Die Mittelspalte hat **Tabs** (Feedback Georg, 07.08.2026 — vorher stapelte sich
   alles mit Scrollleisten): **Schaubild** (Workflow bearbeiten, Start,
   Kartenauswahl) · **Lauf** (Verbrauch, Stopp, Gespräch, Liveticker, Rohprotokoll,
-  Ergebnis) · **Laufberichte** · **Sicherungspunkte**. Beim Lauf-Start wechselt
+  Ergebnis) · **Laufberichte** (seit Bauschritt 15 filterbar nach Ausgang; Details je
+  Bericht mit Dauer und den Ergebnissen jedes Blocks) · **Sicherungspunkte**. Beim Lauf-Start wechselt
   die Ansicht automatisch zum Lauf-Tab; wartet dort eine Frage, zeigt der Tab
   einen roten Punkt. Die laufende Block-Karte bleibt im Schaubild-Tab hervorgehoben.
 

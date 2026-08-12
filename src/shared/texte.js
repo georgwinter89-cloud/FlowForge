@@ -10,7 +10,13 @@ export const texte = {
     oeffnen: 'Öffnen',
     nichtGefunden: 'Ordner nicht gefunden',
     nichtGefundenHinweis: 'Der Projektordner wurde verschoben oder gelöscht.',
-    ausListeEntfernen: 'Aus der Übersicht entfernen'
+    ausListeEntfernen: 'Aus der Übersicht entfernen',
+    // Zustände auf den Kacheln (SPEC §9, BAUPLAN 15).
+    kachelLaeuft: 'läuft …',
+    kachelWartetAntwort: 'wartet auf deine Antwort',
+    kachelWarteschlange: 'wartet in der Warteschlange',
+    kachelLetzterLauf: (zeit) => `Letzter Lauf: ${zeit} —`,
+    kachelKeinLauf: 'Noch kein Lauf.'
   },
   neuesProjekt: {
     ueberschrift: 'Neues Projekt',
@@ -37,6 +43,7 @@ export const texte = {
     tabBerichte: 'Laufberichte',
     tabPunkte: 'Sicherungspunkte',
     tabLaufLeer: 'Noch kein Lauf in dieser Sitzung. Starte den Workflow im Schaubild-Tab.',
+    einstellungenKnopf: 'Projekt-Einstellungen',
     bibliothekTitel: 'Blockbibliothek',
     bibliothekHinweis: 'Zieh einen Block mit der Maus auf die Leinwand.',
     vorlagenTitel: 'Vorlagen',
@@ -604,9 +611,45 @@ export const texte = {
     fehlerWaehrendWarteschlange:
       'Dieses Projekt wartet in der Warteschlange auf einen Lauf — solange kann nichts wiederhergestellt werden.'
   },
+  // Rechte-Standard sichtbar in den Projekt-Einstellungen (SPEC §7, BAUPLAN 15).
+  projektEinstellungen: {
+    ueberschrift: 'Projekt-Einstellungen',
+    rechteUeberschrift: 'Rechte des Agenten',
+    rechteEinleitung:
+      'Diese Regeln gelten für jeden Agenten, der in diesem Projekt arbeitet. Sie sind in V1 fest eingebaut — pro Projekt verstellbar werden sie in einer späteren Version.',
+    ohneRueckfrageTitel: 'Ohne Rückfrage erlaubt',
+    ohneRueckfrage: [
+      'Im Projektordner lesen, schreiben und löschen',
+      'Programmbibliotheken aus offiziellen Quellen installieren',
+      'Tests und bekannte Entwickler-Werkzeuge ausführen (node, npm, python …)',
+      'Rein lesende Kommandozeilen-Befehle (dir, type, findstr …)'
+    ],
+    mitRueckfrageTitel: 'Nur mit deiner Erlaubnis',
+    mitRueckfrage: [
+      'Alles außerhalb des Projektordners',
+      'Sonstige Internetzugriffe',
+      'Unbekannte Kommandozeilen-Befehle und alles Unumkehrbare'
+    ],
+    gesperrtTitel: 'Immer gesperrt (hartes Nein)',
+    gesperrt: [
+      'Git — Sicherungspunkte verwaltet FlowForge selbst',
+      'FlowForge-Verwaltungsdateien (Karten, Workflow, Laufberichte) — Karten pflegt der Agent über die Karten-Werkzeuge',
+      'Bei Blöcken mit Sperre „darf nur lesen": jede Veränderung'
+    ],
+    hinweisAutomodus:
+      'Ob Rückfragen automatisch erlaubt werden (Automodus), stellst du oben rechts unter „Einstellungen" ein — das gilt für alle Projekte. Die harten Sperren gelten auch im Automodus.',
+    kontingentHinweis:
+      'Das Verhalten bei erschöpftem Abo-Kontingent und die Übertragsgrenze stellst du direkt im Schaubild-Tab über dem Schaubild ein.',
+    schliessen: 'Schließen'
+  },
   laufberichte: {
     ueberschrift: 'Laufberichte',
     keine: 'Noch keine Laufberichte.',
+    keineZumFilter: 'Kein Laufbericht mit diesem Ausgang.',
+    filterAlle: 'Alle',
+    dauerSekunden: (s) => `Dauer: ${s} Sekunden`,
+    dauerMinuten: (m) => `Dauer: etwa ${m} ${m === 1 ? 'Minute' : 'Minuten'}`,
+    blockErgebnisseLabel: 'Blöcke dieses Laufs',
     blockErgebnis: 'Letzter Lauf',
     blockZustaende: {
       erfolgreich: 'erledigt',

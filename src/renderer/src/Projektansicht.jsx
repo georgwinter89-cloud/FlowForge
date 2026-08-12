@@ -5,6 +5,7 @@ import KartenFormular from './KartenFormular.jsx'
 import Leinwand from './Leinwand.jsx'
 import Blockbibliothek from './Blockbibliothek.jsx'
 import BlockEditor from './BlockEditor.jsx'
+import ProjektEinstellungen from './ProjektEinstellungen.jsx'
 
 const t = texte.projektansicht
 const tk = texte.karten
@@ -68,6 +69,8 @@ export default function Projektansicht({ pfad, onZurueck }) {
   // nicht auflösen. false = Editor zu, 'neu' = neuer Block, sonst der Block.
   const [eigene, setEigene] = useState(null)
   const [blockEditor, setBlockEditor] = useState(false)
+  // Projekt-Einstellungen (BAUPLAN 15): zeigen den Rechte-Standard des Agenten.
+  const [einstellungenOffen, setEinstellungenOffen] = useState(false)
 
   function projektLaden() {
     window.flowforge.projektOeffnen(pfad).then((ergebnis) => {
@@ -202,6 +205,12 @@ export default function Projektansicht({ pfad, onZurueck }) {
         <div className="kopf-rechts">
           {startFehler && <span className="start-fehler">{startFehler}</span>}
           <button
+            className="knopf-sekundaer knopf-klein"
+            onClick={() => setEinstellungenOffen(true)}
+          >
+            {t.einstellungenKnopf}
+          </button>
+          <button
             className="knopf-primaer"
             disabled={!anleitung || startLaeuft}
             title={anleitung ? anleitung.beschreibung : tst.keineHinweis}
@@ -293,6 +302,9 @@ export default function Projektansicht({ pfad, onZurueck }) {
           onSpeichern={blockSpeichern}
           onAbbrechen={() => setBlockEditor(false)}
         />
+      )}
+      {einstellungenOffen && (
+        <ProjektEinstellungen onSchliessen={() => setEinstellungenOffen(false)} />
       )}
     </section>
   )

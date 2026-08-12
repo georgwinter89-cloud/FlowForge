@@ -160,6 +160,31 @@ body {
   font-weight: 600;
 }
 
+/* Zustände auf den Kacheln (SPEC §9, BAUPLAN 15) */
+
+.kachel-marken {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.zustand-aktiv {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.zustand-antwort {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.zustand-wartend {
+  background: #fef3c7;
+  color: #b45309;
+}
+
 /* Dialoge */
 
 .dialog-schleier {
@@ -186,6 +211,68 @@ body {
 
 .dialog h2 {
   font-size: 18px;
+}
+
+/* Projekt-Einstellungen: Rechte-Standard des Agenten (SPEC §7, BAUPLAN 15) */
+
+.dialog-breit {
+  width: 760px;
+}
+
+.rechte-spalten {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 10px;
+}
+
+.rechte-gruppe {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+.rechte-frei {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+}
+
+.rechte-frage {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+}
+
+.rechte-gesperrt {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+}
+
+.rechte-titel {
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.rechte-frei .rechte-titel {
+  color: #15803d;
+}
+
+.rechte-frage .rechte-titel {
+  color: #b45309;
+}
+
+.rechte-gesperrt .rechte-titel {
+  color: #b91c1c;
+}
+
+.rechte-liste {
+  margin: 0;
+  padding-left: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--text-gedimmt);
 }
 
 .feld {
@@ -613,9 +700,16 @@ body {
 
 .zustand-sanft-gestoppt,
 .zustand-hart-abgebrochen,
+.zustand-zurueckgestellt,
+.zustand-wiederhergestellt,
 .zustand-laeuft {
   background: #e5e7eb;
   color: #374151;
+}
+
+.zustand-kontingent-erschoepft {
+  background: #fef3c7;
+  color: #b45309;
 }
 
 .berichte-bereich {

@@ -149,6 +149,52 @@ export function laufberichteLaden(projektPfad) {
   return { ok: true, berichte }
 }
 
+// Für die Kacheln der Projektübersicht (BAUPLAN 15): nur der jüngste Bericht
+// zählt — und nur sein Ausgang. Die Dateinamen sind Zeitstempel, die neueste
+// Datei ist also die alphabetisch letzte; so bleibt der Blick billig, auch
+// wenn sich viele Berichte angesammelt haben.
+function letzterBericht(projektPfad) {
+  const ordner = path.join(projektPfad, BERICHTE_ORDNER)
+  let dateien = []
+  try {
+    dateien = fs.readdirSync(ordner).filter((d) => d.endsWith('.json'))
+  } catch {
+    return null
+  }
+  if (dateien.length === 0) return null
+  dateien.sort()
+  try {
+    const bericht = JSON.parse(
+      fs.readFileSync(path.join(ordner, dateien[dateien.length - 1]), 'utf8')
+    )
+    return { zustand: bericht.zustand, gestartetAm: bericht.gestartetAm }
+  } catch {
+    return null
+  }
+}
+
+// Zustände für die Projektübersicht (SPEC §9, BAUPLAN 15): läuft, wartet auf
+// Antwort, wartet in der Warteschlange — und der Ausgang des letzten Laufs.
+export function projektZustaende(pfade) {
+  const zustaende = {}
+  for (const pfad of Array.isArray(pfade) ? pfade : []) {
+    if (typeof pfad !== 'string') continue
+    const lauf = aktiveLaeufe.get(pfad)
+    zustaende[pfad] = {
+      laeuft: Boolean(lauf),
+      brauchtAntwort: Boolean(
+        lauf &&
+          (lauf.offeneFragen.length > 0 ||
+            lauf.offeneMenschFragen.length > 0 ||
+            lauf.offeneEntscheidung)
+      ),
+      wartet: warteschlange.some((eintrag) => eintrag.projektPfad === pfad),
+      letzterLauf: letzterBericht(pfad)
+    }
+  }
+  return { ok: true, zustaende }
+}
+
 // Prüfer-Urteil aus dem Abschlusstext lesen: die letzte Marke zählt.
 // true = bestanden, false = nicht bestanden, null = keine eindeutige Marke.
 function pruefUrteil(ergebnisText) {

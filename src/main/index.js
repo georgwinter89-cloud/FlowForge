@@ -25,7 +25,8 @@ import {
   laufEntscheidungAntworten,
   laufMenschAntworten,
   laufZustand,
-  laufberichteLaden
+  laufberichteLaden,
+  projektZustaende
 } from './lauf.js'
 import { workflowLaden, workflowSpeichern } from './workflow.js'
 import {
@@ -133,6 +134,8 @@ function registriereIpc() {
   )
   ipcMain.handle('lauf-zustand', (_e, pfad) => laufZustand(pfad))
   ipcMain.handle('laufberichte-laden', (_e, pfad) => laufberichteLaden(pfad))
+  // Zustände für die Kacheln der Projektübersicht (SPEC §9, BAUPLAN 15).
+  ipcMain.handle('projekt-zustaende', (_e, pfade) => projektZustaende(pfade))
 
   // Startanleitung & „App starten"-Knopf (SPEC §8, BAUPLAN 10).
   ipcMain.handle('startanleitung-laden', (_e, pfad) => startanleitungLaden(pfad))

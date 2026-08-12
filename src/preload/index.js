@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld('flowforge', {
   projekteLaden: () => ipcRenderer.invoke('projekte-laden'),
   projektOeffnen: (pfad) => ipcRenderer.invoke('projekt-oeffnen', pfad),
   projektVergessen: (pfad) => ipcRenderer.invoke('projekt-vergessen', pfad),
+  projektZustaende: (pfade) => ipcRenderer.invoke('projekt-zustaende', pfade),
   karteAnlegen: (pfad, karte) => ipcRenderer.invoke('karte-anlegen', { pfad, karte }),
   karteAendern: (pfad, id, aenderung) => ipcRenderer.invoke('karte-aendern', { pfad, id, aenderung }),
   karteErledigtSetzen: (pfad, id, erledigt) =>
