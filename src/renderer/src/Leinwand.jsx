@@ -171,7 +171,13 @@ function BlockErgebnisZeile({ eintrag }) {
       </button>
       {offen && (
         <div className="block-ergebnis-text">
-          <p className="feld-hinweis">{zeitText(eintrag.zeit)}</p>
+          <p className="feld-hinweis">
+            {zeitText(eintrag.zeit)}
+            {eintrag.tokens != null && ` · ${tb.blockTokens(eintrag.tokens)}`}
+          </p>
+          {eintrag.sessionFortgesetzt && (
+            <p className="feld-hinweis">{tb.sessionFortgesetztHinweis}</p>
+          )}
           {eintrag.ergebnisText}
         </div>
       )}

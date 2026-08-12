@@ -433,6 +433,9 @@ export function starteMotorLauf(optionen) {
     nurLesen = false,
     // Prüf-Blöcke (prueft: true) dürfen als einzige die Prüfmappe verändern.
     darfPruefen = false,
+    // Session-Fortsetzung bei Wiederholungen (BAUPLAN 16): Kennung der eigenen
+    // früheren Session dieses Blocks — der auftrag ist dann nur der Zusatz.
+    fortsetzen = null,
     uebertrag = { aktiv: false, testModus: false, anweisung: '' },
     // Die echte Fenstergröße meldet der Motor erst am Session-Ende — ein
     // Vorwissen aus früheren Blöcken desselben Laufs macht die
@@ -481,6 +484,11 @@ export function starteMotorLauf(optionen) {
   let uebertragPhase = null
   // Füllstand der ersten Messung dieser Session — Bezugspunkt für den Testmodus.
   let startProzent = null
+  // Session-Kennung dieses Laufs (BAUPLAN 16) — jede SDK-Nachricht trägt sie.
+  let sessionKennung = null
+  // Kam überhaupt eine Nachricht an? Scheitert ein Fortsetzen-Versuch schon
+  // beim Start (Kennung ungültig, Session weg), bleibt das false.
+  let nachrichtEmpfangen = false
 
   const verbrauch = {
     tokens: 0,
@@ -535,6 +543,9 @@ export function starteMotorLauf(optionen) {
         // Georgs persönliche Claude-Einstellungen bleiben außen vor:
         // der Motor läuft nur mit dem, was FlowForge ihm mitgibt.
         settingSources: [],
+        // Session-Fortsetzung (BAUPLAN 16): dieselbe Session weiterführen —
+        // der Agent kennt seine bisherige Arbeit noch.
+        ...(fortsetzen ? { resume: fortsetzen } : {}),
         mcpServers: { karten: kartenServer, mensch: menschServer, start: startServer },
         // Windows-Härtung: Die Shell des Motors zeigt POSIX-Pfade (/tmp/…, /c/…) an —
         // als Datei-Werkzeug-Pfade landen die auf Windows aber am falschen Ort und
@@ -596,6 +607,9 @@ export function starteMotorLauf(optionen) {
     let ergebnis = null
     try {
       for await (const nachricht of abfrage) {
+        nachrichtEmpfangen = true
+        if (typeof nachricht.session_id === 'string' && nachricht.session_id)
+          sessionKennung = nachricht.session_id
         aufEreignis({ art: 'roh', zeile: JSON.stringify(nachricht) })
         for (const zeile of tickerZeilen(nachricht, projektPfad))
           aufEreignis({ art: 'ticker', text: zeile })
@@ -676,16 +690,20 @@ export function starteMotorLauf(optionen) {
       // Nach einem harten Abbruch ist ein Prozessfehler erwartet — kein echter Fehler.
       if (!hartAngefordert && !ergebnis) {
         if (sanftAngefordert)
-          return { zustand: 'sanft-gestoppt', fehlertext: '', fehlerArt: null, ergebnisText: '', verbrauch }
+          return { zustand: 'sanft-gestoppt', fehlertext: '', fehlerArt: null, ergebnisText: '', verbrauch, sessionKennung }
         // Stirbt die Session mitten im Übertrag, geht nur die Übergabe verloren —
         // die frische Session liest den Stand dann selbst aus Ordner und Karten.
         if (uebertragPhase)
-          return { zustand: 'uebertrag', fehlertext: '', fehlerArt: null, ergebnisText: '', verbrauch }
+          return { zustand: 'uebertrag', fehlertext: '', fehlerArt: null, ergebnisText: '', verbrauch, sessionKennung }
+        // Fortsetzen-Versuch, der schon vor der ersten Nachricht stirbt: die
+        // alte Session ist nicht wiederaufnehmbar — still auf Kaltstart zurück.
+        if (fortsetzen && !nachrichtEmpfangen)
+          return { zustand: 'fortsetzung-gescheitert', fehlertext: '', fehlerArt: null, ergebnisText: '', verbrauch, sessionKennung: null }
         const { fehlertext, fehlerArt } = fehlerAusErgebnis(
           null,
           stderrPuffer || String(fehler?.message ?? '')
         )
-        return { zustand: 'fehlgeschlagen', fehlertext, fehlerArt, ergebnisText: '', verbrauch }
+        return { zustand: 'fehlgeschlagen', fehlertext, fehlerArt, ergebnisText: '', verbrauch, sessionKennung }
       }
     } finally {
       eingabeSchliessen()
@@ -695,19 +713,32 @@ export function starteMotorLauf(optionen) {
     const ergebnisText = typeof ergebnis?.result === 'string' ? ergebnis.result : ''
 
     if (hartAngefordert)
-      return { zustand: 'hart-abgebrochen', fehlertext: '', fehlerArt: null, ergebnisText: '', verbrauch }
+      return { zustand: 'hart-abgebrochen', fehlertext: '', fehlerArt: null, ergebnisText: '', verbrauch, sessionKennung }
     if (sanftAngefordert)
-      return { zustand: 'sanft-gestoppt', fehlertext: '', fehlerArt: null, ergebnisText, verbrauch }
+      return { zustand: 'sanft-gestoppt', fehlertext: '', fehlerArt: null, ergebnisText, verbrauch, sessionKennung }
     // Übertrag (SPEC §5): der Abschlusstext ist die Übergabe an die frische Session.
     if (uebertragPhase === 'fertig' || uebertragPhase === 'uebergabe')
-      return { zustand: 'uebertrag', fehlertext: '', fehlerArt: null, ergebnisText, verbrauch }
+      return { zustand: 'uebertrag', fehlertext: '', fehlerArt: null, ergebnisText, verbrauch, sessionKennung }
     // Achtung: subtype 'success' heißt nur „sauber durchgelaufen" — Fehler wie
     // eine fehlende Anmeldung kommen trotzdem mit is_error zurück.
     if (ergebnis?.subtype === 'success' && !ergebnis.is_error)
-      return { zustand: 'erfolgreich', fehlertext: '', fehlerArt: null, ergebnisText, verbrauch }
+      return { zustand: 'erfolgreich', fehlertext: '', fehlerArt: null, ergebnisText, verbrauch, sessionKennung }
     {
       const { fehlertext, fehlerArt } = fehlerAusErgebnis(ergebnis, stderrPuffer)
-      return { zustand: 'fehlgeschlagen', fehlertext, fehlerArt, ergebnisText, verbrauch }
+      // Fortsetzen-Versuch, den die CLI mit „Session nicht gefunden" ablehnt
+      // (real beobachtet: „No conversation found with session ID: …"): kein
+      // echter Fehler des Blocks — still auf Kaltstart zurück. Echte Fehler
+      // mit Einstufung (Kontingent, Anmeldung …) bleiben, was sie sind.
+      if (
+        fortsetzen &&
+        fehlerArt === null &&
+        (!nachrichtEmpfangen ||
+          /no conversation|session id|session.*not found|(could not|cannot|unable to) resume/i.test(
+            fehlertext
+          ))
+      )
+        return { zustand: 'fortsetzung-gescheitert', fehlertext: '', fehlerArt: null, ergebnisText: '', verbrauch, sessionKennung: null }
+      return { zustand: 'fehlgeschlagen', fehlertext, fehlerArt, ergebnisText, verbrauch, sessionKennung }
     }
   })()
 

@@ -19,6 +19,13 @@
 //                            den Agenten, schickt ihm die anweisung (Karten aktualisieren,
 //                            Übergabe schreiben) und endet mit zustand 'uebertrag' —
 //                            der ergebnisText ist dann die Übergabe an die frische Session.
+//     fortsetzen             Session-Fortsetzung bei Wiederholungen (BAUPLAN 16):
+//                            Kennung einer früheren Motor-Session DESSELBEN Blocks.
+//                            Der Motor setzt sie fort und reicht nur den auftrag als
+//                            Zusatz nach — statt kalt zu starten. Scheitert das
+//                            Fortsetzen (Kennung ungültig, Session weg), endet der
+//                            Lauf mit zustand 'fortsetzung-gescheitert', damit die
+//                            Lauf-Verwaltung still auf einen Kaltstart zurückfällt.
 //
 //   Jeder Motor stellt dem Agenten außerdem die Karten-Werkzeuge bereit
 //   (kartenWerkzeuge.js): Karten lesen, anlegen, aktualisieren, erledigen —
@@ -31,9 +38,13 @@
 //   }
 //
 //   Rückgabe = {
-//     fertig            Promise<{ zustand, fehlertext, fehlerArt, ergebnisText, verbrauch }>
+//     fertig            Promise<{ zustand, fehlertext, fehlerArt, ergebnisText, verbrauch,
+//                       sessionKennung }>
 //                       zustand: 'erfolgreich' | 'fehlgeschlagen'
 //                              | 'sanft-gestoppt' | 'hart-abgebrochen' | 'uebertrag'
+//                              | 'fortsetzung-gescheitert'
+//                       sessionKennung: Kennung der Motor-Session dieses Laufs —
+//                       damit derselbe Block sie später fortsetzen kann (BAUPLAN 16)
 //                       fehlerArt (nur bei 'fehlgeschlagen'): 'kontingent' |
 //                       'obergrenze' | 'anmeldung' | null — die Lauf-Verwaltung
 //                       entscheidet daran z.B. über die Kontingent-Pause (SPEC §5)
@@ -57,6 +68,11 @@ export const UEBERTRAG_SCHWELLE_PROZENT = 85
 // 10-%-Schwelle würde sofort wieder feuern, ohne dass der Agent etwas schafft.
 // Im Testmodus gilt darum: Startfüllstand + 10 Prozentpunkte.
 export const UEBERTRAG_TEST_AUFSCHLAG_PUNKTE = 10
+
+// Füllstands-Wächter der Session-Fortsetzung (BAUPLAN 16): Liegt die alte
+// Session schon nahe der Übertrags-Schwelle, lohnt Fortsetzen nicht — die
+// Wiederholung würde sofort wieder in den Übertrag laufen. Dann Kaltstart.
+export const FORTSETZUNG_WAECHTER_PROZENT = UEBERTRAG_SCHWELLE_PROZENT - 10
 
 const BAND_BREITE = 5 // Prozentpunkte
 

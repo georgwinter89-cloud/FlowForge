@@ -330,6 +330,26 @@ export const texte = {
       'Stand im Projektordner und an den Karten, und setze die Arbeit dann fort, ohne ' +
       'Erledigtes zu wiederholen.'
   },
+  // Session-Fortsetzung bei Wiederholungen (BAUPLAN 16): Der Block setzt seine
+  // eigene frühere Session fort — er kennt Auftrag, Karten und seine Arbeit
+  // noch, nur der Zusatz wird nachgereicht.
+  agentenFortsetzung: {
+    rueckmeldung: (kritik) =>
+      'FlowForge setzt deine Session fort: Der Prüfer hat dein Ergebnis geprüft und die ' +
+      'folgenden Punkte beanstandet. Du kennst deine bisherige Arbeit noch — lies nichts ' +
+      'unnötig neu ein, sondern behebe genau diese Punkte:\n' + kritik,
+    nachpruefung: (kritik) =>
+      'FlowForge setzt deine Session fort: Der Bauer hat deine Beanstandungen aus der ' +
+      'letzten Runde behoben. Prüfe NUR diese Beanstandungen nach — keine erneute ' +
+      'Vollprüfung, keine neuen Prüffelder; nutze deine vorhandenen Prüfungen. Schließe ' +
+      'wieder mit der Urteils-Zeile (PRUEFUNG: BESTANDEN oder PRUEFUNG: FEHLGESCHLAGEN). ' +
+      'Deine Beanstandungen von letzter Runde:\n' + kritik,
+    startanleitung:
+      'FlowForge setzt deine Session fort: Dein Auftrag ist umgesetzt, aber die ' +
+      'Startanleitung des Projekts fehlt noch. Lege sie jetzt mit dem Werkzeug ' +
+      'startanleitung_setzen an (beschreibung, dazu befehl und/oder adresse). ' +
+      'Ändere sonst nichts am Projekt.'
+  },
   // KI-Assistent des Block-Editors (SPEC §4.5, BAUPLAN 14) — Texte an den Motor.
   agentenBlockAssistent: {
     keineWerkzeuge:
@@ -601,7 +621,12 @@ export const texte = {
     motorWartet: (versuch, max) =>
       `Die KI-Server sind gerade überlastet — der Motor versucht es weiter (Versuch ${versuch} von ${max}).`,
     wiederaufnahme: (nummer, gesamt, name) =>
-      `Wiederaufnahme am letzten Sicherungspunkt — weiter mit Block ${nummer} von ${gesamt}: „${name}".`
+      `Wiederaufnahme am letzten Sicherungspunkt — weiter mit Block ${nummer} von ${gesamt}: „${name}".`,
+    // Session-Fortsetzung bei Wiederholungen (BAUPLAN 16).
+    sessionFortgesetzt: (name) =>
+      `Session fortgesetzt statt neu gestartet — „${name}" kennt seine bisherige Arbeit noch.`,
+    sessionFortsetzenGescheitert:
+      'Fortsetzen hat nicht geklappt — der Block startet stattdessen als frische Session.'
   },
   sicherungen: {
     ueberschrift: 'Sicherungspunkte',
@@ -690,6 +715,9 @@ export const texte = {
     uebertragOhneUebergabeZeile: (block) =>
       `Der Kontext von „${block}" war voll, aber die Übergabe ging verloren — die frische Session hat den Stand selbst aus Projektordner und Karten gelesen.`,
     fortgesetztHinweis: 'Dieser Lauf wurde nach einer Unterbrechung am letzten Sicherungspunkt fortgesetzt.',
+    // Session-Fortsetzung bei Wiederholungen (BAUPLAN 16).
+    sessionFortgesetztHinweis: 'Session fortgesetzt statt neu gestartet — der Block kannte seine bisherige Arbeit noch.',
+    blockTokens: (tokens) => `Verbrauch: ${tokens.toLocaleString('de-DE')} Tokens`,
     erlaubt: 'erlaubt',
     abgelehnt: 'abgelehnt',
     automatischErlaubt: 'automatisch erlaubt (Automodus)',

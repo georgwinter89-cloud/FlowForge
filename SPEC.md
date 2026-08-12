@@ -252,6 +252,20 @@ Angreifer durch die Diagnose.
 - **Übertrags-Grenze pro Workflow einstellbar** (im Schaubild-Kopf): Zahl (Standard 5) oder
   unbegrenzt (Feld leer). Ist die Grenze erreicht, läuft der Block ohne weiteren Übertrag zu
   Ende — ehrlich im Ticker vermerkt.
+- **Session-Fortsetzung bei Wiederholungen** (seit Bauschritt 16, Entscheidung Georg,
+  12.08.2026): Läuft derselbe Block nur wegen eines Zusatzes erneut, setzt er seine
+  **eigene** frühere Motor-Session fort und bekommt nur den Zusatz nachgereicht — statt
+  kalt zu starten und das Projekt neu einzulesen. Genau drei Fälle: Reparatur-Runde des
+  Rückführungs-Ziels (Prüferkritik), Nachprüfung des Prüfers (nur die Beanstandungen),
+  Startanleitungs-Nachforderung. Leitplanken: Kein Block setzt je die Session eines
+  **anderen** Blocks fort (der erste Prüfer-Durchlauf bleibt frisch, §4.3); ein
+  Füllstands-Wächter erzwingt Kaltstart, wenn die alte Session schon nahe der
+  Übertrags-Schwelle liegt (unter 75 % wird fortgesetzt); ist die Session nicht
+  wiederaufnehmbar (App-Neustart, Kennung ungültig), fällt der Fall still auf den
+  Kaltstart zurück — die Kennungen wandern dafür mit in den Laufstand. Jede Fortsetzung
+  steht ehrlich im Ticker und im Laufbericht („Session fortgesetzt statt neu gestartet");
+  der Karten-Kontext wird dabei nicht erneut eingespeist. Der Laufbericht zeigt je Block
+  den Token-Verbrauch — so ist sichtbar, dass Wiederholungen deutlich billiger werden.
 - **Abo-Kontingent erschöpft:** Verhalten pro Projekt wählbar (im Schaubild-Kopf) —
   (a) **pausieren** (Standard): Windows-Benachrichtigung, alle 10 Minuten ein neuer Versuch,
   selbstständiges Weiterarbeiten sobald wieder Kontingent da ist (+ Benachrichtigung), oder
