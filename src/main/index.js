@@ -20,6 +20,7 @@ import {
   laufstandVerwerfen,
   laufSanftStoppen,
   laufHartStoppen,
+  laufWarteschlangeVerlassen,
   laufFrageAntworten,
   laufEntscheidungAntworten,
   laufMenschAntworten,
@@ -83,8 +84,11 @@ function registriereIpc() {
 
   ipcMain.handle('workflow-laden', (_e, pfad) => workflowLaden(pfad))
   ipcMain.handle('workflow-speichern', (_e, { pfad, workflow }) => {
-    // Kein Umbau eines Workflows, während er läuft (SPEC §10).
-    if (laufZustand(pfad).aktiv) return { ok: false, fehler: texte.kette.fehlerWaehrendLauf }
+    // Kein Umbau eines Workflows, während er läuft (SPEC §10) — oder während
+    // er in der Warteschlange auf seinen automatischen Start wartet.
+    const zustand = laufZustand(pfad)
+    if (zustand.aktiv) return { ok: false, fehler: texte.kette.fehlerWaehrendLauf }
+    if (zustand.wartet) return { ok: false, fehler: texte.kette.fehlerWaehrendWarteschlange }
     return workflowSpeichern(pfad, workflow)
   })
 
@@ -103,6 +107,8 @@ function registriereIpc() {
   )
   ipcMain.handle('lauf-sanft-stoppen', (_e, pfad) => laufSanftStoppen(pfad))
   ipcMain.handle('lauf-hart-stoppen', (_e, pfad) => laufHartStoppen(pfad))
+  // Warteschlange (BAUPLAN 12): einen vorgemerkten Start wieder herausnehmen.
+  ipcMain.handle('lauf-warteschlange-verlassen', (_e, pfad) => laufWarteschlangeVerlassen(pfad))
   ipcMain.handle('lauf-frage-antworten', (_e, { frageId, erlaubt }) =>
     laufFrageAntworten(frageId, erlaubt)
   )
@@ -121,12 +127,19 @@ function registriereIpc() {
 
   ipcMain.handle('sicherungspunkte-laden', (_e, pfad) => sicherungspunkteLaden(pfad))
   ipcMain.handle('wiederherstellen-vorschau', (_e, { pfad, punktId }) => {
-    if (laufZustand(pfad).aktiv) return { ok: false, fehler: texte.sicherungen.fehlerWaehrendLauf }
+    const zustand = laufZustand(pfad)
+    if (zustand.aktiv) return { ok: false, fehler: texte.sicherungen.fehlerWaehrendLauf }
+    if (zustand.wartet)
+      return { ok: false, fehler: texte.sicherungen.fehlerWaehrendWarteschlange }
     return wiederherstellenVorschau(pfad, punktId)
   })
   ipcMain.handle('wiederherstellen', (_e, { pfad, punktId }) => {
-    // Während ein Agent im Projekt schreibt, wird nichts zurückgesetzt.
-    if (laufZustand(pfad).aktiv) return { ok: false, fehler: texte.sicherungen.fehlerWaehrendLauf }
+    // Während ein Agent im Projekt schreibt (oder gleich schreiben wird),
+    // wird nichts zurückgesetzt.
+    const zustand = laufZustand(pfad)
+    if (zustand.aktiv) return { ok: false, fehler: texte.sicherungen.fehlerWaehrendLauf }
+    if (zustand.wartet)
+      return { ok: false, fehler: texte.sicherungen.fehlerWaehrendWarteschlange }
     return wiederherstellen(pfad, punktId)
   })
 }

@@ -27,6 +27,7 @@ contextBridge.exposeInMainWorld('flowforge', {
     ipcRenderer.invoke('kontingent-verhalten-setzen', { pfad, verhalten }),
   laufSanftStoppen: (pfad) => ipcRenderer.invoke('lauf-sanft-stoppen', pfad),
   laufHartStoppen: (pfad) => ipcRenderer.invoke('lauf-hart-stoppen', pfad),
+  laufWarteschlangeVerlassen: (pfad) => ipcRenderer.invoke('lauf-warteschlange-verlassen', pfad),
   laufFrageAntworten: (frageId, erlaubt) =>
     ipcRenderer.invoke('lauf-frage-antworten', { frageId, erlaubt }),
   laufEntscheidungAntworten: (frageId, wahl) =>

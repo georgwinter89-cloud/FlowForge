@@ -341,8 +341,13 @@ export default function Leinwand({
   onKontingentVerhalten,
   onWiederhergestellt
 }) {
-  // zustand: 'bereit' (Schaubild bearbeiten) | 'laeuft' | 'fertig'
+  // zustand: 'bereit' (Schaubild bearbeiten) | 'wartet' (in der Warteschlange,
+  // BAUPLAN 12) | 'laeuft' | 'fertig'
   const [zustand, setZustand] = useState('bereit')
+  // Parallelität (SPEC §5): wie viele Läufe insgesamt aktiv sind (für den
+  // Verbrauchs-Hinweis) und ob dieses Projekt in der Warteschlange steht.
+  const [laufAnzahl, setLaufAnzahl] = useState(0)
+  const [wartePosition, setWartePosition] = useState(0)
   const [workflow, setWorkflow] = useState(null)
   const [meldung, setMeldung] = useState('')
   const [aktiveInstanz, setAktiveInstanz] = useState(null)
@@ -406,7 +411,15 @@ export default function Leinwand({
     // sonst hinge der Lauf nach einem Ansichtswechsel ewig an einem Dialog.
     window.flowforge.laufZustand(pfad).then((e) => {
       if (!e.ok) return
+      setLaufAnzahl(e.laufAnzahl ?? 0)
+      setWartePosition(e.wartePosition ?? 0)
       if (!e.aktiv) {
+        // Wartet das Projekt in der Warteschlange, zeigt der Lauf-Tab das an.
+        if (e.wartet) {
+          setZustand('wartet')
+          setTab('lauf')
+          return
+        }
         // Kein aktiver Lauf, aber ein liegen gebliebener Laufstand? Dann wurde
         // die App mitten im Lauf beendet — Wiederaufnahme anbieten (SPEC §3.3).
         window.flowforge.laufstandInfo(pfad).then((info) => {
@@ -424,10 +437,38 @@ export default function Leinwand({
       if (e.gespraech) setGespraech(e.gespraech)
     })
     const abmelden = window.flowforge.aufLaufEreignis((ereignis) => {
+      // Läufe-Übersicht (BAUPLAN 12): kommt ohne Projektpfad an alle Ansichten —
+      // sie speist Verbrauchs-Hinweis und Warteschlangen-Anzeige.
+      if (ereignis.art === 'laeufe') {
+        setLaufAnzahl(ereignis.aktive.length)
+        const position = ereignis.warteschlange.indexOf(pfad) + 1
+        setWartePosition(position)
+        if (position === 0 && !ereignis.aktive.includes(pfad))
+          setZustand((z) => (z === 'wartet' ? 'bereit' : z))
+        return
+      }
       if (ereignis.projektPfad !== pfad) return
       if (ereignis.art === 'zustand' && ereignis.zustand === 'laeuft') {
+        // Ein frischer Lauf beginnt — auch von allein aus der Warteschlange.
+        // Die Anzeige des vorigen Laufs wird geleert wie bei einem Handstart.
+        setTicker([])
+        setRoh([])
+        setVerbrauch(null)
+        setErgebnis(null)
+        setGespraech([])
+        setMenschFrage(null)
+        setFrage(null)
+        setEntscheidung(null)
+        setAktiveInstanz(null)
         setZustand('laeuft')
         setTab('lauf')
+      }
+      // Der automatische Start aus der Warteschlange hat nicht geklappt
+      // (z.B. Schaubild inzwischen verändert) — ehrlich anzeigen.
+      if (ereignis.art === 'warteschlange-fehler') {
+        setZustand((z) => (z === 'wartet' ? 'bereit' : z))
+        setFehler(texte.lauf.warteschlangeFehler(ereignis.fehler))
+        setTab('schaubild')
       }
       if (ereignis.art === 'block') setAktiveInstanz(ereignis.instanzId)
       if (ereignis.art === 'ticker')
@@ -674,6 +715,12 @@ export default function Leinwand({
     setGespraech([])
     const antwort = await window.flowforge.laufFortsetzen(pfad)
     if (!antwort.ok) setFehler(antwort.fehler)
+    // Sind alle Plätze belegt, wartet auch die Wiederaufnahme in der Schlange.
+    if (antwort.ok && antwort.wartet) {
+      setWartePosition(antwort.position ?? 1)
+      setZustand('wartet')
+      setTab('lauf')
+    }
     // Das Zurücksetzen auf den Sicherungspunkt kann Karten verändert haben.
     onWiederhergestellt?.()
   }
@@ -726,18 +773,25 @@ export default function Leinwand({
   async function starten() {
     setMeldung('')
     setFehler('')
-    setTicker([])
-    setRoh([])
-    setVerbrauch(null)
-    setErgebnis(null)
-    setAktiveInstanz(null)
-    setMenschFrage(null)
-    setGespraech([])
+    // Die Lauf-Anzeige leert das „Lauf startet"-Ereignis — so wird sie auch
+    // bei automatischen Starts aus der Warteschlange frisch (BAUPLAN 12).
     const kartenIds = kontextAuswahl()
       .filter((k) => k.sorte !== 'status')
       .map((k) => k.id)
     const antwort = await window.flowforge.laufStarten(pfad, kartenIds)
-    if (!antwort.ok) setFehler(antwort.fehler)
+    if (!antwort.ok) return setFehler(antwort.fehler)
+    // Projekt belegt oder alle Plätze vergeben: der Start wartet sichtbar.
+    if (antwort.wartet) {
+      setWartePosition(antwort.position ?? 1)
+      setZustand((z) => (z === 'laeuft' ? z : 'wartet'))
+      setTab('lauf')
+    }
+  }
+
+  async function warteschlangeVerlassen() {
+    await window.flowforge.laufWarteschlangeVerlassen(pfad)
+    setWartePosition(0)
+    setZustand((z) => (z === 'wartet' ? 'bereit' : z))
   }
 
   async function hartStoppen() {
@@ -826,6 +880,8 @@ export default function Leinwand({
   // Offene Fragen ziehen den Blick auf den Lauf-Tab, auch wenn Georg gerade
   // woanders ist.
   const laufBrauchtDich = Boolean(frage || entscheidung || menschFrage)
+  // Läufe in anderen Projekten — der laufende dieses Projekts zählt nicht mit.
+  const andereLaeufe = laufAnzahl - (zustand === 'laeuft' ? 1 : 0)
   const tabs = [
     ['schaubild', texte.projektansicht.tabSchaubild],
     ['lauf', texte.projektansicht.tabLauf],
@@ -844,6 +900,9 @@ export default function Leinwand({
           >
             {titel}
             {wert === 'lauf' && zustand === 'laeuft' && <span className="tab-marke">{t.laeuft}</span>}
+            {wert === 'lauf' && zustand !== 'laeuft' && wartePosition > 0 && (
+              <span className="tab-marke">{t.wartetMarke}</span>
+            )}
             {wert === 'lauf' && laufBrauchtDich && <span className="tab-punkt" />}
           </button>
         ))}
@@ -852,11 +911,15 @@ export default function Leinwand({
       {tab === 'schaubild' && meldung && <p className="fehlermeldung">{meldung}</p>}
       {tab === 'schaubild' && fehler && <p className="fehlermeldung">{fehler}</p>}
 
-      {tab === 'schaubild' && bearbeitbar && (
+      {tab === 'schaubild' && (
         <div className="kette-kopf">
+          {/* Der Start-Knopf bleibt auch während eines Laufs sichtbar (BAUPLAN
+              12): ein weiterer Start wartet dann in der Warteschlange und
+              läuft von allein an, sobald Platz ist. */}
           <button
             className="knopf-primaer knopf-klein"
-            disabled={bloecke.length === 0}
+            disabled={bloecke.length === 0 || wartePosition > 0}
+            title={wartePosition > 0 ? t.schonInWarteschlange : undefined}
             onClick={starten}
           >
             {tk.starten}
@@ -867,6 +930,7 @@ export default function Leinwand({
               type="number"
               min="0"
               max={REPARATUR_RUNDEN_MAX}
+              disabled={!bearbeitbar}
               value={workflow.reparaturRunden}
               onChange={(e) => rundenSetzen(e.target.value)}
             />
@@ -879,6 +943,7 @@ export default function Leinwand({
               max={UEBERTRAG_GRENZE_MAX}
               placeholder="∞"
               title={tk.uebertragUnbegrenzt}
+              disabled={!bearbeitbar}
               value={workflow.uebertragGrenze ?? ''}
               onChange={(e) => grenzeSetzen(e.target.value)}
             />
@@ -894,6 +959,12 @@ export default function Leinwand({
             </select>
           </label>
         </div>
+      )}
+
+      {/* Sichtbarer Hinweis (SPEC §5, BAUPLAN 12): parallele Läufe
+          vervielfachen den Verbrauch. */}
+      {tab === 'schaubild' && andereLaeufe > 0 && (
+        <p className="feld-hinweis">⚠ {t.parallelStartHinweis(andereLaeufe)}</p>
       )}
 
       {tab === 'schaubild' && bearbeitbar && (
@@ -1033,9 +1104,36 @@ export default function Leinwand({
       {tab === 'lauf' && zustand === 'bereit' && ticker.length === 0 && (
         <p className="feld-hinweis">{texte.projektansicht.tabLaufLeer}</p>
       )}
-      {tab === 'lauf' && !(zustand === 'bereit' && ticker.length === 0) && (
+      {/* Warteschlange (BAUPLAN 12): der Start wartet sichtbar und läuft von
+          allein an, sobald ein Platz frei ist. */}
+      {tab === 'lauf' && zustand === 'wartet' && (
+        <div className="lauf-ansicht">
+          <p className="feld-hinweis">{t.wartetHinweis(wartePosition)}</p>
+          {laufAnzahl > 0 && (
+            <p className="feld-hinweis">⚠ {t.parallelStartHinweis(laufAnzahl)}</p>
+          )}
+          <div className="lauf-knoepfe">
+            <button className="knopf-sekundaer knopf-klein" onClick={warteschlangeVerlassen}>
+              {t.warteschlangeVerlassen}
+            </button>
+          </div>
+        </div>
+      )}
+      {tab === 'lauf' && zustand !== 'wartet' && !(zustand === 'bereit' && ticker.length === 0) && (
         <div className="lauf-ansicht">
           <VerbrauchZeile verbrauch={verbrauch} modus={modus} />
+
+          {zustand === 'laeuft' && laufAnzahl > 1 && (
+            <p className="feld-hinweis">⚠ {t.parallelHinweis(laufAnzahl)}</p>
+          )}
+          {wartePosition > 0 && (
+            <p className="feld-hinweis">
+              {t.folgelaufWartet}{' '}
+              <button className="knopf-klein" onClick={warteschlangeVerlassen}>
+                {t.warteschlangeVerlassen}
+              </button>
+            </p>
+          )}
 
           {zustand === 'laeuft' && (
             <div className="lauf-knoepfe">

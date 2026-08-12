@@ -77,6 +77,8 @@ export const texte = {
     fehlerAuftragsquelle: (blockName, feld) =>
       `Beim Block „${blockName}" ist das Feld „${feld}" leer, und in der Kartenauswahl ist keine offene Aufgaben-Karte. Trag einen Wunsch ins Feld ein — oder leg links eine Aufgaben-Karte an. Sonst wüsste der Agent nicht, was gebaut werden soll.`,
     fehlerWaehrendLauf: 'Während ein Lauf läuft, kann die Kette nicht verändert werden.',
+    fehlerWaehrendWarteschlange:
+      'Dieser Workflow wartet in der Warteschlange auf seinen Start. Nimm ihn erst aus der Warteschlange, wenn du ihn ändern willst.',
     unbekannterBlock: 'Diesen Block kennt FlowForge nicht.',
     uebertragGrenzeLabel: 'Überträge höchstens',
     uebertragGrenzeHinweis:
@@ -355,6 +357,23 @@ export const texte = {
       'Dein Abo-Kontingent ist im Moment erschöpft. Der Lauf hat angehalten — alles bisher Gebaute bleibt bestehen. Starte den Workflow neu, sobald dein Kontingent wieder da ist.',
     okKnopf: 'Alles klar',
     schonAktiv: 'Es läuft schon ein Workflow. Bitte warte, bis er fertig ist.',
+    // Parallelität & Warteschlange (SPEC §5, BAUPLAN 12).
+    schonInWarteschlange: 'Dieser Workflow steht schon in der Warteschlange.',
+    wartetMarke: 'wartet',
+    wartetHinweis: (position) =>
+      'Der Lauf wartet in der Warteschlange' +
+      (position > 1 ? ` (Platz ${position})` : '') +
+      ' und startet von allein, sobald Platz ist — höchstens 3 Workflows laufen gleichzeitig, und pro Projekt nur einer.',
+    warteschlangeVerlassen: 'Aus der Warteschlange nehmen',
+    warteschlangeFehler: (fehler) => `Der wartende Lauf konnte nicht starten: ${fehler}`,
+    folgelaufWartet:
+      'Ein weiterer Lauf ist vorgemerkt und startet von allein, sobald dieser fertig ist.',
+    parallelHinweis: (anzahl) =>
+      `${anzahl} Workflows laufen gleichzeitig — parallele Läufe vervielfachen den Verbrauch deines Kontingents.`,
+    parallelStartHinweis: (anzahl) =>
+      anzahl === 1
+        ? 'In einem anderen Projekt läuft gerade ein Workflow — ein weiterer Lauf vervielfacht den Verbrauch deines Kontingents.'
+        : `In anderen Projekten laufen gerade ${anzahl} Workflows — ein weiterer Lauf vervielfacht den Verbrauch deines Kontingents.`,
     aboNichtErlaubt:
       'Diese FlowForge-Version läuft nur mit API-Schlüssel. Bitte hinterlege einen in den Einstellungen.',
     motorNichtAngemeldet:
@@ -444,6 +463,8 @@ export const texte = {
       'Die KI-Server sind überlastet — der Lauf pausiert und probiert es alle 10 Minuten von selbst wieder.',
     kontingentVersuch: 'Pause vorbei: FlowForge versucht es jetzt wieder.',
     kontingentWeiter: 'Es geht weiter — der Motor arbeitet wieder.',
+    ausWarteschlangeGestartet:
+      'Der Platz war frei — dieser Lauf startet jetzt von allein aus der Warteschlange.',
     motorWartet: (versuch, max) =>
       `Die KI-Server sind gerade überlastet — der Motor versucht es weiter (Versuch ${versuch} von ${max}).`,
     wiederaufnahme: (nummer, gesamt, name) =>
@@ -472,7 +493,9 @@ export const texte = {
     fehlerAnlegen: 'Der Sicherungspunkt konnte nicht angelegt werden. Der Lauf wurde sicherheitshalber nicht gestartet.',
     fehlerVorschau: 'Die Vorschau konnte nicht erstellt werden.',
     fehlerWiederherstellen: 'Das Wiederherstellen hat nicht geklappt. Der Projektordner wurde nicht verändert.',
-    fehlerWaehrendLauf: 'Während ein Workflow läuft, kann nichts wiederhergestellt werden.'
+    fehlerWaehrendLauf: 'Während ein Workflow läuft, kann nichts wiederhergestellt werden.',
+    fehlerWaehrendWarteschlange:
+      'Dieses Projekt wartet in der Warteschlange auf einen Lauf — solange kann nichts wiederhergestellt werden.'
   },
   laufberichte: {
     ueberschrift: 'Laufberichte',

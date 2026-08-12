@@ -9,7 +9,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'node:crypto'
-import { Notification } from 'electron'
+import { BrowserWindow, Notification } from 'electron'
 import { texte } from '../shared/texte.js'
 import { blockDefinition } from '../shared/blockKatalog.js'
 import {
@@ -39,8 +39,75 @@ const BERICHTE_ORDNER = 'laufberichte'
 // Versuchen, wenn das Abo-Kontingent erschöpft ist.
 const KONTINGENT_PAUSE_MS = 10 * 60 * 1000
 
-// V1 Schritt 5: höchstens ein Lauf gleichzeitig. Parallelität kommt in Schritt 11.
-let aktiverLauf = null
+// Parallelität (SPEC §5, BAUPLAN 12): bis zu 3 Läufe gleichzeitig, aber nur in
+// verschiedenen Projekten — pro Projekt schreibt immer nur ein Agent. Weitere
+// Starts landen in der Warteschlange und laufen automatisch an.
+const MAX_PARALLEL_LAEUFE = 3
+const aktiveLaeufe = new Map() // projektPfad → Lauf
+const warteschlange = [] // { fenster, projektPfad, kartenIds, fortsetzen }
+// Läufe, die gerade aus der Warteschlange anlaufen, aber noch keinen Eintrag in
+// aktiveLaeufe haben — sonst könnten zwei gleichzeitig endende Läufe die
+// 3er-Grenze überschießen.
+let startendeLaeufe = 0
+
+function plaetzeBelegt() {
+  return aktiveLaeufe.size + startendeLaeufe
+}
+
+// Aktive Läufe und Warteschlange an alle Fenster melden — daraus speist sich
+// der sichtbare Hinweis, dass parallele Läufe den Verbrauch vervielfachen.
+function laeufeMelden() {
+  const daten = {
+    art: 'laeufe',
+    aktive: [...aktiveLaeufe.keys()],
+    warteschlange: warteschlange.map((eintrag) => eintrag.projektPfad)
+  }
+  for (const fenster of BrowserWindow.getAllWindows())
+    if (!fenster.isDestroyed()) fenster.webContents.send('lauf-ereignis', daten)
+}
+
+function inWarteschlangeStellen(fenster, projektPfad, kartenIds, fortsetzen) {
+  if (warteschlange.some((eintrag) => eintrag.projektPfad === projektPfad))
+    return { ok: false, fehler: texte.lauf.schonInWarteschlange }
+  warteschlange.push({ fenster, projektPfad, kartenIds, fortsetzen })
+  laeufeMelden()
+  return { ok: true, wartet: true, position: warteschlange.length }
+}
+
+// Automatischer Anlauf (SPEC §5): sobald ein Platz frei wird, startet der
+// nächste wartende Lauf, dessen Projekt frei ist — von allein.
+async function warteschlangeAnstossen() {
+  let idx = 0
+  while (idx < warteschlange.length) {
+    if (plaetzeBelegt() >= MAX_PARALLEL_LAEUFE) break
+    const eintrag = warteschlange[idx]
+    if (aktiveLaeufe.has(eintrag.projektPfad)) {
+      idx++
+      continue
+    }
+    warteschlange.splice(idx, 1)
+    startendeLaeufe++
+    let ergebnis
+    try {
+      ergebnis = eintrag.fortsetzen
+        ? await laufFortsetzen(eintrag.fenster, eintrag.projektPfad, true)
+        : await laufStarten(eintrag.fenster, eintrag.projektPfad, eintrag.kartenIds, null, true)
+    } catch (fehler) {
+      ergebnis = { ok: false, fehler: String(fehler?.message ?? fehler) }
+    } finally {
+      startendeLaeufe--
+    }
+    // Klappt der automatische Start nicht (z.B. Schaubild inzwischen leer),
+    // erfährt Georg das sichtbar — der Eintrag verschwindet aus der Schlange.
+    if (!ergebnis.ok && !eintrag.fenster.isDestroyed())
+      eintrag.fenster.webContents.send('lauf-ereignis', {
+        projektPfad: eintrag.projektPfad,
+        art: 'warteschlange-fehler',
+        fehler: ergebnis.fehler
+      })
+  }
+  laeufeMelden()
+}
 
 function jetztIso() {
   return new Date().toISOString()
@@ -127,8 +194,9 @@ function uebergabenText(def, lieferungen) {
 // fortsetzung (BAUPLAN 11): gespeicherter Laufstand einer Unterbrechung — der
 // Lauf startet dann nicht bei Block 1, sondern an der notierten Position mit
 // den notierten Übergaben. Kommt nur über laufFortsetzen() herein.
-export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung = null) {
-  if (aktiverLauf) return { ok: false, fehler: texte.lauf.schonAktiv }
+// ausWarteschlange (BAUPLAN 12): Start durch den automatischen Anlauf — dann
+// wird bei belegtem Platz nicht erneut eingereiht, sondern ehrlich abgelehnt.
+export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung = null, ausWarteschlange = false) {
   if (!fs.existsSync(projektPfad)) return { ok: false, fehler: texte.fehler.projektNichtGefunden }
 
   // Ohne ausdrückliche Auswahl gilt die festgenagelte Vorauswahl:
@@ -207,9 +275,22 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
   if (einstellungen.motorModus === 'api' && !einstellungen.apiSchluessel)
     return { ok: false, fehler: texte.einstellungen.fehlerApiSchluesselFehlt }
 
+  // Parallelität (SPEC §5, BAUPLAN 12): Ist das Projekt belegt oder sind alle
+  // 3 Plätze vergeben, wartet der Start in der Warteschlange und läuft von
+  // allein an. Die Prüfungen oben sind trotzdem schon gelaufen — offensichtliche
+  // Fehler (leeres Schaubild, leeres Pflichtfeld) kommen sofort zurück.
+  // Ein Start aus der Warteschlange zählt in plaetzeBelegt() schon selbst mit —
+  // seine Platz-Prüfung hat der Anstoßer vor dem Herausnehmen gemacht.
+  if (aktiveLaeufe.has(projektPfad)) {
+    if (ausWarteschlange) return { ok: false, fehler: texte.lauf.schonAktiv }
+    return inWarteschlangeStellen(fenster, projektPfad, kartenIds, Boolean(fortsetzung))
+  }
+  if (!ausWarteschlange && plaetzeBelegt() >= MAX_PARALLEL_LAEUFE)
+    return inWarteschlangeStellen(fenster, projektPfad, kartenIds, Boolean(fortsetzung))
+
   // Projekt sofort belegen, damit ein Doppelklick auf „Starten" während der
   // Sicherung keinen zweiten Lauf startet.
-  aktiverLauf = {
+  const lauf = {
     projektPfad,
     motor: null,
     fragen: new Map(),
@@ -225,7 +306,8 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     // Ansicht stellt ihn nach einem Wechsel daraus wieder her.
     gespraech: []
   }
-  const lauf = aktiverLauf
+  aktiveLaeufe.set(projektPfad, lauf)
+  laeufeMelden()
 
   // Sicherheitsnetz vor dem Lauf: der Stand von jetzt ist immer wiederholbar —
   // und die Folgen-Frage kann genau hierauf zurücksetzen.
@@ -235,7 +317,8 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     texte.sicherungen.beschriftungVorLauf(namen[0])
   )
   if (!sicherung.ok) {
-    aktiverLauf = null
+    aktiveLaeufe.delete(projektPfad)
+    laeufeMelden()
     return { ok: false, fehler: sicherung.fehler }
   }
   const punktVorLauf = sicherung.id
@@ -391,6 +474,14 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       verbrauch: null
     }))
   }
+
+  // Lauf-Start sofort melden — noch vor der ersten Ticker-Zeile, damit die
+  // Ansicht die Anzeige des vorigen Laufs sauber leeren kann.
+  senden({ art: 'zustand', zustand: 'laeuft' })
+  if (ausWarteschlange) tickern(texte.ticker.ausWarteschlangeGestartet)
+  // Sichtbarer Hinweis (SPEC §5, BAUPLAN 12): parallele Läufe vervielfachen den
+  // Verbrauch — ehrlich im Ticker und damit auch im Laufbericht.
+  if (aktiveLaeufe.size > 1) tickern(texte.lauf.parallelHinweis(aktiveLaeufe.size))
 
   // Die eigentliche Ketten-Schleife — läuft im Hintergrund weiter, laufStarten
   // kehrt sofort zurück.
@@ -723,7 +814,8 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     }
     // Der Lauf ist geordnet zu Ende — es gibt nichts mehr wiederaufzunehmen.
     laufstandLoeschen(projektPfad)
-    aktiverLauf = null
+    aktiveLaeufe.delete(projektPfad)
+    laeufeMelden()
     // Lauf-Ende melden, wenn Georg gerade woanders ist (SPEC §5).
     benachrichtigen(
       texte.benachrichtigung.fertigTitel,
@@ -735,43 +827,54 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       fehlertext: bericht.fehlertext,
       bericht
     })
+    // Der Platz ist frei — der nächste wartende Lauf startet von allein.
+    warteschlangeAnstossen()
   })()
 
-  senden({ art: 'zustand', zustand: 'laeuft' })
   return { ok: true }
 }
 
 export function laufSanftStoppen(projektPfad) {
-  if (!aktiverLauf || aktiverLauf.projektPfad !== projektPfad)
-    return { ok: false, fehler: texte.fehler.unbekannt }
-  if (!aktiverLauf.sanft && !aktiverLauf.hart) {
-    aktiverLauf.sanft = true
-    aktiverLauf.tickern?.(texte.ticker.sanftAngefordert)
+  const lauf = aktiveLaeufe.get(projektPfad)
+  if (!lauf) return { ok: false, fehler: texte.fehler.unbekannt }
+  if (!lauf.sanft && !lauf.hart) {
+    lauf.sanft = true
+    lauf.tickern?.(texte.ticker.sanftAngefordert)
   }
   return { ok: true }
 }
 
 export function laufHartStoppen(projektPfad) {
-  if (!aktiverLauf || aktiverLauf.projektPfad !== projektPfad)
-    return { ok: false, fehler: texte.fehler.unbekannt }
-  aktiverLauf.hart = true
+  const lauf = aktiveLaeufe.get(projektPfad)
+  if (!lauf) return { ok: false, fehler: texte.fehler.unbekannt }
+  lauf.hart = true
   // Eine offene Mensch-Frage würde den Werkzeug-Aufruf im FlowForge-Prozess
   // ewig hängen lassen — sofort auflösen.
-  for (const antworten of [...aktiverLauf.menschFragen.values()]) antworten(null)
-  if (aktiverLauf.motor) aktiverLauf.motor.hartStoppen()
-  else aktiverLauf.tickern?.(texte.ticker.hartAbgebrochen)
+  for (const antworten of [...lauf.menschFragen.values()]) antworten(null)
+  if (lauf.motor) lauf.motor.hartStoppen()
+  else lauf.tickern?.(texte.ticker.hartAbgebrochen)
   return { ok: true }
 }
 
+// Frage-IDs sind UUIDs — bei mehreren gleichzeitigen Läufen wird die passende
+// Antwort-Funktion über alle Läufe hinweg gesucht.
+function antwortSuchen(sammlung, frageId) {
+  for (const lauf of aktiveLaeufe.values()) {
+    const eintrag = lauf[sammlung].get(frageId)
+    if (eintrag) return eintrag
+  }
+  return null
+}
+
 export function laufFrageAntworten(frageId, erlaubt) {
-  const antworten = aktiverLauf?.fragen.get(frageId)
+  const antworten = antwortSuchen('fragen', frageId)
   if (!antworten) return { ok: false, fehler: texte.fehler.unbekannt }
   antworten(Boolean(erlaubt))
   return { ok: true }
 }
 
 export function laufMenschAntworten(frageId, antwortText) {
-  const antworten = aktiverLauf?.menschFragen.get(frageId)
+  const antworten = antwortSuchen('menschFragen', frageId)
   if (!antworten) return { ok: false, fehler: texte.fehler.unbekannt }
   const text = String(antwortText ?? '').trim()
   if (!text) return { ok: false, fehler: texte.fehler.unbekannt }
@@ -780,7 +883,7 @@ export function laufMenschAntworten(frageId, antwortText) {
 }
 
 export function laufEntscheidungAntworten(frageId, wahl) {
-  const aufloesen = aktiverLauf?.entscheidungen.get(frageId)
+  const aufloesen = antwortSuchen('entscheidungen', frageId)
   if (!aufloesen) return { ok: false, fehler: texte.fehler.unbekannt }
   if (!['weitermachen', 'zurueckstellen', 'wiederherstellen'].includes(wahl))
     return { ok: false, fehler: texte.fehler.unbekannt }
@@ -788,10 +891,26 @@ export function laufEntscheidungAntworten(frageId, wahl) {
   return { ok: true }
 }
 
+// Warteschlange verlassen (BAUPLAN 12): Georg nimmt einen vorgemerkten Start
+// wieder heraus, bevor er anläuft.
+export function laufWarteschlangeVerlassen(projektPfad) {
+  const idx = warteschlange.findIndex((eintrag) => eintrag.projektPfad === projektPfad)
+  if (idx >= 0) {
+    warteschlange.splice(idx, 1)
+    laeufeMelden()
+  }
+  return { ok: true }
+}
+
 // Wiederaufnahme nach App-/Rechner-Neustart (SPEC §3.3, BAUPLAN 11): Liegt in
 // diesem Projekt ein unterbrochener Lauf, den die App fortsetzen kann?
 export function laufstandInfo(projektPfad) {
-  if (aktiverLauf && aktiverLauf.projektPfad === projektPfad) return { ok: true, vorhanden: false }
+  // Läuft oder wartet das Projekt schon, gibt es nichts anzubieten.
+  if (
+    aktiveLaeufe.has(projektPfad) ||
+    warteschlange.some((eintrag) => eintrag.projektPfad === projektPfad)
+  )
+    return { ok: true, vorhanden: false }
   const stand = laufstandLaden(projektPfad)
   if (!stand) return { ok: true, vorhanden: false }
   let blockName = ''
@@ -812,29 +931,44 @@ export function laufstandVerwerfen(projektPfad) {
 
 // Setzt einen unterbrochenen Lauf fort: Projektordner zurück auf den letzten
 // Sicherungspunkt (halbfertige Änderungen des abgebrochenen Blocks
-// verschwinden), dann weiter an der notierten Position.
-export async function laufFortsetzen(fenster, projektPfad) {
-  if (aktiverLauf) return { ok: false, fehler: texte.lauf.schonAktiv }
+// verschwinden), dann weiter an der notierten Position. Sind alle Plätze
+// belegt, wartet auch die Wiederaufnahme in der Warteschlange — zurückgesetzt
+// wird erst unmittelbar vor dem echten Start.
+export async function laufFortsetzen(fenster, projektPfad, ausWarteschlange = false) {
+  if (aktiveLaeufe.has(projektPfad)) return { ok: false, fehler: texte.lauf.schonAktiv }
   const stand = laufstandLaden(projektPfad)
   if (!stand) return { ok: false, fehler: texte.wiederaufnahme.fehlerKeinStand }
+  // Ein Start aus der Warteschlange zählt in plaetzeBelegt() schon selbst mit
+  // — seine Platz-Prüfung hat der Anstoßer vor dem Herausnehmen gemacht.
+  if (!ausWarteschlange && plaetzeBelegt() >= MAX_PARALLEL_LAEUFE)
+    return inWarteschlangeStellen(fenster, projektPfad, null, true)
   const zurueck = await aufLetztenPunktZuruecksetzen(projektPfad)
   if (!zurueck.ok) return zurueck
-  return laufStarten(fenster, projektPfad, stand.kartenIds, stand)
+  return laufStarten(fenster, projektPfad, stand.kartenIds, stand, ausWarteschlange)
 }
 
 // Für die Oberfläche: Läuft in diesem Projekt gerade etwas — und wo steht es?
 // Offene Fragen kommen mit, damit die Ansicht sie nach einem Wechsel zur
-// Projektübersicht und zurück wieder anzeigen kann.
+// Projektübersicht und zurück wieder anzeigen kann. Dazu (BAUPLAN 12): wie
+// viele Läufe insgesamt aktiv sind und ob dieses Projekt in der Schlange wartet.
 export function laufZustand(projektPfad) {
-  const aktiv = Boolean(aktiverLauf && aktiverLauf.projektPfad === projektPfad)
-  if (!aktiv) return { ok: true, aktiv: false }
+  const lauf = aktiveLaeufe.get(projektPfad)
+  const wartePosition =
+    warteschlange.findIndex((eintrag) => eintrag.projektPfad === projektPfad) + 1
+  const rahmen = {
+    laufAnzahl: aktiveLaeufe.size,
+    wartet: wartePosition > 0,
+    wartePosition
+  }
+  if (!lauf) return { ok: true, aktiv: false, ...rahmen }
   return {
     ok: true,
     aktiv: true,
-    blockInstanzId: aktiverLauf.aktuelleInstanzId,
-    frage: aktiverLauf.offeneFrage,
-    entscheidung: aktiverLauf.offeneEntscheidung,
-    menschFrage: aktiverLauf.offeneMenschFrage,
-    gespraech: aktiverLauf.gespraech
+    ...rahmen,
+    blockInstanzId: lauf.aktuelleInstanzId,
+    frage: lauf.offeneFrage,
+    entscheidung: lauf.offeneEntscheidung,
+    menschFrage: lauf.offeneMenschFrage,
+    gespraech: lauf.gespraech
   }
 }

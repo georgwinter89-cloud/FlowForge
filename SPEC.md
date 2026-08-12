@@ -213,9 +213,13 @@ Angreifer durch die Diagnose.
   **Status-Karte (immer) + offene Aufgaben-Karten**; der Nutzer kann weitere Karten per
   Drag & Drop in die Auswahl ziehen und vorausgewählte per Klick rauswerfen, dann Start.
   Die gewählten Karten bekommt der Agent zu Beginn **jedes Blocks** frisch mit.
-- **Parallelität:** Bis zu **3 Workflows gleichzeitig, aber nur in verschiedenen Projekten.**
-  Pro Projekt schreibt immer nur **ein** Agent (mehrere lesende erlaubt). Weitere Starts landen
-  in einer Warteschlange und laufen automatisch an.
+- **Parallelität** (seit Bauschritt 12): Bis zu **3 Workflows gleichzeitig, aber nur in
+  verschiedenen Projekten.** Pro Projekt schreibt immer nur **ein** Agent (mehrere lesende
+  erlaubt). Weitere Starts landen in einer Warteschlange und laufen automatisch an: sichtbar
+  im Lauf-Tab (samt Herausnehmen-Knopf), festgehalten im Ticker des anlaufenden Laufs.
+  Solange ein Projekt läuft oder wartet, sind Schaubild-Umbau und Wiederherstellen gesperrt.
+  **Sichtbarer Verbrauchs-Hinweis:** Läuft anderswo schon etwas, warnt FlowForge beim Start
+  und im Lauf-Tab, dass parallele Läufe den Verbrauch vervielfachen.
 
 ## 6. Live-Ansicht & Eingriff
 
