@@ -1,11 +1,16 @@
-// Lauf-Verwaltung: führt die Workflow-Kette eines Projekts Block für Block über
-// die Motor-Schnittstelle aus, reicht Ereignisse an die Oberfläche weiter und
+// Lauf-Verwaltung: führt das Workflow-Schaubild eines Projekts über die
+// Motor-Schnittstelle aus, reicht Ereignisse an die Oberfläche weiter und
 // legt Laufberichte ab (SPEC §3.2, §4, §6).
 //
+// Parallele Zweige (SPEC §4.1, BAUPLAN 13): Ein Block startet, sobald alle
+// seine Vorgänger fertig sind. Mehrere nur-lesende Blöcke dürfen gleichzeitig
+// laufen, aber höchstens ein schreibender (SPEC §5) — ein Block mit mehreren
+// Vorgängern führt die Zweige zusammen, weil er auf alle wartet.
+//
 // Fehlschlag-Rückführung (SPEC §4.1): Meldet ein Prüfer-Block „nicht bestanden",
-// springt der Lauf zurück zu Block X (Standard: der Block davor) — so oft, wie
-// Reparatur-Runden eingestellt sind. Danach hält der Lauf an und stellt die
-// Folgen-Frage: weitermachen, zurückstellen oder Stand wiederherstellen.
+// laufen die Blöcke zwischen Ziel und Prüfer erneut — so oft, wie Reparatur-
+// Runden eingestellt sind. Danach hält der Lauf an und stellt die Folgen-Frage:
+// weitermachen, zurückstellen oder Stand wiederherstellen.
 import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'node:crypto'
@@ -13,12 +18,14 @@ import { BrowserWindow, Notification } from 'electron'
 import { texte } from '../shared/texte.js'
 import { blockDefinition } from '../shared/blockKatalog.js'
 import {
-  pruefeKette,
   pruefeSchaubild,
+  pruefeVersorgung,
   schaubildReihenfolge,
   pruefePflichtfelder,
   auftragMitFeldern,
-  rueckfuehrungsZiel
+  vorfahrenSortiert,
+  rueckfuehrungsZiel,
+  zwischenBloecke
 } from '../shared/kettenRegeln.js'
 import { einstellungenLaden, ABO_MODUS_ERLAUBT } from './einstellungen.js'
 import { kartenLaden, kontingentVerhaltenLaden } from './projekte.js'
@@ -173,27 +180,18 @@ function kartenKontext(projektPfad, kartenIds) {
 }
 
 // Übergaben zwischen Blöcken (SPEC §4.3): Was ein Block „liefert", ist sein
-// Abschlusstext — Folgeblöcke mit passendem „braucht" bekommen ihn in den
-// Auftrag. Gekürzt, damit ein ausufernder Abschlusstext den Kontext des
-// nächsten Blocks nicht flutet.
+// Abschlusstext — Nachfahren entlang der Pfeile mit passendem „braucht"
+// bekommen ihn in den Auftrag. Gekürzt, damit ein ausufernder Abschlusstext
+// den Kontext des nächsten Blocks nicht flutet.
 const LIEFERUNG_MAX = 8000
 
-function uebergabenText(def, lieferungen) {
-  const eintraege = []
-  // Optionale Bedarfe (z.B. Angriffsliste beim Bauer) werden mitgereicht,
-  // wenn ein Block davor sie geliefert hat — verlangt werden sie nicht.
-  for (const etikett of [...def.braucht, ...(def.brauchtOptional ?? [])]) {
-    const lieferung = lieferungen.get(etikett)
-    if (lieferung)
-      eintraege.push(texte.agentenUebergabe.eintrag(etikett, lieferung.block, lieferung.text))
-  }
-  if (eintraege.length === 0) return ''
-  return texte.agentenUebergabe.ueberschrift + eintraege.join('')
+function gekuerzt(text) {
+  return text.length > LIEFERUNG_MAX ? text.slice(0, LIEFERUNG_MAX) + ' …' : text
 }
 
-// fortsetzung (BAUPLAN 11): gespeicherter Laufstand einer Unterbrechung — der
-// Lauf startet dann nicht bei Block 1, sondern an der notierten Position mit
-// den notierten Übergaben. Kommt nur über laufFortsetzen() herein.
+// fortsetzung (BAUPLAN 11): gespeicherter Laufstand einer Unterbrechung — die
+// dort fertigen Blöcke laufen nicht erneut, ihre Lieferungen sind wieder da.
+// Kommt nur über laufFortsetzen() herein.
 // ausWarteschlange (BAUPLAN 12): Start durch den automatischen Anlauf — dann
 // wird bei belegtem Platz nicht erneut eingereiht, sondern ehrlich abgelehnt.
 export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung = null, ausWarteschlange = false) {
@@ -212,25 +210,35 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
   const geladen = workflowLaden(projektPfad)
   if (!geladen.ok) return geladen
   const workflow = geladen.workflow
-  // Reihenfolge aus dem Schaubild ableiten (SPEC §4.1): die Pfeile müssen alle
-  // Karten zu genau einem durchgehenden Pfad verbinden.
+  // Schaubild prüfen (SPEC §4.1): kreisfrei, zusammenhängend — die topologische
+  // Reihenfolge liefert Nummerierung und Laufordnung.
   const schaubildFehler = pruefeSchaubild(workflow.bloecke, workflow.pfeile)
   if (schaubildFehler) return { ok: false, fehler: schaubildFehler }
   const geordnet = schaubildReihenfolge(workflow.bloecke, workflow.pfeile)
   if (geordnet.fehler) return { ok: false, fehler: geordnet.fehler }
   const kette = geordnet.reihenfolge
+  const kettenIds = kette.map((eintrag) => eintrag.instanzId)
   // Beim Start streng: auch der erste Block muss versorgt sein.
-  const ketteFehler = pruefeKette(kette)
-  if (ketteFehler) return { ok: false, fehler: ketteFehler }
+  const versorgungsFehler = pruefeVersorgung(workflow.bloecke, workflow.pfeile)
+  if (versorgungsFehler) return { ok: false, fehler: versorgungsFehler }
   // Wiederaufnahme nur, wenn das Schaubild noch dasselbe ist wie beim
-  // unterbrochenen Lauf — sonst passen Position und Übergaben nicht mehr.
+  // unterbrochenen Lauf — sonst passen Blöcke und Lieferungen nicht mehr.
+  // Ein Laufstand aus einer FlowForge-Version vor den parallelen Zweigen
+  // (Positions- statt Blockliste) ist ebenfalls nicht fortsetzbar.
   if (fortsetzung) {
+    const pfeilMenge = new Set(workflow.pfeile.map((p) => p.von + '→' + p.nach))
+    const idMenge = new Set(kettenIds)
     const passt =
+      Array.isArray(fortsetzung.fertigIds) &&
       Array.isArray(fortsetzung.kettenIds) &&
       fortsetzung.kettenIds.length === kette.length &&
       kette.every((eintrag, idx) => eintrag.instanzId === fortsetzung.kettenIds[idx]) &&
-      fortsetzung.index >= 0 &&
-      fortsetzung.index < kette.length
+      Array.isArray(fortsetzung.pfeile) &&
+      fortsetzung.pfeile.length === pfeilMenge.size &&
+      fortsetzung.pfeile.every(
+        (paar) => Array.isArray(paar) && pfeilMenge.has(paar[0] + '→' + paar[1])
+      ) &&
+      fortsetzung.fertigIds.every((id) => idMenge.has(id))
     if (!passt) {
       laufstandLoeschen(projektPfad)
       return { ok: false, fehler: texte.wiederaufnahme.fehlerVeraendert }
@@ -244,23 +252,23 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
   // was gebaut werden soll — der Lauf startet gar nicht erst. Bei einer
   // Wiederaufnahme entfällt die Prüfung: frühere Blöcke sind schon gelaufen,
   // ihre Aufgaben können bereits abgehakt sein.
-  for (const [kettenIndex, eintrag] of fortsetzung ? [] : kette.entries()) {
+  for (const eintrag of fortsetzung ? [] : kette) {
     const def = blockDefinition(eintrag.blockId)
     for (const feld of def.felder) {
       if (!feld.oderOffeneAufgaben) continue
       if ((eintrag.feldWerte?.[feld.id] ?? '').trim()) continue
-      // Ein früherer Block, der selbst Aufgaben-Karten erzeugt (Spec-Interview),
+      // Ein Vorfahre, der selbst Aufgaben-Karten erzeugt (Spec-Interview),
       // zählt als Auftragsquelle — bei „Neue App starten" gibt es beim Start
       // noch keine Karten, die Aufgaben entstehen erst im Lauf.
       if (
-        kette
-          .slice(0, kettenIndex)
-          .some((e) => blockDefinition(e.blockId).erzeugtAufgaben)
+        vorfahrenSortiert(workflow.bloecke, workflow.pfeile, eintrag.instanzId).some(
+          (v) => blockDefinition(v.blockId).erzeugtAufgaben
+        )
       )
         continue
-      const geladen = kartenLaden(projektPfad)
-      const offene = geladen.ok
-        ? geladen.karten.filter(
+      const frisch = kartenLaden(projektPfad)
+      const offene = frisch.ok
+        ? frisch.karten.filter(
             (k) => ausgewaehlt.includes(k.id) && k.sorte === 'aufgabe' && !k.erledigt
           )
         : []
@@ -292,16 +300,20 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
   // Sicherung keinen zweiten Lauf startet.
   const lauf = {
     projektPfad,
-    motor: null,
+    // Bei parallelen Zweigen laufen mehrere Motoren gleichzeitig —
+    // „Sofort abbrechen" muss jeden einzelnen töten.
+    motoren: new Map(), // instanzId → Motor
+    aktiveInstanzen: new Set(),
     fragen: new Map(),
     entscheidungen: new Map(),
     menschFragen: new Map(),
     sanft: false,
     hart: false,
-    aktuelleInstanzId: null,
-    offeneFrage: null,
+    // Offene Dialoge als Warteschlangen: Zwei parallele Blöcke können
+    // gleichzeitig fragen — die Ansicht zeigt eine Frage nach der anderen.
+    offeneFragen: [],
+    offeneMenschFragen: [],
     offeneEntscheidung: null,
-    offeneMenschFrage: null,
     // Gesprächsverlauf dieses Laufs (Fragen des Agenten + Antworten) — die
     // Ansicht stellt ihn nach einem Wechsel daraus wieder her.
     gespraech: []
@@ -384,17 +396,22 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       const frageId = crypto.randomUUID()
       lauf.fragen.set(frageId, (erlaubt) => {
         lauf.fragen.delete(frageId)
-        lauf.offeneFrage = null
+        lauf.offeneFragen = lauf.offeneFragen.filter((f) => f.frageId !== frageId)
         bericht.rechteFragen.push({ beschreibung: frage.beschreibung, erlaubt })
         senden({ art: 'frage-erledigt', frageId })
+        // Wartet schon die nächste Rechte-Frage eines parallelen Blocks,
+        // rückt sie sofort nach.
+        const naechste = lauf.offeneFragen[0]
+        if (naechste) senden({ art: 'frage', ...naechste })
         antworten(erlaubt)
       })
-      lauf.offeneFrage = { frageId, beschreibung: frage.beschreibung }
-      senden({ art: 'frage', frageId, beschreibung: frage.beschreibung })
+      lauf.offeneFragen.push({ frageId, beschreibung: frage.beschreibung })
+      if (lauf.offeneFragen.length === 1)
+        senden({ art: 'frage', frageId, beschreibung: frage.beschreibung })
     })
   }
 
-  // Frage an den Menschen (BAUPLAN 9, SPEC §6): pausiert den Lauf, bis die
+  // Frage an den Menschen (BAUPLAN 9, SPEC §6): pausiert den Block, bis die
   // Antwort aus dem Gespräch kommt. Löst mit dem Antwort-Text auf — oder mit
   // null, wenn der Lauf vorher endet (das Werkzeug meldet das dem Agenten).
   function menschFrageStellen({ frage, optionen }, blockName) {
@@ -410,21 +427,25 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       const frageId = crypto.randomUUID()
       lauf.menschFragen.set(frageId, (antwortText) => {
         lauf.menschFragen.delete(frageId)
-        lauf.offeneMenschFrage = null
+        lauf.offeneMenschFragen = lauf.offeneMenschFragen.filter((f) => f.frageId !== frageId)
         if (antwortText != null) {
           bericht.gespraech.push({ block: blockName, frage, antwort: antwortText })
           lauf.gespraech.push({ frage, optionen, antwort: antwortText })
           tickern(texte.ticker.menschGeantwortet)
         }
         senden({ art: 'mensch-frage-erledigt', frageId, frage, antwort: antwortText })
+        const naechste = lauf.offeneMenschFragen[0]
+        if (naechste) senden({ art: 'mensch-frage', ...naechste })
         antworten(antwortText)
       })
-      lauf.offeneMenschFrage = { frageId, frage, optionen }
-      senden({ art: 'mensch-frage', frageId, frage, optionen })
+      lauf.offeneMenschFragen.push({ frageId, frage, optionen })
+      if (lauf.offeneMenschFragen.length === 1)
+        senden({ art: 'mensch-frage', frageId, frage, optionen })
     })
   }
 
-  // Folgen-Frage nach verbrauchten Reparatur-Runden (SPEC §4.1).
+  // Folgen-Frage nach verbrauchten Reparatur-Runden (SPEC §4.1). Die Ergebnisse
+  // werden nacheinander verarbeitet — es ist also höchstens eine offen.
   function entscheidungStellen(blockName, runden) {
     return new Promise((aufloesen) => {
       if (fenster.isDestroyed()) return aufloesen('zurueckstellen')
@@ -442,39 +463,6 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     })
   }
 
-  function blockAusfuehren(auftrag, def, uebertragErlaubt) {
-    const motor = starteMotorLauf({
-      projektPfad,
-      auftrag,
-      modus: einstellungen.motorModus,
-      apiSchluessel: einstellungen.apiSchluessel,
-      ausgabenObergrenzeUsd: einstellungen.ausgabenObergrenzeUsd,
-      nurLesen: def.nurLesen,
-      // Automatischer Übertrag (SPEC §5): läuft der Kontext voll, übergibt der
-      // Agent an eine frische Session — sofern die Übertragsgrenze es erlaubt.
-      uebertrag: {
-        aktiv: uebertragErlaubt,
-        testModus: Boolean(einstellungen.uebertragTest),
-        anweisung: texte.agentenUebergabe.uebertragAnweisung(def.nurLesen)
-      },
-      ...(bekanntesKontextFenster > 0 ? { kontextFenster: bekanntesKontextFenster } : {}),
-      aufEreignis(e) {
-        if (e.art === 'ticker') bericht.ticker.push({ zeit: jetztIso(), text: e.text })
-        senden(e)
-      },
-      aufRechteFrage: rechteFrageStellen,
-      aufMenschFrage: (daten) => menschFrageStellen(daten, def.name)
-    })
-    lauf.motor = motor
-    return motor.fertig.catch((fehler) => ({
-      zustand: 'fehlgeschlagen',
-      fehlertext: String(fehler?.message ?? fehler),
-      fehlerArt: null,
-      ergebnisText: '',
-      verbrauch: null
-    }))
-  }
-
   // Lauf-Start sofort melden — noch vor der ersten Ticker-Zeile, damit die
   // Ansicht die Anzeige des vorigen Laufs sauber leeren kann.
   senden({ art: 'zustand', zustand: 'laeuft' })
@@ -483,29 +471,81 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
   // Verbrauch — ehrlich im Ticker und damit auch im Laufbericht.
   if (aktiveLaeufe.size > 1) tickern(texte.lauf.parallelHinweis(aktiveLaeufe.size))
 
-  // Die eigentliche Ketten-Schleife — läuft im Hintergrund weiter, laufStarten
+  // Der eigentliche Ablaufplaner — läuft im Hintergrund weiter, laufStarten
   // kehrt sofort zurück.
   ;(async () => {
-    let i = 0
+    // Ein Knoten pro Schaubild-Karte: Zustand, Lieferung und die Zusätze, die
+    // beim nächsten Anlauf desselben Blocks in den Auftrag gehören.
+    const knoten = new Map(
+      kette.map((eintrag) => [
+        eintrag.instanzId,
+        {
+          eintrag,
+          def: blockDefinition(eintrag.blockId),
+          status: 'offen', // 'offen' | 'laeuft' | 'fertig'
+          lieferung: null,
+          rueckmeldung: '',
+          startanleitungNachforderung: false,
+          uebergabe: '',
+          uebergabeVerloren: false,
+          warPausiert: false
+        }
+      ])
+    )
+    const nummerVon = new Map(kettenIds.map((id, idx) => [id, idx + 1]))
+    const vorgaengerVon = new Map(kettenIds.map((id) => [id, []]))
+    for (const pfeil of workflow.pfeile) vorgaengerVon.get(pfeil.nach)?.push(pfeil.von)
+    const vorfahrenVon = new Map(
+      kettenIds.map((id) => [id, vorfahrenSortiert(workflow.bloecke, workflow.pfeile, id)])
+    )
+
+    let endZustand = null
+    let fehlertext = ''
+    // „Stand wiederherstellen" aus der Folgen-Frage: erst ausführen, wenn alle
+    // noch laufenden Blöcke fertig sind — sonst schreibt einer in den
+    // zurückgesetzten Ordner hinein.
+    let wiederherstellenNachLauf = false
     let rundenUebrig = workflow.reparaturRunden
-    let rueckmeldung = ''
     // Startanleitungs-Pflicht (SPEC §8): genau eine Nachbesserungs-Runde pro
     // Lauf — unabhängig von den Reparatur-Runden des Prüfers.
     let startanleitungNachgefordert = false
-    let startanleitungNachforderung = false
-    // Automatischer Übertrag (SPEC §5): Übergabe des Vorgängers an die frische
-    // Session desselben Blocks + Zähler gegen die Übertragsgrenze.
-    let uebergabe = ''
-    let uebergabeVerloren = false
+    // Automatischer Übertrag (SPEC §5): Zähler gegen die Übertragsgrenze,
+    // gemeinsam für alle Blöcke des Laufs.
     let uebertraege = 0
-    // Kontingent-Pause (SPEC §5): merkt sich, ob gerade pausiert wurde —
-    // für die „es geht weiter"-Meldung.
-    let warPausiert = false
-    let endZustand = null
-    let fehlertext = ''
-    // Übergaben dieses Laufs: liefert-Etikett → Abschlusstext des Blocks.
-    // Läuft ein Block erneut (Reparatur-Runde), ersetzt er seine Lieferung.
-    const lieferungen = new Map()
+    // Kontingent-Pause: eine Windows-Benachrichtigung genügt, auch wenn
+    // mehrere parallele Blöcke gleichzeitig pausieren.
+    let pauseBenachrichtigt = false
+    // Der Verbrauchs-Hinweis für parallele Blöcke kommt einmal pro Lauf.
+    let parallelGemeldet = false
+    const laufende = new Map() // instanzId → Promise<{ id, ergebnis }>
+
+    // Laufstand festhalten (BAUPLAN 11): Bleibt die App mitten im Lauf stehen
+    // (Absturz, Neustart), kann FlowForge an den fertigen Blöcken wieder aufsetzen.
+    function standSpeichern() {
+      laufstandSpeichern(projektPfad, {
+        gestartetAm: bericht.gestartetAm,
+        kettenIds,
+        pfeile: workflow.pfeile.map((p) => [p.von, p.nach]),
+        kartenIds: ausgewaehlt,
+        fertigIds: kettenIds.filter((id) => knoten.get(id).status === 'fertig'),
+        lieferungen: kettenIds
+          .filter((id) => knoten.get(id).lieferung != null)
+          .map((id) => [id, knoten.get(id).lieferung]),
+        rueckmeldungen: kettenIds
+          .filter((id) => knoten.get(id).rueckmeldung)
+          .map((id) => [id, knoten.get(id).rueckmeldung]),
+        nachforderungen: kettenIds.filter((id) => knoten.get(id).startanleitungNachforderung),
+        uebergaben: kettenIds
+          .filter((id) => knoten.get(id).uebergabe || knoten.get(id).uebergabeVerloren)
+          .map((id) => [
+            id,
+            { text: knoten.get(id).uebergabe, verloren: knoten.get(id).uebergabeVerloren }
+          ]),
+        rundenUebrig,
+        uebertraege,
+        startanleitungNachgefordert
+      })
+    }
 
     // Wartet die Kontingent-Pause ab — im Sekundentakt unterbrechbar, damit
     // „Sanft anhalten" und „Sofort abbrechen" nicht 10 Minuten hängen.
@@ -515,214 +555,312 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         await new Promise((weiter) => setTimeout(weiter, 1000))
     }
 
-    // Wiederaufnahme (BAUPLAN 11): an der notierten Position weitermachen.
+    // Wiederaufnahme (BAUPLAN 11): fertige Blöcke samt Lieferungen übernehmen,
+    // alles andere läuft erneut.
     if (fortsetzung) {
-      i = fortsetzung.index
-      rundenUebrig = Number.isInteger(fortsetzung.rundenUebrig)
-        ? fortsetzung.rundenUebrig
-        : workflow.reparaturRunden
-      rueckmeldung = typeof fortsetzung.rueckmeldung === 'string' ? fortsetzung.rueckmeldung : ''
+      for (const id of fortsetzung.fertigIds)
+        if (knoten.has(id)) knoten.get(id).status = 'fertig'
+      for (const [id, text] of Array.isArray(fortsetzung.lieferungen) ? fortsetzung.lieferungen : [])
+        if (knoten.has(id) && typeof text === 'string') knoten.get(id).lieferung = text
+      for (const [id, text] of Array.isArray(fortsetzung.rueckmeldungen) ? fortsetzung.rueckmeldungen : [])
+        if (knoten.has(id) && typeof text === 'string') knoten.get(id).rueckmeldung = text
+      for (const id of Array.isArray(fortsetzung.nachforderungen) ? fortsetzung.nachforderungen : [])
+        if (knoten.has(id)) knoten.get(id).startanleitungNachforderung = true
+      for (const [id, u] of Array.isArray(fortsetzung.uebergaben) ? fortsetzung.uebergaben : [])
+        if (knoten.has(id)) {
+          knoten.get(id).uebergabe = typeof u?.text === 'string' ? u.text : ''
+          knoten.get(id).uebergabeVerloren = Boolean(u?.verloren)
+        }
+      if (Number.isInteger(fortsetzung.rundenUebrig)) rundenUebrig = fortsetzung.rundenUebrig
+      if (Number.isInteger(fortsetzung.uebertraege)) uebertraege = fortsetzung.uebertraege
       startanleitungNachgefordert = Boolean(fortsetzung.startanleitungNachgefordert)
-      startanleitungNachforderung = Boolean(fortsetzung.startanleitungNachforderung)
-      uebergabe = typeof fortsetzung.uebergabe === 'string' ? fortsetzung.uebergabe : ''
-      uebertraege = Number.isInteger(fortsetzung.uebertraege) ? fortsetzung.uebertraege : 0
-      for (const [etikett, lieferung] of Array.isArray(fortsetzung.lieferungen)
-        ? fortsetzung.lieferungen
-        : [])
-        if (typeof etikett === 'string' && lieferung?.text != null)
-          lieferungen.set(etikett, { block: String(lieferung.block ?? ''), text: String(lieferung.text) })
-      tickern(
-        texte.ticker.wiederaufnahme(i + 1, kette.length, blockDefinition(kette[i].blockId).name)
-      )
+      const naechster = kette.find((eintrag) => knoten.get(eintrag.instanzId).status !== 'fertig')
+      if (naechster)
+        tickern(
+          texte.ticker.wiederaufnahme(
+            nummerVon.get(naechster.instanzId),
+            kette.length,
+            blockDefinition(naechster.blockId).name
+          )
+        )
       bericht.ticker.push({ zeit: jetztIso(), text: texte.laufberichte.fortgesetztHinweis })
     }
 
-    while (i < kette.length && !endZustand) {
-      // Laufstand festhalten (BAUPLAN 11): Bleibt die App mitten im Block
-      // stehen (Absturz, Neustart), kann FlowForge hier wieder aufsetzen.
-      laufstandSpeichern(projektPfad, {
-        gestartetAm: bericht.gestartetAm,
-        kettenIds: kette.map((eintrag) => eintrag.instanzId),
-        index: i,
-        kartenIds: ausgewaehlt,
-        rundenUebrig,
-        rueckmeldung,
-        uebergabe,
-        uebertraege,
-        startanleitungNachgefordert,
-        startanleitungNachforderung,
-        lieferungen: [...lieferungen.entries()]
+    // Ein Motor-Durchlauf eines Blocks. Ticker-Zeilen bekommen den Blocknamen
+    // vorangestellt, sobald mehrere Motoren gleichzeitig laufen — sonst wäre
+    // der Liveticker nicht zuzuordnen.
+    function blockAusfuehren(k, auftrag, uebertragErlaubt) {
+      const instanzId = k.eintrag.instanzId
+      const motor = starteMotorLauf({
+        projektPfad,
+        auftrag,
+        modus: einstellungen.motorModus,
+        apiSchluessel: einstellungen.apiSchluessel,
+        ausgabenObergrenzeUsd: einstellungen.ausgabenObergrenzeUsd,
+        nurLesen: k.def.nurLesen,
+        // Automatischer Übertrag (SPEC §5): läuft der Kontext voll, übergibt der
+        // Agent an eine frische Session — sofern die Übertragsgrenze es erlaubt.
+        uebertrag: {
+          aktiv: uebertragErlaubt,
+          testModus: Boolean(einstellungen.uebertragTest),
+          anweisung: texte.agentenUebergabe.uebertragAnweisung(k.def.nurLesen)
+        },
+        ...(bekanntesKontextFenster > 0 ? { kontextFenster: bekanntesKontextFenster } : {}),
+        aufEreignis(e) {
+          const daten =
+            e.art === 'ticker' && lauf.motoren.size > 1
+              ? { ...e, text: `${k.def.name}: ${e.text}` }
+              : e
+          if (daten.art === 'ticker') bericht.ticker.push({ zeit: jetztIso(), text: daten.text })
+          senden({ instanzId, ...daten })
+        },
+        aufRechteFrage: rechteFrageStellen,
+        aufMenschFrage: (daten) => menschFrageStellen(daten, k.def.name)
       })
+      lauf.motoren.set(instanzId, motor)
+      return motor.fertig
+        .catch((fehler) => ({
+          zustand: 'fehlgeschlagen',
+          fehlertext: String(fehler?.message ?? fehler),
+          fehlerArt: null,
+          ergebnisText: '',
+          verbrauch: null
+        }))
+        .finally(() => lauf.motoren.delete(instanzId))
+    }
 
-      // Harter Stopp zwischen zwei Blöcken (Motor war gerade fertig): der
-      // nächste Block darf nicht mehr starten.
-      if (lauf.hart) {
-        const zurueck = await aufLetztenPunktZuruecksetzen(projektPfad)
-        if (zurueck.ok && zurueck.zurueckgesetzt) tickern(texte.ticker.zurueckgesetzt)
-        endZustand = 'hart-abgebrochen'
-        break
+    // Führt einen Block vollständig aus: Auftrag bauen, Motor laufen lassen,
+    // Überträge und Kontingent-/Server-Pausen durchstehen — bis ein endgültiges
+    // Ergebnis da ist. Läuft für parallele Blöcke gleichzeitig.
+    async function knotenAusfuehren(k) {
+      while (true) {
+        standSpeichern()
+        // Rückmeldung, Nachforderung und Übergabe bleiben am Knoten, bis der
+        // Block wirklich fertig ist — kommt er per Übertrag oder Pause erneut
+        // dran, gehören sie wieder in den Auftrag.
+        let auftrag =
+          kartenKontext(projektPfad, ausgewaehlt) +
+          uebergabenText(k) +
+          texte.agentenUebergabe.auftragEinleitung +
+          auftragMitFeldern(k.def, k.eintrag.feldWerte)
+        if (k.rueckmeldung) auftrag += texte.agentenUebergabe.prueferRueckmeldung(k.rueckmeldung)
+        if (k.startanleitungNachforderung)
+          auftrag += texte.agentenUebergabe.startanleitungNachforderung
+        if (k.uebergabe) auftrag += texte.agentenUebergabe.uebertragFortsetzung(k.uebergabe)
+        else if (k.uebergabeVerloren) auftrag += texte.agentenUebergabe.uebertragOhneUebergabe
+
+        const uebertragErlaubt =
+          workflow.uebertragGrenze == null || uebertraege < workflow.uebertragGrenze
+        const ergebnis = await blockAusfuehren(k, auftrag, uebertragErlaubt)
+        if (ergebnis.verbrauch) {
+          gesamtVerbrauch.tokens += ergebnis.verbrauch.tokens ?? 0
+          if (ergebnis.verbrauch.kostenUsd != null)
+            gesamtVerbrauch.kostenUsd = (gesamtVerbrauch.kostenUsd ?? 0) + ergebnis.verbrauch.kostenUsd
+          if (ergebnis.verbrauch.kontextFenster > 0)
+            bekanntesKontextFenster = ergebnis.verbrauch.kontextFenster
+        }
+
+        // Nach einer Kontingent-Pause: Der Motor arbeitet wieder — Bescheid geben.
+        if (k.warPausiert && ergebnis.zustand !== 'fehlgeschlagen') {
+          k.warPausiert = false
+          pauseBenachrichtigt = false
+          tickern(texte.ticker.kontingentWeiter)
+          benachrichtigen(texte.benachrichtigung.weiterTitel, texte.benachrichtigung.weiterText, {
+            immer: true
+          })
+        }
+
+        // Automatischer Übertrag (SPEC §5): Der Kontext war voll, der Agent hat
+        // übergeben — derselbe Block läuft sofort als frische Session weiter.
+        if (ergebnis.zustand === 'uebertrag') {
+          uebertraege++
+          const text = String(ergebnis.ergebnisText ?? '').trim()
+          k.uebergabeVerloren = !text
+          k.uebergabe = gekuerzt(text)
+          bericht.uebertraege.push({
+            zeit: jetztIso(),
+            block: k.def.name,
+            text: k.uebergabeVerloren
+              ? texte.laufberichte.uebertragOhneUebergabeZeile(k.def.name)
+              : texte.laufberichte.uebertragZeile(
+                  k.def.name,
+                  // Füllstand im Moment der Auslösung — nicht der am Session-Ende
+                  // (die endgültige Fenstergröße würde ihn sonst kleinrechnen).
+                  ergebnis.verbrauch?.uebertragBand?.von ?? ergebnis.verbrauch?.kontextProzentVon ?? '?',
+                  ergebnis.verbrauch?.uebertragBand?.bis ?? ergebnis.verbrauch?.kontextProzentBis ?? '?',
+                  uebertraege,
+                  workflow.uebertragGrenze
+                )
+          })
+          tickern(texte.ticker.uebertragWeiter(uebertraege, workflow.uebertragGrenze))
+          if (workflow.uebertragGrenze != null && uebertraege >= workflow.uebertragGrenze)
+            tickern(texte.ticker.uebertragGrenzeErreicht(workflow.uebertragGrenze))
+          continue
+        }
+
+        if (ergebnis.zustand === 'fehlgeschlagen') {
+          // Abo-Kontingent erschöpft (SPEC §5): je nach Projekt-Einstellung
+          // pausieren und von selbst weitermachen — oder ehrlich anhalten.
+          // Überlastete KI-Server (529) sind immer nur vorübergehend: da wird
+          // grundsätzlich pausiert statt aufgegeben.
+          const kontingentPause =
+            ergebnis.fehlerArt === 'kontingent' && einstellungen.motorModus === 'abo'
+          const serverPause = ergebnis.fehlerArt === 'ueberlastet'
+          if (kontingentPause && kontingentVerhaltenLaden(projektPfad) === 'stoppen')
+            return ergebnis // die Ergebnis-Verarbeitung hält den Lauf an
+          if (kontingentPause || serverPause) {
+            if (!k.warPausiert) {
+              k.warPausiert = true
+              if (!pauseBenachrichtigt) {
+                pauseBenachrichtigt = true
+                benachrichtigen(
+                  serverPause ? texte.benachrichtigung.serverTitel : texte.benachrichtigung.pauseTitel,
+                  serverPause ? texte.benachrichtigung.serverText : texte.benachrichtigung.pauseText,
+                  { immer: true }
+                )
+              }
+            }
+            tickern(serverPause ? texte.ticker.serverPause : texte.ticker.kontingentPause)
+            await kontingentWarten()
+            if (lauf.hart) return { ...ergebnis, zustand: 'hart-abgebrochen' }
+            if (lauf.sanft) return { ...ergebnis, zustand: 'sanft-gestoppt' }
+            tickern(texte.ticker.kontingentVersuch)
+            continue
+          }
+        }
+        return ergebnis
       }
+    }
 
-      const eintrag = kette[i]
-      const def = blockDefinition(eintrag.blockId)
-      lauf.aktuelleInstanzId = eintrag.instanzId
-      senden({ art: 'block', instanzId: eintrag.instanzId, index: i })
-      tickern(texte.ticker.blockStartet(i + 1, kette.length, def.name))
-
-      // Rückmeldung, Nachforderung und Übergabe werden hier bewusst NICHT
-      // gelöscht — kommt derselbe Block per Übertrag oder Kontingent-Pause
-      // erneut dran, gehören sie wieder in den Auftrag. Gelöscht wird erst,
-      // wenn der Block wirklich fertig ist.
-      let auftrag =
-        kartenKontext(projektPfad, ausgewaehlt) +
-        uebergabenText(def, lieferungen) +
-        texte.agentenUebergabe.auftragEinleitung +
-        auftragMitFeldern(def, eintrag.feldWerte)
-      if (rueckmeldung) auftrag += texte.agentenUebergabe.prueferRueckmeldung(rueckmeldung)
-      if (startanleitungNachforderung) auftrag += texte.agentenUebergabe.startanleitungNachforderung
-      if (uebergabe) auftrag += texte.agentenUebergabe.uebertragFortsetzung(uebergabe)
-      else if (uebergabeVerloren) auftrag += texte.agentenUebergabe.uebertragOhneUebergabe
-
-      const uebertragErlaubt =
-        workflow.uebertragGrenze == null || uebertraege < workflow.uebertragGrenze
-      const ergebnis = await blockAusfuehren(auftrag, def, uebertragErlaubt)
-      lauf.motor = null
-      if (ergebnis.verbrauch) {
-        gesamtVerbrauch.tokens += ergebnis.verbrauch.tokens ?? 0
-        if (ergebnis.verbrauch.kostenUsd != null)
-          gesamtVerbrauch.kostenUsd = (gesamtVerbrauch.kostenUsd ?? 0) + ergebnis.verbrauch.kostenUsd
-        if (ergebnis.verbrauch.kontextFenster > 0)
-          bekanntesKontextFenster = ergebnis.verbrauch.kontextFenster
+    // Übergaben aus den Lieferungen der Vorfahren einsammeln — deterministisch
+    // in topologischer Reihenfolge (bei gleichem Etikett gewinnt der spätere,
+    // also nähere Vorfahre).
+    function uebergabenText(k) {
+      const geliefert = new Map()
+      for (const vorfahre of vorfahrenVon.get(k.eintrag.instanzId)) {
+        const vk = knoten.get(vorfahre.instanzId)
+        if (vk.lieferung == null) continue
+        for (const etikett of vk.def.liefert)
+          geliefert.set(etikett, { block: vk.def.name, text: vk.lieferung })
       }
-
-      // Nach einer Kontingent-Pause: Der Motor arbeitet wieder — Bescheid geben.
-      if (warPausiert && ergebnis.zustand !== 'fehlgeschlagen') {
-        warPausiert = false
-        tickern(texte.ticker.kontingentWeiter)
-        benachrichtigen(texte.benachrichtigung.weiterTitel, texte.benachrichtigung.weiterText, {
-          immer: true
-        })
+      const eintraege = []
+      // Optionale Bedarfe (z.B. Angriffsliste beim Bauer) werden mitgereicht,
+      // wenn ein Vorfahre sie geliefert hat — verlangt werden sie nicht.
+      for (const etikett of [...k.def.braucht, ...(k.def.brauchtOptional ?? [])]) {
+        const lieferung = geliefert.get(etikett)
+        if (lieferung)
+          eintraege.push(texte.agentenUebergabe.eintrag(etikett, lieferung.block, lieferung.text))
       }
+      if (eintraege.length === 0) return ''
+      return texte.agentenUebergabe.ueberschrift + eintraege.join('')
+    }
+
+    // Startet alle Blöcke, deren Vorgänger fertig sind — unter der Regel:
+    // beliebig viele nur-lesende gleichzeitig, höchstens ein schreibender.
+    function bereiteStarten() {
+      if (endZustand || lauf.sanft || lauf.hart) return
+      for (const eintrag of kette) {
+        const k = knoten.get(eintrag.instanzId)
+        if (k.status !== 'offen') continue
+        const vorgaenger = vorgaengerVon.get(eintrag.instanzId)
+        if (!vorgaenger.every((id) => knoten.get(id).status === 'fertig')) continue
+        if (!k.def.nurLesen) {
+          const schreiberLaeuft = [...laufende.keys()].some((id) => !knoten.get(id).def.nurLesen)
+          if (schreiberLaeuft) continue // pro Projekt schreibt nur ein Agent (SPEC §5)
+        }
+        k.status = 'laeuft'
+        lauf.aktiveInstanzen.add(eintrag.instanzId)
+        senden({ art: 'block', instanzId: eintrag.instanzId })
+        tickern(
+          texte.ticker.blockStartet(nummerVon.get(eintrag.instanzId), kette.length, k.def.name)
+        )
+        // Zusammenführung sichtbar machen (BAUPLAN 13): dieser Block hat auf
+        // mehrere Zweige gewartet.
+        if (vorgaenger.length > 1)
+          tickern(texte.ticker.zweigeZusammengefuehrt(k.def.name, vorgaenger.length))
+        laufende.set(
+          eintrag.instanzId,
+          knotenAusfuehren(k).then((ergebnis) => ({ id: eintrag.instanzId, ergebnis }))
+        )
+      }
+      // Sichtbarer Hinweis (SPEC §4.1, BAUPLAN 13): parallele Blöcke
+      // vervielfachen den Verbrauch — einmal pro Lauf.
+      if (laufende.size > 1 && !parallelGemeldet) {
+        parallelGemeldet = true
+        tickern(texte.lauf.parallelBloeckeHinweis(laufende.size))
+      }
+    }
+
+    // Verarbeitet das endgültige Ergebnis eines Blocks — nacheinander, auch
+    // wenn mehrere Blöcke gleichzeitig fertig werden.
+    async function verarbeite(id, ergebnis) {
+      const k = knoten.get(id)
 
       if (ergebnis.zustand === 'hart-abgebrochen') {
-        const zurueck = await aufLetztenPunktZuruecksetzen(projektPfad)
-        if (zurueck.ok && zurueck.zurueckgesetzt) tickern(texte.ticker.zurueckgesetzt)
-        endZustand = 'hart-abgebrochen'
-        break
+        // Der Abbruch samt Zurücksetzen wird nach dem Ende aller Motoren
+        // einmal zentral erledigt.
+        k.status = 'offen'
+        return
       }
       if (ergebnis.zustand === 'sanft-gestoppt') {
-        endZustand = 'sanft-gestoppt'
-        break
+        k.status = 'offen'
+        if (!endZustand) endZustand = 'sanft-gestoppt'
+        return
       }
-
-      // Automatischer Übertrag (SPEC §5): Der Kontext war voll, der Agent hat
-      // übergeben — derselbe Block läuft sofort als frische Session weiter.
-      if (ergebnis.zustand === 'uebertrag') {
-        uebertraege++
-        const text = String(ergebnis.ergebnisText ?? '').trim()
-        uebergabeVerloren = !text
-        uebergabe = text.length > LIEFERUNG_MAX ? text.slice(0, LIEFERUNG_MAX) + ' …' : text
-        bericht.uebertraege.push({
-          zeit: jetztIso(),
-          block: def.name,
-          text: uebergabeVerloren
-            ? texte.laufberichte.uebertragOhneUebergabeZeile(def.name)
-            : texte.laufberichte.uebertragZeile(
-                def.name,
-                // Füllstand im Moment der Auslösung — nicht der am Session-Ende
-                // (die endgültige Fenstergröße würde ihn sonst kleinrechnen).
-                ergebnis.verbrauch?.uebertragBand?.von ?? ergebnis.verbrauch?.kontextProzentVon ?? '?',
-                ergebnis.verbrauch?.uebertragBand?.bis ?? ergebnis.verbrauch?.kontextProzentBis ?? '?',
-                uebertraege,
-                workflow.uebertragGrenze
-              )
-        })
-        tickern(texte.ticker.uebertragWeiter(uebertraege, workflow.uebertragGrenze))
-        if (workflow.uebertragGrenze != null && uebertraege >= workflow.uebertragGrenze)
-          tickern(texte.ticker.uebertragGrenzeErreicht(workflow.uebertragGrenze))
-        continue
-      }
-
       if (ergebnis.zustand === 'fehlgeschlagen') {
-        // Abo-Kontingent erschöpft (SPEC §5): je nach Projekt-Einstellung
-        // pausieren und von selbst weitermachen — oder ehrlich anhalten.
-        // Überlastete KI-Server (529) sind immer nur vorübergehend: da wird
-        // grundsätzlich pausiert statt aufgegeben.
-        const kontingentPause =
-          ergebnis.fehlerArt === 'kontingent' && einstellungen.motorModus === 'abo'
-        const serverPause = ergebnis.fehlerArt === 'ueberlastet'
-        if (kontingentPause && kontingentVerhaltenLaden(projektPfad) === 'stoppen') {
+        k.status = 'offen'
+        // Kontingent erschöpft mit Einstellung „anhalten" (SPEC §5).
+        if (ergebnis.fehlerArt === 'kontingent' && einstellungen.motorModus === 'abo') {
           benachrichtigen(
             texte.benachrichtigung.pauseTitel,
             texte.benachrichtigung.pauseGestopptText,
             { immer: true }
           )
-          endZustand = 'kontingent-erschoepft'
-          fehlertext = ergebnis.fehlertext
-          break
-        }
-        if (kontingentPause || serverPause) {
-          if (!warPausiert) {
-            warPausiert = true
-            benachrichtigen(
-              serverPause ? texte.benachrichtigung.serverTitel : texte.benachrichtigung.pauseTitel,
-              serverPause ? texte.benachrichtigung.serverText : texte.benachrichtigung.pauseText,
-              { immer: true }
-            )
+          if (!endZustand) {
+            endZustand = 'kontingent-erschoepft'
+            fehlertext = ergebnis.fehlertext
           }
-          tickern(serverPause ? texte.ticker.serverPause : texte.ticker.kontingentPause)
-          await kontingentWarten()
-          if (lauf.hart) continue // der Schleifenkopf übernimmt den Abbruch
-          if (lauf.sanft) {
-            endZustand = 'sanft-gestoppt'
-            break
-          }
-          tickern(texte.ticker.kontingentVersuch)
-          continue
+          return
         }
         bericht.blockErgebnisse.push({
-          instanzId: eintrag.instanzId,
-          block: def.name,
+          instanzId: id,
+          block: k.def.name,
           zeit: jetztIso(),
           zustand: 'fehlgeschlagen',
           ergebnisText: String(ergebnis.fehlertext ?? '').slice(0, 4000)
         })
-        endZustand = 'fehlgeschlagen'
-        fehlertext = ergebnis.fehlertext
-        break
+        if (!endZustand) {
+          endZustand = 'fehlgeschlagen'
+          fehlertext = ergebnis.fehlertext
+        }
+        return
       }
 
       // Block ist wirklich fertig: mitgeschleppte Zusätze für den nächsten
       // Anlauf sind damit erledigt.
-      rueckmeldung = ''
-      startanleitungNachforderung = false
-      uebergabe = ''
-      uebergabeVerloren = false
+      k.status = 'fertig'
+      k.rueckmeldung = ''
+      k.startanleitungNachforderung = false
+      k.uebergabe = ''
+      k.uebergabeVerloren = false
 
-      // Block ist normal durchgelaufen: Abschlusstext als Lieferung für
-      // Folgeblöcke ablegen und für die Karten-Anzeige merken.
+      // Abschlusstext als Lieferung für die Nachfahren ablegen und für die
+      // Karten-Anzeige merken.
       const abschlusstext = String(ergebnis.ergebnisText ?? '')
-      for (const etikett of def.liefert)
-        lieferungen.set(etikett, {
-          block: def.name,
-          text:
-            abschlusstext.length > LIEFERUNG_MAX
-              ? abschlusstext.slice(0, LIEFERUNG_MAX) + ' …'
-              : abschlusstext
-        })
+      k.lieferung = gekuerzt(abschlusstext)
       const blockErgebnis = {
-        instanzId: eintrag.instanzId,
-        block: def.name,
+        instanzId: id,
+        block: k.def.name,
         zeit: jetztIso(),
         zustand: 'erfolgreich',
-        ergebnisText: String(ergebnis.ergebnisText ?? '').slice(0, 4000)
+        ergebnisText: abschlusstext.slice(0, 4000)
       }
       bericht.blockErgebnisse.push(blockErgebnis)
 
       // Hat der Block Aufgaben-Karten erzeugt (Spec-Interview), gehören seine
       // neuen offenen Aufgaben ab jetzt zur Kartenauswahl des Laufs — die
       // Folgeblöcke arbeiten ja genau damit (festgenagelte Vorauswahl, SPEC §5).
-      if (def.erzeugtAufgaben) {
+      if (k.def.erzeugtAufgaben) {
         const frisch = kartenLaden(projektPfad)
         if (frisch.ok)
           for (const karte of frisch.karten)
@@ -734,69 +872,99 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       // fertig, wenn die maschinenlesbare Startanleitung existiert. Fehlt sie,
       // läuft derselbe Block genau einmal mit einer Nachforderung erneut;
       // fehlt sie danach immer noch, macht der Lauf ehrlich vermerkt weiter.
-      if (def.startanleitungPflicht && !startanleitungVorhanden(projektPfad)) {
+      if (k.def.startanleitungPflicht && !startanleitungVorhanden(projektPfad)) {
         blockErgebnis.zustand = 'startanleitung-fehlt'
-        if (!startanleitungNachgefordert && !lauf.sanft && !lauf.hart) {
+        if (!startanleitungNachgefordert && !lauf.sanft && !lauf.hart && !endZustand) {
           startanleitungNachgefordert = true
-          startanleitungNachforderung = true
-          tickern(texte.ticker.startanleitungNachgefordert(def.name))
-          continue
+          k.startanleitungNachforderung = true
+          k.status = 'offen'
+          tickern(texte.ticker.startanleitungNachgefordert(k.def.name))
+          return
         }
         tickern(texte.ticker.startanleitungWeiterOhne)
       }
 
       // Prüfer-Blöcke: Urteil auswerten, ggf. Fehlschlag-Rückführung.
-      if (def.prueft) {
+      if (k.def.prueft) {
         const bestanden = pruefUrteil(ergebnis.ergebnisText)
         blockErgebnis.zustand = bestanden === true ? 'pruefung-bestanden' : 'pruefung-nicht-bestanden'
         if (bestanden === true) {
           tickern(texte.ticker.pruefungBestanden)
         } else {
           tickern(bestanden === false ? texte.ticker.pruefungNichtBestanden : texte.ticker.pruefungOhneErgebnis)
-          const ziel = rueckfuehrungsZiel(kette, i)
-          if (rundenUebrig > 0 && ziel !== null && !lauf.sanft && !lauf.hart) {
+          const zielId = rueckfuehrungsZiel(workflow.bloecke, workflow.pfeile, id)
+          if (rundenUebrig > 0 && zielId && !lauf.sanft && !lauf.hart && !endZustand) {
             rundenUebrig--
             const genutzt = workflow.reparaturRunden - rundenUebrig
-            const zielName = blockDefinition(kette[ziel].blockId).name
-            rueckmeldung = prueferKritik(ergebnis.ergebnisText)
+            // Erneut laufen alle Blöcke auf den Wegen vom Ziel zum Prüfer —
+            // parallele Zweige außerhalb behalten ihr Ergebnis.
+            for (const nochmalId of zwischenBloecke(workflow.bloecke, workflow.pfeile, zielId, id)) {
+              const nk = knoten.get(nochmalId)
+              if (nk.status === 'fertig') nk.status = 'offen'
+            }
+            knoten.get(zielId).rueckmeldung = prueferKritik(ergebnis.ergebnisText)
+            const zielName = knoten.get(zielId).def.name
             tickern(texte.ticker.rueckfuehrung(zielName, genutzt, workflow.reparaturRunden))
-            i = ziel
-            continue
+            return
           }
-          const wahl = await entscheidungStellen(def.name, workflow.reparaturRunden)
+          const wahl = await entscheidungStellen(k.def.name, workflow.reparaturRunden)
           if (wahl === 'zurueckstellen') {
             tickern(texte.ticker.entscheidungZurueckgestellt)
-            endZustand = 'zurueckgestellt'
-            break
+            if (!endZustand) endZustand = 'zurueckgestellt'
+            return
           }
           if (wahl === 'wiederherstellen') {
             tickern(texte.ticker.entscheidungWiederhergestellt)
-            const zurueck = await wiederherstellen(projektPfad, punktVorLauf)
-            if (zurueck.ok) tickern(texte.ticker.zurueckgesetzt)
-            endZustand = 'wiederhergestellt'
-            break
+            wiederherstellenNachLauf = true
+            if (!endZustand) endZustand = 'wiederhergestellt'
+            return
           }
           tickern(texte.ticker.entscheidungWeitermachen)
         }
       }
 
-      // Block erfolgreich: Sicherungspunkt nach jedem gelungenen Block (SPEC §3.3).
-      const punkt = await sicherungspunktAnlegen(
-        projektPfad,
-        texte.sicherungen.beschriftungNachBlock(def.name)
-      )
-      if (punkt.ok && punkt.neu) tickern(texte.ticker.sicherungspunktAngelegt)
-
-      // Sanftes Anhalten: der laufende Block hat fertig gemacht — Halt am
-      // Sicherungspunkt (SPEC §6).
-      if (lauf.sanft) {
-        endZustand = 'sanft-gestoppt'
-        break
+      // Sicherungspunkt nach jedem gelungenen schreibenden Block (SPEC §3.3).
+      // Nur-lesende Blöcke ändern nichts — und ein Punkt, während parallel ein
+      // Schreiber arbeitet, würde dessen halbfertige Änderungen einfrieren.
+      if (!k.def.nurLesen) {
+        const punkt = await sicherungspunktAnlegen(
+          projektPfad,
+          texte.sicherungen.beschriftungNachBlock(k.def.name)
+        )
+        if (punkt.ok && punkt.neu) tickern(texte.ticker.sicherungspunktAngelegt)
       }
-      i++
     }
 
-    if (!endZustand) endZustand = 'erfolgreich'
+    standSpeichern()
+    // Die Planer-Schleife: Bereites starten, auf den nächsten fertigen Block
+    // warten, Ergebnis verarbeiten — bis nichts mehr läuft.
+    while (true) {
+      bereiteStarten()
+      if (laufende.size === 0) break
+      const { id, ergebnis } = await Promise.race(laufende.values())
+      laufende.delete(id)
+      lauf.aktiveInstanzen.delete(id)
+      senden({ art: 'block-fertig', instanzId: id })
+      await verarbeite(id, ergebnis)
+      standSpeichern()
+    }
+
+    // Harter Stopp: alle Motoren sind tot — der Projektordner springt einmal
+    // zentral auf den letzten Sicherungspunkt zurück (SPEC §6).
+    if (lauf.hart && !wiederherstellenNachLauf) {
+      const zurueck = await aufLetztenPunktZuruecksetzen(projektPfad)
+      if (zurueck.ok && zurueck.zurueckgesetzt) tickern(texte.ticker.zurueckgesetzt)
+      endZustand = 'hart-abgebrochen'
+    }
+    if (!endZustand) {
+      const alleFertig = kettenIds.every((id) => knoten.get(id).status === 'fertig')
+      endZustand = alleFertig ? 'erfolgreich' : lauf.sanft ? 'sanft-gestoppt' : 'fehlgeschlagen'
+    }
+    // „Stand wiederherstellen" aus der Folgen-Frage — jetzt schreibt keiner mehr.
+    if (wiederherstellenNachLauf) {
+      const zurueck = await wiederherstellen(projektPfad, punktVorLauf)
+      if (zurueck.ok) tickern(texte.ticker.zurueckgesetzt)
+    }
 
     // Offene Fragen auflösen, damit nichts ewig hängt.
     for (const antworten of [...lauf.fragen.values()]) antworten(false)
@@ -851,7 +1019,9 @@ export function laufHartStoppen(projektPfad) {
   // Eine offene Mensch-Frage würde den Werkzeug-Aufruf im FlowForge-Prozess
   // ewig hängen lassen — sofort auflösen.
   for (const antworten of [...lauf.menschFragen.values()]) antworten(null)
-  if (lauf.motor) lauf.motor.hartStoppen()
+  // Bei parallelen Zweigen laufen mehrere Motoren — alle sofort töten.
+  if (lauf.motoren.size > 0)
+    for (const motor of [...lauf.motoren.values()]) motor.hartStoppen()
   else lauf.tickern?.(texte.ticker.hartAbgebrochen)
   return { ok: true }
 }
@@ -913,12 +1083,14 @@ export function laufstandInfo(projektPfad) {
     return { ok: true, vorhanden: false }
   const stand = laufstandLaden(projektPfad)
   if (!stand) return { ok: true, vorhanden: false }
+  // Der nächste offene Block — beim alten Positions-Format die notierte Position.
+  const naechsteId = Array.isArray(stand.fertigIds)
+    ? stand.kettenIds.find((id) => !stand.fertigIds.includes(id))
+    : stand.kettenIds[stand.index]
   let blockName = ''
   const geladen = workflowLaden(projektPfad)
   if (geladen.ok) {
-    const eintrag = geladen.workflow.bloecke.find(
-      (block) => block.instanzId === stand.kettenIds[stand.index]
-    )
+    const eintrag = geladen.workflow.bloecke.find((block) => block.instanzId === naechsteId)
     if (eintrag) blockName = blockDefinition(eintrag.blockId)?.name ?? ''
   }
   return { ok: true, vorhanden: true, gestartetAm: stand.gestartetAm, blockName }
@@ -930,8 +1102,8 @@ export function laufstandVerwerfen(projektPfad) {
 }
 
 // Setzt einen unterbrochenen Lauf fort: Projektordner zurück auf den letzten
-// Sicherungspunkt (halbfertige Änderungen des abgebrochenen Blocks
-// verschwinden), dann weiter an der notierten Position. Sind alle Plätze
+// Sicherungspunkt (halbfertige Änderungen der abgebrochenen Blöcke
+// verschwinden), dann laufen alle noch offenen Blöcke erneut. Sind alle Plätze
 // belegt, wartet auch die Wiederaufnahme in der Warteschlange — zurückgesetzt
 // wird erst unmittelbar vor dem echten Start.
 export async function laufFortsetzen(fenster, projektPfad, ausWarteschlange = false) {
@@ -965,10 +1137,11 @@ export function laufZustand(projektPfad) {
     ok: true,
     aktiv: true,
     ...rahmen,
-    blockInstanzId: lauf.aktuelleInstanzId,
-    frage: lauf.offeneFrage,
+    // Bei parallelen Zweigen laufen mehrere Karten gleichzeitig (BAUPLAN 13).
+    blockInstanzIds: [...lauf.aktiveInstanzen],
+    frage: lauf.offeneFragen[0] ?? null,
     entscheidung: lauf.offeneEntscheidung,
-    menschFrage: lauf.offeneMenschFrage,
+    menschFrage: lauf.offeneMenschFragen[0] ?? null,
     gespraech: lauf.gespraech
   }
 }

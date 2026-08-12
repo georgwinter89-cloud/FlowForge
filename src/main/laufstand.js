@@ -29,7 +29,12 @@ export function laufstandLaden(projektPfad) {
     const stand = JSON.parse(
       fs.readFileSync(path.join(projektPfad, LAUFSTAND_DATEI), 'utf8')
     )
-    if (!stand || !Array.isArray(stand.kettenIds) || !Number.isInteger(stand.index)) return null
+    if (!stand || !Array.isArray(stand.kettenIds)) return null
+    // Seit den parallelen Zweigen (BAUPLAN 13) hält der Laufstand die fertigen
+    // Blöcke statt einer Position. Das alte Positions-Format wird noch geladen,
+    // damit das Wiederaufnahme-Angebot erscheint — fortsetzen lässt es sich
+    // nicht mehr (die Prüfung in laufStarten lehnt es sauber ab).
+    if (!Array.isArray(stand.fertigIds) && !Number.isInteger(stand.index)) return null
     return stand
   } catch {
     return null

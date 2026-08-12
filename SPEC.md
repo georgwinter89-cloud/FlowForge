@@ -68,8 +68,10 @@ Ergebnis des letzten Laufs direkt an jeder Block-Karte auf der Leinwand aufklapp
 ### 3.3 Sicherungspunkte
 
 - Automatische Sicherungspunkte des Projektordners: beim Anlegen des Projekts, **vor jedem
-  Lauf** und **nach jedem erfolgreichen Block** (technisch Git, für den Nutzer unsichtbar —
-  sichtbar nur als Liste: „14:32 — Prüfer bestanden").
+  Lauf** und **nach jedem erfolgreichen schreibenden Block** (technisch Git, für den Nutzer
+  unsichtbar — sichtbar nur als Liste: „14:32 — Prüfer bestanden"). Nur-lesende Blöcke
+  ändern nichts und erzeugen deshalb keinen Punkt — ein Punkt, während parallel ein
+  schreibender Block arbeitet, würde dessen halbfertige Änderungen einfrieren.
 - Technik-Absicherung: Die Verwaltung nutzt ein eigenes, verstecktes Git-Verzeichnis
   **außerhalb** des Projektordners — das Projekt darf selbst ein Git-Repo sein oder werden.
   Dem Agenten ist Git-Benutzung per Sperre untersagt (hartes Nein, keine Rückfrage).
@@ -88,19 +90,24 @@ Ergebnis des letzten Laufs direkt an jeder Block-Karte auf der Leinwand aufklapp
 - Die Leinwand ist ein **Schaubild** (Entscheidung Georg, 07.08.2026): gerahmte Block-Karten,
   **frei platzierbar** (Positionen werden gespeichert), verbunden durch von Hand gezogene
   **Pfeile**, die die Reihenfolge bestimmen. Datenformat: Karten + Pfeile.
-- **Ein-Pfad-Regel bis zur Freischaltung paralleler Zweige** (BAUPLAN Schritt 13): Ein
-  Workflow ist ein durchgehender Pfad — ein zweiter Pfeil aus derselben Karte wird mit
-  freundlichem Hinweis abgelehnt. **Zwischenstände beim Umbauen sind erlaubt:** Beim
-  Bearbeiten darf der Pfad vorübergehend in Stücke zerfallen (z.B. um einen Block aus
-  der Mitte zu nehmen); die braucht/liefert-Steck-Prüfung greift, sobald die Pfeile
-  wieder alle Karten zu einem Pfad verbinden — und spätestens beim Start, der immer
-  streng prüft. Danach sind **parallele Zweige** erlaubt: gleichzeitig
-  laufen dürfen mehrere lesende Blöcke, aber höchstens ein schreibender (§5); Zweige werden
-  vor dem nächsten gemeinsamen Schritt zusammengeführt. Parallelität existiert außerdem
-  **innerhalb** von Blöcken (z.B. Audit-Block startet intern zwei Prüfer).
+- **Parallele Zweige** (seit Bauschritt 13): Von einer Karte dürfen mehrere Pfeile
+  ausgehen und mehrere an einer ankommen; Kreise sind verboten. Ein Block startet,
+  sobald alle seine Vorgänger fertig sind — ein Block mit mehreren eingehenden Pfeilen
+  führt die Zweige zusammen (er wartet auf alle). Gleichzeitig laufen dürfen mehrere
+  lesende Blöcke, aber höchstens ein schreibender (§5); ein sichtbarer Hinweis im
+  Ticker warnt, dass parallele Blöcke den Verbrauch vervielfachen. braucht/liefert
+  gilt entlang der Pfeile: Was ein Block braucht, muss einer seiner Vorfahren liefern.
+  **Zwischenstände beim Umbauen sind erlaubt:** Beim Bearbeiten darf das Schaubild
+  vorübergehend in Stücke zerfallen (z.B. um einen Block herauszunehmen); die
+  braucht/liefert-Steck-Prüfung greift, sobald die Pfeile wieder alle Karten zu einem
+  zusammenhängenden Schaubild verbinden — und spätestens beim Start, der immer streng
+  prüft. Parallelität **innerhalb** von Blöcken (z.B. ein Audit-Block, der intern zwei
+  Prüfer startet) gibt es noch nicht.
 - **Fehlschlag-Rückführung:** „bei Fehlschlag zurück zu Block X" (braucht der Prüfer sofort).
   Standard **2 Reparatur-Runden** (pro Workflow verstellbar); danach hält der Lauf an und stellt
-  eine Folgen-Frage („Weitermachen, zurückstellen oder Stand wiederherstellen?").
+  eine Folgen-Frage („Weitermachen, zurückstellen oder Stand wiederherstellen?"). Im
+  Verzweigten laufen genau die Blöcke auf den Wegen von X zum Prüfer erneut — parallele
+  Zweige daneben behalten ihr Ergebnis; als Ziel wählbar sind alle Vorfahren des Prüfers.
 
 ### 4.2 Anatomie eines Blocks
 
@@ -116,8 +123,8 @@ blockieren den Weiterlauf, Regeln stehen nicht nur als Text im Prompt.
 **Arbeitsblöcke** (echte Arbeitsaufträge, seit Bauschritt 8/9): Kontext laden ·
 Spec-Interview · Paket schneiden · Angreifer (nur lesend) · Diagnose (nur
 lesend) · Bauer · Prüfer · Frage an den Menschen (nur lesend) · Sessionende
-(bringt die Karten auf Stand). Noch ausstehend: Audit (parallele Prüfer,
-Bauschritt 13).
+(bringt die Karten auf Stand). Noch ausstehend: Audit (startet intern
+parallele Prüfer; noch keinem Bauschritt zugeordnet).
 Auftragsquelle von Paket schneiden und Diagnose (Entscheidung Georg,
 07.08.2026): das Wunsch- bzw. Fehlerbild-Feld am Block **oder**, wenn es leer
 ist, die offenen Aufgaben-Karten der Kartenauswahl — sind beide leer, startet
@@ -145,8 +152,9 @@ und Empfehlung über das Gespräch (§6) und liefert die Antwort an die Folgebl�
 
 **Übergaben:** braucht/liefert ist nicht nur eine Steck-Regel, sondern die
 Datenweitergabe im Lauf — der Abschlusstext eines Blocks wird unter seinen
-liefert-Etiketten gespeichert und jedem Folgeblock mit passendem braucht in den
-Auftrag gereicht (gekürzt auf 8.000 Zeichen je Übergabe). Daneben gibt es
+liefert-Etiketten gespeichert und jedem Nachfahren entlang der Pfeile mit
+passendem braucht in den Auftrag gereicht (gekürzt auf 8.000 Zeichen je
+Übergabe; liefern mehrere Vorfahren dasselbe Etikett, gewinnt der nächstgelegene). Daneben gibt es
 **optionale Bedarfe** („falls da"): Der Bauer verlangt nur das Arbeitspaket;
 eine Angriffsliste wird mitgereicht und muss eingearbeitet werden, wenn ein
 Block davor eine liefert — so kommt „Bug jagen" ohne Angreifer aus.
@@ -223,7 +231,8 @@ Angreifer durch die Diagnose.
 
 ## 6. Live-Ansicht & Eingriff
 
-- **Klartext-Liveticker** + hervorgehobener laufender Block auf der Leinwand.
+- **Klartext-Liveticker** + hervorgehobene laufende Blöcke auf der Leinwand (bei
+  parallelen Zweigen mehrere gleichzeitig; Ticker-Zeilen tragen dann den Blocknamen).
 - **Rohprotokoll** einklappbar für den Blick hinter die Kulissen.
 - **Stopp in zwei Stufen:** „Sanft anhalten" (laufender Block macht fertig, Halt am
   Sicherungspunkt) und „Sofort abbrechen" (Block gilt als nicht gelaufen; der Projektordner

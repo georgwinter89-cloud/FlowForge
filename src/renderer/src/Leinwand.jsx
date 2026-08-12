@@ -7,7 +7,7 @@ import {
   REPARATUR_RUNDEN_MAX,
   UEBERTRAG_GRENZE_MAX
 } from '../../shared/blockKatalog.js'
-import { schaubildReihenfolge, vorfahrenImPfad } from '../../shared/kettenRegeln.js'
+import { schaubildReihenfolge, vorfahrenSortiert } from '../../shared/kettenRegeln.js'
 import { BlockChips } from './Blockbibliothek.jsx'
 
 const t = texte.lauf
@@ -55,7 +55,7 @@ function VorschauGruppe({ ueberschrift, eintraege }) {
   )
 }
 
-function VerbrauchZeile({ verbrauch, modus }) {
+function VerbrauchZeile({ verbrauch, modus, label }) {
   if (!verbrauch) return null
   const teile = []
   if (verbrauch.kontextProzentVon != null)
@@ -64,7 +64,12 @@ function VerbrauchZeile({ verbrauch, modus }) {
   if (verbrauch.kostenUsd != null)
     teile.push(modus === 'abo' ? t.verbrauchKostenAbo : t.verbrauchKosten(verbrauch.kostenUsd))
   if (teile.length === 0) return null
-  return <p className="verbrauch-zeile">{teile.join(' · ')}</p>
+  return (
+    <p className="verbrauch-zeile">
+      {label ? `„${label}": ` : ''}
+      {teile.join(' · ')}
+    </p>
+  )
 }
 
 function ZustandsMarke({ zustand }) {
@@ -350,11 +355,15 @@ export default function Leinwand({
   const [wartePosition, setWartePosition] = useState(0)
   const [workflow, setWorkflow] = useState(null)
   const [meldung, setMeldung] = useState('')
-  const [aktiveInstanz, setAktiveInstanz] = useState(null)
+  // Bei parallelen Zweigen laufen mehrere Karten gleichzeitig (BAUPLAN 13).
+  const [aktiveInstanzen, setAktiveInstanzen] = useState(() => new Set())
   const [ticker, setTicker] = useState([])
   const [roh, setRoh] = useState([])
   const [rohOffen, setRohOffen] = useState(false)
-  const [verbrauch, setVerbrauch] = useState(null)
+  // Verbrauch je Block (instanzId → Verbrauch) — parallele Blöcke melden
+  // gleichzeitig; angezeigt wird eine Zeile pro laufendem Block.
+  const [verbraeuche, setVerbraeuche] = useState({})
+  const [letzterVerbrauch, setLetzterVerbrauch] = useState(null)
   const [frage, setFrage] = useState(null)
   const [entscheidung, setEntscheidung] = useState(null)
   // Gespräch mit dem Agenten: offene Frage + bisheriger Verlauf dieses Laufs.
@@ -430,7 +439,7 @@ export default function Leinwand({
       }
       setZustand('laeuft')
       setTab('lauf')
-      setAktiveInstanz(e.blockInstanzId ?? null)
+      setAktiveInstanzen(new Set(e.blockInstanzIds ?? []))
       if (e.frage) setFrage(e.frage)
       if (e.entscheidung) setEntscheidung(e.entscheidung)
       if (e.menschFrage) setMenschFrage(e.menschFrage)
@@ -453,13 +462,14 @@ export default function Leinwand({
         // Die Anzeige des vorigen Laufs wird geleert wie bei einem Handstart.
         setTicker([])
         setRoh([])
-        setVerbrauch(null)
+        setVerbraeuche({})
+        setLetzterVerbrauch(null)
         setErgebnis(null)
         setGespraech([])
         setMenschFrage(null)
         setFrage(null)
         setEntscheidung(null)
-        setAktiveInstanz(null)
+        setAktiveInstanzen(new Set())
         setZustand('laeuft')
         setTab('lauf')
       }
@@ -470,11 +480,22 @@ export default function Leinwand({
         setFehler(texte.lauf.warteschlangeFehler(ereignis.fehler))
         setTab('schaubild')
       }
-      if (ereignis.art === 'block') setAktiveInstanz(ereignis.instanzId)
+      if (ereignis.art === 'block')
+        setAktiveInstanzen((alt) => new Set(alt).add(ereignis.instanzId))
+      if (ereignis.art === 'block-fertig')
+        setAktiveInstanzen((alt) => {
+          const neu = new Set(alt)
+          neu.delete(ereignis.instanzId)
+          return neu
+        })
       if (ereignis.art === 'ticker')
         setTicker((alt) => [...alt, { zeit: new Date(), text: ereignis.text }])
       if (ereignis.art === 'roh') setRoh((alt) => [...alt, ereignis.zeile])
-      if (ereignis.art === 'verbrauch') setVerbrauch(ereignis.verbrauch)
+      if (ereignis.art === 'verbrauch') {
+        setLetzterVerbrauch(ereignis.verbrauch)
+        if (ereignis.instanzId)
+          setVerbraeuche((alt) => ({ ...alt, [ereignis.instanzId]: ereignis.verbrauch }))
+      }
       if (ereignis.art === 'frage')
         setFrage({ frageId: ereignis.frageId, beschreibung: ereignis.beschreibung })
       if (ereignis.art === 'frage-erledigt') setFrage(null)
@@ -499,7 +520,7 @@ export default function Leinwand({
       if (ereignis.art === 'fertig') {
         setZustand('fertig')
         setErgebnis({ zustand: ereignis.zustand, fehlertext: ereignis.fehlertext })
-        setAktiveInstanz(null)
+        setAktiveInstanzen(new Set())
         setFrage(null)
         setEntscheidung(null)
         setMenschFrage(null)
@@ -710,7 +731,8 @@ export default function Leinwand({
     setFehler('')
     setTicker([])
     setRoh([])
-    setVerbrauch(null)
+    setVerbraeuche({})
+    setLetzterVerbrauch(null)
     setErgebnis(null)
     setGespraech([])
     const antwort = await window.flowforge.laufFortsetzen(pfad)
@@ -1067,10 +1089,10 @@ export default function Leinwand({
                 eintrag={eintrag}
                 def={def}
                 nummer={nummern.get(eintrag.instanzId) ?? null}
-                vorfahren={vorfahrenImPfad(bloecke, pfeile, eintrag.instanzId)}
+                vorfahren={vorfahrenSortiert(bloecke, pfeile, eintrag.instanzId)}
                 nummern={nummern}
                 bearbeitbar={bearbeitbar}
-                aktiv={eintrag.instanzId === aktiveInstanz}
+                aktiv={aktiveInstanzen.has(eintrag.instanzId)}
                 letztesErgebnis={letzteErgebnisse.get(eintrag.instanzId) ?? null}
                 onFeld={(feldId, wert) => feldSetzen(eintrag.instanzId, feldId, wert)}
                 onSpeichern={() => ketteSpeichern(workflowRef.current)}
@@ -1121,7 +1143,25 @@ export default function Leinwand({
       )}
       {tab === 'lauf' && zustand !== 'wartet' && !(zustand === 'bereit' && ticker.length === 0) && (
         <div className="lauf-ansicht">
-          <VerbrauchZeile verbrauch={verbrauch} modus={modus} />
+          {/* Laufen mehrere Blöcke parallel, bekommt jeder seine eigene
+              Verbrauchszeile — sonst genügt die letzte Meldung. */}
+          {(() => {
+            const aktive = [...aktiveInstanzen].filter((id) => verbraeuche[id])
+            if (aktive.length === 0)
+              return <VerbrauchZeile verbrauch={letzterVerbrauch} modus={modus} />
+            return aktive.map((id) => (
+              <VerbrauchZeile
+                key={id}
+                verbrauch={verbraeuche[id]}
+                modus={modus}
+                label={
+                  aktive.length > 1
+                    ? blockDefinition(bloecke.find((b) => b.instanzId === id)?.blockId)?.name
+                    : null
+                }
+              />
+            ))
+          })()}
 
           {zustand === 'laeuft' && laufAnzahl > 1 && (
             <p className="feld-hinweis">⚠ {t.parallelHinweis(laufAnzahl)}</p>

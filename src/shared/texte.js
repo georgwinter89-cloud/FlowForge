@@ -47,18 +47,15 @@ export const texte = {
   kette: {
     starten: 'Workflow starten',
     leerHinweis:
-      'Dein Schaubild ist noch leer. Zieh Blöcke aus der Bibliothek rechts hierher, schieb sie zurecht und verbinde sie mit Pfeilen — die Pfeile bestimmen die Reihenfolge.',
+      'Dein Schaubild ist noch leer. Zieh Blöcke aus der Bibliothek rechts hierher, schieb sie zurecht und verbinde sie mit Pfeilen — die Pfeile bestimmen die Reihenfolge. Von einer Karte dürfen auch mehrere Pfeile ausgehen: Solche Zweige laufen parallel und werden am nächsten gemeinsamen Block wieder zusammengeführt.',
     pfeilZiehenHinweis: 'Pfeil ziehen: hier drücken und zum nächsten Block ziehen',
     pfeilLoeschen: 'Diesen Pfeil löschen',
-    einPfadAusgehend: (name) =>
-      `Von „${name}" geht schon ein Pfeil aus. Ein Workflow ist vorerst ein einziger durchgehender Pfad — parallele Zweige kommen in einem späteren Bauschritt. Lösch den vorhandenen Pfeil, wenn du neu verbinden willst.`,
-    einPfadEingehend: (name) =>
-      `Bei „${name}" kommt schon ein Pfeil an. Ein Workflow ist vorerst ein einziger durchgehender Pfad — parallele Zweige kommen in einem späteren Bauschritt. Lösch den vorhandenen Pfeil, wenn du neu verbinden willst.`,
     fehlerKreis:
       'Diese Pfeile ergeben einen Kreis — der Workflow hätte kein Ende. Bitte lösch einen der Pfeile.',
     fehlerPfeilUngueltig: 'Dieser Pfeil lässt sich nicht setzen.',
+    fehlerPfeilDoppelt: 'Diese Verbindung gibt es schon.',
     fehlerNichtVerbunden: (name) =>
-      `„${name}" hängt noch nicht am Pfad. Verbinde alle Blöcke mit Pfeilen zu einem durchgehenden Pfad — oder entferne den Block.`,
+      `„${name}" hängt noch nicht am Schaubild. Verbinde alle Blöcke mit Pfeilen zu einem zusammenhängenden Schaubild — oder entferne den Block.`,
     entfernen: 'Entfernen',
     reparaturRundenLabel: 'Reparatur-Runden',
     reparaturRundenHinweis:
@@ -70,7 +67,7 @@ export const texte = {
     prueftMarke: 'Prüfer',
     fallsDaZusatz: 'falls da',
     fehlerBraucht: (blockName, bedarf) =>
-      `„${blockName}" braucht „${bedarf}" — aber kein Block davor liefert das.`,
+      `„${blockName}" braucht „${bedarf}" — aber keiner seiner Vorgänger entlang der Pfeile liefert das.`,
     fehlerLeereKette: 'Die Kette ist noch leer. Zieh zuerst Blöcke aus der Bibliothek auf die Leinwand.',
     fehlerPflichtfeld: (blockName, feld) =>
       `Beim Block „${blockName}" ist das Pflichtfeld „${feld}" leer. Bitte ausfüllen — sonst startet der Lauf nicht.`,
@@ -374,6 +371,9 @@ export const texte = {
       anzahl === 1
         ? 'In einem anderen Projekt läuft gerade ein Workflow — ein weiterer Lauf vervielfacht den Verbrauch deines Kontingents.'
         : `In anderen Projekten laufen gerade ${anzahl} Workflows — ein weiterer Lauf vervielfacht den Verbrauch deines Kontingents.`,
+    // Parallele Zweige (SPEC §4.1, BAUPLAN 13): sichtbarer Verbrauchs-Hinweis.
+    parallelBloeckeHinweis: (anzahl) =>
+      `${anzahl} Blöcke laufen jetzt gleichzeitig — parallele Blöcke vervielfachen den Verbrauch deines Kontingents.`,
     aboNichtErlaubt:
       'Diese FlowForge-Version läuft nur mit API-Schlüssel. Bitte hinterlege einen in den Einstellungen.',
     motorNichtAngemeldet:
@@ -439,6 +439,8 @@ export const texte = {
     zurueckgesetzt: 'Projektordner auf den letzten Sicherungspunkt zurückgesetzt.',
     fertigIn: (sekunden) => `Fertig nach ${sekunden} Sekunden.`,
     blockStartet: (nr, gesamt, name) => `Block ${nr} von ${gesamt}: „${name}" startet.`,
+    zweigeZusammengefuehrt: (name, anzahl) =>
+      `„${name}" führt ${anzahl} Zweige zusammen — alle Vorgänger sind fertig.`,
     pruefungBestanden: 'Prüfung bestanden.',
     pruefungNichtBestanden: 'Prüfung nicht bestanden.',
     pruefungOhneErgebnis:
