@@ -133,6 +133,14 @@ der Lauf gar nicht erst (freundlicher Hinweis). Ein früherer Block, der selbst
 Aufgaben-Karten erzeugt (Spec-Interview), zählt dabei als Quelle; seine neuen
 offenen Aufgaben rutschen nach seinem Lauf automatisch in die Kartenauswahl.
 
+**Paketgröße** (Entscheidung Georg, 12.08.2026): Paket schneiden misst die Größe
+an Zusammengehörigkeit und Prüfbarkeit, **nicht** an der Sitzungslänge — der
+automatische Übertrag (§5) trägt lange Pakete, während jeder eigene Lauf mehrere
+Sessions Grundaufwand kostet. Zusammengehörige Aufgaben-Karten dürfen zu einem
+Paket gebündelt werden (Fertig-Kriterien je Teilstück); kleiner geschnitten wird
+nur bei wirklich unabhängigen Baustellen oder wenn mittendrin eine Entscheidung
+des Nutzers nötig wäre.
+
 **Spec-Interview:** grillt den Nutzer über das Gespräch (§6) nach der
 Entscheidungsbaum-Methode (Entscheidung Georg, 07.08.2026: originalgetreu nach
 Matt Pococks Grilling-Vorgehen): Jede Festlegung verzweigt in Folge-Entscheidungen;

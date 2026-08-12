@@ -122,7 +122,7 @@ export const BLOCK_KATALOG = [
     name: 'Paket schneiden',
     symbol: '✂️',
     beschreibung:
-      'Schneidet aus dem Wunsch ein kleines, in einer Sitzung schaffbares Arbeitspaket mit prüfbaren Fertig-Kriterien.',
+      'Schneidet aus dem Wunsch ein zusammenhängendes Arbeitspaket mit prüfbaren Fertig-Kriterien — so groß wie sinnvoll, so klein wie nötig.',
     braucht: [],
     // Liegt ein Projekt-Überblick vor (z.B. vom Spec-Interview), wird er
     // mitgereicht — verlangt wird er nicht: Der Block liest selbst (12.08.2026).
@@ -149,22 +149,28 @@ export const BLOCK_KATALOG = [
       'Der Wunsch des Nutzers steht in diesem Feld:\n' +
       '{{wunsch}}\n' +
       'Ist das Feld leer, sind die offenen Aufgaben-Karten der Wunsch — wähle daraus die ' +
-      'sinnvollste nächste Arbeit (ein Paket, nicht alle auf einmal) und benenne, welche ' +
-      'Karte du dir vornimmst. ' +
+      'sinnvollste nächste Arbeit und benenne, welche Karte(n) du dir vornimmst; ' +
+      'zusammengehörige Aufgaben darfst du zu einem Paket bündeln. ' +
       'Prüfe durch eigenes Lesen im Projektordner (liegt dir ein Projekt-Überblick vor, nutze ' +
-      'ihn als Abkürzung), wie sich dieser Wunsch in EIN kleines, in einer Sitzung schaffbares ' +
-      'Arbeitspaket fassen lässt. ' +
-      'Ist der Wunsch zu groß, schneide das sinnvollste erste Paket heraus und benenne, ' +
-      'was bewusst draußen bleibt. Projektkarten sind nie Teil des Pakets — sie pflegt der ' +
+      'ihn als Abkürzung), wie sich dieser Wunsch in EIN zusammenhängendes Arbeitspaket ' +
+      'fassen lässt. Miss die Paketgröße NICHT an der Sitzungslänge: Läuft der Kontext des ' +
+      'Bauers voll, übergibt FlowForge automatisch an eine frische Session, die nahtlos ' +
+      'weitermacht — jeder eigene Lauf kostet dagegen mehrere Sessions Grundaufwand. Schneide ' +
+      'deshalb so GROSS wie inhaltlich sinnvoll: Was zusammengehört und sich gemeinsam prüfen ' +
+      'lässt, gehört in EIN Paket. Schneide nur dann kleiner, wenn der Wunsch wirklich ' +
+      'unabhängige Baustellen mischt oder mittendrin eine Entscheidung des Nutzers nötig wäre ' +
+      '— dann benenne, was bewusst draußen bleibt. ' +
+      'Projektkarten sind nie Teil des Pakets — sie pflegt der ' +
       'Sessionende-Block nach der Prüfung; nimm sie weder in die Schritte noch in die ' +
       'Fertig-Kriterien auf. ' +
       'Dein Abschlusstext ist die Übergabe an Angreifer und Bauer — kompakt (höchstens etwa ' +
-      '25 Zeilen) und mit genau diesen Punkten: ' +
+      '40 Zeilen) und mit genau diesen Punkten: ' +
       '1. Ziel des Pakets in einem Satz. ' +
       '2. Voraussichtlich betroffene Dateien. ' +
       '3. Umsetzungsschritte in sinnvoller Reihenfolge. ' +
       '4. Was ausdrücklich NICHT Teil des Pakets ist. ' +
-      '5. Fertig-Kriterien: prüfbare Aussagen, an denen ein Prüfer das Ergebnis messen kann.'
+      '5. Fertig-Kriterien: prüfbare Aussagen, an denen ein Prüfer das Ergebnis messen kann — ' +
+      'bei gebündelten Aufgaben eigene Kriterien je Teilstück.'
   },
   {
     id: 'angreifer',
