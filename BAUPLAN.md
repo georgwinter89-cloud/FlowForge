@@ -155,6 +155,33 @@ Politur.
 Feature → Bug) und findet keine Stelle, an der er Kommandozeile oder Dateisystem-
 Handarbeit braucht.
 
+### 16 — Session-Fortsetzung bei Wiederholungen
+(Entscheidung Georg, 12.08.2026: Wiederholungsfälle desselben Blocks starten nicht
+mehr kalt — der Kaltstart war Bauweise-Erbe, kein Prinzip, und kostet pro
+Reparatur-Runde zwei volle Sessions Grundaufwand samt Neu-Einlesen des Projekts.)
+Die Motor-Schnittstelle lernt **Fortsetzen**: Jede Motor-Session bekommt eine
+Kennung; läuft derselbe Block erneut, setzt er seine **eigene** frühere Session
+fort und bekommt nur den Zusatz nachgereicht. Genau drei Fälle:
+- **Reparatur-Runde des Bauers** (Prüferkritik nachgereicht — er weiß noch, was
+  er wo gebaut hat),
+- **Nachprüfung des Prüfers** (nur die Beanstandungen — er kennt seine Tests noch),
+- **Startanleitungs-Nachforderung**.
+Leitplanken: Kein Block setzt je die Session eines **anderen** Blocks fort — der
+erste Prüfer-Durchlauf bleibt frisch ohne Bauer-Wissen (SPEC §4.3). Ein
+**Füllstands-Wächter** prüft vor dem Fortsetzen: Liegt die alte Session schon nahe
+der Übertrags-Schwelle, lohnt Fortsetzen nicht → Kaltstart wie bisher. Kann eine
+Session nicht wiederaufgenommen werden (App-Neustart, Kennung ungültig), fällt der
+Fall still auf Kaltstart zurück; die Kennungen wandern dafür mit in den Laufstand.
+Jede Fortsetzung ist ehrlich im Ticker und Laufbericht vermerkt („Session
+fortgesetzt statt neu gestartet"). Der Karten-Kontext wird bei Fortsetzung nicht
+erneut eingespeist (steht dort schon). Bewusst NICHT Teil dieses Schritts:
+verschiedene Blöcke in einer Session zusammenlegen (z.B. Paket schneiden → Bauer)
+— das berührt das Frische-Prinzip und wird danach getrennt entschieden.
+**Alltagstest:** Georg provoziert mit dem strengen Übungs-Prüfer eine
+Reparatur-Runde und sieht im Ticker „Session fortgesetzt statt neu gestartet" —
+und im Laufbericht, dass die Reparatur-Runde deutlich weniger verbraucht hat als
+der erste Durchlauf des Blocks.
+
 ## Reihenfolge-Begründung (kurz)
 Motor-Durchstich früh (3), weil dort das größte technische Risiko liegt — inklusive
 Rechte-Durchsetzung und Verbrauchs-Messung, den zwei größten Adapter-Risiken.
