@@ -319,6 +319,13 @@ die Nachprüfung des Prüfers ist der eingebaute Schiedsrichter.)
   Reparatur, Versuch 1 von 2"), samt Ausgang der Nachprüfung. Nur aktiv, wenn
   die lokale Helfer-KI eingeschaltet und beim Laufstart erreichbar ist —
   sonst läuft die Rückführung wie heute.
+- **Häkchen je Block** (Idee Georg, 13.08.2026): An jeder Block-Karte im
+  Schaubild ein Abwahl-Häkchen „lokale KI erlaubt" (Standard: an, erbt den
+  globalen Schalter). Abgewählt wird es als echte Sperre durchgesetzt —
+  FlowForge lehnt lokal_recherchieren für diesen Block hart ab (erkennbar am
+  laufenden Block, Mechanik aus Schritt 19) und streicht den Hinweis aus dem
+  Auftrag. Ein Block ohne lokale KI bekommt auch keine lokale Vorreparatur.
+  Keine Gegenrichtung (global aus, einzeln an) — ein Vorzeichen genügt.
 **Alltagstest:** Georg fährt ein Paket, bei dem der Prüfer eine mechanische
 Beanstandung findet: Im Ticker erscheint „lokale Reparatur, Versuch 1", die
 Nachprüfung besteht, und der Laufbericht zeigt, dass keine Opus-Reparatur
