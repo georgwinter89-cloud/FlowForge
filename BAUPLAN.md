@@ -294,6 +294,37 @@ einmal startet und die Blöcke als Agenten laufen. Ein Sperren-Test (z.B.
 Bauer-Agent versucht, in die Prüfmappe zu schreiben) wird weiterhin sichtbar
 abgelehnt, und der Prüfer liefert unverändert seinen Rot-vor-Grün-Beleg.
 
+### 20 — Lokale Vorreparatur: Reparatur-Runden erst lokal
+(Idee Georg, 13.08.2026: Scheitert eine Prüfung, repariert zuerst die lokale
+Helfer-KI nach den Hinweisen des Prüfers — erst wenn das zweimal scheitert,
+übernimmt der Opus-Bauer. Reparatur-Runden sind die bestgeeignete
+Schreibaufgabe für ein kleines Modell: Der Auftrag ist eng und konkret, und
+die Nachprüfung des Prüfers ist der eingebaute Schiedsrichter.)
+- **Opus sortiert vor:** Der Prüfer markiert je Beanstandung, ob sie
+  „mechanisch reparierbar" ist (Tippfehler, falscher Wert, vergessener
+  Randfall). Nur solche gehen an die lokale KI; Architektur-Probleme
+  eskalieren sofort zum Opus-Bauer. Die Kosten-Wette lohnt nur bei
+  ausreichender Trefferquote — jeder lokale Versuch kostet eine
+  Opus-Nachprüfung; die Vorsortierung schützt vor teuren Fehlwetten.
+- **Sicherungspunkt + Rückrollen:** Vor jedem lokalen Versuch legt FlowForge
+  einen Sicherungspunkt an; scheitert die Nachprüfung, wird der Stand
+  zurückgerollt, BEVOR Opus übernimmt — Opus soll reparieren, nicht erst das
+  Gebastel der lokalen KI verstehen müssen.
+- **Erstes Schreib-Werkzeug der lokalen KI, an kurzer Leine:** gezieltes
+  Ersetzen (kein freies Datei-Schreiben), unter denselben harten Sperren wie
+  der Bauer — nur Projektordner, Prüfmappe und Verwaltungsdateien tabu,
+  durchgesetzt im FlowForge-Code. Eigenes Versuchs-Budget (2 je Rückführung);
+  lokale Versuche verbrauchen KEINE regulären Reparatur-Runden des Workflows.
+- **Ehrlichkeit:** Jeder Versuch steht im Ticker und im Laufbericht („lokale
+  Reparatur, Versuch 1 von 2"), samt Ausgang der Nachprüfung. Nur aktiv, wenn
+  die lokale Helfer-KI eingeschaltet und beim Laufstart erreichbar ist —
+  sonst läuft die Rückführung wie heute.
+**Alltagstest:** Georg fährt ein Paket, bei dem der Prüfer eine mechanische
+Beanstandung findet: Im Ticker erscheint „lokale Reparatur, Versuch 1", die
+Nachprüfung besteht, und der Laufbericht zeigt, dass keine Opus-Reparatur
+nötig war. Ein Gegenlauf mit dem strengen Übungs-Prüfer zeigt die Eskalation:
+zwei lokale Versuche, dann übernimmt sichtbar der Opus-Bauer.
+
 ## Reihenfolge-Begründung (kurz)
 Motor-Durchstich früh (3), weil dort das größte technische Risiko liegt — inklusive
 Rechte-Durchsetzung und Verbrauchs-Messung, den zwei größten Adapter-Risiken.
