@@ -4,7 +4,9 @@ import { texte } from './texte.js'
 
 export const TITEL_MAX = 80
 export const TEXT_MAX = 400
-export const SORTEN = ['aufgabe', 'entscheidung', 'wissen', 'status']
+// 'pruefung' (BAUPLAN 18) legt ausschließlich FlowForge selbst an — nach
+// jeder bestandenen Prüfung; Mensch-Formular und Agenten-Werkzeuge nicht.
+export const SORTEN = ['aufgabe', 'entscheidung', 'wissen', 'status', 'pruefung']
 
 // Liefert null, wenn alles passt — sonst eine Fehlermeldung in Alltagssprache.
 export function pruefeKarteneingabe({ titel, text }) {

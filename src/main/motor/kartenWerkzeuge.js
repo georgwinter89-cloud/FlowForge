@@ -43,8 +43,8 @@ export async function kartenWerkzeugServer({ projektPfad, aufEreignis }) {
 
   const uebersicht = tool(
     'karten_uebersicht',
-    'Listet alle Projektkarten von FlowForge auf (Status, Aufgaben, Entscheidungen, Wissen), ' +
-      'mit der id für die anderen Karten-Werkzeuge.',
+    'Listet alle Projektkarten von FlowForge auf (Status, Aufgaben, Entscheidungen, Wissen, ' +
+      'Prüfungen), mit der id für die anderen Karten-Werkzeuge.',
     {},
     async () => {
       const geladen = kartenLaden(projektPfad)
@@ -95,6 +95,10 @@ export async function kartenWerkzeugServer({ projektPfad, aufEreignis }) {
       if (!geladen.ok) return fehlerAntwort(geladen.fehler)
       const bisher = geladen.karten.find((k) => k.id === id)
       if (!bisher) return fehlerAntwort(texte.agentenKarten.unbekannteId(id))
+      // Prüfkarten pflegt FlowForge selbst (BAUPLAN 18) — würde der Agent sie
+      // umschreiben, passte der Kartentext nicht mehr zum aufbewahrten Archiv.
+      if (bisher.sorte === 'pruefung')
+        return abgelehnt(texte.kartenRegeln.pruefkarteNurFlowForge)
       const ergebnis = karteAendern(projektPfad, id, { titel: titel ?? bisher.titel, text })
       if (!ergebnis.ok) return abgelehnt(ergebnis.fehler)
       const karte = ergebnis.karten.find((k) => k.id === id)

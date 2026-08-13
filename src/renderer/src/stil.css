@@ -492,6 +492,11 @@ body {
   border-left-color: #7c3aed;
 }
 
+/* Prüfkarten (BAUPLAN 18): legt FlowForge nach jeder bestandenen Prüfung an. */
+.karte-pruefung {
+  border-left-color: #0d9488;
+}
+
 .karte-erledigt {
   opacity: 0.55;
 }
@@ -870,6 +875,22 @@ body {
 
 .kontext-chip.chip-wissen {
   border-left-color: #7c3aed;
+}
+
+.kontext-chip.chip-pruefung {
+  border-left-color: #0d9488;
+}
+
+/* Angehängte Prüfkarten an der Prüf-Blockkarte (BAUPLAN 18) */
+.pruefkarten-anhang {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.pruefkarten-anhang .feld-hinweis {
+  margin: 0;
 }
 
 /* Der Kartentext kürzt sich mit … — das × und der Rahmen bleiben immer sichtbar. */

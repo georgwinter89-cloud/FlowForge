@@ -165,7 +165,11 @@ export default function Projektansicht({ pfad, onZurueck }) {
   }
 
   async function loeschen(karte) {
-    if (!window.confirm(tk.loeschenBestaetigung)) return
+    // Löschen einer Prüfkarte räumt ihre aufbewahrten Prüfdateien mit weg
+    // (BAUPLAN 18) — die Rückfrage sagt das ehrlich dazu.
+    const rueckfrage =
+      karte.sorte === 'pruefung' ? tk.loeschenBestaetigungPruefung : tk.loeschenBestaetigung
+    if (!window.confirm(rueckfrage)) return
     uebernehmen(await window.flowforge.karteLoeschen(pfad, karte.id))
   }
 
@@ -229,7 +233,7 @@ export default function Projektansicht({ pfad, onZurueck }) {
             </button>
           </div>
           <div className="filter-zeile">
-            {['alle', 'aufgabe', 'entscheidung', 'wissen'].map((wert) => (
+            {['alle', 'aufgabe', 'entscheidung', 'wissen', 'pruefung'].map((wert) => (
               <button
                 key={wert}
                 className={'filter-chip' + (filter === wert ? ' filter-aktiv' : '')}

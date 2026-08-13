@@ -28,7 +28,15 @@ import {
   zwischenBloecke
 } from '../shared/kettenRegeln.js'
 import { einstellungenLaden, ABO_MODUS_ERLAUBT } from './einstellungen.js'
-import { kartenLaden, kontingentVerhaltenLaden } from './projekte.js'
+import { kartenLaden, kontingentVerhaltenLaden, pruefkarteAnlegen } from './projekte.js'
+import {
+  pruefkartenOrdner,
+  pruefkarteEinlegen,
+  pruefkartenArchivHatDateien,
+  pruefkartenArchivAuffrischen,
+  pruefungenArchivieren,
+  pruefkarteAusErgebnis
+} from './pruefkarten.js'
 import { starteMotorLauf } from './motor/claudeCodeMotor.js'
 import {
   KONTEXT_FENSTER_STANDARD,
@@ -391,6 +399,52 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     }
   }
 
+  // Prüfkarten (SPEC §4.3, BAUPLAN 18): NACH der Leerung legt FlowForge die
+  // aufbewahrten Prüfdateien der auf Prüf-Blöcke gezogenen Karten zurück in
+  // die Mappe — noch vor dem Sicherungspunkt „Stand vor Lauf", damit auch
+  // „Sofort abbrechen" sie korrekt zurückholt. Die Mappe ist nur die Werkbank
+  // des Laufs; das Gedächtnis ist das Archiv hinter den Prüfkarten. Bei einer
+  // Wiederaufnahme liegen die Dateien schon in der Mappe (der Sicherungspunkt
+  // kam nach dem Einlegen) — dann wird nur die Zuordnung neu aufgebaut.
+  const pruefkartenVonInstanz = new Map() // instanzId → [{ id, titel, text, ordner, dateien }]
+  let pruefkartenEingelegt = 0
+  {
+    const geladeneKarten = kartenLaden(projektPfad)
+    const pruefkartenNachId = new Map(
+      geladeneKarten.ok
+        ? geladeneKarten.karten.filter((k) => k.sorte === 'pruefung').map((k) => [k.id, k])
+        : []
+    )
+    const schonEingelegt = new Set()
+    for (const eintrag of kette) {
+      if (!blockDefinition(eintrag.blockId)?.prueft) continue
+      const liste = []
+      for (const kartenId of eintrag.pruefKarten ?? []) {
+        const karte = pruefkartenNachId.get(kartenId)
+        if (!karte) continue // Karte inzwischen gelöscht — still ignorieren
+        const anhang = {
+          id: kartenId,
+          titel: karte.titel,
+          text: karte.text,
+          ordner: pruefkartenOrdner(kartenId),
+          dateien: pruefkartenArchivHatDateien(projektPfad, kartenId)
+        }
+        if (!fortsetzung && anhang.dateien && !schonEingelegt.has(kartenId)) {
+          schonEingelegt.add(kartenId)
+          try {
+            if (pruefkarteEinlegen(projektPfad, kartenId)) pruefkartenEingelegt++
+          } catch {
+            // Eine klemmende Kopie verhindert den Start nicht — der Prüfer
+            // bekommt die Karte dann ohne Dateien genannt.
+            anhang.dateien = false
+          }
+        }
+        liste.push(anhang)
+      }
+      if (liste.length) pruefkartenVonInstanz.set(eintrag.instanzId, liste)
+    }
+  }
+
   // Sicherheitsnetz vor dem Lauf: der Stand von jetzt ist immer wiederholbar —
   // und die Folgen-Frage kann genau hierauf zurücksetzen.
   const namen = kette.map((b) => blockDefinition(b.blockId).name)
@@ -537,6 +591,7 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
   // Ansicht die Anzeige des vorigen Laufs sauber leeren kann.
   senden({ art: 'zustand', zustand: 'laeuft' })
   if (pruefmappeGeleert) tickern(texte.ticker.pruefmappeGeleert)
+  if (pruefkartenEingelegt > 0) tickern(texte.ticker.pruefkartenEingelegt(pruefkartenEingelegt))
   if (ausWarteschlange) tickern(texte.ticker.ausWarteschlangeGestartet)
   // Sichtbarer Hinweis (SPEC §5, BAUPLAN 12): parallele Läufe vervielfachen den
   // Verbrauch — ehrlich im Ticker und damit auch im Laufbericht.
@@ -779,6 +834,20 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
             uebergabenText(k) +
             texte.agentenUebergabe.auftragEinleitung +
             auftragMitFeldern(k.def, k.eintrag.feldWerte)
+          // Prüfkarten (BAUPLAN 18): gezogene alte Prüfungen werden zusätzlich
+          // zur Paket-Prüfung ausgeführt — der Zusatz gehört in jeden
+          // Kaltstart-Auftrag dieses Blocks (auch nach einem Übertrag).
+          const pruefkarten = pruefkartenVonInstanz.get(k.eintrag.instanzId)
+          if (pruefkarten)
+            auftrag +=
+              texte.agentenPruefkarten.einleitung +
+              pruefkarten
+                .map((anhang) =>
+                  anhang.dateien
+                    ? texte.agentenPruefkarten.eintrag(anhang.titel, anhang.text, anhang.ordner)
+                    : texte.agentenPruefkarten.eintragOhneDateien(anhang.titel, anhang.text)
+                )
+                .join('')
           if (k.rueckmeldung) auftrag += texte.agentenUebergabe.prueferRueckmeldung(k.rueckmeldung)
           if (k.nachpruefung) auftrag += texte.agentenUebergabe.prueferNachpruefung(k.nachpruefung)
           if (k.startanleitungNachforderung)
@@ -958,6 +1027,35 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       }
     }
 
+    // Prüfkarten (SPEC §3.1/§4.3, BAUPLAN 18): Nach jeder bestandenen Prüfung
+    // entsteht automatisch eine Prüfkarte; dahinter bewahrt FlowForge die
+    // frischen Prüfdateien dieses Laufs auf. Angepasste Fassungen eingelegter
+    // alter Prüfungen ersetzen ihr Archiv — die Karte veraltet nicht.
+    function pruefkarteNachBestandenerPruefung(instanzId, ergebnisText) {
+      try {
+        const frisch = kartenLaden(projektPfad)
+        const vorhandene = new Set(frisch.ok ? frisch.karten.map((karte) => karte.id) : [])
+        for (const anhang of pruefkartenVonInstanz.get(instanzId) ?? [])
+          if (vorhandene.has(anhang.id)) pruefkartenArchivAuffrischen(projektPfad, anhang.id)
+        const roh = pruefkarteAusErgebnis(ergebnisText)
+        const zeitText = new Date().toLocaleString('de-DE', {
+          dateStyle: 'short',
+          timeStyle: 'short'
+        })
+        const angelegt = pruefkarteAnlegen(projektPfad, {
+          titel: roh.titel ?? texte.pruefkarten.ersatzTitel(zeitText),
+          text: roh.text ?? texte.pruefkarten.ersatzText
+        })
+        if (!angelegt.ok) return
+        pruefungenArchivieren(projektPfad, angelegt.karte.id)
+        senden({ art: 'karten', karten: angelegt.karten })
+        tickern(texte.ticker.pruefkarteAngelegt(angelegt.karte.titel))
+      } catch {
+        // Ein klemmendes Archiv darf das Laufende nicht stören — die Prüfung
+        // selbst ist bestanden, nur die Aufbewahrung fiel aus.
+      }
+    }
+
     // Verarbeitet das endgültige Ergebnis eines Blocks — nacheinander, auch
     // wenn mehrere Blöcke gleichzeitig fertig werden.
     async function verarbeite(id, ergebnis) {
@@ -1064,6 +1162,7 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         blockErgebnis.zustand = bestanden === true ? 'pruefung-bestanden' : 'pruefung-nicht-bestanden'
         if (bestanden === true) {
           tickern(texte.ticker.pruefungBestanden)
+          pruefkarteNachBestandenerPruefung(id, ergebnis.ergebnisText)
         } else {
           tickern(bestanden === false ? texte.ticker.pruefungNichtBestanden : texte.ticker.pruefungOhneErgebnis)
           const zielId = rueckfuehrungsZiel(workflow.bloecke, workflow.pfeile, id)

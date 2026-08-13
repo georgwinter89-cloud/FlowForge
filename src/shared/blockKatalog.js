@@ -337,7 +337,12 @@ export const BLOCK_KATALOG = [
       'nach dir vom Sessionende-Block gepflegt. ' +
       'Dein Abschlusstext ist der Prüfbeleg — kompakt: 1. Was du wie geprüft hast. ' +
       '2. Der Rot-vor-Grün-Beleg mit den Ausgaben. 3. Beanstandungen mit Fundort — oder dass ' +
-      'es keine gibt. Deine allerletzte Zeile muss exakt lauten: ' +
+      'es keine gibt. Direkt vor der Urteils-Zeile stehen zwei Zeilen für die Prüfkarte, die ' +
+      'FlowForge bei bestandener Prüfung automatisch anlegt: eine Zeile ' +
+      '„PRUEFKARTE-TITEL: kurzer Name des Geprüften" (höchstens 80 Zeichen) und eine Zeile ' +
+      '„PRUEFKARTE: was geprüft wurde und woran man erkennt, dass es in Ordnung ist" — ' +
+      'ein bis zwei Sätze in Alltagssprache, höchstens 400 Zeichen. ' +
+      'Deine allerletzte Zeile muss exakt lauten: ' +
       'PRUEFUNG: BESTANDEN oder PRUEFUNG: FEHLGESCHLAGEN'
   },
   {
@@ -373,7 +378,11 @@ export const BLOCK_KATALOG = [
       'Wegwerf-Hilfen gehören in den Ordner arbeitsablage/. ' +
       'Dein Abschlusstext ist der Prüfbeleg — kompakt: 1. Was du geprüft hast und wie es ' +
       'ausging. 2. Jeder Fehlschlag mit Fundort in ein bis zwei Sätzen. ' +
-      'Deine allerletzte Zeile muss exakt lauten: ' +
+      'Direkt vor der Urteils-Zeile stehen zwei Zeilen für die Prüfkarte, die FlowForge bei ' +
+      'bestandener Prüfung automatisch anlegt: eine Zeile „PRUEFKARTE-TITEL: kurzer Name des ' +
+      'Geprüften" (höchstens 80 Zeichen) und eine Zeile „PRUEFKARTE: was geprüft wurde und ' +
+      'woran man erkennt, dass es in Ordnung ist" — ein bis zwei Sätze in Alltagssprache, ' +
+      'höchstens 400 Zeichen. Deine allerletzte Zeile muss exakt lauten: ' +
       'PRUEFUNG: BESTANDEN oder PRUEFUNG: FEHLGESCHLAGEN'
   },
   {

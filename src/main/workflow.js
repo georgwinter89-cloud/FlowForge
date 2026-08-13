@@ -56,6 +56,14 @@ function bereinigen(roh) {
       blockId: def.id,
       feldWerte,
       zurueckZu: typeof eintrag?.zurueckZu === 'string' ? eintrag.zurueckZu : null,
+      // Prüfkarten am Prüf-Block (BAUPLAN 18): ids der Karten, deren
+      // aufbewahrte Prüfungen dieser Prüfer zusätzlich ausführt. Gelöschte
+      // Karten werden erst beim Anzeigen/Laufstart still ignoriert — die
+      // Kartendatei ist hier nicht in der Hand.
+      pruefKarten:
+        def.prueft && Array.isArray(eintrag?.pruefKarten)
+          ? [...new Set(eintrag.pruefKarten.filter((id) => typeof id === 'string'))]
+          : [],
       position:
         Number.isFinite(x) && Number.isFinite(y)
           ? { x: Math.max(0, Math.round(x)), y: Math.max(0, Math.round(y)) }

@@ -186,7 +186,8 @@ export const texte = {
       aufgabe: 'Aufgabe',
       entscheidung: 'Entscheidung',
       wissen: 'Wissen',
-      status: 'Status'
+      status: 'Status',
+      pruefung: 'Prüfung'
     },
     offen: 'offen',
     erledigt: 'erledigt',
@@ -195,6 +196,8 @@ export const texte = {
     bearbeiten: 'Bearbeiten',
     loeschen: 'Löschen',
     loeschenBestaetigung: 'Diese Karte wirklich löschen?',
+    loeschenBestaetigungPruefung:
+      'Diese Prüfkarte wirklich löschen? Ihre aufbewahrten Prüfdateien werden mitgelöscht — diese Prüfung lässt sich dann nicht mehr auf einen Prüfer ziehen.',
     keineKarten: 'Keine Karten in dieser Ansicht.'
   },
   kartenFormular: {
@@ -215,7 +218,10 @@ export const texte = {
     textZuLang: (max) =>
       `Der Inhalt ist zu lang (höchstens ${max} Zeichen). Bitte kürzen — oder den Inhalt auf mehrere Karten aufteilen.`,
     statusUnantastbar: 'Die Status-Karte gibt es genau einmal — sie kann nicht gelöscht oder neu angelegt werden.',
-    nurAufgabenErledigbar: 'Nur Aufgaben-Karten können erledigt werden.'
+    nurAufgabenErledigbar: 'Nur Aufgaben-Karten können erledigt werden.',
+    // Prüfkarten (BAUPLAN 18): legt und pflegt ausschließlich FlowForge.
+    pruefkarteNurFlowForge:
+      'Prüfkarten legt FlowForge selbst an — automatisch nach jeder bestandenen Prüfung. Sie lassen sich nicht anlegen oder über die Karten-Werkzeuge ändern.'
   },
   statusKarte: {
     titel: 'Status',
@@ -349,6 +355,22 @@ export const texte = {
       'Startanleitung des Projekts fehlt noch. Lege sie jetzt mit dem Werkzeug ' +
       'startanleitung_setzen an (beschreibung, dazu befehl und/oder adresse). ' +
       'Ändere sonst nichts am Projekt.'
+  },
+  // Prüfkarten im Prüfer-Auftrag (BAUPLAN 18): Der Nutzer hat alte Prüfungen
+  // auf diesen Prüf-Block gezogen — sie werden zusätzlich geprüft.
+  agentenPruefkarten: {
+    einleitung:
+      '\n\nZusätzlich von FlowForge — Wiederholungsprüfung: Der Nutzer hat die folgenden ' +
+      'Prüfkarten auf diesen Prüf-Block gezogen. Führe deren Prüfungen ZUSÄTZLICH zu deiner ' +
+      'eigentlichen Prüfung aus; die aufbewahrten Prüfdateien liegen schon in der Prüfmappe ' +
+      '(je Karte ein eigener Unterordner). Passt eine alte Prüfung nicht mehr zum heutigen ' +
+      'Code (verschobene Dateien, umgebaute Stellen, geänderte Pfade), passe sie in ihrem ' +
+      'Unterordner an, statt sie zu verwerfen — FlowForge bewahrt die angepasste Fassung ' +
+      'hinter der Karte auf. Scheitert eine dieser Prüfungen zu Recht, zählt das als nicht ' +
+      'bestanden und gehört in deine Beanstandungen. Die Prüfkarten:\n',
+    eintrag: (titel, text, ordner) => `- „${titel}" (Dateien in pruefung/${ordner}/): ${text}\n`,
+    eintragOhneDateien: (titel, text) =>
+      `- „${titel}" (keine aufbewahrten Prüfdateien — prüfe das Beschriebene mit frisch geschriebenen Prüfungen): ${text}\n`
   },
   // KI-Assistent des Block-Editors (SPEC §4.5, BAUPLAN 14) — Texte an den Motor.
   agentenBlockAssistent: {
@@ -583,6 +605,12 @@ export const texte = {
     // Lauf-Mappe statt Projekt-Mappe (BAUPLAN 17).
     pruefmappeGeleert:
       'Prüfmappe geleert — der Prüfer baut seine Prüfungen frisch fürs aktuelle Paket.',
+    // Prüfkarten (BAUPLAN 18).
+    pruefkartenEingelegt: (n) =>
+      n === 1
+        ? 'Eine Prüfkarte liegt am Prüfer — ihre aufbewahrten Prüfungen sind wieder in der Prüfmappe.'
+        : `${n} Prüfkarten liegen an Prüfern — ihre aufbewahrten Prüfungen sind wieder in der Prüfmappe.`,
+    pruefkarteAngelegt: (titel) => `Prüfung bestanden und aufbewahrt — neue Prüfkarte: „${titel}"`,
     arbeitsablageGeleert: 'Arbeitsablage geleert.',
     verwaltungGesperrt: 'Schreib-Versuch auf eine FlowForge-Verwaltungsdatei gestoppt.',
     liestKarten: 'Liest die Projektkarten.',
@@ -707,6 +735,20 @@ export const texte = {
       'Gezählt werden Prüf-Dateien, nicht einzelne Testfälle darin. Nur zum Nachlesen — bearbeiten darf die Mappe nur der Prüfer.',
     groesseBytes: (bytes) => `${bytes} Byte`,
     groesseKb: (kb) => `${kb} KB`
+  },
+  // Prüfkarten (SPEC §3.1/§4.3, BAUPLAN 18): gezielte Wiederholungsprüfung —
+  // der Nutzer zieht Prüfkarten auf einen Prüf-Block, FlowForge legt deren
+  // aufbewahrte Prüfdateien beim Laufstart in die Prüfmappe.
+  pruefkarten: {
+    anhangTitel: 'Prüfkarten für diesen Lauf',
+    ziehHinweis:
+      'Zieh eine Prüfkarte aus der Seitenleiste hierher — der Prüfer prüft sie dann beim nächsten Lauf zusätzlich.',
+    entfernen: 'Von diesem Prüfer nehmen',
+    nurPruefkarten:
+      'Auf einen Prüfer lassen sich nur Prüfkarten ziehen (die grünen Häkchen-Karten legt FlowForge nach jeder bestandenen Prüfung an). Andere Karten ziehst du in die Kartenauswahl über dem Schaubild.',
+    ersatzTitel: (zeit) => `Geprüft am ${zeit}`,
+    ersatzText:
+      'Diese Prüfung wurde bestanden. Einzelheiten stehen im Laufbericht dieses Laufs.'
   },
   laufberichte: {
     ueberschrift: 'Laufberichte',

@@ -38,7 +38,7 @@ Sitzungen hinweg Software entsteht — ohne dass dem Agenten der Kontext überl�
 
 ### 3.1 Karten (ersetzen jede Prosa-Dokumentation)
 
-Vier Sorten, als strukturierte Datensätze in der App — nicht als Textdateien gepflegt:
+Fünf Sorten, als strukturierte Datensätze in der App — nicht als Textdateien gepflegt:
 
 | Sorte | Zweck |
 |---|---|
@@ -46,11 +46,22 @@ Vier Sorten, als strukturierte Datensätze in der App — nicht als Textdateien 
 | **Entscheidung** | „X festgelegt, weil Y" — verhindert, dass der Agent Entscheidungen wieder aufrollt |
 | **Wissen** | Fakten übers Projekt |
 | **Status** | Genau **eine** pro Projekt: „Wo stehen wir gerade" |
+| **Prüfung** | Legt FlowForge automatisch nach jeder bestandenen Prüfung an; dahinter bewahrt es die Prüfdateien des Laufs auf (§4.3) |
 
 **Harte Längengrenze pro Karte (Richtwert 3–5 Sätze; durchgesetzt als 400 Zeichen Inhalt,
 80 Zeichen Titel) — gilt auch für den Agenten.** Wer mehr zu
 sagen hat, legt mehrere fokussierte Karten an. Die Status-Karte wird beim Anlegen des Projekts
 automatisch erzeugt und kann weder gelöscht noch doppelt angelegt werden. Weitere Sorten erst, wenn der Alltag sie einfordert.
+
+**Prüfkarten** (seit Bauschritt 18): legt ausschließlich FlowForge an — automatisch nach
+jeder bestandenen Prüfung. Titel und Text kommen aus den Zeilen „PRUEFKARTE-TITEL:" und
+„PRUEFKARTE:" des Prüfbelegs (Alltagssprache: was geprüft wurde, woran „in Ordnung"
+erkennbar ist); fehlen sie, baut FlowForge einen Ersatz aus dem Prüfbeleg. Dahinter
+bewahrt FlowForge die Prüfdateien dieses Laufs im verwalteten Bereich **außerhalb des
+Projektordners** auf (wie die Sicherungspunkte) — kein Agent sieht das Archiv, es kostet
+keinen Lauf Kontext. Der Nutzer kann Prüfkarten bearbeiten und löschen; **Löschen räumt
+die aufbewahrten Prüfdateien mit weg.** Agenten können Prüfkarten weder anlegen noch
+ändern (die Übersicht listet sie mit). Wiederholungsprüfung per Ziehen auf den Prüfer: §4.3.
 
 Der Agent liest und schreibt Karten über eingebaute **Karten-Werkzeuge** (Übersicht, anlegen,
 aktualisieren, erledigen) — dieselben Regeln, hart durchgesetzt; abgelehnte Versuche sind im
@@ -204,8 +215,18 @@ Prüfmappe höchstens einmal ganz am Ende laufen lassen, nicht als Dauerschleife
 **Lauf-Mappe statt Projekt-Mappe** (Entscheidung Georg, 13.08.2026): Die Prüfmappe
 gehört zum Lauf, nicht zum Projekt — beim Start eines neuen Laufs leert FlowForge
 sie automatisch (vor dem Sicherungspunkt „Stand vor Lauf"; die Wiederaufnahme eines
-unterbrochenen Laufs leert nicht). Wuchern ist damit strukturell unmöglich;
-gezielte Wiederholungsprüfung alter Features kommt mit den Prüfkarten (Bauschritt 18).
+unterbrochenen Laufs leert nicht). Wuchern ist damit strukturell unmöglich.
+**Gezielte Wiederholungsprüfung über Prüfkarten** (seit Bauschritt 18): Der Nutzer
+zieht Prüfkarten (§3.1) auf eine Prüf-Blockkarte im Schaubild — sie hängen dort
+sichtbar an (abnehmbar per ×). Beim Lauf-Start legt FlowForge — **nach** der
+automatischen Leerung, noch vor dem Sicherungspunkt „Stand vor Lauf" — die
+aufbewahrten Prüfdateien der gezogenen Karten in die Prüfmappe (je Karte ein eigener
+Unterordner `pruefkarte-…/`), und der Prüfer führt sie zusätzlich zu seinen
+Paket-Prüfungen aus. Die Mappe ist damit nur die Werkbank des Laufs; das Gedächtnis
+ist das Archiv hinter den Prüfkarten, das die Leerung nie berührt. Passt eine alte
+Prüfung nicht mehr zum heutigen Code, passt der Prüfer sie in ihrem Unterordner an —
+nach bestandener Prüfung ersetzt die angepasste Fassung die aufbewahrte, die Karte
+veraltet nicht.
 **Bilddateien sind in der Prüfmappe verboten** (hartes Nein, auch für Prüf-Blöcke).
 An jeder Prüf-Blockkarte auf der Leinwand hängt ein aufklappbarer Bereich
 **„Prüfmappe"** (Wunsch Georg, 13.08.2026): je Prüfdatei Name, Größe und

@@ -347,6 +347,10 @@ function SchaubildKarte({
   aktiv,
   letztesErgebnis,
   pfad,
+  pruefKarten,
+  zeigePruefkartenTipp,
+  onKarteAbgelegt,
+  onPruefkarteEntfernen,
   onFeld,
   onSpeichern,
   onZurueckZu,
@@ -356,6 +360,9 @@ function SchaubildKarte({
   messen
 }) {
   const [ergebnisOffen, setErgebnisOffen] = useState(false)
+  // Prüfkarten auf den Prüfer ziehen (BAUPLAN 18): nur Prüf-Blockkarten sind
+  // Drop-Ziel — und nur, solange das Schaubild bearbeitbar ist.
+  const nimmtKarten = bearbeitbar && def.prueft
   return (
     <div
       className={
@@ -365,6 +372,14 @@ function SchaubildKarte({
       data-instanz={eintrag.instanzId}
       ref={messen}
       onPointerDown={bearbeitbar ? onGreifen : undefined}
+      onDragOver={
+        nimmtKarten
+          ? (e) => {
+              if (e.dataTransfer.types.includes('text/flowforge-karte')) e.preventDefault()
+            }
+          : undefined
+      }
+      onDrop={nimmtKarten ? onKarteAbgelegt : undefined}
     >
       <div className={'ketten-block-kopf' + (bearbeitbar ? ' schaubild-griff' : '')}>
         {nummer != null && <span className="block-nummer">{nummer}</span>}
@@ -408,6 +423,29 @@ function SchaubildKarte({
             ))}
           </select>
         </label>
+      )}
+      {/* Angehängte Prüfkarten (BAUPLAN 18): hängen sichtbar an der Karte;
+          der Prüfer führt ihre aufbewahrten Prüfungen zusätzlich aus. */}
+      {def.prueft && (pruefKarten.length > 0 || (bearbeitbar && zeigePruefkartenTipp)) && (
+        <div className="pruefkarten-anhang" title={texte.pruefkarten.anhangTitel}>
+          {pruefKarten.map((karte) => (
+            <span key={karte.id} className="kontext-chip chip-pruefung" title={karte.text}>
+              <span className="chip-text">{karte.titel}</span>
+              {bearbeitbar && (
+                <button
+                  className="chip-entfernen"
+                  title={texte.pruefkarten.entfernen}
+                  onClick={() => onPruefkarteEntfernen(karte.id)}
+                >
+                  ×
+                </button>
+              )}
+            </span>
+          ))}
+          {pruefKarten.length === 0 && (
+            <p className="feld-hinweis">{texte.pruefkarten.ziehHinweis}</p>
+          )}
+        </div>
       )}
       {letztesErgebnis && (
         <div className="block-ergebnis">
@@ -819,6 +857,38 @@ export default function Leinwand({
     })
   }
 
+  // Prüfkarten auf den Prüfer ziehen (BAUPLAN 18): Die Karte hängt danach
+  // sichtbar an der Prüf-Blockkarte; beim nächsten Lauf legt FlowForge ihre
+  // aufbewahrten Prüfungen in die Prüfmappe und der Prüfer führt sie mit aus.
+  function pruefkarteAbgelegt(e, eintrag) {
+    const id = e.dataTransfer.getData('text/flowforge-karte')
+    if (!id) return
+    e.preventDefault()
+    e.stopPropagation()
+    const karte = (karten ?? []).find((k) => k.id === id)
+    if (!karte || karte.sorte !== 'pruefung') return setMeldung(texte.pruefkarten.nurPruefkarten)
+    if ((eintrag.pruefKarten ?? []).includes(id)) return
+    ketteSpeichern({
+      ...workflow,
+      bloecke: workflow.bloecke.map((b) =>
+        b.instanzId === eintrag.instanzId
+          ? { ...b, pruefKarten: [...(b.pruefKarten ?? []), id] }
+          : b
+      )
+    })
+  }
+
+  function pruefkarteEntfernen(instanzId, kartenId) {
+    ketteSpeichern({
+      ...workflow,
+      bloecke: workflow.bloecke.map((b) =>
+        b.instanzId === instanzId
+          ? { ...b, pruefKarten: (b.pruefKarten ?? []).filter((id) => id !== kartenId) }
+          : b
+      )
+    })
+  }
+
   function rundenSetzen(wert) {
     const runden = Math.max(0, Math.min(REPARATUR_RUNDEN_MAX, Number(wert) || 0))
     ketteSpeichern({ ...workflow, reparaturRunden: runden })
@@ -959,6 +1029,9 @@ export default function Leinwand({
   const bearbeitbar = zustand === 'bereit'
   const bloecke = workflow.bloecke
   const pfeile = workflow.pfeile
+  // Prüfkarten des Projekts (BAUPLAN 18) — für die Anhänge an Prüf-Blockkarten;
+  // gelöschte Karten fallen beim Auflösen still heraus.
+  const pruefungsKarten = (karten ?? []).filter((k) => k.sorte === 'pruefung')
 
   // Letztes Block-Ergebnis pro Karte aus dem neuesten Laufbericht — bei
   // Reparatur-Runden gewinnt der späteste Durchgang.
@@ -1202,6 +1275,12 @@ export default function Leinwand({
                 aktiv={aktiveInstanzen.has(eintrag.instanzId)}
                 letztesErgebnis={letzteErgebnisse.get(eintrag.instanzId) ?? null}
                 pfad={pfad}
+                pruefKarten={(eintrag.pruefKarten ?? [])
+                  .map((id) => pruefungsKarten.find((k) => k.id === id))
+                  .filter(Boolean)}
+                zeigePruefkartenTipp={pruefungsKarten.length > 0}
+                onKarteAbgelegt={(e) => pruefkarteAbgelegt(e, eintrag)}
+                onPruefkarteEntfernen={(id) => pruefkarteEntfernen(eintrag.instanzId, id)}
                 onFeld={(feldId, wert) => feldSetzen(eintrag.instanzId, feldId, wert)}
                 onSpeichern={() => ketteSpeichern(workflowRef.current)}
                 onZurueckZu={(ziel) => zurueckZuSetzen(eintrag.instanzId, ziel)}

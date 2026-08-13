@@ -5,8 +5,9 @@ import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'node:crypto'
 import { texte } from '../shared/texte.js'
-import { pruefeKarteneingabe } from '../shared/kartenRegeln.js'
+import { pruefeKarteneingabe, TITEL_MAX, TEXT_MAX } from '../shared/kartenRegeln.js'
 import { sicherungspunktAnlegen } from './sicherungspunkte.js'
+import { pruefkartenArchivLoeschen } from './pruefkarten.js'
 
 const PROJEKT_DATEI = 'projekt.json'
 const KARTEN_DATEI = 'karten.json'
@@ -186,6 +187,9 @@ function mitKarten(projektPfad, aenderung) {
 
 export function karteAnlegen(projektPfad, { sorte, titel, text }) {
   return mitKarten(projektPfad, (karten) => {
+    // Prüfkarten legt nur FlowForge selbst an (BAUPLAN 18).
+    if (sorte === 'pruefung')
+      return { ok: false, fehler: texte.kartenRegeln.pruefkarteNurFlowForge }
     if (sorte === 'status' || !['aufgabe', 'entscheidung', 'wissen'].includes(sorte))
       return { ok: false, fehler: texte.kartenRegeln.statusUnantastbar }
     const fehler = pruefeKarteneingabe({ titel, text })
@@ -229,13 +233,45 @@ export function karteErledigtSetzen(projektPfad, id, erledigt) {
 }
 
 export function karteLoeschen(projektPfad, id) {
-  return mitKarten(projektPfad, (karten) => {
+  let geloeschte = null
+  const ergebnis = mitKarten(projektPfad, (karten) => {
     const stelle = karten.findIndex((k) => k.id === id)
     if (stelle === -1) return { ok: false, fehler: texte.fehler.unbekannt }
     if (karten[stelle].sorte === 'status')
       return { ok: false, fehler: texte.kartenRegeln.statusUnantastbar }
+    geloeschte = karten[stelle]
     karten.splice(stelle, 1)
   })
+  // Löschen einer Prüfkarte räumt ihre aufbewahrten Prüfdateien mit weg
+  // (BAUPLAN 18) — sonst sammelte sich verwaistes Archiv an.
+  if (ergebnis.ok && geloeschte?.sorte === 'pruefung')
+    pruefkartenArchivLoeschen(projektPfad, geloeschte.id)
+  return ergebnis
+}
+
+// Prüfkarten (BAUPLAN 18): legt ausschließlich FlowForge selbst an — nach
+// jeder bestandenen Prüfung. Die harten Längengrenzen gelten auch hier;
+// FlowForge kürzt aber, statt zu scheitern — die Karte muss immer entstehen.
+function gekuerztAuf(wert, max) {
+  const sauber = String(wert ?? '').trim()
+  return sauber.length > max ? sauber.slice(0, max - 2).trimEnd() + ' …' : sauber
+}
+
+export function pruefkarteAnlegen(projektPfad, { titel, text }) {
+  let karte = null
+  const ergebnis = mitKarten(projektPfad, (karten) => {
+    const jetzt = new Date().toISOString()
+    karte = {
+      id: crypto.randomUUID(),
+      sorte: 'pruefung',
+      titel: gekuerztAuf(titel, TITEL_MAX),
+      text: gekuerztAuf(text, TEXT_MAX),
+      angelegtAm: jetzt,
+      geaendertAm: jetzt
+    }
+    karten.push(karte)
+  })
+  return ergebnis.ok ? { ...ergebnis, karte } : ergebnis
 }
 
 // Prüfmappen-Ansicht (BAUPLAN 17): Was hat der letzte Lauf in pruefung/
