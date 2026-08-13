@@ -234,9 +234,6 @@ function BlockErgebnisZeile({ eintrag }) {
           {eintrag.kostenUsd != null && (
             <p className="feld-hinweis">{tb.apiKosten(eintrag.kostenUsd)}</p>
           )}
-          {eintrag.sessionFortgesetzt && (
-            <p className="feld-hinweis">{tb.sessionFortgesetztHinweis}</p>
-          )}
           {eintrag.ergebnisText}
         </div>
       )}

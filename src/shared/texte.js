@@ -310,51 +310,64 @@ export const texte = {
       'Startanleitung des Projekts fehlt noch. Lege sie jetzt mit dem Werkzeug ' +
       'startanleitung_setzen an (beschreibung, dazu befehl und/oder adresse). ' +
       'Ändere sonst nichts am Projekt.',
-    // Automatischer Übertrag (SPEC §5, BAUPLAN 11): Anweisung an den laufenden
-    // Agenten, wenn sein Kontext fast voll ist …
-    uebertragAnweisung: (nurLesen) =>
-      'WICHTIG — Anweisung von FlowForge: Dein Kontextfenster ist fast voll. Beende die ' +
-      'Arbeit JETZT sauber an dieser Stelle — fang nichts Neues mehr an. ' +
-      (nurLesen
-        ? ''
-        : 'Aktualisiere zuerst über die karten-Werkzeuge die Status-Karte (wo genau stehst ' +
-          'du, was ist der nächste Schritt) und lege für offen Gebliebenes kurze ' +
-          'Aufgaben-Karten an. ') +
-      'Schreibe dann als Abschlusstext eine Übergabe an deinen Nachfolger — er bekommt ' +
-      'denselben Auftrag mit frischem Kontext und soll nahtlos weitermachen: ' +
-      '1. Was ist schon erledigt (mit den betroffenen Dateien)? ' +
-      '2. Was ist der nächste konkrete Schritt? ' +
-      '3. Was muss er wissen, um ohne Neuanfang weiterzuarbeiten?',
-    // … und die Übergabe an seinen Nachfolger in der frischen Session.
+    // Übergabe an den nächsten Anlauf desselben Blocks nach einem Übertrag.
     uebertragFortsetzung: (uebergabe) =>
-      '\n\nÜbergabe deines Vorgängers: Genau dieser Auftrag lief schon in einer früheren ' +
-      'Session, deren Kontext voll wurde. Setze die Arbeit nahtlos fort — beginne NICHT ' +
+      '\n\nÜbergabe deines Vorgängers: Genau dieser Auftrag lief schon in einem früheren ' +
+      'Anlauf, dessen Kontext voll wurde. Setze die Arbeit nahtlos fort — beginne NICHT ' +
       'von vorn und wiederhole keine erledigten Schritte. Die Übergabe:\n' + uebergabe,
     uebertragOhneUebergabe:
-      '\n\nHinweis von FlowForge: Genau dieser Auftrag lief schon in einer früheren Session, ' +
-      'deren Kontext voll wurde — eine Übergabe liegt leider nicht vor. Prüfe zuerst den ' +
+      '\n\nHinweis von FlowForge: Genau dieser Auftrag lief schon in einem früheren Anlauf, ' +
+      'dessen Kontext voll wurde — eine Übergabe liegt leider nicht vor. Prüfe zuerst den ' +
       'Stand im Projektordner und an den Karten, und setze die Arbeit dann fort, ohne ' +
       'Erledigtes zu wiederholen.'
   },
-  // Session-Fortsetzung bei Wiederholungen (BAUPLAN 16): Der Block setzt seine
-  // eigene frühere Session fort — er kennt Auftrag, Karten und seine Arbeit
-  // noch, nur der Zusatz wird nachgereicht.
-  agentenFortsetzung: {
-    rueckmeldung: (kritik) =>
-      'FlowForge setzt deine Session fort: Der Prüfer hat dein Ergebnis geprüft und die ' +
-      'folgenden Punkte beanstandet. Du kennst deine bisherige Arbeit noch — lies nichts ' +
-      'unnötig neu ein, sondern behebe genau diese Punkte:\n' + kritik,
-    nachpruefung: (kritik) =>
-      'FlowForge setzt deine Session fort: Der Bauer hat deine Beanstandungen aus der ' +
-      'letzten Runde behoben. Prüfe NUR diese Beanstandungen nach — keine erneute ' +
-      'Vollprüfung, keine neuen Prüffelder; nutze deine vorhandenen Prüfungen. Schließe ' +
-      'wieder mit der Urteils-Zeile (PRUEFUNG: BESTANDEN oder PRUEFUNG: FEHLGESCHLAGEN). ' +
-      'Deine Beanstandungen von letzter Runde:\n' + kritik,
-    startanleitung:
-      'FlowForge setzt deine Session fort: Dein Auftrag ist umgesetzt, aber die ' +
-      'Startanleitung des Projekts fehlt noch. Lege sie jetzt mit dem Werkzeug ' +
-      'startanleitung_setzen an (beschreibung, dazu befehl und/oder adresse). ' +
-      'Ändere sonst nichts am Projekt.'
+  // Eine Motor-Session pro Lauf (BAUPLAN 19): Der Koordinator in der Session
+  // verteilt nur Aufträge — jeder Block läuft als frischer Agent. Den echten
+  // Arbeitsauftrag setzt FlowForge beim Agent-Aufruf selbst ein, damit der
+  // Koordinator schlank bleibt und nichts verfälschen kann.
+  agentenLaufSession: {
+    koordinatorSystem:
+      'Du bist der Koordinator eines FlowForge-Laufs. Du erledigst niemals selbst Arbeit, ' +
+      'liest keine Dateien und nutzt ausschließlich das Agent-Werkzeug. Wenn FlowForge dir ' +
+      'einen Block ankündigt, startest du GENAU EINEN Block-Agenten: Rufe das Agent-Werkzeug ' +
+      'auf mit subagent_type "block" und run_in_background false; als prompt genügt das Wort ' +
+      'AUFTRAG — FlowForge setzt den echten Arbeitsauftrag beim Aufruf selbst ein. Wenn der ' +
+      'Agent fertig ist, antwortest du nur mit: OK — das Fazit liest FlowForge selbst mit. ' +
+      'Antworte auf Deutsch.',
+    dispatch: (blockName) =>
+      `FlowForge: Der Block „${blockName}" steht an. Starte jetzt genau einen Block-Agenten ` +
+      '(Agent-Werkzeug, subagent_type "block", run_in_background false, prompt: AUFTRAG). ' +
+      'Antworte danach nur mit: OK',
+    blockAgentSystem: (projektPfad, titelMax, textMax) =>
+      'Du bist ein Block-Agent von FlowForge und führst genau den Arbeitsauftrag aus, den ' +
+      'du bekommst — nicht mehr und nicht weniger. Antworte auf Deutsch. Dein Abschlusstext ' +
+      'ist das Fazit, das FlowForge als Ergebnis dieses Blocks übernimmt.\n' +
+      `Der Projektordner ist: ${projektPfad}\n` +
+      'Verwende bei Datei-Werkzeugen (Read/Write/Edit) ausschließlich Pfade relativ zum ' +
+      'Projektordner oder diesen absoluten Windows-Pfad. Niemals POSIX-Pfade wie /tmp/… ' +
+      'oder /c/… verwenden — sie zeigen auf Windows auf falsche Orte.\n' +
+      'Projektkarten: FlowForge verwaltet strukturierte Karten (Status, Aufgabe, ' +
+      'Entscheidung, Wissen) als Gedächtnis des Projekts. Lies und schreibe sie ' +
+      'ausschließlich über die karten-Werkzeuge (karten_uebersicht, karte_anlegen, ' +
+      'karte_aktualisieren, karte_erledigen) — niemals über die Datei karten.json. ' +
+      `Harte Regeln: Titel höchstens ${titelMax} Zeichen, Inhalt höchstens ${textMax} ` +
+      'Zeichen; wer mehr zu sagen hat, legt mehrere fokussierte Karten an. Es gibt genau ' +
+      'eine Status-Karte — sie kann weder gelöscht noch neu angelegt werden.',
+    nurEinAgent:
+      'FlowForge: Für diesen Block lief bereits ein Agent. Starte keinen weiteren — ' +
+      'antworte nur mit: OK',
+    koordinatorGesperrt:
+      'FlowForge: Als Koordinator erledigst du nichts selbst — die Arbeit erledigen die ' +
+      'Block-Agenten. Antworte nur mit: OK',
+    // Automatischer Übertrag (SPEC §5): Die Lauf-Session ist fast voll — der
+    // Koordinator schreibt die Übergabe, der Block läuft frisch erneut an.
+    uebertragAnweisung:
+      'WICHTIG — Anweisung von FlowForge: Das Kontextfenster dieser Lauf-Session ist fast ' +
+      'voll; der laufende Block-Agent wurde unterbrochen, sein Block wird in einer frischen ' +
+      'Session neu angestoßen. Starte KEINEN weiteren Agenten. Schreibe als Antwort eine ' +
+      'kurze Übergabe für den nächsten Anlauf dieses Blocks: 1. Was in diesem Lauf bisher ' +
+      'erledigt wurde (die Fazite kennst du). 2. Was der unterbrochene Block zuletzt tun ' +
+      'sollte. 3. Was der nächste Anlauf wissen muss, um nahtlos weiterzumachen.'
   },
   // Prüfkarten im Prüfer-Auftrag (BAUPLAN 18): Der Nutzer hat alte Prüfungen
   // auf diesen Prüf-Block gezogen — sie werden zusätzlich geprüft.
@@ -525,6 +538,11 @@ export const texte = {
       'Dein Abo-Kontingent ist im Moment erschöpft. Der Lauf hat angehalten — alles bisher Gebaute bleibt bestehen. Starte den Workflow neu, sobald dein Kontingent wieder da ist.',
     okKnopf: 'Alles klar',
     schonAktiv: 'Es läuft schon ein Workflow. Bitte warte, bis er fertig ist.',
+    // Eine Motor-Session pro Lauf (BAUPLAN 19): Ohne Fazit des Block-Agenten
+    // gilt der Block ehrlich als fehlgeschlagen — statt ein leeres Ergebnis
+    // an die Folgeblöcke weiterzureichen.
+    blockOhneFazit:
+      'Der Block-Agent hat kein Fazit geliefert — der Block gilt als fehlgeschlagen.',
     // Parallelität & Warteschlange (SPEC §5, BAUPLAN 12).
     schonInWarteschlange: 'Dieser Workflow steht schon in der Warteschlange.',
     wartetMarke: 'wartet',
@@ -586,7 +604,16 @@ export const texte = {
       'Diese Datei verwaltet FlowForge selbst — sie ist für direkte Änderungen gesperrt. Karten liest und schreibst du über die karten-Werkzeuge.'
   },
   ticker: {
-    motorGestartet: (modell) => `Motor gestartet (${modell}).`,
+    // Eine Motor-Session pro Lauf (BAUPLAN 19): Der Motor startet einmal,
+    // die Blöcke laufen darin als frische Agenten.
+    laufSessionGestartet: (modell) =>
+      `Motor gestartet (${modell}) — eine Lauf-Session für den ganzen Lauf; jeder Block läuft darin als eigener Agent.`,
+    laufSessionFortgesetzt: 'Lauf-Session fortgesetzt statt neu gestartet.',
+    blockAgentGestartet: (name) => `„${name}" läuft als frischer Agent in der Lauf-Session.`,
+    koordinatorGestoppt:
+      'Werkzeug-Versuch des Koordinators gestoppt — Arbeit erledigen nur die Block-Agenten.',
+    parallelEigeneSession: (name) =>
+      `„${name}" läuft parallel in einer eigenen Session — die Lauf-Session ist gerade beschäftigt.`,
     schreibtDatei: (pfad) => `Schreibt Datei: ${pfad}`,
     aendertDatei: (pfad) => `Ändert Datei: ${pfad}`,
     liestDatei: (pfad) => `Liest: ${pfad}`,
@@ -672,11 +699,8 @@ export const texte = {
       `Die KI-Server sind gerade überlastet — der Motor versucht es weiter (Versuch ${versuch} von ${max}).`,
     wiederaufnahme: (nummer, gesamt, name) =>
       `Wiederaufnahme am letzten Sicherungspunkt — weiter mit Block ${nummer} von ${gesamt}: „${name}".`,
-    // Session-Fortsetzung bei Wiederholungen (BAUPLAN 16).
-    sessionFortgesetzt: (name) =>
-      `Session fortgesetzt statt neu gestartet — „${name}" kennt seine bisherige Arbeit noch.`,
     sessionFortsetzenGescheitert:
-      'Fortsetzen hat nicht geklappt — der Block startet stattdessen als frische Session.'
+      'Die Lauf-Session ließ sich nicht fortsetzen — es geht mit einer frischen Session weiter.'
   },
   sicherungen: {
     ueberschrift: 'Sicherungspunkte',
@@ -790,8 +814,6 @@ export const texte = {
     uebertragOhneUebergabeZeile: (block) =>
       `Der Kontext von „${block}" war voll, aber die Übergabe ging verloren — die frische Session hat den Stand selbst aus Projektordner und Karten gelesen.`,
     fortgesetztHinweis: 'Dieser Lauf wurde nach einer Unterbrechung am letzten Sicherungspunkt fortgesetzt.',
-    // Session-Fortsetzung bei Wiederholungen (BAUPLAN 16).
-    sessionFortgesetztHinweis: 'Session fortgesetzt statt neu gestartet — der Block kannte seine bisherige Arbeit noch.',
     blockTokens: (tokens) => `Verbrauch: ${tokens.toLocaleString('de-DE')} Tokens`,
     // Token-Aufschlüsselung & theoretische API-Kosten (Wunsch Georg, 13.08.2026).
     aufschluesselungZeile: (a) =>

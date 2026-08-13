@@ -193,9 +193,10 @@ mindestens ein Test wird einmal mit absichtlich verfälschter Erwartung ausgefü
 Auftrag untersagt.
 In einer **Reparatur-Runde prüft er nur seine Beanstandungen der letzten Runde
 nach** — keine erneute Vollprüfung. Ehrlichkeits-Notiz: „Prüfer ≠ Bauer" heißt
-technisch „frische Session ohne das Arbeitswissen des Bauers" — jeder Block läuft
-ohnehin als frische Motor-Session; es ist kein anderes Gehirn. Prüfer-Blöcke melden
-ihr Urteil als letzte Zeile ihres Abschlusstexts („PRUEFUNG: BESTANDEN/FEHLGESCHLAGEN").
+technisch „frischer Agent ohne das Arbeitswissen des Bauers" — jeder Block läuft
+als frischer Agent in der Lauf-Session (§5); es ist kein anderes Gehirn.
+Prüfer-Blöcke melden ihr Urteil als letzte Zeile ihres Abschlusstexts
+(„PRUEFUNG: BESTANDEN/FEHLGESCHLAGEN").
 
 **Gesamtprüfung** (seit 12.08.2026, umgebaut 13.08.2026): eigener Prüf-Block für
 zwischendurch — prüft mit **frisch geschriebenen** Prüfungen, ob das Projekt als
@@ -211,7 +212,7 @@ Arbeitsgedächtnis anhäuft. Unteraufgaben laufen unter denselben Rechten und Sp
 wie ihr Block (auch „darf nur lesen" — deshalb ist das Unteraufgaben-Werkzeug dort
 erlaubt); ihre Zeilen sind im Ticker als „Unteraufgabe" gekennzeichnet. Ihr
 Verbrauch zählt ehrlich zum Laufbericht dazu, belastet aber nicht den
-Kontext-Füllstand der Hauptsession, der den automatischen Übertrag steuert.
+Kontext-Füllstand der Lauf-Session, der den automatischen Übertrag steuert.
 **Gezügelter Angreifer** (Entscheidung Georg, 13.08.2026 — Befund: 425.000 Tokens
 für eine Angriffsliste, weil vier Späher je das ganze Projekt einlasen): höchstens
 zwei Unteraufgaben pro Angreifer-Lauf, jede eng umrissen; gelesen werden nur die im
@@ -291,37 +292,53 @@ Angreifer durch die Diagnose.
 
 ## 5. Sessions & Autonomie
 
-- **Session = Abschnitt eines Workflow-Laufs.** Das **Sessionende** (Karten aktualisieren,
+- **Eine Motor-Session pro Lauf, jeder Block ein frischer Agent** (seit Bauschritt 19,
+  Entscheidung Georg, 13.08.2026 — die Frische-Session je Block war Bauweise-Erbe aus
+  Schritt 3, nie die gewollte Architektur): Die Motor-Session bleibt über den ganzen
+  Lauf offen. Auf ihrem Hauptfaden sitzt ein **Koordinator** mit den engsten Rechten —
+  er erledigt selbst nichts, sondern startet je Block genau einen frischen Agenten
+  (Unteraufgabe) und sammelt die Fazite ein. FlowForge bleibt der Steuerer: Es reicht
+  Block für Block als Auftrag nach und behält Reihenfolge, Sicherungspunkte,
+  Prüfer-Urteile, Reparatur-Runden, Startanleitungs-Pflicht und Folgen-Fragen fest in
+  der Hand. Den echten Arbeitsauftrag setzt FlowForge beim Agent-Aufruf selbst ein
+  (der Koordinator bleibt schlank und kann nichts verfälschen), und das Fazit liest es
+  direkt aus dem Werkzeug-Ergebnis des Agent-Aufrufs — nicht aus dem Koordinator-Text.
+  Das Frische-Prinzip bleibt: Agenten erben kein Arbeitsgedächtnis (§4.3). Die harten
+  Sperren („darf nur lesen", Prüfmappen-Besitz, Git-/Verwaltungsdatei-Sperren) erkennt
+  FlowForge am Werkzeugaufruf (Unteraufgaben-Kennung) und setzt die Regeln des gerade
+  laufenden Blocks für dessen Agenten und Helfer durch; der Koordinator darf
+  ausschließlich delegieren. Reparatur-Runden laufen als neuer Agent mit der
+  Prüferkritik im Auftrag. **Parallele Zweige** laufen als eigene Sessions, weil die
+  Lauf-Session einen Block nach dem anderen verarbeitet — ehrlich im Ticker vermerkt.
+- **Session = ein Workflow-Lauf.** Das **Sessionende** (Karten aktualisieren,
   Laufbericht schreiben) ist fest eingebaut, kein optionaler Block.
-- **Automatischer Übertrag** (seit Bauschritt 11): Die App misst den echten Kontext-Füllstand.
-  Die Fenstergröße des Modells kennt FlowForge seit 13.08.2026 schon ab der Startmeldung des
-  Motors (aus der Modellkennung bzw. der gemerkten Größe früherer Sessions) — vorher rechnete
-  der erste Block eines Laufs mit einem 200.000er-Standardwert, zeigte zu hohe Prozente und
-  hätte zu früh übertragen.
-  Bei ~85 % unterbricht sie den laufenden Block; der Agent aktualisiert die Karten (sofern der
-  Block schreiben darf), schreibt eine Übergabe (Erledigtes, nächster Schritt, Wissenswertes),
-  und derselbe Block arbeitet sofort als frische Session nahtlos weiter — bis der Workflow
-  fertig ist. Jeder Übertrag hinterlässt einen Eintrag in Alltagssprache im Laufbericht
-  (Abschnitt „Überträge"). Test-Schalter in den Einstellungen: „Übertrag schon bei etwa 10 %" —
-  greift beim Startfüllstand der Session plus 10 Prozentpunkte (eine frische Session hat schon
-  ~8–10 % Grundlast, eine absolute 10-%-Schwelle würde sofort wieder feuern).
+- **Automatischer Übertrag** (seit Bauschritt 11): Die App misst den echten
+  Kontext-Füllstand der Lauf-Session (den Koordinator-Faden — der wächst nur um
+  Aufträge und Fazite, Überträge sind darum selten). Die Fenstergröße des Modells kennt
+  FlowForge seit 13.08.2026 schon ab der Startmeldung des Motors (aus der Modellkennung
+  bzw. der gemerkten Größe früherer Sessions). Bei ~85 % unterbricht sie den laufenden
+  Block; der Koordinator schreibt eine Übergabe, und derselbe Block läuft sofort in
+  einer frischen Lauf-Session als neuer Agent weiter (die Übergabe wandert über den
+  Auftrag mit) — bis der Workflow fertig ist. Jeder Übertrag hinterlässt einen Eintrag
+  in Alltagssprache im Laufbericht (Abschnitt „Überträge"). Test-Schalter in den
+  Einstellungen: „Übertrag schon bei etwa 10 %" — greift beim Startfüllstand plus
+  10 Prozentpunkte; im Testmodus zählt der Verbrauch der Block-Agenten mit, damit der
+  Übertrag vorführbar bleibt (im Normalbetrieb zählt nur der Koordinator-Faden).
 - **Übertrags-Grenze pro Workflow einstellbar** (im Schaubild-Kopf): Zahl (Standard 5) oder
   unbegrenzt (Feld leer). Ist die Grenze erreicht, läuft der Block ohne weiteren Übertrag zu
   Ende — ehrlich im Ticker vermerkt.
-- **Session-Fortsetzung bei Wiederholungen** (seit Bauschritt 16, Entscheidung Georg,
-  12.08.2026): Läuft derselbe Block nur wegen eines Zusatzes erneut, setzt er seine
-  **eigene** frühere Motor-Session fort und bekommt nur den Zusatz nachgereicht — statt
-  kalt zu starten und das Projekt neu einzulesen. Genau drei Fälle: Reparatur-Runde des
-  Rückführungs-Ziels (Prüferkritik), Nachprüfung des Prüfers (nur die Beanstandungen),
-  Startanleitungs-Nachforderung. Leitplanken: Kein Block setzt je die Session eines
-  **anderen** Blocks fort (der erste Prüfer-Durchlauf bleibt frisch, §4.3); ein
-  Füllstands-Wächter erzwingt Kaltstart, wenn die alte Session schon nahe der
-  Übertrags-Schwelle liegt (unter 75 % wird fortgesetzt); ist die Session nicht
-  wiederaufnehmbar (App-Neustart, Kennung ungültig), fällt der Fall still auf den
-  Kaltstart zurück — die Kennungen wandern dafür mit in den Laufstand. Jede Fortsetzung
-  steht ehrlich im Ticker und im Laufbericht („Session fortgesetzt statt neu gestartet");
-  der Karten-Kontext wird dabei nicht erneut eingespeist. Der Laufbericht zeigt je Block
-  den Token-Verbrauch — so ist sichtbar, dass Wiederholungen deutlich billiger werden.
+- **Fortsetzung der Lauf-Session** (Bauschritt 16, seit Bauschritt 19 nur noch für
+  Unterbrechungen): Stirbt der Session-Prozess (App-Neustart, Absturz, Pause), setzt
+  FlowForge dieselbe Lauf-Session über ihre Kennung fort, statt neu zu starten — die
+  Kennung wandert dafür mit in den Laufstand. Ein Füllstands-Wächter erzwingt eine
+  frische Session, wenn die alte schon nahe der Übertrags-Schwelle liegt (unter 75 %
+  wird fortgesetzt); ist die Session nicht wiederaufnehmbar (Kennung ungültig), fällt
+  der Fall still auf eine frische Session zurück. Jede Fortsetzung steht ehrlich im
+  Ticker („Lauf-Session fortgesetzt statt neu gestartet"). Die frühere Fall-Liste
+  (Reparatur-Runde, Nachprüfung, Startanleitungs-Nachforderung) ist damit überflüssig:
+  Diese Wiederholungen laufen ohnehin als neue Agenten in der weiterlaufenden
+  Lauf-Session. Der Laufbericht zeigt je Block den Token-Verbrauch (Koordinator-Zuwachs
+  plus die Agenten des Blocks).
 - **Abo-Kontingent erschöpft:** Verhalten pro Projekt wählbar (im Schaubild-Kopf) —
   (a) **pausieren** (Standard): Windows-Benachrichtigung, alle 10 Minuten ein neuer Versuch,
   selbstständiges Weiterarbeiten sobald wieder Kontingent da ist (+ Benachrichtigung), oder

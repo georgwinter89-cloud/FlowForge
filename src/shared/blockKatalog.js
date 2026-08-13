@@ -36,7 +36,7 @@ export const BLOCK_KATALOG = [
     name: 'Kontext laden',
     symbol: '📖',
     beschreibung:
-      'Verschafft sich einen Überblick über Projekt und Karten. Meist unnötig — jeder Block liest selbst; kostet eine eigene Session.',
+      'Verschafft sich einen Überblick über Projekt und Karten. Meist unnötig — jeder Block liest selbst; kostet einen eigenen Agenten-Lauf.',
     braucht: [],
     liefert: ['Projekt-Überblick'],
     nurLesen: true,
@@ -154,8 +154,8 @@ export const BLOCK_KATALOG = [
       'Prüfe durch eigenes Lesen im Projektordner (liegt dir ein Projekt-Überblick vor, nutze ' +
       'ihn als Abkürzung), wie sich dieser Wunsch in EIN zusammenhängendes Arbeitspaket ' +
       'fassen lässt. Miss die Paketgröße NICHT an der Sitzungslänge: Läuft der Kontext des ' +
-      'Bauers voll, übergibt FlowForge automatisch an eine frische Session, die nahtlos ' +
-      'weitermacht — jeder eigene Lauf kostet dagegen mehrere Sessions Grundaufwand. Schneide ' +
+      'Bauers voll, übergibt FlowForge automatisch an einen frischen Anlauf, der nahtlos ' +
+      'weitermacht — jeder eigene Lauf kostet dagegen eigenen Grundaufwand. Schneide ' +
       'deshalb so GROSS wie inhaltlich sinnvoll: Was zusammengehört und sich gemeinsam prüfen ' +
       'lässt, gehört in EIN Paket. Schneide nur dann kleiner, wenn der Wunsch wirklich ' +
       'unabhängige Baustellen mischt oder mittendrin eine Entscheidung des Nutzers nötig wäre ' +
@@ -190,7 +190,7 @@ export const BLOCK_KATALOG = [
       'auflisten, suchen, Dateien ansehen) laufen durch; Programme oder Tests auszuführen ist ' +
       'für diesen Block gesperrt — versuche es gar nicht erst. Antworte auf Deutsch. ' +
       'Halte dein eigenes Arbeitsgedächtnis schlank: Delegiere das Durchsuchen und Einlesen ' +
-      'an Unteraufgaben (Task-Werkzeug) — aber SPARSAM: höchstens ZWEI Unteraufgaben in ' +
+      'an Unteraufgaben (Agent-Werkzeug) — aber SPARSAM: höchstens ZWEI Unteraufgaben in ' +
       'diesem ganzen Auftrag, jede mit einem eng umrissenen Suchauftrag. Weder du noch die ' +
       'Helfer lesen das ganze Projekt ein: Gelesen werden die im Arbeitspaket genannten ' +
       'Stellen und ihre direkte Nachbarschaft (was sie aufruft, was sie verwenden) — mehr ' +
@@ -235,7 +235,7 @@ export const BLOCK_KATALOG = [
       'Ist das Feld leer, beschreiben die offenen Aufgaben-Karten den Fehler — wähle die ' +
       'passende und benenne sie. ' +
       'Halte dein eigenes Arbeitsgedächtnis schlank: Delegiere breites Suchen und Einlesen ' +
-      'an Unteraufgaben (Task-Werkzeug) — der Wegwerf-Helfer wühlt in seinem eigenen Kontext ' +
+      'an Unteraufgaben (Agent-Werkzeug) — der Wegwerf-Helfer wühlt in seinem eigenen Kontext ' +
       'und liefert dir nur sein kompaktes Fazit mit Fundorten zurück. Die entscheidenden ' +
       'Stellen für deinen Beleg liest du selbst nach. ' +
       'Verfolge den Fehler im Code: Lies die beteiligten Stellen, verfolge den Weg der Daten ' +
@@ -272,7 +272,7 @@ export const BLOCK_KATALOG = [
       'Räume jeden Fund aus ' +
       'oder begründe, warum er dieses Paket nicht trifft. ' +
       'Halte dein eigenes Arbeitsgedächtnis schlank: Delegiere das Einlesen und Durchsuchen ' +
-      'des Projekts an Unteraufgaben (Task-Werkzeug) — der Wegwerf-Helfer wühlt in seinem ' +
+      'des Projekts an Unteraufgaben (Agent-Werkzeug) — der Wegwerf-Helfer wühlt in seinem ' +
       'eigenen Kontext und liefert dir nur sein kompaktes Fazit zurück; selbst liest du ' +
       'gezielt die Stellen, die du wirklich änderst. ' +
       'Halte dich an Stil und Aufbau des ' +
@@ -305,7 +305,7 @@ export const BLOCK_KATALOG = [
     name: 'Prüfer',
     symbol: '🔬',
     beschreibung:
-      'Frische Session ohne Bauer-Wissen: schreibt eigene Tests, führt sie aus und liefert einen Rot-vor-Grün-Beleg.',
+      'Frischer Agent ohne Bauer-Wissen: schreibt eigene Tests, führt sie aus und liefert einen Rot-vor-Grün-Beleg.',
     braucht: ['Arbeitspaket', 'Umsetzungsbericht'],
     liefert: ['Prüfbeleg'],
     nurLesen: false,
@@ -313,7 +313,7 @@ export const BLOCK_KATALOG = [
     uebung: false,
     felder: [],
     auftrag:
-      'Du bist der Prüfer — eine frische Session ohne das Arbeitswissen des Bauers. Antworte ' +
+      'Du bist der Prüfer — ein frischer Agent ohne das Arbeitswissen des Bauers. Antworte ' +
       'auf Deutsch. Maßstab deiner Prüfung sind AUSSCHLIESSLICH die Fertig-Kriterien des ' +
       'Arbeitspakets: Du prüfst, was der Bauer in diesem Lauf gebaut hat — nicht das ganze ' +
       'Projekt. Die Prüfmappe pruefung/ ist deine Werkbank für DIESEN Lauf: FlowForge hat ' +
@@ -321,7 +321,7 @@ export const BLOCK_KATALOG = [
       'Alttest-Ballast. Bilddateien sind in der Mappe verboten (hartes Nein). ' +
       'Verlasse dich nicht auf den Umsetzungsbericht: Prüfe selbst nach. Halte dabei dein ' +
       'eigenes Arbeitsgedächtnis schlank: Delegiere das Einlesen des Codes an Unteraufgaben ' +
-      '(Task-Werkzeug) — der Wegwerf-Helfer wühlt in seinem eigenen Kontext und liefert dir ' +
+      '(Agent-Werkzeug) — der Wegwerf-Helfer wühlt in seinem eigenen Kontext und liefert dir ' +
       'nur sein kompaktes Fazit zurück; die Stellen, die du konkret prüfst, liest du selbst. ' +
       'Schreibe wenige, kleine Testdateien in den Ordner pruefung/ (passend zu den ' +
       'Werkzeugen des Projekts; zur Not ein einfaches Skript, das bei Fehlern mit einer ' +
@@ -370,7 +370,7 @@ export const BLOCK_KATALOG = [
       'Die Prüfmappe pruefung/ ist beim Laufstart geleert — alte Prüfungen gibt es nicht; ' +
       'du schreibst dir deine Prüfungen frisch, statt alte abzuspielen. ' +
       'Verschaffe dir zuerst einen Überblick — halte dein eigenes Arbeitsgedächtnis schlank ' +
-      'und delegiere Suchen und Einlesen an Unteraufgaben (Task-Werkzeug), die dir nur ihr ' +
+      'und delegiere Suchen und Einlesen an Unteraufgaben (Agent-Werkzeug), die dir nur ihr ' +
       'kompaktes Fazit liefern: Was verspricht die Status-Karte, was legen die ' +
       'Entscheidungs-Karten fest, was sagt die Startanleitung? ' +
       'Schreibe dann wenige, robuste Prüfungen für die Kernversprechen des Projekts in den ' +

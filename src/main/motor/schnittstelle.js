@@ -1,60 +1,69 @@
 // Motor-Schnittstelle (SPEC §2): trennt FlowForge vom ausführenden KI-Agenten.
 // Die restliche App kennt nur diesen Vertrag — welcher Motor dranhängt, ist ihr egal.
 //
-// Jeder Motor exportiert eine Funktion  starteMotorLauf(optionen)  mit:
+// Eine Motor-Session pro Lauf (BAUPLAN 19): Jeder Motor exportiert eine
+// Funktion  starteLaufMotor(optionen)  — sie öffnet EINE Session für den
+// ganzen Lauf. Auf dem Hauptfaden sitzt ein Koordinator mit den engsten
+// Rechten (nur delegieren); jeder Block läuft darin als frischer Agent ohne
+// das Arbeitsgedächtnis der anderen Blöcke (SPEC §4.3).
 //
 //   optionen = {
 //     projektPfad            Arbeitsordner; nur hier darf ohne Rückfrage geschrieben werden
-//     auftrag                Arbeitsauftrag des Blocks (Klartext, Deutsch)
 //     modus                  'abo' | 'api'
 //     apiSchluessel          nur im API-Modus
 //     ausgabenObergrenzeUsd  nur im API-Modus; der Motor bricht darüber selbst ab
-//     nurLesen               Sperre „darf nur lesen" (SPEC §4.2): alles außer
-//                            Lese-Werkzeugen wird hart abgelehnt, ohne Rückfrage
+//     fortsetzen             optional: Kennung einer früheren Lauf-Session —
+//                            der Motor setzt sie fort statt neu zu starten
+//                            (Wiederaufnahme nach App-Neustart oder nach dem
+//                            Tod des Session-Prozesses). Scheitert das, endet
+//                            der erste Block mit 'fortsetzung-gescheitert',
+//                            damit die Lauf-Verwaltung frisch startet.
 //     kontextFenster         optional: bekannte Fenstergröße aus früheren Sessions
-//                            desselben Laufs (der Motor meldet die echte Größe erst
-//                            am Session-Ende — so stimmt die Schwelle von Anfang an)
-//     uebertrag              Automatischer Übertrag (SPEC §5): { aktiv, testModus, anweisung }.
-//                            Läuft der Kontext über die Schwelle, unterbricht der Motor
-//                            den Agenten, schickt ihm die anweisung (Karten aktualisieren,
-//                            Übergabe schreiben) und endet mit zustand 'uebertrag' —
-//                            der ergebnisText ist dann die Übergabe an die frische Session.
-//     fortsetzen             Session-Fortsetzung bei Wiederholungen (BAUPLAN 16):
-//                            Kennung einer früheren Motor-Session DESSELBEN Blocks.
-//                            Der Motor setzt sie fort und reicht nur den auftrag als
-//                            Zusatz nach — statt kalt zu starten. Scheitert das
-//                            Fortsetzen (Kennung ungültig, Session weg), endet der
-//                            Lauf mit zustand 'fortsetzung-gescheitert', damit die
-//                            Lauf-Verwaltung still auf einen Kaltstart zurückfällt.
-//
-//   Jeder Motor stellt dem Agenten außerdem die Karten-Werkzeuge bereit
-//   (kartenWerkzeuge.js): Karten lesen, anlegen, aktualisieren, erledigen —
-//   mit denselben harten Regeln wie für Menschen (BAUPLAN 7). Erfolgreiche
-//   Änderungen melden sich als Ereignis { art: 'karten', karten }.
+//                            (der Motor meldet die echte Größe erst am Turn-Ende —
+//                            so stimmt die Übertrags-Schwelle von Anfang an)
 //     aufEreignis(e)         e = { art: 'ticker', text }
 //                              | { art: 'roh', zeile }
 //                              | { art: 'verbrauch', verbrauch }
 //     aufRechteFrage(frage)  frage = { beschreibung }; Promise<boolean> — erlaubt?
+//     aufMenschFrage(daten)  Frage-an-den-Menschen-Werkzeug (SPEC §6)
 //   }
 //
+//   Jeder Motor stellt den Agenten außerdem die Karten-Werkzeuge bereit
+//   (kartenWerkzeuge.js): Karten lesen, anlegen, aktualisieren, erledigen —
+//   mit denselben harten Regeln wie für Menschen (BAUPLAN 7). Erfolgreiche
+//   Änderungen melden sich als Ereignis { art: 'karten', karten }.
+//
 //   Rückgabe = {
-//     fertig            Promise<{ zustand, fehlertext, fehlerArt, ergebnisText, verbrauch,
-//                       sessionKennung }>
-//                       zustand: 'erfolgreich' | 'fehlgeschlagen'
-//                              | 'sanft-gestoppt' | 'hart-abgebrochen' | 'uebertrag'
-//                              | 'fortsetzung-gescheitert'
-//                       sessionKennung: Kennung der Motor-Session dieses Laufs —
-//                       damit derselbe Block sie später fortsetzen kann (BAUPLAN 16)
-//                       fehlerArt (nur bei 'fehlgeschlagen'): 'kontingent' |
-//                       'obergrenze' | 'anmeldung' | null — die Lauf-Verwaltung
-//                       entscheidet daran z.B. über die Kontingent-Pause (SPEC §5)
-//                       ergebnisText: Abschlusstext des Agenten — daraus liest
-//                       FlowForge z.B. Prüfer-Urteile (PRUEFUNG: BESTANDEN/…)
+//     blockAusfuehren({ auftrag, blockName, nurLesen, darfPruefen, uebertrag })
+//           Führt genau einen Block als frischen Agenten in der Lauf-Session
+//           aus. Der Arbeitsauftrag wird beim Agent-Aufruf von FlowForge
+//           selbst eingesetzt; die Sperren (nurLesen, Prüfmappen-Besitz)
+//           gelten für den Agenten und seine Helfer — erkannt an der
+//           Unteraufgaben-Kennung des Werkzeugaufrufs. uebertrag = { aktiv,
+//           testModus, anweisung }: Läuft die Lauf-Session über die Schwelle,
+//           wird unterbrochen; der ergebnisText ist dann die Übergabe an den
+//           nächsten Anlauf, und die Session ist danach verbraucht (tot).
+//           Promise<{ zustand, fehlertext, fehlerArt, ergebnisText, verbrauch,
+//                     sessionKennung }>
+//           zustand: 'erfolgreich' | 'fehlgeschlagen' | 'sanft-gestoppt'
+//                  | 'hart-abgebrochen' | 'uebertrag' | 'fortsetzung-gescheitert'
+//           fehlerArt (nur bei 'fehlgeschlagen'): 'kontingent' | 'obergrenze'
+//                  | 'anmeldung' | 'ueberlastet' | null
+//           ergebnisText: Fazit des Block-Agenten — daraus liest FlowForge
+//                  z.B. Prüfer-Urteile (PRUEFUNG: BESTANDEN/…)
+//     istTot()          Session nimmt keine Blöcke mehr an → neuen Motor
+//                       starten (mit fortsetzen = sessionKennung)
+//     sessionKennung    Kennung der Lauf-Session (für Laufstand/Wiederaufnahme)
+//     tokens            Füllstand des Hauptfadens (für den Fortsetzungs-Wächter)
+//     beenden()         Session geordnet schließen (Lauf-Ende)
 //     sanftStoppen()    Motor unterbricht geordnet (Unterbrechungs-Funktion)
 //     hartStoppen()     Prozessbaum sofort beenden
 //   }
 //
-//   verbrauch = { tokens, kontextProzentVon, kontextProzentBis, kostenUsd }
+//   verbrauch = { tokens (Füllstand der Lauf-Session), blockZuwachs (Anteil
+//   dieses Blocks am Hauptfaden), unterTokens (Verbrauch der Agenten dieses
+//   Blocks), kontextProzentVon/Bis, kostenUsd und aufschluesselung (Anteil
+//   dieses Blocks), kontextFenster, uebertragBand }
 //   Der Kontext-Füllstand ist bewusst ein Toleranzbereich, kein Punktwert.
 
 // Solange der Motor die echte Fenstergröße noch nicht gemeldet hat.

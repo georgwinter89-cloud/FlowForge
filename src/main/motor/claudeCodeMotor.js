@@ -26,12 +26,16 @@ function claudeExePfad() {
 }
 
 // Werkzeuge, die nur lesen oder rein intern arbeiten — laut SPEC §7 ohne Rückfrage.
+// „Task" und „Agent" sind zwei Namen desselben Unteraufgaben-Werkzeugs (die CLI
+// nennt es inzwischen Agent); ToolSearch lädt nur Werkzeug-Beschreibungen nach.
 const OHNE_RUECKFRAGE = new Set([
   'Read',
   'Glob',
   'Grep',
   'TodoWrite',
   'Task',
+  'Agent',
+  'ToolSearch',
   'BashOutput',
   'KillShell',
   'ExitPlanMode',
@@ -41,15 +45,18 @@ const OHNE_RUECKFRAGE = new Set([
 const SCHREIB_WERKZEUGE = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit'])
 
 // Sperre „darf nur lesen" (SPEC §4.2): nur diese Werkzeuge sind dann erlaubt.
-// Task ist dabei (BAUPLAN 17): Unteraufgaben halten den Kontext schlank, und
-// ihre eigenen Werkzeugaufrufe laufen durch dieselbe Rechte-Prüfung — schreiben
-// kann eine Unteraufgabe unter der Sperre also genauso wenig. Bewusst ohne Bash.
+// Task/Agent ist dabei (BAUPLAN 17/19): Unteraufgaben halten den Kontext
+// schlank, und ihre eigenen Werkzeugaufrufe laufen durch dieselbe
+// Rechte-Prüfung — schreiben kann eine Unteraufgabe unter der Sperre also
+// genauso wenig. Bewusst ohne Bash.
 const NUR_LESEN_ERLAUBT = new Set([
   'Read',
   'Glob',
   'Grep',
   'TodoWrite',
   'Task',
+  'Agent',
+  'ToolSearch',
   'NotebookRead',
   'BashOutput',
   'KillShell',
@@ -292,21 +299,25 @@ function kuerzen(text, max = 160) {
 }
 
 // Übersetzt eine SDK-Nachricht in Klartext-Zeilen für den Liveticker.
-// Zeilen aus Unteraufgaben (BAUPLAN 17) bekommen einen Vorsatz — sonst wäre
-// im Ticker nicht zu erkennen, dass gerade ein Wegwerf-Helfer wühlt.
-function tickerZeilen(nachricht, projektPfad) {
+// Seit BAUPLAN 19 laufen die Blöcke selbst als Agenten: Zeilen des
+// Block-Agenten (parent in blockTaskIds) sind normale Ticker-Zeilen; nur
+// Zeilen seiner tieferen Wegwerf-Helfer tragen den Unteraufgaben-Vorsatz.
+// Der Hauptfaden ist der Koordinator — sein Geplauder („OK") bleibt draußen,
+// sein Agent-Aufruf wird vom Hook gemeldet.
+function tickerZeilen(nachricht, projektPfad, blockTaskIds) {
   const t = texte.ticker
-  if (nachricht.type === 'system' && nachricht.subtype === 'init')
-    return [t.motorGestartet(nachricht.model ?? 'Claude')]
   // Überlastete KI-Server: die CLI wiederholt selbst — ohne diese Zeile sähe
   // Georg nur eine stumme App.
   if (nachricht.type === 'system' && nachricht.subtype === 'api_retry')
     return [t.motorWartet(nachricht.attempt ?? '?', nachricht.max_retries ?? '?')]
   if (nachricht.type !== 'assistant') return []
+  const hauptfaden = !nachricht.parent_tool_use_id
   const zeilen = []
   for (const block of nachricht.message?.content ?? []) {
+    if (hauptfaden) continue
     if (block.type === 'text' && block.text?.trim()) zeilen.push(block.text.trim())
     if (block.type !== 'tool_use') continue
+    if (block.name === 'ToolSearch') continue
     const e = block.input ?? {}
     // Karten-Werkzeuge: die Übersicht meldet sich hier, Änderungen melden ihr
     // Ergebnis selbst aus dem Werkzeug heraus (angelegt/abgelehnt).
@@ -339,6 +350,7 @@ function tickerZeilen(nachricht, projektPfad) {
         zeilen.push(t.plant)
         break
       case 'Task':
+      case 'Agent':
         zeilen.push(t.unteraufgabe)
         break
       case 'Bash':
@@ -353,7 +365,8 @@ function tickerZeilen(nachricht, projektPfad) {
         zeilen.push(t.werkzeug(block.name))
     }
   }
-  return nachricht.parent_tool_use_id ? zeilen.map((z) => t.unteraufgabeZeile(z)) : zeilen
+  const vomBlockAgenten = Boolean(blockTaskIds?.has(nachricht.parent_tool_use_id))
+  return !hauptfaden && !vomBlockAgenten ? zeilen.map((z) => t.unteraufgabeZeile(z)) : zeilen
 }
 
 // Fehlermeldung des Motors in Klartext übersetzen und einstufen — an der
@@ -442,23 +455,29 @@ export async function starteMotorFrage({ frage, modus, apiSchluessel, ausgabenOb
   return { ok: false, fehler: fehlertext }
 }
 
-export function starteMotorLauf(optionen) {
+// Eine Motor-Session pro Lauf (BAUPLAN 19): Die Session bleibt über den ganzen
+// Lauf offen. Auf dem Hauptfaden sitzt ein Koordinator, der selbst nichts
+// erledigt — je Block startet er genau einen frischen Agenten (Unteraufgabe).
+// Den echten Arbeitsauftrag setzt FlowForge beim Agent-Aufruf selbst ein
+// (PreToolUse-Hook, updatedInput): Der Koordinator sieht ihn nie, bleibt
+// schlank und kann nichts verfälschen. Das Fazit des Agenten liest FlowForge
+// direkt aus dem Werkzeug-Ergebnis des Agent-Aufrufs — nicht aus dem
+// Koordinator-Text, der z.B. die Urteils-Marke des Prüfers verschlucken könnte.
+// Die harten Sperren gelten pro Aufrufer: Werkzeugaufrufe mit agent_id gehören
+// dem gerade laufenden Block-Agenten (oder seinen Helfern) und unterliegen
+// dessen Regeln; der Koordinator selbst darf ausschließlich delegieren.
+export function starteLaufMotor(optionen) {
   const {
     projektPfad,
-    auftrag,
     modus,
     apiSchluessel,
     ausgabenObergrenzeUsd,
-    nurLesen = false,
-    // Prüf-Blöcke (prueft: true) dürfen als einzige die Prüfmappe verändern.
-    darfPruefen = false,
-    // Session-Fortsetzung bei Wiederholungen (BAUPLAN 16): Kennung der eigenen
-    // früheren Session dieses Blocks — der auftrag ist dann nur der Zusatz.
+    // Wiederaufnahme (BAUPLAN 16/19): Kennung der Lauf-Session eines
+    // unterbrochenen Laufs — sie wird fortgesetzt statt neu gestartet.
     fortsetzen = null,
-    uebertrag = { aktiv: false, testModus: false, anweisung: '' },
     // Die echte Fenstergröße meldet der Motor erst am Session-Ende — ein
-    // Vorwissen aus früheren Blöcken desselben Laufs macht die
-    // Übertrags-Schwelle von Anfang an richtig.
+    // Vorwissen aus früheren Sessions macht die Übertrags-Schwelle von
+    // Anfang an richtig.
     kontextFenster = KONTEXT_FENSTER_STANDARD,
     aufEreignis,
     aufRechteFrage,
@@ -468,13 +487,25 @@ export function starteMotorLauf(optionen) {
   let kindProzess = null
   let sanftAngefordert = false
   let hartAngefordert = false
+  // Tot = die Session nimmt keine Blöcke mehr an (Prozess beendet, Fehler,
+  // beenden()). Die Lauf-Verwaltung startet dann bei Bedarf einen neuen Motor,
+  // der die Session über ihre Kennung fortsetzt.
+  let tot = false
   let stderrPuffer = ''
   let abfrage = null
   const abbruch = new AbortController()
 
-  // Die Eingabe ist eine Warteschlange und bleibt offen, bis das Ergebnis da
-  // ist — so kann der Motor Unterbrechungen empfangen und beim Übertrag die
-  // Übergabe-Anweisung als weitere Nachricht in dieselbe Session bekommen.
+  // Session-Kennung der Lauf-Session — jede SDK-Nachricht trägt sie.
+  let sessionKennung = null
+  // Die CLI meldet init bei jedem Turn erneut — getickert wird nur der erste.
+  let initGemeldet = false
+  // Kam überhaupt eine Nachricht an? Scheitert ein Fortsetzen-Versuch schon
+  // beim Start (Kennung ungültig, Session weg), bleibt das false.
+  let nachrichtEmpfangen = false
+
+  // Die Eingabe ist eine offene Warteschlange: FlowForge reicht Block für
+  // Block als Nachricht nach — die Session bleibt offen, bis beenden() sie
+  // schließt. Auch Unterbrechungs-Anweisungen (Übertrag) kommen hier herein.
   const eingabeSchlange = []
   let eingabeEnde = false
   let eingabeWecker = null
@@ -487,7 +518,6 @@ export function starteMotorLauf(optionen) {
     eingabeWecker?.()
   }
   async function* eingabe() {
-    yield { type: 'user', message: { role: 'user', content: auftrag }, parent_tool_use_id: null }
     while (true) {
       if (eingabeSchlange.length) {
         const text = eingabeSchlange.shift()
@@ -499,45 +529,131 @@ export function starteMotorLauf(optionen) {
     }
   }
 
-  // Automatischer Übertrag (SPEC §5): null | 'angefordert' | 'uebergabe' | 'fertig'.
-  let uebertragPhase = null
-  // Füllstand der ersten Messung dieser Session — Bezugspunkt für den Testmodus.
-  let startProzent = null
-  // Session-Kennung dieses Laufs (BAUPLAN 16) — jede SDK-Nachricht trägt sie.
-  let sessionKennung = null
-  // Kam überhaupt eine Nachricht an? Scheitert ein Fortsetzen-Versuch schon
-  // beim Start (Kennung ungültig, Session weg), bleibt das false.
-  let nachrichtEmpfangen = false
+  // Kumulierte Stände der Lauf-Session — daraus rechnet der Motor die
+  // ehrlichen Block-Anteile (Zuwachs des Hauptfadens, Kosten- und
+  // Aufschlüsselungs-Deltas), damit kein Block die Historie der ganzen
+  // Session mitzählt.
+  let hauptTokens = 0
+  let bekanntesFenster = kontextFenster > 0 ? kontextFenster : KONTEXT_FENSTER_STANDARD
+  let kostenStand = null
+  const aufschlStand = { eingabe: 0, ausgabe: 0, cacheLesen: 0, cacheSchreiben: 0 }
 
-  const verbrauch = {
-    tokens: 0,
-    // Verbrauch der Unteraufgaben (BAUPLAN 17): Wegwerf-Helfer wühlen in ihrem
-    // eigenen Kontext — ihre Tokens zählen zum ehrlichen Verbrauch, aber NICHT
-    // zum Füllstand der Hauptsession (der steuert den Übertrag).
-    unterTokens: 0,
-    kontextProzentVon: 0,
-    kontextProzentBis: 5,
-    kostenUsd: null,
-    // Token-Aufschlüsselung (Wunsch Georg, 13.08.2026): Eingabe, Ausgabe,
-    // Cache gelesen/geschrieben — kumuliert über alle Modelle der Session
-    // (Unteraufgaben eingeschlossen), gemeldet am Session-Ende.
-    aufschluesselung: null,
-    kontextFenster: kontextFenster > 0 ? kontextFenster : KONTEXT_FENSTER_STANDARD,
-    // Beim Übertrag: der Füllstand im Moment der Auslösung — die endgültige
-    // Fenstergröße kommt erst später und würde ihn sonst verfälschen.
-    uebertragBand: null
+  // Der gerade laufende Block-Dispatch — es läuft höchstens einer zugleich.
+  // Parallele Zweige bekommen eigene Motoren (lauf.js).
+  let block = null
+
+  function unterSumme() {
+    return block ? [...block.unterVerbrauch.values()].reduce((a, b) => a + b, 0) : 0
   }
-  // Letzter kumulierter Verbrauchs-Stand je Unteraufgabe (Task-Aufruf-Kennung).
-  const unterVerbrauch = new Map()
+
+  function blockVerbrauch() {
+    const band = kontextBand(hauptTokens, bekanntesFenster)
+    return {
+      // Füllstand der Lauf-Session (Hauptfaden = Koordinator) — steuert den Übertrag.
+      tokens: hauptTokens,
+      // Zuwachs des Hauptfadens in diesem Block — für die ehrliche Block-Zählung.
+      blockZuwachs: block ? Math.max(0, hauptTokens - block.startTokens) : 0,
+      // Verbrauch der Agenten dieses Blocks (Block-Agent + seine Helfer):
+      // zählt zum ehrlichen Verbrauch, aber nicht zum Füllstand.
+      unterTokens: unterSumme(),
+      kontextProzentVon: band.von,
+      kontextProzentBis: band.bis,
+      kostenUsd: block?.kosten ?? null,
+      aufschluesselung: block?.aufschluesselung ?? null,
+      kontextFenster: bekanntesFenster,
+      uebertragBand: block?.uebertragBand ?? null
+    }
+  }
 
   function verbrauchMelden() {
-    const band = kontextBand(verbrauch.tokens, verbrauch.kontextFenster)
-    verbrauch.kontextProzentVon = band.von
-    verbrauch.kontextProzentBis = band.bis
-    aufEreignis({ art: 'verbrauch', verbrauch: { ...verbrauch } })
+    aufEreignis({ art: 'verbrauch', verbrauch: blockVerbrauch() })
   }
 
-  const fertig = (async () => {
+  // Löst den laufenden Block-Dispatch mit einem endgültigen Ergebnis auf.
+  function blockAufloesen(zustand, extra = {}) {
+    if (!block) return
+    const verbrauch = blockVerbrauch()
+    const b = block
+    block = null
+    b.aufloesen({
+      zustand,
+      fehlertext: '',
+      fehlerArt: null,
+      ergebnisText: '',
+      verbrauch,
+      sessionKennung,
+      ...extra
+    })
+  }
+
+  // Das Werkzeug-Ergebnis des Agent-Aufrufs trägt hinter dem Fazit noch
+  // Metadaten der CLI (agentId-Zeile, usage-Block) — die gehören nicht in
+  // Übergaben und Laufberichte.
+  function fazitStutzen(text) {
+    let t = String(text)
+    const marke = t.startsWith('agentId:') ? 0 : t.lastIndexOf('\nagentId:')
+    if (marke >= 0) t = t.slice(0, marke)
+    return t.replace(/<usage>[\s\S]*?<\/usage>\s*$/, '').trim()
+  }
+
+  // Harte Sperren pro Aufrufer (BAUPLAN 19), durchgesetzt VOR jedem
+  // Werkzeugaufruf — auch für Werkzeuge, die nie eine Rechte-Frage auslösen
+  // würden (der Agent-Aufruf selbst). Rückfrage-Fälle entscheidet weiterhin
+  // canUseTool, denn dort darf die Frage an den Nutzer beliebig lange warten.
+  async function vorWerkzeug(hookDaten) {
+    const name = hookDaten.tool_name
+    const eingabeDaten =
+      hookDaten.tool_input && typeof hookDaten.tool_input === 'object' ? hookDaten.tool_input : {}
+    const nein = (grund, tickerText) => {
+      if (tickerText) aufEreignis({ art: 'ticker', text: tickerText })
+      return {
+        hookSpecificOutput: {
+          hookEventName: 'PreToolUse',
+          permissionDecision: 'deny',
+          permissionDecisionReason: grund
+        }
+      }
+    }
+    // Hauptfaden = Koordinator: engste Rechte — er darf nur delegieren.
+    if (!hookDaten.agent_id) {
+      if (name === 'Agent' || name === 'Task') {
+        if (!block || block.auftragEingesetzt) return nein(texte.agentenLaufSession.nurEinAgent)
+        block.auftragEingesetzt = true
+        block.blockTaskIds.add(hookDaten.tool_use_id)
+        aufEreignis({ art: 'ticker', text: texte.ticker.blockAgentGestartet(block.blockName) })
+        // Der echte Arbeitsauftrag wird hier eingesetzt — der Koordinator
+        // hat nur das Wort AUFTRAG geschrieben und bleibt schlank.
+        return {
+          hookSpecificOutput: {
+            hookEventName: 'PreToolUse',
+            permissionDecision: 'allow',
+            updatedInput: {
+              description: block.blockName,
+              subagent_type: 'block',
+              run_in_background: false,
+              prompt: block.auftrag
+            }
+          }
+        }
+      }
+      return nein(texte.agentenLaufSession.koordinatorGesperrt, texte.ticker.koordinatorGestoppt)
+    }
+    // Aufruf aus dem Block-Agenten oder seinen Helfern: Es gelten die Sperren
+    // des gerade laufenden Blocks (ohne laufenden Block: strengste Auslegung).
+    const urteil = pruefeWerkzeug(
+      name,
+      eingabeDaten,
+      projektPfad,
+      block?.nurLesen ?? true,
+      block?.darfPruefen ?? false
+    )
+    if (urteil.gesperrt) return nein(urteil.gesperrt, urteil.tickerText)
+    if (urteil.erlaubt)
+      return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'allow' } }
+    return {}
+  }
+
+  const schleife = (async () => {
     const { query } = await import('@anthropic-ai/claude-agent-sdk')
 
     // Agent-Karten-Brücke (BAUPLAN 7): Karten lesen/schreiben mit denselben
@@ -572,32 +688,26 @@ export function starteMotorLauf(optionen) {
         // Georgs persönliche Claude-Einstellungen bleiben außen vor:
         // der Motor läuft nur mit dem, was FlowForge ihm mitgibt.
         settingSources: [],
-        // Session-Fortsetzung (BAUPLAN 16): dieselbe Session weiterführen —
-        // der Agent kennt seine bisherige Arbeit noch.
+        // Wiederaufnahme: dieselbe Lauf-Session weiterführen — der
+        // Koordinator kennt die bisherigen Blöcke und Fazite noch.
         ...(fortsetzen ? { resume: fortsetzen } : {}),
         mcpServers: { karten: kartenServer, mensch: menschServer, start: startServer },
-        // Windows-Härtung: Die Shell des Motors zeigt POSIX-Pfade (/tmp/…, /c/…) an —
-        // als Datei-Werkzeug-Pfade landen die auf Windows aber am falschen Ort und
-        // lösen unnötige Rechte-Rückfragen aus.
-        systemPrompt: {
-          type: 'preset',
-          preset: 'claude_code',
-          append:
-            `Der Projektordner ist: ${projektPfad}\n` +
-            'Verwende bei Datei-Werkzeugen (Read/Write/Edit) ausschließlich Pfade relativ ' +
-            'zum Projektordner oder diesen absoluten Windows-Pfad. Niemals POSIX-Pfade ' +
-            'wie /tmp/… oder /c/… verwenden — sie zeigen auf Windows auf falsche Orte.\n' +
-            'Projektkarten: FlowForge verwaltet strukturierte Karten (Status, Aufgabe, ' +
-            'Entscheidung, Wissen) als Gedächtnis des Projekts. Lies und schreibe sie ' +
-            'ausschließlich über die karten-Werkzeuge (karten_uebersicht, karte_anlegen, ' +
-            'karte_aktualisieren, karte_erledigen) — niemals über die Datei karten.json. ' +
-            `Harte Regeln: Titel höchstens ${TITEL_MAX} Zeichen, Inhalt höchstens ${TEXT_MAX} ` +
-            'Zeichen; wer mehr zu sagen hat, legt mehrere fokussierte Karten an. Es gibt ' +
-            'genau eine Status-Karte — sie kann weder gelöscht noch neu angelegt werden.'
+        // Der Hauptfaden ist der Koordinator: schlanker eigener Systemtext
+        // statt des vollen Werkzeug-Vorspanns — er arbeitet ja nicht selbst.
+        systemPrompt: texte.agentenLaufSession.koordinatorSystem,
+        // Jeder Block läuft als frischer Agent dieses Typs (BAUPLAN 19).
+        // Sein Systemtext trägt die Projekt-Grundregeln (Windows-Pfade,
+        // Karten-Werkzeuge) — den Arbeitsauftrag setzt der Hook ein.
+        agents: {
+          block: {
+            description: 'Führt genau einen Block-Arbeitsauftrag von FlowForge aus.',
+            prompt: texte.agentenLaufSession.blockAgentSystem(projektPfad, TITEL_MAX, TEXT_MAX),
+            maxTurns: 300
+          }
         },
-        // Echte Bau- und Prüf-Blöcke (BAUPLAN 8) brauchen deutlich mehr Runden
-        // als die Übungs-Blöcke — die echte Grenze ist das Kontextfenster.
-        maxTurns: 200,
+        // Eine Session für den ganzen Lauf: Die Koordinator-Runden aller
+        // Blöcke zählen zusammen — die echte Grenze ist das Kontextfenster.
+        maxTurns: 1000,
         ...(modus === 'api' && ausgabenObergrenzeUsd > 0
           ? { maxBudgetUsd: ausgabenObergrenzeUsd }
           : {}),
@@ -614,8 +724,21 @@ export function starteMotorLauf(optionen) {
           })
           return kindProzess
         },
-        canUseTool: async (name, eingabeDaten) => {
-          const urteil = pruefeWerkzeug(name, eingabeDaten ?? {}, projektPfad, nurLesen, darfPruefen)
+        // Harte Sperren pro Aufrufer — vor jedem Werkzeugaufruf, auch dem
+        // Agent-Aufruf des Koordinators (der nie bei canUseTool ankommt).
+        hooks: { PreToolUse: [{ hooks: [vorWerkzeug] }] },
+        canUseTool: async (name, eingabeDaten, kontext) => {
+          // Der Koordinator landet hier nur, wenn der Hook nichts entschieden
+          // hat — sicherheitshalber dieselbe harte Linie.
+          if (!kontext?.agentID)
+            return { behavior: 'deny', message: texte.agentenLaufSession.koordinatorGesperrt }
+          const urteil = pruefeWerkzeug(
+            name,
+            eingabeDaten ?? {},
+            projektPfad,
+            block?.nurLesen ?? true,
+            block?.darfPruefen ?? false
+          )
           if (urteil.erlaubt) return { behavior: 'allow', updatedInput: eingabeDaten }
           if (urteil.gesperrt) {
             aufEreignis({ art: 'ticker', text: urteil.tickerText })
@@ -633,30 +756,101 @@ export function starteMotorLauf(optionen) {
       }
     })
 
-    let ergebnis = null
+    // Verarbeitet ein endgültiges Turn-Ergebnis für den laufenden Block.
+    function blockErgebnisVerarbeiten(nachricht) {
+      if (!block) return
+      aufEreignis({
+        art: 'ticker',
+        text: texte.ticker.fertigIn(Math.round((Date.now() - block.startZeit) / 1000))
+      })
+      if (hartAngefordert) return blockAufloesen('hart-abgebrochen')
+      if (sanftAngefordert)
+        return blockAufloesen('sanft-gestoppt', { ergebnisText: block.fazit ?? '' })
+      // Achtung: subtype 'success' heißt nur „sauber durchgelaufen" — Fehler
+      // wie eine fehlende Anmeldung kommen trotzdem mit is_error zurück.
+      if (nachricht.subtype === 'success' && !nachricht.is_error) {
+        // Das Ergebnis des Blocks ist das Fazit des Block-Agenten — nicht der
+        // Koordinator-Text, der z.B. die Prüfer-Urteils-Marke verlieren könnte.
+        if (block.fazit) return blockAufloesen('erfolgreich', { ergebnisText: block.fazit })
+        return blockAufloesen('fehlgeschlagen', {
+          fehlertext: block.agentFehler
+            ? kuerzen(block.agentFehler, 400)
+            : texte.lauf.blockOhneFazit
+        })
+      }
+      const { fehlertext, fehlerArt } = fehlerAusErgebnis(nachricht, stderrPuffer)
+      // Fortsetzen-Versuch, den die CLI mit „Session nicht gefunden" ablehnt
+      // (real beobachtet: „No conversation found with session ID: …"): kein
+      // echter Fehler des Blocks — still auf frische Session zurück. Echte
+      // Fehler mit Einstufung (Kontingent, Anmeldung …) bleiben, was sie sind.
+      if (
+        fortsetzen &&
+        fehlerArt === null &&
+        /no conversation|session id|session.*not found|(could not|cannot|unable to) resume/i.test(
+          fehlertext
+        )
+      ) {
+        tot = true
+        eingabeSchliessen()
+        return blockAufloesen('fortsetzung-gescheitert', { sessionKennung: null })
+      }
+      blockAufloesen('fehlgeschlagen', { fehlertext, fehlerArt })
+    }
+
     try {
       for await (const nachricht of abfrage) {
         nachrichtEmpfangen = true
         if (typeof nachricht.session_id === 'string' && nachricht.session_id)
           sessionKennung = nachricht.session_id
         aufEreignis({ art: 'roh', zeile: JSON.stringify(nachricht) })
-        for (const zeile of tickerZeilen(nachricht, projektPfad))
+        for (const zeile of tickerZeilen(nachricht, projektPfad, block?.blockTaskIds))
           aufEreignis({ art: 'ticker', text: zeile })
 
-        // Kontextfenster ab der Startmeldung (Befund Georg, 13.08.2026: der
-        // erste Block eines Laufs rechnete mit dem 200.000er-Standard — Anzeige
-        // zu hoch, Übertrag zu früh). Die Startmeldung nennt das Modell; das
-        // Motor-Wissen liefert die gemerkte bzw. an der Kennung erkennbare
-        // Größe. Vorwissen aus früheren Blöcken desselben Laufs geht vor.
+        if (nachricht.type === 'system' && nachricht.subtype === 'init') {
+          // Der Motor startet einmal pro Lauf — sichtbar im Ticker (BAUPLAN 19).
+          // Die CLI meldet init bei JEDEM Turn erneut (gleiche Session-Kennung,
+          // real erprobt) — gemeldet wird nur der erste.
+          if (!initGemeldet) {
+            initGemeldet = true
+            aufEreignis({
+              art: 'ticker',
+              text: fortsetzen
+                ? texte.ticker.laufSessionFortgesetzt
+                : texte.ticker.laufSessionGestartet(nachricht.model ?? 'Claude')
+            })
+          }
+          // Kontextfenster ab der Startmeldung (Befund Georg, 13.08.2026):
+          // das Motor-Wissen liefert die gemerkte bzw. an der Modellkennung
+          // erkennbare Größe. Vorwissen aus früheren Sessions geht vor.
+          if (kontextFenster === KONTEXT_FENSTER_STANDARD) {
+            const bekannt = kontextFensterFuerModell(nachricht.model)
+            if (bekannt > 0) {
+              bekanntesFenster = bekannt
+              verbrauchMelden()
+            }
+          }
+        }
+
+        // Fazit des Block-Agenten: das Werkzeug-Ergebnis seines Agent-Aufrufs
+        // auf dem Hauptfaden — die verlässliche Quelle für den Abschlusstext.
         if (
-          nachricht.type === 'system' &&
-          nachricht.subtype === 'init' &&
-          kontextFenster === KONTEXT_FENSTER_STANDARD
+          nachricht.type === 'user' &&
+          !nachricht.parent_tool_use_id &&
+          block &&
+          Array.isArray(nachricht.message?.content)
         ) {
-          const bekannt = kontextFensterFuerModell(nachricht.model)
-          if (bekannt > 0) {
-            verbrauch.kontextFenster = bekannt
-            verbrauchMelden()
+          for (const teil of nachricht.message.content) {
+            if (teil?.type !== 'tool_result' || !block.blockTaskIds.has(teil.tool_use_id)) continue
+            const text = Array.isArray(teil.content)
+              ? teil.content
+                  .filter((c) => c?.type === 'text')
+                  .map((c) => c.text)
+                  .join('\n')
+              : typeof teil.content === 'string'
+                ? teil.content
+                : ''
+            if (teil.is_error) block.agentFehler = text
+            else block.fazit = fazitStutzen(text)
           }
         }
 
@@ -667,40 +861,47 @@ export function starteMotorLauf(optionen) {
             (u.cache_creation_input_tokens ?? 0) +
             (u.cache_read_input_tokens ?? 0) +
             (u.output_tokens ?? 0)
-          // Nachrichten aus Unteraufgaben (BAUPLAN 17) tragen den Füllstand des
-          // Helfers, nicht der Hauptsession — sie dürfen die Übertrags-Schwelle
-          // nicht verfälschen. Ihr Verbrauch wird getrennt aufsummiert: je
-          // Unteraufgabe der letzte kumulierte Stand.
+          // Nachrichten aus Agenten tragen den Füllstand des jeweiligen
+          // Helfers, nicht der Lauf-Session — sie dürfen die Übertrags-
+          // Schwelle nicht verfälschen. Ihr Verbrauch wird je Block getrennt
+          // aufsummiert: je Agent der letzte kumulierte Stand.
           if (nachricht.parent_tool_use_id) {
-            unterVerbrauch.set(nachricht.parent_tool_use_id, kumuliert)
-            verbrauch.unterTokens = [...unterVerbrauch.values()].reduce((a, b) => a + b, 0)
+            if (block) {
+              block.unterVerbrauch.set(nachricht.parent_tool_use_id, kumuliert)
+              verbrauchMelden()
+            }
+          } else {
+            hauptTokens = kumuliert
             verbrauchMelden()
-            continue
           }
-          verbrauch.tokens = kumuliert
-          verbrauchMelden()
 
-          // Übertrags-Schwelle (SPEC §5): läuft der Kontext voll, wird der
-          // Agent unterbrochen und zur Übergabe aufgefordert — genau einmal.
-          if (uebertrag.aktiv && uebertragPhase === null && !sanftAngefordert && !hartAngefordert) {
-            const fenster = verbrauch.kontextFenster || KONTEXT_FENSTER_STANDARD
-            const prozent = (verbrauch.tokens / fenster) * 100
-            if (startProzent === null) startProzent = prozent
-            const schwelle = uebertrag.testModus
-              ? Math.min(startProzent + UEBERTRAG_TEST_AUFSCHLAG_PUNKTE, UEBERTRAG_SCHWELLE_PROZENT)
+          // Übertrags-Schwelle (SPEC §5): Läuft die Lauf-Session voll, wird
+          // unterbrochen und der Koordinator zur Übergabe aufgefordert.
+          // Der Koordinator wächst langsam (nur Aufträge und Fazite) — echte
+          // Überträge sind selten. Im Testmodus zählt deshalb der Verbrauch
+          // der Block-Agenten mit, damit der Übertrag vorführbar bleibt.
+          if (
+            block?.uebertrag.aktiv &&
+            block.uebertragPhase === null &&
+            !sanftAngefordert &&
+            !hartAngefordert
+          ) {
+            const fenster = bekanntesFenster || KONTEXT_FENSTER_STANDARD
+            const messTokens = block.uebertrag.testModus
+              ? hauptTokens + unterSumme()
+              : hauptTokens
+            const prozent = (messTokens / fenster) * 100
+            if (block.startProzent === null) block.startProzent = prozent
+            const schwelle = block.uebertrag.testModus
+              ? Math.min(block.startProzent + UEBERTRAG_TEST_AUFSCHLAG_PUNKTE, UEBERTRAG_SCHWELLE_PROZENT)
               : UEBERTRAG_SCHWELLE_PROZENT
             if (prozent >= schwelle) {
-              uebertragPhase = 'angefordert'
-              verbrauch.uebertragBand = {
-                von: verbrauch.kontextProzentVon,
-                bis: verbrauch.kontextProzentBis
-              }
+              block.uebertragPhase = 'angefordert'
+              const band = kontextBand(messTokens, fenster)
+              block.uebertragBand = { von: band.von, bis: band.bis }
               aufEreignis({
                 art: 'ticker',
-                text: texte.ticker.uebertragAngefordert(
-                  verbrauch.kontextProzentVon,
-                  verbrauch.kontextProzentBis
-                )
+                text: texte.ticker.uebertragAngefordert(band.von, band.bis)
               })
               abfrage?.interrupt().catch(() => {})
             }
@@ -708,17 +909,22 @@ export function starteMotorLauf(optionen) {
         }
 
         if (nachricht.type === 'result') {
-          if (typeof nachricht.total_cost_usd === 'number')
-            verbrauch.kostenUsd = nachricht.total_cost_usd
-          // modelUsage ist der kumulierte Stand der Session je Modell —
-          // Unteraufgaben eingeschlossen. Daraus kommen die Fenstergröße
-          // (gemerkt fürs Motor-Wissen) und die Token-Aufschlüsselung.
+          // Kosten und Aufschlüsselung meldet die CLI als kumulierte Stände
+          // des Prozesses — gezählt wird der Zuwachs dieses Blocks.
+          if (typeof nachricht.total_cost_usd === 'number') {
+            const delta =
+              kostenStand === null
+                ? nachricht.total_cost_usd
+                : Math.max(0, nachricht.total_cost_usd - kostenStand)
+            kostenStand = nachricht.total_cost_usd
+            if (block && delta > 0) block.kosten = (block.kosten ?? 0) + delta
+          }
           const summe = { eingabe: 0, ausgabe: 0, cacheLesen: 0, cacheSchreiben: 0 }
           let hatModelUsage = false
           for (const [modell, m] of Object.entries(nachricht.modelUsage ?? {})) {
             hatModelUsage = true
             if (m.contextWindow > 0) {
-              verbrauch.kontextFenster = m.contextWindow
+              bekanntesFenster = m.contextWindow
               kontextFensterMerken(modell, m.contextWindow)
             }
             summe.eingabe += m.inputTokens ?? 0
@@ -726,96 +932,133 @@ export function starteMotorLauf(optionen) {
             summe.cacheLesen += m.cacheReadInputTokens ?? 0
             summe.cacheSchreiben += m.cacheCreationInputTokens ?? 0
           }
-          if (hatModelUsage) verbrauch.aufschluesselung = summe
+          if (hatModelUsage) {
+            if (block) {
+              block.aufschluesselung ??= { eingabe: 0, ausgabe: 0, cacheLesen: 0, cacheSchreiben: 0 }
+              for (const feld of ['eingabe', 'ausgabe', 'cacheLesen', 'cacheSchreiben'])
+                block.aufschluesselung[feld] += Math.max(0, summe[feld] - aufschlStand[feld])
+            }
+            for (const feld of ['eingabe', 'ausgabe', 'cacheLesen', 'cacheSchreiben'])
+              aufschlStand[feld] = summe[feld]
+          }
           verbrauchMelden()
 
-          if (uebertragPhase === 'angefordert' && !sanftAngefordert && !hartAngefordert) {
-            if (nachricht.subtype === 'success' && !nachricht.is_error) {
+          if (!block) continue
+          if (block.uebertragPhase === 'angefordert' && !sanftAngefordert && !hartAngefordert) {
+            if (nachricht.subtype === 'success' && !nachricht.is_error && block.fazit) {
               // Wettlauf: Der Block war beim Erreichen der Schwelle ohnehin
               // fertig — dann ist das ein normales Ende, kein Übertrag.
-              uebertragPhase = null
-              ergebnis = nachricht
+              block.uebertragPhase = null
+              blockErgebnisVerarbeiten(nachricht)
             } else {
-              // Das ist das Ende des unterbrochenen Auftrags — jetzt bekommt
-              // dieselbe Session (voller Kontext!) die Übergabe-Anweisung.
-              uebertragPhase = 'uebergabe'
-              eingabeNachschieben(uebertrag.anweisung)
+              // Das ist das Ende des unterbrochenen Turns — jetzt bekommt
+              // dieselbe Session die Übergabe-Anweisung an den Koordinator.
+              block.uebertragPhase = 'uebergabe'
+              eingabeNachschieben(block.uebertrag.anweisung)
             }
-          } else if (uebertragPhase === 'uebergabe' && !sanftAngefordert && !hartAngefordert) {
-            uebertragPhase = 'fertig'
-            ergebnis = nachricht
-          } else {
-            ergebnis = nachricht
-          }
-
-          if (ergebnis) {
-            if (typeof nachricht.duration_ms === 'number')
-              aufEreignis({
-                art: 'ticker',
-                text: texte.ticker.fertigIn(Math.round(nachricht.duration_ms / 1000))
-              })
+          } else if (block.uebertragPhase === 'uebergabe' && !sanftAngefordert && !hartAngefordert) {
+            // Übertrag (SPEC §5): der Antworttext ist die Übergabe an den
+            // nächsten Anlauf — die Lauf-Session ist danach verbraucht.
+            block.uebertragPhase = 'fertig'
+            tot = true
             eingabeSchliessen()
+            blockAufloesen('uebertrag', {
+              ergebnisText: typeof nachricht.result === 'string' ? nachricht.result : ''
+            })
+          } else {
+            blockErgebnisVerarbeiten(nachricht)
           }
         }
       }
     } catch (fehler) {
       // Nach einem harten Abbruch ist ein Prozessfehler erwartet — kein echter Fehler.
-      if (!hartAngefordert && !ergebnis) {
-        if (sanftAngefordert)
-          return { zustand: 'sanft-gestoppt', fehlertext: '', fehlerArt: null, ergebnisText: '', verbrauch, sessionKennung }
-        // Stirbt die Session mitten im Übertrag, geht nur die Übergabe verloren —
-        // die frische Session liest den Stand dann selbst aus Ordner und Karten.
-        if (uebertragPhase)
-          return { zustand: 'uebertrag', fehlertext: '', fehlerArt: null, ergebnisText: '', verbrauch, sessionKennung }
+      if (!hartAngefordert && block) {
+        if (sanftAngefordert) blockAufloesen('sanft-gestoppt', { ergebnisText: '' })
+        // Stirbt die Session mitten im Übertrag, geht nur die Übergabe
+        // verloren — der nächste Anlauf liest den Stand selbst aus Ordner
+        // und Karten.
+        else if (block.uebertragPhase) blockAufloesen('uebertrag', { ergebnisText: '' })
         // Fortsetzen-Versuch, der schon vor der ersten Nachricht stirbt: die
-        // alte Session ist nicht wiederaufnehmbar — still auf Kaltstart zurück.
-        if (fortsetzen && !nachrichtEmpfangen)
-          return { zustand: 'fortsetzung-gescheitert', fehlertext: '', fehlerArt: null, ergebnisText: '', verbrauch, sessionKennung: null }
-        const { fehlertext, fehlerArt } = fehlerAusErgebnis(
-          null,
-          stderrPuffer || String(fehler?.message ?? '')
-        )
-        return { zustand: 'fehlgeschlagen', fehlertext, fehlerArt, ergebnisText: '', verbrauch, sessionKennung }
+        // alte Session ist nicht wiederaufnehmbar — still auf frisch zurück.
+        else if (fortsetzen && !nachrichtEmpfangen)
+          blockAufloesen('fortsetzung-gescheitert', { sessionKennung: null })
+        else {
+          const { fehlertext, fehlerArt } = fehlerAusErgebnis(
+            null,
+            stderrPuffer || String(fehler?.message ?? '')
+          )
+          blockAufloesen('fehlgeschlagen', { fehlertext, fehlerArt })
+        }
       }
     } finally {
+      tot = true
       eingabeSchliessen()
-    }
-
-    // Der Abschlusstext des Agenten — daraus liest FlowForge z.B. Prüfer-Urteile.
-    const ergebnisText = typeof ergebnis?.result === 'string' ? ergebnis.result : ''
-
-    if (hartAngefordert)
-      return { zustand: 'hart-abgebrochen', fehlertext: '', fehlerArt: null, ergebnisText: '', verbrauch, sessionKennung }
-    if (sanftAngefordert)
-      return { zustand: 'sanft-gestoppt', fehlertext: '', fehlerArt: null, ergebnisText, verbrauch, sessionKennung }
-    // Übertrag (SPEC §5): der Abschlusstext ist die Übergabe an die frische Session.
-    if (uebertragPhase === 'fertig' || uebertragPhase === 'uebergabe')
-      return { zustand: 'uebertrag', fehlertext: '', fehlerArt: null, ergebnisText, verbrauch, sessionKennung }
-    // Achtung: subtype 'success' heißt nur „sauber durchgelaufen" — Fehler wie
-    // eine fehlende Anmeldung kommen trotzdem mit is_error zurück.
-    if (ergebnis?.subtype === 'success' && !ergebnis.is_error)
-      return { zustand: 'erfolgreich', fehlertext: '', fehlerArt: null, ergebnisText, verbrauch, sessionKennung }
-    {
-      const { fehlertext, fehlerArt } = fehlerAusErgebnis(ergebnis, stderrPuffer)
-      // Fortsetzen-Versuch, den die CLI mit „Session nicht gefunden" ablehnt
-      // (real beobachtet: „No conversation found with session ID: …"): kein
-      // echter Fehler des Blocks — still auf Kaltstart zurück. Echte Fehler
-      // mit Einstufung (Kontingent, Anmeldung …) bleiben, was sie sind.
-      if (
-        fortsetzen &&
-        fehlerArt === null &&
-        (!nachrichtEmpfangen ||
-          /no conversation|session id|session.*not found|(could not|cannot|unable to) resume/i.test(
-            fehlertext
-          ))
-      )
-        return { zustand: 'fortsetzung-gescheitert', fehlertext: '', fehlerArt: null, ergebnisText: '', verbrauch, sessionKennung: null }
-      return { zustand: 'fehlgeschlagen', fehlertext, fehlerArt, ergebnisText, verbrauch, sessionKennung }
+      // Ein noch offener Block darf nie ewig hängen — z.B. wenn der Prozess
+      // nach einem harten Abbruch oder still von selbst endet.
+      if (block) {
+        if (hartAngefordert) blockAufloesen('hart-abgebrochen')
+        else if (sanftAngefordert) blockAufloesen('sanft-gestoppt', { ergebnisText: '' })
+        else blockAufloesen('fehlgeschlagen', { fehlertext: texte.fehler.unbekannt })
+      }
     }
   })()
+  // Fehler der Schleife selbst (z.B. beim Start) landen im offenen Block —
+  // unbeobachtete Ablehnungen soll es nie geben.
+  schleife.catch(() => {})
 
   return {
-    fertig,
+    // Führt genau einen Block in der Lauf-Session aus: Der Koordinator
+    // bekommt den Dispatch, startet den Block-Agenten (der Hook setzt den
+    // Auftrag ein), und das Fazit kommt als Ergebnis zurück.
+    blockAusfuehren({ auftrag, blockName, nurLesen = false, darfPruefen = false, uebertrag }) {
+      if (tot)
+        return Promise.resolve({
+          zustand: 'fehlgeschlagen',
+          fehlertext: texte.fehler.unbekannt,
+          fehlerArt: null,
+          ergebnisText: '',
+          verbrauch: null,
+          sessionKennung
+        })
+      return new Promise((aufloesen) => {
+        block = {
+          auftrag,
+          blockName,
+          nurLesen,
+          darfPruefen,
+          uebertrag: uebertrag ?? { aktiv: false, testModus: false, anweisung: '' },
+          aufloesen,
+          blockTaskIds: new Set(),
+          auftragEingesetzt: false,
+          uebertragPhase: null,
+          startProzent: null,
+          uebertragBand: null,
+          fazit: null,
+          agentFehler: null,
+          startTokens: hauptTokens,
+          startZeit: Date.now(),
+          kosten: null,
+          aufschluesselung: null,
+          unterVerbrauch: new Map()
+        }
+        eingabeNachschieben(texte.agentenLaufSession.dispatch(blockName))
+      })
+    },
+    // Lebt die Session noch? Wenn nicht, startet die Lauf-Verwaltung einen
+    // neuen Motor, der die Session über ihre Kennung fortsetzt.
+    istTot: () => tot,
+    get sessionKennung() {
+      return sessionKennung
+    },
+    // Füllstand der Lauf-Session — für Laufstand und Fortsetzungs-Wächter.
+    get tokens() {
+      return hauptTokens
+    },
+    // Geordnetes Ende: Die Eingabe schließt, der Prozess läuft aus.
+    beenden() {
+      tot = true
+      eingabeSchliessen()
+    },
     sanftStoppen() {
       if (sanftAngefordert || hartAngefordert) return
       sanftAngefordert = true

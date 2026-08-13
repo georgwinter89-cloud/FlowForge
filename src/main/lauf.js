@@ -37,7 +37,7 @@ import {
   pruefungenArchivieren,
   pruefkarteAusErgebnis
 } from './pruefkarten.js'
-import { starteMotorLauf } from './motor/claudeCodeMotor.js'
+import { starteLaufMotor } from './motor/claudeCodeMotor.js'
 import {
   KONTEXT_FENSTER_STANDARD,
   FORTSETZUNG_WAECHTER_PROZENT
@@ -358,8 +358,10 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
   // Sicherung keinen zweiten Lauf startet.
   const lauf = {
     projektPfad,
-    // Bei parallelen Zweigen laufen mehrere Motoren gleichzeitig —
-    // „Sofort abbrechen" muss jeden einzelnen töten.
+    // Eine Motor-Session pro Lauf (BAUPLAN 19): der Lauf-Motor hält die
+    // Session über alle Blöcke offen. Parallele Zweige bekommen zusätzlich
+    // eigene Motoren — „Sofort abbrechen" muss jeden einzelnen töten.
+    laufMotor: null,
     motoren: new Map(), // instanzId → Motor
     aktiveInstanzen: new Set(),
     fragen: new Map(),
@@ -623,12 +625,7 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           startanleitungNachforderung: false,
           uebergabe: '',
           uebergabeVerloren: false,
-          warPausiert: false,
-          // Session-Fortsetzung bei Wiederholungen (BAUPLAN 16): Kennung und
-          // Füllstand der letzten Motor-Session dieses Blocks — läuft er mit
-          // einem Zusatz erneut, setzt er seine EIGENE Session fort.
-          sessionKennung: null,
-          sessionTokens: 0
+          warPausiert: false
         }
       ])
     )
@@ -638,6 +635,20 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     const vorfahrenVon = new Map(
       kettenIds.map((id) => [id, vorfahrenSortiert(workflow.bloecke, workflow.pfeile, id)])
     )
+
+    // Eine Motor-Session pro Lauf (BAUPLAN 19): Kennung und Füllstand der
+    // Lauf-Session. Die Kennung wandert in den Laufstand — die Wiederaufnahme
+    // nach einem App-Neustart setzt dieselbe Session fort statt neu zu starten.
+    let laufSessionKennung =
+      typeof fortsetzung?.laufSitzung?.kennung === 'string' ? fortsetzung.laufSitzung.kennung : null
+    let laufSessionTokens = Number(fortsetzung?.laufSitzung?.tokens) || 0
+    // Die Lauf-Session verarbeitet einen Block nach dem anderen — parallele
+    // Zweige laufen als eigene Sessions (ehrlich im Ticker vermerkt).
+    let laufMotorBelegt = false
+    // Für die Ereignis-Zuordnung des Lauf-Motors: welcher Block gerade in der
+    // Lauf-Session arbeitet (Ticker-Zeilen, Mensch-Fragen, Karten-Ereignisse).
+    let hauptMotorInstanz = null
+    let hauptMotorBlockName = ''
 
     let endZustand = null
     let fehlertext = ''
@@ -684,14 +695,12 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
             id,
             { text: knoten.get(id).uebergabe, verloren: knoten.get(id).uebergabeVerloren }
           ]),
-        // Session-Kennungen wandern mit in den Laufstand (BAUPLAN 16) — nach
-        // einem App-Neustart kann eine Wiederholung trotzdem fortsetzen.
-        sitzungen: kettenIds
-          .filter((id) => knoten.get(id).sessionKennung)
-          .map((id) => [
-            id,
-            { kennung: knoten.get(id).sessionKennung, tokens: knoten.get(id).sessionTokens }
-          ]),
+        // Die Kennung der Lauf-Session wandert mit in den Laufstand
+        // (BAUPLAN 19) — die Wiederaufnahme nach einem App-Neustart setzt
+        // dieselbe Session fort statt neu zu starten.
+        laufSitzung: laufSessionKennung
+          ? { kennung: laufSessionKennung, tokens: laufSessionTokens }
+          : null,
         rundenUebrig,
         uebertraege,
         startanleitungNachgefordert
@@ -724,11 +733,6 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           knoten.get(id).uebergabe = typeof u?.text === 'string' ? u.text : ''
           knoten.get(id).uebergabeVerloren = Boolean(u?.verloren)
         }
-      for (const [id, s] of Array.isArray(fortsetzung.sitzungen) ? fortsetzung.sitzungen : [])
-        if (knoten.has(id) && typeof s?.kennung === 'string' && s.kennung) {
-          knoten.get(id).sessionKennung = s.kennung
-          knoten.get(id).sessionTokens = Number(s.tokens) || 0
-        }
       if (Number.isInteger(fortsetzung.rundenUebrig)) rundenUebrig = fortsetzung.rundenUebrig
       if (Number.isInteger(fortsetzung.uebertraege)) uebertraege = fortsetzung.uebertraege
       startanleitungNachgefordert = Boolean(fortsetzung.startanleitungNachgefordert)
@@ -744,45 +748,91 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       bericht.ticker.push({ zeit: jetztIso(), text: texte.laufberichte.fortgesetztHinweis })
     }
 
-    // Ein Motor-Durchlauf eines Blocks. Ticker-Zeilen bekommen den Blocknamen
-    // vorangestellt, sobald mehrere Motoren gleichzeitig laufen — sonst wäre
-    // der Liveticker nicht zuzuordnen.
-    function blockAusfuehren(k, auftrag, uebertragErlaubt, fortsetzen = null) {
-      const instanzId = k.eintrag.instanzId
-      const motor = starteMotorLauf({
+    // Baut einen Motor: den Lauf-Motor (mit Fortsetzung der Lauf-Session)
+    // oder einen eigenen Motor für einen parallelen Zweig. Die Ereignis-
+    // Zuordnung (welcher Block, welche Karte) liefern die Hol-Funktionen —
+    // beim Lauf-Motor wechseln sie mit jedem Block.
+    function motorBauen(fortsetzen, holeInstanz, holeName) {
+      return starteLaufMotor({
         projektPfad,
-        auftrag,
         modus: einstellungen.motorModus,
         apiSchluessel: einstellungen.apiSchluessel,
         ausgabenObergrenzeUsd: einstellungen.ausgabenObergrenzeUsd,
-        nurLesen: k.def.nurLesen,
-        // Session-Fortsetzung bei Wiederholungen (BAUPLAN 16): der Block setzt
-        // seine eigene frühere Session fort statt kalt zu starten.
         fortsetzen,
-        // Nur Prüf-Blöcke dürfen die Prüfmappe verändern (Entscheidung Georg,
-        // 12.08.2026) — der Bauer weicht sonst Prüfungen auf, statt zu reparieren.
-        darfPruefen: Boolean(k.def.prueft),
-        // Automatischer Übertrag (SPEC §5): läuft der Kontext voll, übergibt der
-        // Agent an eine frische Session — sofern die Übertragsgrenze es erlaubt.
-        uebertrag: {
-          aktiv: uebertragErlaubt,
-          testModus: Boolean(einstellungen.uebertragTest),
-          anweisung: texte.agentenUebergabe.uebertragAnweisung(k.def.nurLesen)
-        },
         ...(bekanntesKontextFenster > 0 ? { kontextFenster: bekanntesKontextFenster } : {}),
         aufEreignis(e) {
+          // Ticker-Zeilen bekommen den Blocknamen vorangestellt, sobald
+          // mehrere Blöcke gleichzeitig laufen — sonst nicht zuzuordnen.
           const daten =
-            e.art === 'ticker' && lauf.motoren.size > 1
-              ? { ...e, text: `${k.def.name}: ${e.text}` }
+            e.art === 'ticker' && lauf.aktiveInstanzen.size > 1 && holeName()
+              ? { ...e, text: `${holeName()}: ${e.text}` }
               : e
           if (daten.art === 'ticker') bericht.ticker.push({ zeit: jetztIso(), text: daten.text })
-          senden({ instanzId, ...daten })
+          senden({ instanzId: holeInstanz(), ...daten })
         },
         aufRechteFrage: rechteFrageStellen,
-        aufMenschFrage: (daten) => menschFrageStellen(daten, k.def.name)
+        aufMenschFrage: (daten) => menschFrageStellen(daten, holeName())
       })
+    }
+
+    // Besorgt den Lauf-Motor — bei Bedarf neu (erster Block, Prozess-Tod,
+    // Übertrag). Eine noch brauchbare frühere Lauf-Session wird über ihre
+    // Kennung fortgesetzt; der Fortsetzungs-Wächter erzwingt eine frische
+    // Session, wenn die alte schon nahe der Übertrags-Schwelle liegt.
+    function laufMotorBesorgen() {
+      if (lauf.laufMotor && !lauf.laufMotor.istTot()) return lauf.laufMotor
+      let fortsetzen = laufSessionKennung
+      const fenster =
+        bekanntesKontextFenster > 0 ? bekanntesKontextFenster : KONTEXT_FENSTER_STANDARD
+      if (fortsetzen && (laufSessionTokens / fenster) * 100 >= FORTSETZUNG_WAECHTER_PROZENT)
+        fortsetzen = null
+      lauf.laufMotor = motorBauen(
+        fortsetzen,
+        () => hauptMotorInstanz,
+        () => hauptMotorBlockName
+      )
+      return lauf.laufMotor
+    }
+
+    // Führt einen Block als frischen Agenten aus — in der Lauf-Session, oder
+    // (wenn dort gerade ein anderer Block arbeitet) als eigene Session.
+    function blockAusfuehren(k, auftrag, uebertragErlaubt) {
+      const instanzId = k.eintrag.instanzId
+      const uebertrag = {
+        aktiv: uebertragErlaubt,
+        testModus: Boolean(einstellungen.uebertragTest),
+        anweisung: texte.agentenLaufSession.uebertragAnweisung
+      }
+      let motor
+      let haupt = false
+      if (!laufMotorBelegt) {
+        motor = laufMotorBesorgen()
+        haupt = true
+        laufMotorBelegt = true
+        hauptMotorInstanz = instanzId
+        hauptMotorBlockName = k.def.name
+      } else {
+        // Parallele Zweige (BAUPLAN 19): Die Lauf-Session verarbeitet einen
+        // Block nach dem anderen — parallele Blöcke laufen ehrlich vermerkt
+        // in eigenen Sessions.
+        tickern(texte.ticker.parallelEigeneSession(k.def.name))
+        motor = motorBauen(
+          null,
+          () => instanzId,
+          () => k.def.name
+        )
+      }
       lauf.motoren.set(instanzId, motor)
-      return motor.fertig
+      return motor
+        .blockAusfuehren({
+          auftrag,
+          blockName: k.def.name,
+          nurLesen: k.def.nurLesen,
+          // Nur Prüf-Blöcke dürfen die Prüfmappe verändern (Entscheidung Georg,
+          // 12.08.2026) — der Bauer weicht sonst Prüfungen auf, statt zu reparieren.
+          darfPruefen: Boolean(k.def.prueft),
+          uebertrag
+        })
         .catch((fehler) => ({
           zustand: 'fehlgeschlagen',
           fehlertext: String(fehler?.message ?? fehler),
@@ -790,7 +840,21 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           ergebnisText: '',
           verbrauch: null
         }))
-        .finally(() => lauf.motoren.delete(instanzId))
+        .finally(() => {
+          lauf.motoren.delete(instanzId)
+          if (haupt) {
+            laufMotorBelegt = false
+            hauptMotorInstanz = null
+            hauptMotorBlockName = ''
+            if (motor.sessionKennung) {
+              laufSessionKennung = motor.sessionKennung
+              laufSessionTokens = motor.tokens
+            }
+          } else {
+            // Der Zweig-Motor hat seine Aufgabe erledigt — Session schließen.
+            motor.beenden()
+          }
+        })
     }
 
     // Führt einen Block vollständig aus: Auftrag bauen, Motor laufen lassen,
@@ -803,99 +867,64 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       let blockKosten = null
       const blockAufschluesselung = { eingabe: 0, ausgabe: 0, cacheLesen: 0, cacheSchreiben: 0 }
       let blockHatAufschluesselung = false
-      let fortgesetztImLauf = false
       // Hängt die Verbrauchs-Summen dieses Blocks an ein endgültiges Ergebnis.
       function mitBlockVerbrauch(ergebnis) {
         return {
           ...ergebnis,
           blockTokens,
           blockKosten,
-          blockAufschluesselung: blockHatAufschluesselung ? { ...blockAufschluesselung } : null,
-          fortgesetztImLauf
+          blockAufschluesselung: blockHatAufschluesselung ? { ...blockAufschluesselung } : null
         }
       }
       while (true) {
         standSpeichern()
-        // Session-Fortsetzung bei Wiederholungen (BAUPLAN 16): Läuft derselbe
-        // Block nur wegen eines Zusatzes erneut (Prüferkritik, Nachprüfung,
-        // Startanleitungs-Nachforderung), setzt er seine eigene frühere Session
-        // fort — er kennt seine Arbeit noch, nur der Zusatz wird nachgereicht.
-        // Nicht bei Übertrags-Fortsetzungen: deren alte Session ist voll.
-        const zusatzFall =
-          Boolean(k.rueckmeldung || k.nachpruefung || k.startanleitungNachforderung) &&
-          !k.uebergabe &&
-          !k.uebergabeVerloren
-        let fortsetzen = null
-        if (zusatzFall && k.sessionKennung) {
-          // Füllstands-Wächter: nahe der Übertrags-Schwelle lohnt Fortsetzen
-          // nicht — die Wiederholung liefe sofort in den Übertrag. Dann Kaltstart.
-          const fenster =
-            bekanntesKontextFenster > 0 ? bekanntesKontextFenster : KONTEXT_FENSTER_STANDARD
-          if ((k.sessionTokens / fenster) * 100 < FORTSETZUNG_WAECHTER_PROZENT)
-            fortsetzen = k.sessionKennung
-        }
-
+        // Jeder Anlauf ist ein frischer Agent in der Lauf-Session (BAUPLAN 19):
+        // Auch Reparatur-Runden bekommen den vollen Auftrag samt Zusatz —
         // Rückmeldung, Nachforderung und Übergabe bleiben am Knoten, bis der
-        // Block wirklich fertig ist — kommt er per Übertrag oder Pause erneut
-        // dran, gehören sie wieder in den Auftrag.
-        let auftrag
-        if (fortsetzen) {
-          // Nur der Zusatz: Karten-Kontext, Übergaben und Arbeitsauftrag
-          // stehen schon in der fortgesetzten Session.
-          auftrag = ''
-          if (k.rueckmeldung) auftrag += texte.agentenFortsetzung.rueckmeldung(k.rueckmeldung)
-          if (k.nachpruefung) auftrag += texte.agentenFortsetzung.nachpruefung(k.nachpruefung)
-          if (k.startanleitungNachforderung) auftrag += texte.agentenFortsetzung.startanleitung
-          tickern(texte.ticker.sessionFortgesetzt(k.def.name))
-        } else {
-          auftrag =
-            kartenKontext(projektPfad, ausgewaehlt) +
-            uebergabenText(k) +
-            texte.agentenUebergabe.auftragEinleitung +
-            auftragMitFeldern(k.def, k.eintrag.feldWerte)
-          // Prüfkarten (BAUPLAN 18): gezogene alte Prüfungen werden zusätzlich
-          // zur Paket-Prüfung ausgeführt — der Zusatz gehört in jeden
-          // Kaltstart-Auftrag dieses Blocks (auch nach einem Übertrag).
-          const pruefkarten = pruefkartenVonInstanz.get(k.eintrag.instanzId)
-          if (pruefkarten)
-            auftrag +=
-              texte.agentenPruefkarten.einleitung +
-              pruefkarten
-                .map((anhang) =>
-                  anhang.dateien
-                    ? texte.agentenPruefkarten.eintrag(anhang.titel, anhang.text, anhang.ordner)
-                    : texte.agentenPruefkarten.eintragOhneDateien(anhang.titel, anhang.text)
-                )
-                .join('')
-          if (k.rueckmeldung) auftrag += texte.agentenUebergabe.prueferRueckmeldung(k.rueckmeldung)
-          if (k.nachpruefung) auftrag += texte.agentenUebergabe.prueferNachpruefung(k.nachpruefung)
-          if (k.startanleitungNachforderung)
-            auftrag += texte.agentenUebergabe.startanleitungNachforderung
-          if (k.uebergabe) auftrag += texte.agentenUebergabe.uebertragFortsetzung(k.uebergabe)
-          else if (k.uebergabeVerloren) auftrag += texte.agentenUebergabe.uebertragOhneUebergabe
-        }
+        // Block wirklich fertig ist.
+        let auftrag =
+          kartenKontext(projektPfad, ausgewaehlt) +
+          uebergabenText(k) +
+          texte.agentenUebergabe.auftragEinleitung +
+          auftragMitFeldern(k.def, k.eintrag.feldWerte)
+        // Prüfkarten (BAUPLAN 18): gezogene alte Prüfungen werden zusätzlich
+        // zur Paket-Prüfung ausgeführt — der Zusatz gehört in jeden
+        // Anlauf dieses Blocks (auch nach einem Übertrag).
+        const pruefkarten = pruefkartenVonInstanz.get(k.eintrag.instanzId)
+        if (pruefkarten)
+          auftrag +=
+            texte.agentenPruefkarten.einleitung +
+            pruefkarten
+              .map((anhang) =>
+                anhang.dateien
+                  ? texte.agentenPruefkarten.eintrag(anhang.titel, anhang.text, anhang.ordner)
+                  : texte.agentenPruefkarten.eintragOhneDateien(anhang.titel, anhang.text)
+              )
+              .join('')
+        if (k.rueckmeldung) auftrag += texte.agentenUebergabe.prueferRueckmeldung(k.rueckmeldung)
+        if (k.nachpruefung) auftrag += texte.agentenUebergabe.prueferNachpruefung(k.nachpruefung)
+        if (k.startanleitungNachforderung)
+          auftrag += texte.agentenUebergabe.startanleitungNachforderung
+        if (k.uebergabe) auftrag += texte.agentenUebergabe.uebertragFortsetzung(k.uebergabe)
+        else if (k.uebergabeVerloren) auftrag += texte.agentenUebergabe.uebertragOhneUebergabe
 
         const uebertragErlaubt =
           workflow.uebertragGrenze == null || uebertraege < workflow.uebertragGrenze
-        const ergebnis = await blockAusfuehren(k, auftrag, uebertragErlaubt, fortsetzen)
+        const ergebnis = await blockAusfuehren(k, auftrag, uebertragErlaubt)
         if (ergebnis.verbrauch) {
-          // Bei einer fortgesetzten Session steckt der alte Kontext schon in der
-          // Messung — gezählt wird ehrlich nur der Zuwachs gegenüber dem alten
-          // Session-Ende, sonst sähe die billige Reparatur-Runde teuer aus.
-          // Unteraufgaben (BAUPLAN 17) zählen ehrlich mit — sie sind Verbrauch,
-          // auch wenn sie den Füllstand der Hauptsession nicht belasten.
+          // Gezählt wird der ehrliche Anteil dieses Blocks: der Zuwachs des
+          // Koordinator-Fadens plus der Verbrauch seiner Agenten (Block-Agent
+          // und Helfer) — nicht die Historie der ganzen Lauf-Session.
           const zaehlTokens =
-            (fortsetzen
-              ? Math.max(0, (ergebnis.verbrauch.tokens ?? 0) - k.sessionTokens)
-              : ergebnis.verbrauch.tokens ?? 0) + (ergebnis.verbrauch.unterTokens ?? 0)
+            (ergebnis.verbrauch.blockZuwachs ?? ergebnis.verbrauch.tokens ?? 0) +
+            (ergebnis.verbrauch.unterTokens ?? 0)
           gesamtVerbrauch.tokens += zaehlTokens
           blockTokens += zaehlTokens
           if (ergebnis.verbrauch.kostenUsd != null) {
             gesamtVerbrauch.kostenUsd = (gesamtVerbrauch.kostenUsd ?? 0) + ergebnis.verbrauch.kostenUsd
             blockKosten = (blockKosten ?? 0) + ergebnis.verbrauch.kostenUsd
           }
-          // Aufschlüsselung je Session aufsummieren — der Motor meldet den
-          // kumulierten Endstand der Session (Unteraufgaben eingeschlossen).
+          // Aufschlüsselung: der Motor meldet den Anteil dieses Blocks.
           const auf = ergebnis.verbrauch.aufschluesselung
           if (auf) {
             blockHatAufschluesselung = true
@@ -907,19 +936,12 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           if (ergebnis.verbrauch.kontextFenster > 0)
             bekanntesKontextFenster = ergebnis.verbrauch.kontextFenster
         }
-        // Kennung und Füllstand der letzten Session dieses Blocks merken —
-        // damit kann eine spätere Wiederholung genau diese Session fortsetzen.
-        if (ergebnis.sessionKennung && (ergebnis.verbrauch?.tokens ?? 0) > 0) {
-          k.sessionKennung = ergebnis.sessionKennung
-          k.sessionTokens = ergebnis.verbrauch.tokens
-        }
-        if (fortsetzen && ergebnis.zustand !== 'fortsetzung-gescheitert') fortgesetztImLauf = true
 
-        // Fortsetzen hat nicht geklappt (Kennung ungültig, Session weg) —
-        // stiller Rückfall auf den Kaltstart, ehrlich im Ticker vermerkt.
+        // Die Lauf-Session ließ sich nicht fortsetzen (Kennung ungültig,
+        // Session weg) — stiller Rückfall auf eine frische Session.
         if (ergebnis.zustand === 'fortsetzung-gescheitert') {
-          k.sessionKennung = null
-          k.sessionTokens = 0
+          laufSessionKennung = null
+          laufSessionTokens = 0
           tickern(texte.ticker.sessionFortsetzenGescheitert)
           continue
         }
@@ -938,6 +960,10 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         // übergeben — derselbe Block läuft sofort als frische Session weiter.
         if (ergebnis.zustand === 'uebertrag') {
           uebertraege++
+          // Die volle Lauf-Session ist verbraucht — der nächste Anlauf startet
+          // eine frische (die Übergabe wandert über den Auftrag mit).
+          laufSessionKennung = null
+          laufSessionTokens = 0
           const text = String(ergebnis.ergebnisText ?? '').trim()
           k.uebergabeVerloren = !text
           k.uebergabe = gekuerzt(text)
@@ -1126,8 +1152,7 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           ergebnisText: String(ergebnis.fehlertext ?? '').slice(0, 4000),
           tokens: ergebnis.blockTokens ?? null,
           aufschluesselung: ergebnis.blockAufschluesselung ?? null,
-          kostenUsd: ergebnis.blockKosten ?? null,
-          sessionFortgesetzt: Boolean(ergebnis.fortgesetztImLauf)
+          kostenUsd: ergebnis.blockKosten ?? null
         })
         if (!endZustand) {
           endZustand = 'fehlgeschlagen'
@@ -1155,15 +1180,14 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         zeit: jetztIso(),
         zustand: 'erfolgreich',
         ergebnisText: abschlusstext.slice(0, 4000),
-        // Verbrauch dieses Anlaufs (BAUPLAN 16): So sieht Georg im Laufbericht,
-        // dass eine fortgesetzte Reparatur-Runde deutlich weniger kostet.
+        // Verbrauch dieses Anlaufs — so sieht Georg im Laufbericht, was jeder
+        // Block gekostet hat (Koordinator-Zuwachs plus seine Agenten).
         tokens: ergebnis.blockTokens ?? null,
         // Token-Aufschlüsselung und theoretische API-Kosten je Block
         // (Wunsch Georg, 13.08.2026) — die Kosten rechnet der Motor selbst
         // aus den Preisen der genutzten Modelle.
         aufschluesselung: ergebnis.blockAufschluesselung ?? null,
-        kostenUsd: ergebnis.blockKosten ?? null,
-        sessionFortgesetzt: Boolean(ergebnis.fortgesetztImLauf)
+        kostenUsd: ergebnis.blockKosten ?? null
       }
       bericht.blockErgebnisse.push(blockErgebnis)
 
@@ -1263,6 +1287,9 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       standSpeichern()
     }
 
+    // Die Lauf-Session geordnet schließen — der Lauf ist zu Ende (BAUPLAN 19).
+    lauf.laufMotor?.beenden()
+
     // Harter Stopp: alle Motoren sind tot — der Projektordner springt einmal
     // zentral auf den letzten Sicherungspunkt zurück (SPEC §6).
     if (lauf.hart && !wiederherstellenNachLauf) {
@@ -1347,10 +1374,12 @@ export function laufHartStoppen(projektPfad) {
   // Eine offene Mensch-Frage würde den Werkzeug-Aufruf im FlowForge-Prozess
   // ewig hängen lassen — sofort auflösen.
   for (const antworten of [...lauf.menschFragen.values()]) antworten(null)
-  // Bei parallelen Zweigen laufen mehrere Motoren — alle sofort töten.
-  if (lauf.motoren.size > 0)
-    for (const motor of [...lauf.motoren.values()]) motor.hartStoppen()
-  else lauf.tickern?.(texte.ticker.hartAbgebrochen)
+  // Bei parallelen Zweigen laufen mehrere Motoren — alle sofort töten. Auch
+  // eine gerade unbeschäftigte Lauf-Session stirbt mit (BAUPLAN 19); doppelte
+  // Aufrufe auf denselben Motor sind unschädlich.
+  if (lauf.motoren.size === 0 && !lauf.laufMotor) lauf.tickern?.(texte.ticker.hartAbgebrochen)
+  for (const motor of [...lauf.motoren.values()]) motor.hartStoppen()
+  lauf.laufMotor?.hartStoppen()
   return { ok: true }
 }
 
