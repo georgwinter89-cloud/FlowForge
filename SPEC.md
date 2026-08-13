@@ -236,10 +236,10 @@ zuschaltbar (Standard: aus) — Recherche-Aufträge gehen dann an eine kleine KI
 Ollama (Modellname und Adresse einstellbar: der eigene Rechner oder ein anderer im
 Heimnetz, z.B. ein Gaming-PC mit stärkerer Grafikkarte) statt an eine Motor-Unteraufgabe;
 das kostet kein Kontingent, nur Rechenzeit. Die Block-Agenten bekommen dafür das
-Werkzeug `lokal_recherchieren`; die lokale KI selbst hat genau drei rein lesende
-Werkzeuge (Ordner auflisten, Datei lesen, suchen), hart im Code auf den Projektordner
-begrenzt — schreiben, ausführen oder außerhalb lesen kann sie nicht, deshalb ist das
-Werkzeug auch unter „darf nur lesen" erlaubt. Steht die lokale KI bereit, weisen die
+Werkzeug `lokal_recherchieren`; beim Recherchieren hat die lokale KI genau drei rein
+lesende Werkzeuge (Ordner auflisten, Datei lesen, suchen), hart im Code auf den
+Projektordner begrenzt — schreiben, ausführen oder außerhalb lesen kann sie dabei
+nicht, deshalb ist das Werkzeug auch unter „darf nur lesen" erlaubt. Steht die lokale KI bereit, weisen die
 Blockaufträge sie als **erste Wahl** fürs Delegieren aus (das Agent-Werkzeug ist der
 Rückfall). Denk-Modelle (z.B. gpt-oss), die ihre Antwort leer lassen und alles ins
 Denkfeld schreiben, werden einmal nachgehakt, bevor ein Fehlschlag gemeldet wird.
@@ -247,7 +247,7 @@ Ehrlichkeits-Vorkehrungen: Jedes Fazit
 trägt den Warnhinweis „kleines Modell — Fundorte selbst nachprüfen" (in der Erprobung
 erfand das 7B-Modell abgelehnte Dateiinhalte), Start/Schritte/Fazit stehen im Ticker,
 der Laufbericht weist den Anteil der lokalen KI aus (Recherchen, Schritte,
-Fehlschläge, Reparatur-Versuche), und ist Ollama beim Laufstart nicht erreichbar, sagt der Ticker das
+Fehlschläge, Reparatur-Versuche, Entwürfe), und ist Ollama beim Laufstart nicht erreichbar, sagt der Ticker das
 ehrlich und alles läuft wie gewohnt über den Motor. V1-Experiment auf Georgs Wunsch —
 der vollwertige lokale Motor bleibt V2 (§2).
 
@@ -269,10 +269,29 @@ Lokale-Helfer-Zeile des Laufberichts. Aktiv nur, wenn die lokale KI
 eingeschaltet und beim Laufstart erreichbar war — sonst läuft die Rückführung
 wie gehabt.
 
+**Lokale Entwürfe** (seit Bauschritt 21): Eng umrissene, **schablonenhafte
+Schreibarbeit mit klarem Vorbild** („eine weitere Prüfdatei nach dem Muster
+von X") können die Block-Agenten über das Werkzeug `lokal_entwerfen` an die
+lokale KI abgeben — die Ersparnis trägt, weil Gegenlesen (Eingabe) deutlich
+billiger ist als Selberschreiben (Ausgabe). Das Schreibwerkzeug der lokalen KI
+ist dabei hart auf die **Arbeitsablage** begrenzt (`arbeitsablage/`, die
+Wegwerf-Fläche — am Laufende geleert, von Sicherungspunkten ausgenommen): In
+Projektdateien oder die Prüfmappe schreibt sie hier nie; der einzige direkte
+Eingriff bleibt die Vorreparatur (s.o.) mit eigenen Leitplanken. Die
+**Abnahme** liegt beim Block-Agenten: Er liest den Entwurf gegen und übernimmt
+ihn selbst an den Zielort — oder verwirft ihn und schreibt selbst; ungeprüft
+zählt nichts. Seine Entscheidung meldet er ausdrücklich über das Werkzeug
+`entwurf_abnehmen`; ein unbrauchbarer Entwurf ist ehrlich billiger Ausschuss,
+kein Schaden. Ehrlichkeit: „Lokale KI entwirft …" steht im Ticker, der
+Laufbericht zählt Entwürfe (übernommen/verworfen) in der Lokale-Helfer-Zeile.
+Entwerfen und Abnehmen sind Schreibarbeit und unter „darf nur lesen" gesperrt;
+das Häkchen je Block (s.u.) gilt auch fürs Entwerfen.
+
 **Häkchen je Block** (seit Bauschritt 20): An jeder Block-Karte im Schaubild
 sitzt ein Abwahl-Häkchen **„lokale KI erlaubt"** (Standard: an, erbt den
-globalen Schalter). Abgewählt ist es eine echte Sperre: FlowForge lehnt
-`lokal_recherchieren` für die Agenten dieses Blocks hart ab (erkannt am
+globalen Schalter). Abgewählt ist es eine echte Sperre: FlowForge lehnt die
+Werkzeuge der lokalen KI (`lokal_recherchieren`, `lokal_entwerfen`,
+`entwurf_abnehmen`) für die Agenten dieses Blocks hart ab (erkannt am
 laufenden Block, Mechanik aus Bauschritt 19) und streicht den Hinweis auf die
 lokale KI aus dem Arbeitsauftrag. Ein Block ohne lokale KI bekommt auch keine
 lokale Vorreparatur (maßgeblich ist das Häkchen des Rückführungs-Ziels, dessen

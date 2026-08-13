@@ -15,6 +15,12 @@
 // FlowForge-Verwaltungsdateien tabu. Die Nachprüfung des Prüfers bleibt der
 // Schiedsrichter; FlowForge rollt gescheiterte Versuche zurück (lauf.js).
 //
+// Lokale Entwürfe (BAUPLAN 21): Ein Entwurfs-Kreislauf für schablonenhafte
+// Schreibarbeit mit Vorbild. Sein Schreibwerkzeug ist hart auf den Ordner
+// arbeitsablage/ begrenzt — die Wegwerf-Fläche, die am Laufende geleert wird.
+// Der Block-Agent (Motor) liest jeden Entwurf gegen und übernimmt ihn selbst
+// an den Zielort — ungeprüft zählt nichts.
+//
 // Bewusst ohne Electron-Abhängigkeiten: das Modul ist einzeln (mit node)
 // erprobbar, wie es die Bauplan-Regel für neue Bausteine verlangt.
 import fs from 'node:fs'
@@ -309,11 +315,69 @@ const ERSETZEN_WERKZEUG = {
   }
 }
 
+// --- Lokale Entwürfe (BAUPLAN 21) ------------------------------------------
+
+// Der einzige Ablageort für Entwürfe: die Wegwerf-Fläche der Agenten. Von
+// Sicherungspunkten ausgenommen, am Laufende geleert — ein unbrauchbarer
+// Entwurf ist ehrlich billiger Ausschuss, kein Schaden.
+const ENTWURF_ORDNER = 'arbeitsablage'
+
+// Das Schreibwerkzeug des Entwurfs-Kreislaufs: freies Datei-Schreiben, aber
+// ausschließlich unter arbeitsablage/ — hart im Code begrenzt, kein Ersetzen
+// in Projektdateien (das bleibt der Vorreparatur mit eigenen Leitplanken).
+// zaehler.dateien sammelt die geschriebenen Entwurfspfade.
+function entwurfSchreiben(projektPfad, eingabe, zaehler) {
+  const ziel = imProjekt(projektPfad, eingabe.pfad)
+  if (!ziel) return 'Abgelehnt: Pfade außerhalb des Projektordners sind gesperrt.'
+  const relativ = path.relative(path.resolve(projektPfad), ziel)
+  const oberster = relativ.split(path.sep)[0].toLowerCase()
+  if (oberster !== ENTWURF_ORDNER || relativ.toLowerCase() === ENTWURF_ORDNER)
+    return `Abgelehnt: Entwürfe dürfen nur in den Ordner ${ENTWURF_ORDNER}/ geschrieben werden — nimm z.B. ${ENTWURF_ORDNER}/entwurf-name.txt.`
+  const inhalt = String(eingabe.inhalt ?? '')
+  if (!inhalt.trim()) return 'Abgelehnt: leerer Entwurf — schreibe den vollständigen Inhalt in inhalt.'
+  try {
+    fs.mkdirSync(path.dirname(ziel), { recursive: true })
+    fs.writeFileSync(ziel, inhalt, 'utf8')
+  } catch {
+    return `Die Datei ließ sich nicht schreiben: ${eingabe.pfad}`
+  }
+  const pfadNormal = relativ.split(path.sep).join('/')
+  if (!zaehler.dateien.includes(pfadNormal)) zaehler.dateien.push(pfadNormal)
+  return `Entwurf geschrieben: ${pfadNormal} (${inhalt.length} Zeichen).`
+}
+
+const ENTWURF_WERKZEUG = {
+  type: 'function',
+  function: {
+    name: 'entwurf_schreiben',
+    description:
+      'Schreibt eine Entwurfsdatei — ausschließlich in den Ordner ' +
+      ENTWURF_ORDNER +
+      '/. Der Inhalt muss vollständig sein (die ganze Datei, kein Ausschnitt).',
+    parameters: {
+      type: 'object',
+      properties: {
+        pfad: {
+          type: 'string',
+          description: 'Zieldatei, z.B. "' + ENTWURF_ORDNER + '/entwurf-pruefung-x.js"'
+        },
+        inhalt: { type: 'string', description: 'Der vollständige Dateiinhalt' }
+      },
+      required: ['pfad', 'inhalt']
+    }
+  }
+}
+
 function werkzeugAusfuehren(projektPfad, name, eingabe, zaehler) {
   if (name === 'ordner_auflisten') return ordnerAuflisten(projektPfad, eingabe)
   if (name === 'datei_lesen') return dateiLesen(projektPfad, eingabe)
   if (name === 'suchen') return suchen(projektPfad, eingabe)
-  if (name === 'ersetzen' && zaehler) return ersetzen(projektPfad, eingabe, zaehler)
+  // Schreib-Werkzeuge nur im jeweils passenden Kreislauf — auch wenn das
+  // Modell einen nicht angebotenen Werkzeugnamen halluziniert.
+  if (name === 'ersetzen' && typeof zaehler?.ersetzungen === 'number')
+    return ersetzen(projektPfad, eingabe, zaehler)
+  if (name === 'entwurf_schreiben' && Array.isArray(zaehler?.dateien))
+    return entwurfSchreiben(projektPfad, eingabe, zaehler)
   return `Unbekanntes Werkzeug: ${name}`
 }
 
@@ -371,6 +435,45 @@ export async function lokalReparieren({ projektPfad, auftrag, modell, adresse = 
     zaehler
   })
   return { ...ergebnis, ersetzungen: zaehler.ersetzungen }
+}
+
+// Der Entwurfs-Kreislauf (BAUPLAN 21): schablonenhafter Schreibauftrag mit
+// Vorbild rein, Entwurfsdateien in der Arbeitsablage raus. Zusätzlich zu den
+// Lese-Werkzeugen gibt es genau das Entwurf-Schreibwerkzeug (nur
+// arbeitsablage/). ergebnis.dateien nennt die geschriebenen Entwürfe —
+// leer heißt „kein Entwurf entstanden".
+export async function lokalEntwerfen({ projektPfad, auftrag, modell, adresse = STANDARD_ADRESSE, aufSchritt }) {
+  const nachrichten = [
+    {
+      role: 'system',
+      content:
+        'Du bist ein Schreib-Helfer in einem Projektordner. Du bekommst einen eng ' +
+        'umrissenen, schablonenhaften Schreibauftrag mit einem Vorbild. Lies zuerst das ' +
+        'Vorbild (datei_lesen) und die im Auftrag genannten Stellen — dann schreibe deinen ' +
+        'Entwurf mit entwurf_schreiben in den Ordner ' +
+        ENTWURF_ORDNER +
+        '/ (z.B. ' +
+        ENTWURF_ORDNER +
+        '/entwurf-name.js), als vollständige Datei. Nur dort darfst du schreiben; ein ' +
+        'stärkeres Modell liest deinen Entwurf gegen und übernimmt ihn an den Zielort. ' +
+        'Halte dich eng an Vorbild und Auftrag — keine Extras, keine Verschönerungen. ' +
+        'Wenn du fertig bist, antworte OHNE weiteren Werkzeugaufruf mit einer kurzen ' +
+        'Liste auf Deutsch: welche Entwurfsdateien du geschrieben hast und was sie ' +
+        'enthalten. Konntest du etwas nicht, schreibe genau das — erfinde nichts.'
+    },
+    { role: 'user', content: String(auftrag ?? '') }
+  ]
+  const zaehler = { dateien: [] }
+  const ergebnis = await kreislauf({
+    projektPfad,
+    nachrichten,
+    werkzeuge: [...WERKZEUGE, ENTWURF_WERKZEUG],
+    modell,
+    adresse,
+    aufSchritt,
+    zaehler
+  })
+  return { ...ergebnis, dateien: zaehler.dateien }
 }
 
 // Gemeinsamer Kern beider Kreisläufe: Ollama-Runden mit Werkzeugaufrufen,

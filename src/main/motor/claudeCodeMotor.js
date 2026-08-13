@@ -233,12 +233,16 @@ function liegtImProjekt(datei, projektPfad) {
 // Exportiert, damit sich die Einstufung ohne laufenden Motor prüfen lässt.
 export function pruefeWerkzeug(name, eingabe, projektPfad, nurLesen, darfPruefen, lokaleKi = true) {
   if (name.startsWith(MENSCH_PRAEFIX)) return { erlaubt: true }
-  // Lokale Helfer-KI: rein lesend (im Code erzwungen) — erlaubt, außer das
-  // Häkchen „lokale KI erlaubt" ist am laufenden Block abgewählt (BAUPLAN 20):
-  // dann ist das eine echte Sperre, kein bloßer Hinweis.
+  // Lokale Helfer-KI: erlaubt, außer das Häkchen „lokale KI erlaubt" ist am
+  // laufenden Block abgewählt (BAUPLAN 20): dann ist das eine echte Sperre,
+  // kein bloßer Hinweis. Rein lesend (im Code erzwungen) ist nur die
+  // Recherche — Entwerfen und Abnehmen (BAUPLAN 21) sind Schreibarbeit und
+  // fallen unter „darf nur lesen".
   if (name.startsWith(HELFER_PRAEFIX)) {
     if (!lokaleKi)
       return { gesperrt: texte.rechteFrage.lokaleKiGesperrtFuerAgent, tickerText: texte.ticker.lokaleKiGesperrt }
+    if (nurLesen && name !== HELFER_PRAEFIX + 'lokal_recherchieren')
+      return { gesperrt: texte.rechteFrage.nurLesenGesperrtFuerAgent, tickerText: texte.ticker.nurLesenGesperrt }
     return { erlaubt: true }
   }
   // Startanleitung setzen schreibt ins Projekt — validiert im Werkzeug selbst,

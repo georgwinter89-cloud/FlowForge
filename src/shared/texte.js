@@ -451,7 +451,42 @@ export const texte = {
       'dort, wo dein Auftrag Unteraufgaben fürs Einlesen vorsieht, als auch für dein ' +
       'eigenes Umsehen im Projekt. Es ist ein kleines Modell: gut für Überblick und ' +
       'Fundstellen; die Stellen, auf die du deine Arbeit stützt, liest du selbst nach. ' +
-      'Scheitert es, nutze wie gewohnt das Agent-Werkzeug.\n'
+      'Scheitert es, nutze wie gewohnt das Agent-Werkzeug.\n' +
+      'Für eng umrissene, schablonenhafte Schreibarbeit mit klarem Vorbild (z.B. „eine ' +
+      'weitere Prüfdatei nach dem Muster von X") steht dir lokal_entwerfen bereit: Die ' +
+      'lokale KI schreibt einen Entwurf in die arbeitsablage/ — nie an den Zielort. Du ' +
+      'liest den Entwurf gegen, übernimmst ihn selbst an den Zielort (oder verwirfst ihn ' +
+      'und schreibst selbst — ungeprüft zählt nichts) und meldest die Entscheidung mit ' +
+      'entwurf_abnehmen. Für Neues ohne Vorbild schreibst du direkt selbst.\n',
+    // Lokale Entwürfe (BAUPLAN 21): schablonenhafte Schreibarbeit lokal
+    // entwerfen lassen, Abnahme beim Block-Agenten — ungeprüft zählt nichts.
+    entwerfenBeschreibung:
+      'Delegiert eng umrissene, schablonenhafte Schreibarbeit mit klarem Vorbild an die ' +
+      'lokale Helfer-KI — sie kostet kein Kontingent und schreibt einen ENTWURF in die ' +
+      'arbeitsablage/, nie an den Zielort. Danach liest du den Entwurf gegen, übernimmst ' +
+      'ihn selbst an den Zielort oder verwirfst ihn, und meldest die Entscheidung mit ' +
+      'entwurf_abnehmen. Nur für Schablonen-Arbeit mit Vorbild — Neues schreibst du selbst.',
+    entwurfFazit: (fazit, dateien) =>
+      'Entwurf der lokalen Helfer-KI (kleines Modell — ungeprüft zählt nichts):\n' +
+      'Entwurfsdateien: ' +
+      dateien.join(', ') +
+      '\n' +
+      fazit +
+      '\n\nLies den Entwurf jetzt vollständig gegen. Übernimm ihn selbst an den Zielort ' +
+      '(gern mit Korrekturen) oder verwirf ihn und schreibe selbst — und melde deine ' +
+      'Entscheidung mit entwurf_abnehmen.',
+    entwurfKeineDatei:
+      'Die lokale Helfer-KI hat keinen Entwurf geschrieben. Erledige die Schreibarbeit selbst.',
+    entwerfenGescheitert: (fehler) =>
+      'Die lokale Helfer-KI konnte nicht entwerfen: ' + fehler + ' Erledige die Schreibarbeit selbst.',
+    abnehmenBeschreibung:
+      'Meldet die Abnahme-Entscheidung zu einem Entwurf der lokalen Helfer-KI: übernommen ' +
+      '(du hast ihn gegengelesen und selbst an den Zielort gebracht) oder verworfen (du ' +
+      'schreibst selbst). Pflicht nach jedem lokal_entwerfen.',
+    abgenommen: (entwurf, uebernommen) =>
+      uebernommen
+        ? `Abnahme vermerkt: Entwurf „${entwurf}" übernommen.`
+        : `Abnahme vermerkt: Entwurf „${entwurf}" verworfen — du schreibst selbst.`
   },
   // KI-Assistent des Block-Editors (SPEC §4.5, BAUPLAN 14) — Texte an den Motor.
   agentenBlockAssistent: {
@@ -549,13 +584,16 @@ export const texte = {
     obergrenzeHinweis: 'Erreicht ein Lauf diese Grenze, hält der Motor von selbst an.',
     // Lokale Helfer-KI (Experiment, Wunsch Georg 13.08.2026).
     lokaleHelferUeberschrift: 'Lokale Helfer-KI (Experiment)',
-    lokaleHelferAktiv: 'Recherche-Aufträge an eine lokale KI (Ollama) geben',
+    lokaleHelferAktiv: 'Recherche- und Entwurfs-Aufträge an eine lokale KI (Ollama) geben',
     lokaleHelferHinweis:
-      'Die Block-Agenten geben reines Einlesen und Suchen an eine kleine KI auf deinem ' +
-      'Rechner ab — das kostet kein Abo-Kontingent, nur Rechenzeit. Die lokale KI kann ' +
-      'nur lesen, nichts verändern. Achtung: Kleine Modelle arbeiten langsamer und ' +
-      'ungenauer; wichtige Fundorte prüft der Agent selbst nach. Voraussetzung: Ollama ' +
-      'läuft und das Modell ist heruntergeladen.',
+      'Die Block-Agenten geben Einlesen, Suchen und schablonenhafte Entwürfe an eine ' +
+      'kleine KI auf deinem Rechner ab — das kostet kein Abo-Kontingent, nur Rechenzeit. ' +
+      'Schreiben darf die lokale KI nur eng begrenzt: Entwürfe landen in der ' +
+      'Wegwerf-Ablage und werden vom Motor gegengelesen, und die Vorreparatur ersetzt ' +
+      'gezielt nach Prüfer-Beanstandungen — mit Sicherungspunkt und Nachprüfung. ' +
+      'Achtung: Kleine Modelle arbeiten langsamer und ungenauer; wichtige Fundorte ' +
+      'prüft der Agent selbst nach. Voraussetzung: Ollama läuft und das Modell ist ' +
+      'heruntergeladen.',
     lokaleHelferModell: 'Modellname bei Ollama',
     lokaleHelferAdresse: 'Adresse des Ollama-Rechners',
     lokaleHelferAdresseHinweis:
@@ -722,6 +760,19 @@ export const texte = {
     lokaleHelferGescheitert: (fehler) => `Lokale KI gescheitert: ${fehler}`,
     lokaleKiGesperrt:
       'lokal_recherchieren gestoppt — die lokale KI ist für diesen Block abgeschaltet.',
+    // Lokale Entwürfe (BAUPLAN 21): sichtbar, wenn die lokale KI entwirft —
+    // und was aus dem Entwurf wurde (Abnahme durch den Block-Agenten).
+    lokaleEntwurfStart: (modell) => `Lokale KI entwirft (${modell}) …`,
+    lokaleEntwurfSchritt: (pfad) =>
+      pfad ? `Lokale KI · schreibt Entwurf ${pfad}.` : 'Lokale KI · schreibt einen Entwurf.',
+    lokaleEntwurfFertig: (dateien, schritte) =>
+      `Lokale KI fertig — ${dateien.length === 1 ? 'ein Entwurf' : dateien.length + ' Entwürfe'} in der Arbeitsablage ` +
+      `(${schritte} ${schritte === 1 ? 'Schritt' : 'Schritte'}). Der Agent liest gegen.`,
+    lokaleEntwurfKeineDatei:
+      'Lokale KI hat keinen Entwurf geschrieben — der Agent schreibt selbst.',
+    lokaleEntwurfGescheitert: (fehler) => `Lokaler Entwurf gescheitert: ${fehler}`,
+    entwurfUebernommen: (entwurf) => `Entwurf übernommen: ${entwurf}.`,
+    entwurfVerworfen: (entwurf) => `Entwurf verworfen: ${entwurf} — der Agent schreibt selbst.`,
     // Lokale Vorreparatur (BAUPLAN 20): jeder Versuch ehrlich im Ticker.
     lokaleReparaturNichtMechanisch: (zielName) =>
       `Keine rein mechanischen Beanstandungen — die Reparatur geht direkt an „${zielName}" (Motor).`,
@@ -953,7 +1004,14 @@ export const texte = {
       (l.gescheitert > 0 ? ` (${l.gescheitert} davon gescheitert)` : '') +
       ((l.reparaturen ?? 0) > 0
         ? ` · ${l.reparaturen} Reparatur-${l.reparaturen === 1 ? 'Versuch' : 'Versuche'}, ${l.reparaturenGehalten ?? 0} ${(l.reparaturenGehalten ?? 0) === 1 ? 'hat' : 'haben'} gehalten`
-        : ''),
+        : '') +
+      // Lokale Entwürfe (BAUPLAN 21): übernommen/verworfen ehrlich gezählt —
+      // gescheiterte Entwurfs-Versuche extra, nicht bei den Recherchen.
+      ((l.entwuerfe ?? 0) > 0
+        ? ` · ${l.entwuerfe} ${l.entwuerfe === 1 ? 'Entwurf' : 'Entwürfe'} (${l.entwuerfeUebernommen ?? 0} übernommen, ${l.entwuerfeVerworfen ?? 0} verworfen${(l.entwuerfeGescheitert ?? 0) > 0 ? `, ${l.entwuerfeGescheitert} ${l.entwuerfeGescheitert === 1 ? 'Versuch' : 'Versuche'} gescheitert` : ''})`
+        : (l.entwuerfeGescheitert ?? 0) > 0
+          ? ` · ${l.entwuerfeGescheitert} Entwurfs-${l.entwuerfeGescheitert === 1 ? 'Versuch' : 'Versuche'} gescheitert`
+          : ''),
     // Token-Aufschlüsselung & theoretische API-Kosten (Wunsch Georg, 13.08.2026).
     aufschluesselungZeile: (a) =>
       `Eingabe ${a.eingabe.toLocaleString('de-DE')} · Ausgabe ${a.ausgabe.toLocaleString('de-DE')} · ` +

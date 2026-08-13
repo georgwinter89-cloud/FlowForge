@@ -822,6 +822,28 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
             if (daten.gescheitert) bericht.lokaleHelfer.gescheitert++
             return
           }
+          // Lokale Entwürfe (BAUPLAN 21): Entwürfe und ihre Abnahme
+          // (übernommen/verworfen) landen ehrlich in der Helfer-Zeile.
+          if (daten.art === 'lokale-helfer-entwurf') {
+            bericht.lokaleHelfer ??= { recherchen: 0, schritte: 0, gescheitert: 0 }
+            bericht.lokaleHelfer.schritte += daten.schritte ?? 0
+            if (daten.entwurf)
+              bericht.lokaleHelfer.entwuerfe = (bericht.lokaleHelfer.entwuerfe ?? 0) + 1
+            else
+              bericht.lokaleHelfer.entwuerfeGescheitert =
+                (bericht.lokaleHelfer.entwuerfeGescheitert ?? 0) + 1
+            return
+          }
+          if (daten.art === 'lokale-helfer-entwurf-urteil') {
+            bericht.lokaleHelfer ??= { recherchen: 0, schritte: 0, gescheitert: 0 }
+            if (daten.uebernommen)
+              bericht.lokaleHelfer.entwuerfeUebernommen =
+                (bericht.lokaleHelfer.entwuerfeUebernommen ?? 0) + 1
+            else
+              bericht.lokaleHelfer.entwuerfeVerworfen =
+                (bericht.lokaleHelfer.entwuerfeVerworfen ?? 0) + 1
+            return
+          }
           // Letzter Kontext-Stand am Lauf gespiegelt — der Kontext-Balken der
           // Projektübersicht braucht ihn außerhalb der Lauf-Ansicht.
           if (daten.art === 'verbrauch' && daten.verbrauch?.kontextProzentBis != null)
