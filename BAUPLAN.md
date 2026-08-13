@@ -182,6 +182,30 @@ Reparatur-Runde und sieht im Ticker „Session fortgesetzt statt neu gestartet" 
 und im Laufbericht, dass die Reparatur-Runde deutlich weniger verbraucht hat als
 der erste Durchlauf des Blocks.
 
+### 17 — Kontext-Sparsamkeit der Agenten
+(Entscheidung Georg, 13.08.2026. Befund aus dem Zugsimulator: Ein sauberer
+Paket-Lauf kostete ~830.000 Tokens — nicht wegen des Briefings [das ist schlank],
+sondern weil die Agenten alles selbst Gelesene und Geschriebene im
+Arbeitsgedächtnis der einen Session anhäufen: der Bauer machte ~125
+Werkzeug-Schritte, der Prüfer ~98, und im ganzen Lauf kam **keine einzige
+Unteraufgabe** vor. Georgs Ansatz: Agenten sollen nur den Kontext tragen, den
+sie wirklich brauchen — wie beim Delegieren an Unteragenten üblich.)
+- **Unteraufgaben-Delegation in den Blockaufträgen:** Erkundungslastige Blöcke
+  (Angreifer, Diagnose, Prüfer, Bauer beim Einlesen) werden angewiesen, Suchen
+  und Lesen an Unteraufgaben zu delegieren — der Wegwerf-Helfer wühlt in seinem
+  eigenen Kontext und liefert nur sein Fazit zurück. Jeder Auftrag erprobt im
+  Ein-Block-Workflow (Bauplan-Regel); der Verbrauchseffekt wird am
+  Zugsimulator-Projekt nachgemessen.
+- **Prüfmappen-Deckel, erzwungen statt erbeten:** Der Ordner `pruefung/`
+  bekommt eine harte Grenze (Richtwert 200 KB gesamt; Bilddateien sind ganz
+  verboten). Überschreitende Schreibversuche werden abgelehnt mit dem Hinweis,
+  vorhandene Prüfungen zusammenzulegen statt zu stapeln — dieselbe Mechanik
+  wie bei der Karten-Längengrenze.
+**Alltagstest:** Georg lässt am Zugsimulator ein Paket bauen und vergleicht im
+Laufbericht den Verbrauch je Block mit dem 830.000er-Lauf vom 12.08. — deutlich
+weniger, und im Ticker tauchen Unteraufgaben auf. Ein Prüfer-Versuch, ein
+Bild in die Prüfmappe zu legen, wird sichtbar abgelehnt.
+
 ## Reihenfolge-Begründung (kurz)
 Motor-Durchstich früh (3), weil dort das größte technische Risiko liegt — inklusive
 Rechte-Durchsetzung und Verbrauchs-Messung, den zwei größten Adapter-Risiken.
