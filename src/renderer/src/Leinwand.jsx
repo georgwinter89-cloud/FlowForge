@@ -634,7 +634,13 @@ export default function Leinwand({
           return neu
         })
       if (ereignis.art === 'ticker')
-        setTicker((alt) => [...alt, { zeit: new Date(), text: ereignis.text }])
+        // instanzId kommt bei Motor-Zeilen mit — daran hängt die Blockfarbe
+        // im Liveticker (Wunsch Georg, 13.08.2026). FlowForge-eigene Zeilen
+        // (Sicherungspunkte, Blockstart …) bleiben neutral.
+        setTicker((alt) => [
+          ...alt,
+          { zeit: new Date(), text: ereignis.text, instanzId: ereignis.instanzId ?? null }
+        ])
       if (ereignis.art === 'roh') setRoh((alt) => [...alt, ereignis.zeile])
       if (ereignis.art === 'verbrauch') {
         setLetzterVerbrauch(ereignis.verbrauch)
@@ -1383,13 +1389,48 @@ export default function Leinwand({
             onAntwort={(frageId, antwort) => window.flowforge.laufMenschAntworten(frageId, antwort)}
           />
 
+          {/* Welcher Block arbeitet gerade? (Wunsch Georg, 13.08.2026) —
+              Chips in der Kategorie-Farbe der Leinwand, bei parallelen
+              Zweigen mehrere gleichzeitig. */}
+          {zustand === 'laeuft' && aktiveInstanzen.size > 0 && (
+            <p className="lauf-aktive">
+              {t.geradeArbeitet(aktiveInstanzen.size)}
+              {[...aktiveInstanzen].map((id) => {
+                const def = blockDefinition(bloecke.find((b) => b.instanzId === id)?.blockId)
+                if (!def) return null
+                return (
+                  <span key={id} className={'lauf-aktiv-chip kategorie-' + blockKategorie(def)}>
+                    {def.symbol} {def.name}
+                  </span>
+                )
+              })}
+            </p>
+          )}
+
           <div className="ticker">
-            {ticker.map((zeile, i) => (
-              <p key={i} className="ticker-zeile">
-                <span className="ticker-zeit">{zeile.zeit.toLocaleTimeString('de-DE')}</span>
-                {zeile.text}
-              </p>
-            ))}
+            {ticker.map((zeile, i) => {
+              // Motor-Zeilen tragen die Farbe und das Etikett ihres Blocks —
+              // so ist auf einen Blick zu sehen, wer gerade spricht.
+              const def = zeile.instanzId
+                ? blockDefinition(
+                    bloecke.find((b) => b.instanzId === zeile.instanzId)?.blockId
+                  )
+                : null
+              return (
+                <p
+                  key={i}
+                  className={'ticker-zeile' + (def ? ' ticker-' + blockKategorie(def) : '')}
+                >
+                  <span className="ticker-zeit">{zeile.zeit.toLocaleTimeString('de-DE')}</span>
+                  {def && (
+                    <span className="ticker-block">
+                      {def.symbol} {def.name}
+                    </span>
+                  )}
+                  {zeile.text}
+                </p>
+              )
+            })}
             <div ref={tickerEnde} />
           </div>
 

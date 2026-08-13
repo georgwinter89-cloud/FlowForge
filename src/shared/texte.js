@@ -485,6 +485,8 @@ export const texte = {
     hartStoppen: 'Sofort abbrechen',
     hartStoppenBestaetigung:
       'Sofort abbrechen? Der Block gilt dann als nicht gelaufen — angefangene Änderungen werden auf den letzten Sicherungspunkt zurückgesetzt.',
+    // Lauf-Tab zeigt, welcher Block gerade arbeitet (Wunsch Georg, 13.08.2026).
+    geradeArbeitet: (n) => (n === 1 ? 'Gerade arbeitet:' : 'Gerade arbeiten:'),
     rohProtokollZeigen: 'Rohprotokoll einblenden',
     rohProtokollVerbergen: 'Rohprotokoll ausblenden',
     tickerUeberschrift: 'Liveticker',
