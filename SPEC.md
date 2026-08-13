@@ -1,6 +1,8 @@
 # FlowForge — Produkt-Spezifikation V1
 
-Stand: 07.08.2026 · Ergebnis der Grilling-Session (5 Runden) · Status: **wartet auf Freigabe durch Georg**
+Stand: 13.08.2026 · Ursprung: Grilling-Session vom 07.08.2026 (von Georg freigegeben) ·
+fortlaufend gepflegt — dieses Dokument beschreibt die Gegenwart, Verhaltensänderungen
+werden hier nachgezogen (Historie liefert git).
 
 ## 1. Was FlowForge ist
 
@@ -27,8 +29,13 @@ Sitzungen hinweg Software entsteht — ohne dass dem Agenten der Kontext überl�
   - **Rückfalllinie ab V1:** Derselbe Motor läuft wahlweise mit **API-Schlüssel**
     (Umschalter in den Einstellungen, kein Umbau). Im API-Modus gilt statt der
     Kontingent-Pause eine einstellbare **Ausgaben-Obergrenze** pro Lauf.
-  - **V2-Motoren:** eigene Agenten-Kreisläufe gegen beliebige Anbieter-APIs sowie lokale KI
-    (z.B. Ollama). Die restliche App merkt nicht, welcher Motor dranhängt.
+  - **Lokale KI schon in V1 — aber nur als Helfer** (Experiment, seit 13.08.2026): Die
+    Block-Agenten können Recherche-Aufträge an eine lokale KI über Ollama abgeben
+    (§4.3 „Lokale Helfer-KI") — ein eigener kleiner Recherche-Kreislauf von FlowForge,
+    kein Motor. Der Motor selbst bleibt die Claude-CLI.
+  - **V2-Motoren:** eigene Agenten-Kreisläufe gegen beliebige Anbieter-APIs sowie ein
+    vollwertiger lokaler Motor (z.B. über Ollama). Die restliche App merkt nicht,
+    welcher Motor dranhängt.
 
 ## 3. Projekte
 
@@ -226,12 +233,17 @@ das kostet kein Kontingent, nur Rechenzeit. Die Block-Agenten bekommen dafür da
 Werkzeug `lokal_recherchieren`; die lokale KI selbst hat genau drei rein lesende
 Werkzeuge (Ordner auflisten, Datei lesen, suchen), hart im Code auf den Projektordner
 begrenzt — schreiben, ausführen oder außerhalb lesen kann sie nicht, deshalb ist das
-Werkzeug auch unter „darf nur lesen" erlaubt. Ehrlichkeits-Vorkehrungen: Jedes Fazit
+Werkzeug auch unter „darf nur lesen" erlaubt. Steht die lokale KI bereit, weisen die
+Blockaufträge sie als **erste Wahl** fürs Delegieren aus (das Agent-Werkzeug ist der
+Rückfall). Denk-Modelle (z.B. gpt-oss), die ihre Antwort leer lassen und alles ins
+Denkfeld schreiben, werden einmal nachgehakt, bevor ein Fehlschlag gemeldet wird.
+Ehrlichkeits-Vorkehrungen: Jedes Fazit
 trägt den Warnhinweis „kleines Modell — Fundorte selbst nachprüfen" (in der Erprobung
 erfand das 7B-Modell abgelehnte Dateiinhalte), Start/Schritte/Fazit stehen im Ticker,
-und ist Ollama beim Laufstart nicht erreichbar, sagt der Ticker das ehrlich und alles
-läuft wie gewohnt über den Motor. V1-Experiment auf Georgs Wunsch — der vollwertige
-lokale Motor bleibt V2 (§2).
+der Laufbericht weist den Anteil der lokalen KI aus (Recherchen, Schritte,
+Fehlschläge), und ist Ollama beim Laufstart nicht erreichbar, sagt der Ticker das
+ehrlich und alles läuft wie gewohnt über den Motor. V1-Experiment auf Georgs Wunsch —
+der vollwertige lokale Motor bleibt V2 (§2).
 
 **Prüfmappe & Arbeitsablage:** Der Ordner `pruefung/` gehört den Prüf-Blöcken —
 für alle anderen Blöcke ist er schreibgesperrt (hartes Nein; der Bauer darf die
@@ -479,7 +491,9 @@ und auf der Hero-Kachel.
 
 ## 10. Bewusst NICHT in V1
 
-- Anbieterneutralität, API-Betrieb, lokale KI (→ V2, durch Motor-Anschluss vorbereitet)
+- Anbieterneutralität und eigene Motoren gegen fremde Anbieter-APIs (→ V2, durch den
+  Motor-Anschluss vorbereitet; der API-Schlüssel-Modus der Claude-CLI und die lokale
+  Helfer-KI (§2, §4.3) existieren dagegen schon in V1)
 - Englische Oberfläche (→ V2, durch zentrale Texte vorbereitet)
 - Import/Export von Blöcken, Mehrbenutzer/Accounts, Auto-Update-Mechanismus
 - Umbau eines Workflows, während er läuft
