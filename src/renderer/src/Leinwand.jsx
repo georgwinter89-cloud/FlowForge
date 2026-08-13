@@ -9,6 +9,7 @@ import {
 } from '../../shared/blockKatalog.js'
 import { schaubildReihenfolge, vorfahrenSortiert } from '../../shared/kettenRegeln.js'
 import { BlockChips } from './Blockbibliothek.jsx'
+import Bestaetigung from './Bestaetigung.jsx'
 
 const t = texte.lauf
 const tk = texte.kette
@@ -548,6 +549,9 @@ export default function Leinwand({
   // Tabs der Mittelspalte (Feedback Georg, 07.08.2026): Schaubild, Lauf,
   // Berichte und Sicherungspunkte gestapelt wurden unübersichtlich.
   const [tab, setTab] = useState('schaubild')
+  // Eigener Bestätigungs-Dialog statt window.confirm (Bugfix 13.08.2026):
+  // null = zu, sonst { frage, knopf, gefahr, aktion }.
+  const [bestaetigung, setBestaetigung] = useState(null)
   // Kartenvorauswahl für den Lauf (SPEC §5, BAUPLAN 7): Status + offene Aufgaben
   // sind vorausgewählt; Georg kann Karten dazuziehen (zusatz) oder vorausgewählte
   // rauswerfen (raus). Beides gilt für den nächsten Start, wird nicht gespeichert.
@@ -787,29 +791,37 @@ export default function Leinwand({
     }
   }
 
+  // Vorlage (SPEC §4.4): legt eine ganze Kette fertig verbunden ab.
+  function vorlageAblegen(vorlage) {
+    const bloecke = vorlage.kette.map((blockId, i) => ({
+      instanzId: crypto.randomUUID(),
+      blockId,
+      feldWerte: {},
+      zurueckZu: null,
+      position: { x: 40 + (i % 2) * 300, y: 40 + i * 190 }
+    }))
+    const pfeile = bloecke
+      .slice(1)
+      .map((block, i) => ({ von: bloecke[i].instanzId, nach: block.instanzId }))
+    ketteSpeichern({ ...workflow, bloecke, pfeile })
+  }
+
   function neuAblegen(e) {
     e.preventDefault()
-    // Vorlage (SPEC §4.4): legt eine ganze Kette fertig verbunden ab — nur auf
-    // die leere Leinwand, damit sie nichts Bestehendes durcheinanderbringt.
     const vorlageId = e.dataTransfer.getData('text/flowforge-vorlage')
     if (vorlageId) {
       const vorlage = vorlageDefinition(vorlageId)
       if (!vorlage) return
       // Liegt schon etwas auf der Leinwand, ersetzt die Vorlage es — aber nur
       // nach Rückfrage (Feedback Georg, 07.08.2026: erst Spec-Interview, dann
-      // Bau-Vorlage auf dieselbe Leinwand).
-      if (workflow.bloecke.length > 0 && !window.confirm(tk.vorlageErsetzenBestaetigung)) return
-      const bloecke = vorlage.kette.map((blockId, i) => ({
-        instanzId: crypto.randomUUID(),
-        blockId,
-        feldWerte: {},
-        zurueckZu: null,
-        position: { x: 40 + (i % 2) * 300, y: 40 + i * 190 }
-      }))
-      const pfeile = bloecke
-        .slice(1)
-        .map((block, i) => ({ von: bloecke[i].instanzId, nach: block.instanzId }))
-      ketteSpeichern({ ...workflow, bloecke, pfeile })
+      // Bau-Vorlage auf dieselbe Leinwand). Eigener Dialog statt window.confirm.
+      if (workflow.bloecke.length > 0)
+        return setBestaetigung({
+          frage: tk.vorlageErsetzenBestaetigung,
+          knopf: texte.bestaetigung.ersetzen,
+          aktion: () => vorlageAblegen(vorlage)
+        })
+      vorlageAblegen(vorlage)
       return
     }
     const blockId = e.dataTransfer.getData('text/flowforge-block')
@@ -1019,9 +1031,13 @@ export default function Leinwand({
     setZustand((z) => (z === 'wartet' ? 'bereit' : z))
   }
 
-  async function hartStoppen() {
-    if (!window.confirm(t.hartStoppenBestaetigung)) return
-    await window.flowforge.laufHartStoppen(pfad)
+  function hartStoppen() {
+    setBestaetigung({
+      frage: t.hartStoppenBestaetigung,
+      knopf: texte.bestaetigung.sofortAbbrechen,
+      gefahr: true,
+      aktion: () => window.flowforge.laufHartStoppen(pfad)
+    })
   }
 
   function fertigText(z) {
@@ -1623,6 +1639,20 @@ export default function Leinwand({
             </div>
           </div>
         </div>
+      )}
+
+      {bestaetigung && (
+        <Bestaetigung
+          frage={bestaetigung.frage}
+          knopf={bestaetigung.knopf}
+          gefahr={bestaetigung.gefahr}
+          onBestaetigen={() => {
+            const aktion = bestaetigung.aktion
+            setBestaetigung(null)
+            aktion?.()
+          }}
+          onAbbrechen={() => setBestaetigung(null)}
+        />
       )}
 
       {entscheidung && !frage && (

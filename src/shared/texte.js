@@ -437,6 +437,15 @@ export const texte = {
     fehlerAdresse:
       'Die adresse muss mit http:// oder https:// beginnen — oder eine Datei im Projektordner sein (relativer Pfad, kein Ausbruch per „..").'
   },
+  // Eigener Bestätigungs-Dialog statt nativer Windows-Fenster (Bugfix 13.08.2026).
+  bestaetigung: {
+    abbrechen: 'Abbrechen',
+    ja: 'Ja',
+    ok: 'Alles klar',
+    loeschen: 'Löschen',
+    ersetzen: 'Vorlage übernehmen',
+    sofortAbbrechen: 'Sofort abbrechen'
+  },
   fehler: {
     projektNichtGefunden: 'Der Projektordner ist nicht mehr da. Wurde er verschoben oder gelöscht?',
     kartenDateiKaputt:

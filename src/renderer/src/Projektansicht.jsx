@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { texte } from '../../shared/texte.js'
 import { eigeneBloeckeSetzen } from '../../shared/blockKatalog.js'
 import KartenFormular from './KartenFormular.jsx'
+import Bestaetigung from './Bestaetigung.jsx'
 import Leinwand from './Leinwand.jsx'
 import Blockbibliothek from './Blockbibliothek.jsx'
 import BlockEditor from './BlockEditor.jsx'
@@ -71,6 +72,9 @@ export default function Projektansicht({ pfad, onZurueck }) {
   const [blockEditor, setBlockEditor] = useState(false)
   // Projekt-Einstellungen (BAUPLAN 15): zeigen den Rechte-Standard des Agenten.
   const [einstellungenOffen, setEinstellungenOffen] = useState(false)
+  // Eigener Bestätigungs-Dialog statt window.confirm/alert (Bugfix 13.08.2026):
+  // null = zu, sonst { frage, knopf, gefahr, aktion } — ohne aktion nur Hinweis.
+  const [bestaetigung, setBestaetigung] = useState(null)
 
   function projektLaden() {
     window.flowforge.projektOeffnen(pfad).then((ergebnis) => {
@@ -110,12 +114,18 @@ export default function Projektansicht({ pfad, onZurueck }) {
     return eigeneUebernehmen(await window.flowforge.eigenenBlockSpeichern(block))
   }
 
-  async function blockLoeschen(block) {
-    if (!window.confirm(texte.blockEditor.loeschenBestaetigung(block.name))) return
-    const ergebnis = eigeneUebernehmen(await window.flowforge.eigenenBlockLoeschen(block.id))
-    // Lösch-Sperre (BAUPLAN 14): liegt der Block noch auf einer Leinwand,
-    // lehnt der Hauptprozess ab — mit den Projektnamen.
-    if (!ergebnis.ok) window.alert(ergebnis.fehler)
+  function blockLoeschen(block) {
+    setBestaetigung({
+      frage: texte.blockEditor.loeschenBestaetigung(block.name),
+      knopf: texte.bestaetigung.loeschen,
+      gefahr: true,
+      aktion: async () => {
+        const ergebnis = eigeneUebernehmen(await window.flowforge.eigenenBlockLoeschen(block.id))
+        // Lösch-Sperre (BAUPLAN 14): liegt der Block noch auf einer Leinwand,
+        // lehnt der Hauptprozess ab — mit den Projektnamen.
+        if (!ergebnis.ok) setBestaetigung({ frage: ergebnis.fehler })
+      }
+    })
   }
 
   // Der Agent kann Karten und Startanleitung mitten im Lauf ändern —
@@ -164,13 +174,16 @@ export default function Projektansicht({ pfad, onZurueck }) {
     uebernehmen(await window.flowforge.karteErledigtSetzen(pfad, karte.id, !karte.erledigt))
   }
 
-  async function loeschen(karte) {
+  function loeschen(karte) {
     // Löschen einer Prüfkarte räumt ihre aufbewahrten Prüfdateien mit weg
     // (BAUPLAN 18) — die Rückfrage sagt das ehrlich dazu.
-    const rueckfrage =
-      karte.sorte === 'pruefung' ? tk.loeschenBestaetigungPruefung : tk.loeschenBestaetigung
-    if (!window.confirm(rueckfrage)) return
-    uebernehmen(await window.flowforge.karteLoeschen(pfad, karte.id))
+    setBestaetigung({
+      frage:
+        karte.sorte === 'pruefung' ? tk.loeschenBestaetigungPruefung : tk.loeschenBestaetigung,
+      knopf: texte.bestaetigung.loeschen,
+      gefahr: true,
+      aktion: async () => uebernehmen(await window.flowforge.karteLoeschen(pfad, karte.id))
+    })
   }
 
   // Kontingent-Verhalten pro Projekt (SPEC §5): pausieren oder anhalten.
@@ -309,6 +322,19 @@ export default function Projektansicht({ pfad, onZurueck }) {
       )}
       {einstellungenOffen && (
         <ProjektEinstellungen onSchliessen={() => setEinstellungenOffen(false)} />
+      )}
+      {bestaetigung && (
+        <Bestaetigung
+          frage={bestaetigung.frage}
+          knopf={bestaetigung.knopf}
+          gefahr={bestaetigung.gefahr}
+          onBestaetigen={() => {
+            const aktion = bestaetigung.aktion
+            setBestaetigung(null)
+            aktion?.()
+          }}
+          onAbbrechen={bestaetigung.aktion ? () => setBestaetigung(null) : null}
+        />
       )}
     </section>
   )
