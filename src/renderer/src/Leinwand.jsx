@@ -397,6 +397,7 @@ function SchaubildKarte({
   onFeld,
   onSpeichern,
   onZurueckZu,
+  onLokaleKi,
   onEntfernen,
   onGreifen,
   onPfeilStart,
@@ -445,6 +446,18 @@ function SchaubildKarte({
         )}
       </div>
       <BlockChips def={def} />
+      {/* Häkchen je Block (BAUPLAN 20): „lokale KI erlaubt" — Standard an,
+          erbt den globalen Schalter. Abgewählt ist eine echte Sperre:
+          kein lokal_recherchieren, keine lokale Vorreparatur für diesen Block. */}
+      <label className="feld-kompakt lokale-ki-feld" title={tk.lokaleKiHinweis}>
+        <input
+          type="checkbox"
+          disabled={!bearbeitbar}
+          checked={eintrag.lokaleKi !== false}
+          onChange={(e) => onLokaleKi(e.target.checked)}
+        />
+        {tk.lokaleKiLabel}
+      </label>
       {def.felder.map((feld) => (
         <label key={feld.id} className="feld feld-kompakt">
           {feld.label}
@@ -922,6 +935,14 @@ export default function Leinwand({
     ketteSpeichern({ ...workflow, bloecke })
   }
 
+  // Häkchen je Block (BAUPLAN 20): „lokale KI erlaubt" abwählen oder wieder setzen.
+  function lokaleKiSetzen(instanzId, erlaubt) {
+    const bloecke = workflow.bloecke.map((b) =>
+      b.instanzId === instanzId ? { ...b, lokaleKi: erlaubt } : b
+    )
+    ketteSpeichern({ ...workflow, bloecke })
+  }
+
   function entfernen(instanzId) {
     ketteSpeichern({
       ...workflow,
@@ -1364,6 +1385,7 @@ export default function Leinwand({
                 onFeld={(feldId, wert) => feldSetzen(eintrag.instanzId, feldId, wert)}
                 onSpeichern={() => ketteSpeichern(workflowRef.current)}
                 onZurueckZu={(ziel) => zurueckZuSetzen(eintrag.instanzId, ziel)}
+                onLokaleKi={(erlaubt) => lokaleKiSetzen(eintrag.instanzId, erlaubt)}
                 onEntfernen={() => entfernen(eintrag.instanzId)}
                 onGreifen={(e) => karteGreifen(e, eintrag)}
                 onPfeilStart={(e) => pfeilBeginnen(e, eintrag)}

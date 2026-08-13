@@ -1734,6 +1734,22 @@ body {
   font-size: 12px;
 }
 
+/* Häkchen je Block (BAUPLAN 20): „lokale KI erlaubt" auf der Blockkarte. */
+.lokale-ki-feld {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-leise);
+  cursor: pointer;
+}
+
+.lokale-ki-feld input[type='checkbox'] {
+  width: auto;
+  margin: 0;
+  accent-color: var(--akzent, #3b82f6);
+}
+
 .feld-kompakt input,
 .feld-kompakt select {
   padding: 6px 8px;

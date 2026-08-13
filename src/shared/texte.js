@@ -167,6 +167,10 @@ export const texte = {
     fehlerWaehrendWarteschlange:
       'Dieser Workflow wartet in der Warteschlange auf seinen Start. Nimm ihn erst aus der Warteschlange, wenn du ihn ändern willst.',
     unbekannterBlock: 'Diesen Block kennt FlowForge nicht.',
+    // Häkchen je Block (BAUPLAN 20): Abwahl der lokalen KI als echte Sperre.
+    lokaleKiLabel: 'lokale KI erlaubt',
+    lokaleKiHinweis:
+      'Abgewählt: Dieser Block nutzt die lokale Helfer-KI nicht — weder für Recherchen noch für die lokale Vorreparatur. Wirkt nur, wenn die lokale KI in den Einstellungen überhaupt eingeschaltet ist.',
     uebertragGrenzeLabel: 'Überträge höchstens',
     uebertragGrenzeHinweis:
       'Läuft der Kontext eines Blocks voll (~85 %), übergibt der Agent an eine frische Session und arbeitet nahtlos weiter. So oft darf das pro Lauf passieren — Feld leer lassen heißt: unbegrenzt.',
@@ -323,6 +327,13 @@ export const texte = {
       '\n\nDies ist eine Reparatur-Runde: Der Bauer hat deine Beanstandungen aus der letzten ' +
       'Runde behoben. Prüfe in dieser Runde NUR diese Beanstandungen nach — keine erneute ' +
       'Vollprüfung, keine neuen Prüffelder. Deine Beanstandungen von letzter Runde:\n' + kritik,
+    // Lokale Vorreparatur (BAUPLAN 20): ehrlich gesagt, WER repariert hat.
+    lokaleNachpruefung: (kritik) =>
+      '\n\nDies ist eine Nachprüfung: Eine kleine lokale KI hat versucht, deine ' +
+      'Beanstandungen aus der letzten Runde mechanisch zu beheben. Prüfe in dieser Runde ' +
+      'NUR diese Beanstandungen nach — keine erneute Vollprüfung, keine neuen Prüffelder. ' +
+      'Sei streng: Ein kleines Modell macht Fehler, übernimm nichts ungeprüft. ' +
+      'Deine Beanstandungen von letzter Runde:\n' + kritik,
     startanleitungNachforderung:
       '\n\nNachforderung von FlowForge: Dieser Auftrag ist schon umgesetzt, aber die ' +
       'Startanleitung des Projekts fehlt noch. Lege sie jetzt mit dem Werkzeug ' +
@@ -426,6 +437,13 @@ export const texte = {
       'Die lokale Helfer-KI konnte nicht recherchieren: ' +
       fehler +
       ' Erledige die Recherche stattdessen mit einer Unteraufgabe (Agent-Werkzeug) oder selbst.',
+    // Lokale Vorreparatur (BAUPLAN 20): der Auftrag an das lokale Modell —
+    // eng umrissen, nur die mechanischen Beanstandungen des Prüfers.
+    reparaturAuftrag: (kritik) =>
+      'Ein Prüfer hat in diesem Projekt Beanstandungen gefunden, die als mechanisch ' +
+      'reparierbar eingestuft sind (Tippfehler, falscher Wert, vergessener Randfall). ' +
+      'Behebe GENAU diese Beanstandungen — nichts anderes:\n\n' +
+      kritik,
     // Zusatz im Systemtext der Block-Agenten, wenn die lokale KI bereitsteht.
     systemZusatz:
       'Für Einlese- und Suchaufträge steht dir das Werkzeug lokal_recherchieren bereit ' +
@@ -671,7 +689,10 @@ export const texte = {
     pruefmappeBildFuerAgent:
       'Bilddateien sind im Prüfordner „pruefung" verboten (hartes Nein, auch für Prüfer): Prüfungen sind kleine Textdateien und Skripte. Prüfe ohne Bildvergleiche — die blockieren künftige, völlig erlaubte Änderungen.',
     verwaltungGesperrtFuerAgent:
-      'Diese Datei verwaltet FlowForge selbst — sie ist für direkte Änderungen gesperrt. Karten liest und schreibst du über die karten-Werkzeuge.'
+      'Diese Datei verwaltet FlowForge selbst — sie ist für direkte Änderungen gesperrt. Karten liest und schreibst du über die karten-Werkzeuge.',
+    // Häkchen je Block (BAUPLAN 20): abgewählt = echte Sperre, kein Hinweis.
+    lokaleKiGesperrtFuerAgent:
+      'Die lokale Helfer-KI ist für diesen Block abgeschaltet (Häkchen an der Block-Karte). Nutze für Unteraufgaben das Agent-Werkzeug.'
   },
   ticker: {
     // Eine Motor-Session pro Lauf (BAUPLAN 19): Der Motor startet einmal,
@@ -699,6 +720,26 @@ export const texte = {
     lokaleHelferFertig: (schritte) =>
       `Lokale KI fertig — Fazit nach ${schritte} ${schritte === 1 ? 'Schritt' : 'Schritten'}.`,
     lokaleHelferGescheitert: (fehler) => `Lokale KI gescheitert: ${fehler}`,
+    lokaleKiGesperrt:
+      'lokal_recherchieren gestoppt — die lokale KI ist für diesen Block abgeschaltet.',
+    // Lokale Vorreparatur (BAUPLAN 20): jeder Versuch ehrlich im Ticker.
+    lokaleReparaturNichtMechanisch: (zielName) =>
+      `Keine rein mechanischen Beanstandungen — die Reparatur geht direkt an „${zielName}" (Motor).`,
+    lokaleReparaturStart: (versuch, max, modell) =>
+      `Lokale Reparatur, Versuch ${versuch} von ${max} (${modell}) — Sicherungspunkt liegt an.`,
+    lokaleReparaturSchritt: (pfad) =>
+      pfad ? `Lokale KI · ersetzt gezielt in ${pfad}.` : 'Lokale KI · ersetzt gezielt eine Stelle.',
+    lokaleReparaturFertig: (ersetzungen) =>
+      `Lokale Reparatur fertig — ${ersetzungen} ${ersetzungen === 1 ? 'Stelle' : 'Stellen'} ersetzt. Der Prüfer prüft nach.`,
+    lokaleReparaturNichtsErsetzt:
+      'Lokale Reparatur ohne Ergebnis — nichts ersetzt, der Versuch zählt trotzdem.',
+    lokaleReparaturGescheitert: (fehler) => `Lokale Reparatur gescheitert: ${fehler}`,
+    lokaleReparaturZurueckgerollt: (versuch, max) =>
+      `Nachprüfung nicht bestanden — der Stand wurde auf den Punkt vor der lokalen Reparatur zurückgerollt (Versuch ${versuch} von ${max}).`,
+    lokaleReparaturGehalten:
+      'Nachprüfung bestanden — die lokale Reparatur hat gehalten, keine Motor-Reparatur nötig.',
+    lokaleReparaturOpusUebernimmt: (zielName) =>
+      `Die lokale Reparatur hat nicht gereicht — jetzt übernimmt „${zielName}" über den Motor.`,
     schreibtDatei: (pfad) => `Schreibt Datei: ${pfad}`,
     aendertDatei: (pfad) => `Ändert Datei: ${pfad}`,
     liestDatei: (pfad) => `Liest: ${pfad}`,
@@ -806,6 +847,9 @@ export const texte = {
     beschriftungVorLauf: (block) => `Stand vor „${block}"`,
     beschriftungNachBlock: (block) => `„${block}" fertig`,
     beschriftungVorWiederherstellung: 'Stand vor der Wiederherstellung',
+    // Lokale Vorreparatur (BAUPLAN 20): auf genau diesen Punkt wird
+    // zurückgerollt, wenn die Nachprüfung scheitert.
+    beschriftungVorLokalerReparatur: 'Stand vor lokaler Reparatur',
     beschriftungWiederhergestellt: (zeit) => `Zurückgeholt: Stand von ${zeit}`,
     fehlerAnlegen: 'Der Sicherungspunkt konnte nicht angelegt werden. Der Lauf wurde sicherheitshalber nicht gestartet.',
     fehlerVorschau: 'Die Vorschau konnte nicht erstellt werden.',
@@ -901,10 +945,15 @@ export const texte = {
     fortgesetztHinweis: 'Dieser Lauf wurde nach einer Unterbrechung am letzten Sicherungspunkt fortgesetzt.',
     blockTokens: (tokens) => `Verbrauch: ${tokens.toLocaleString('de-DE')} Tokens`,
     // Lokale Helfer-KI (Wunsch Georg, 13.08.2026): ihr Anteil im Bericht.
+    // Seit BAUPLAN 20 zählen auch die Vorreparatur-Versuche mit — samt der
+    // Frage, wie viele davon die Nachprüfung bestanden haben.
     lokaleHelferZeile: (l) =>
       `Lokale Helfer-KI: ${l.recherchen} ${l.recherchen === 1 ? 'Recherche' : 'Recherchen'} · ` +
       `${l.schritte} ${l.schritte === 1 ? 'Schritt' : 'Schritte'} übernommen — ohne Kontingent` +
-      (l.gescheitert > 0 ? ` (${l.gescheitert} davon gescheitert)` : ''),
+      (l.gescheitert > 0 ? ` (${l.gescheitert} davon gescheitert)` : '') +
+      ((l.reparaturen ?? 0) > 0
+        ? ` · ${l.reparaturen} Reparatur-${l.reparaturen === 1 ? 'Versuch' : 'Versuche'}, ${l.reparaturenGehalten ?? 0} ${(l.reparaturenGehalten ?? 0) === 1 ? 'hat' : 'haben'} gehalten`
+        : ''),
     // Token-Aufschlüsselung & theoretische API-Kosten (Wunsch Georg, 13.08.2026).
     aufschluesselungZeile: (a) =>
       `Eingabe ${a.eingabe.toLocaleString('de-DE')} · Ausgabe ${a.ausgabe.toLocaleString('de-DE')} · ` +

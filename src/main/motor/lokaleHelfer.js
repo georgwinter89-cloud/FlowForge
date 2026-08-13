@@ -3,11 +3,17 @@
 // Einlesen und Suchen an das lokale Modell statt an eine Motor-Unteraufgabe —
 // das kostet kein Abo-Kontingent, nur Rechenzeit auf Georgs Rechner.
 //
-// Sicherheits-Zuschnitt (erzwungen im Code, nicht per Bitte): Das lokale
-// Modell bekommt genau drei Werkzeuge — Ordner auflisten, Datei lesen,
-// suchen — und alle drei arbeiten ausschließlich lesend innerhalb des
-// Projektordners. Es kann nichts schreiben, nichts ausführen und nichts
+// Sicherheits-Zuschnitt (erzwungen im Code, nicht per Bitte): Beim
+// Recherchieren bekommt das lokale Modell genau drei Werkzeuge — Ordner
+// auflisten, Datei lesen, suchen — und alle drei arbeiten ausschließlich
+// lesend innerhalb des Projektordners. Es kann nichts ausführen und nichts
 // außerhalb des Projekts sehen. Sein Fazit ist reiner Text.
+//
+// Lokale Vorreparatur (BAUPLAN 20): Zusätzlich gibt es einen eng gezügelten
+// Reparatur-Kreislauf mit genau einem Schreib-Werkzeug — gezieltes Ersetzen
+// (kein freies Datei-Schreiben), nur im Projektordner, Prüfmappe und
+// FlowForge-Verwaltungsdateien tabu. Die Nachprüfung des Prüfers bleibt der
+// Schiedsrichter; FlowForge rollt gescheiterte Versuche zurück (lauf.js).
 //
 // Bewusst ohne Electron-Abhängigkeiten: das Modul ist einzeln (mit node)
 // erprobbar, wie es die Bauplan-Regel für neue Bausteine verlangt.
@@ -215,16 +221,105 @@ const WERKZEUGE = [
   }
 ]
 
-function werkzeugAusfuehren(projektPfad, name, eingabe) {
+// --- Lokale Vorreparatur (BAUPLAN 20) --------------------------------------
+
+// Versuchs-Budget je Rückführung: so oft darf die lokale KI reparieren,
+// bevor der Motor-Bauer übernimmt. Lokale Versuche verbrauchen KEINE
+// regulären Reparatur-Runden des Workflows.
+export const LOKALE_REPARATUR_VERSUCHE = 2
+
+// Opus sortiert vor (BAUPLAN 20): Der Prüfer markiert jede Beanstandung als
+// „BEANSTANDUNG (mechanisch): …" oder „BEANSTANDUNG (grundsätzlich): …".
+// Nur wenn ALLE Beanstandungen mechanisch sind, lohnt die lokale Wette —
+// sonst muss der Motor-Bauer ohnehin ran, und jeder lokale Versuch kostete
+// nur eine zusätzliche Nachprüfung. Ohne Marken wird sicher eskaliert.
+export function beanstandungenEinstufen(pruefbeleg) {
+  const marken = [
+    ...String(pruefbeleg ?? '').matchAll(/BEANSTANDUNG\s*\((mechanisch|grunds(?:ä|ae)tzlich)\)/gi)
+  ]
+  if (marken.length === 0) return 'unmarkiert'
+  return marken.every((m) => m[1].toLowerCase() === 'mechanisch') ? 'mechanisch' : 'grundsaetzlich'
+}
+
+// Tabu-Zonen des Ersetzen-Werkzeugs — dieselben harten Sperren wie beim
+// Bauer, durchgesetzt im FlowForge-Code (nicht per Bitte an das Modell).
+const REPARATUR_TABU_DATEIEN = new Set([
+  'projekt.json',
+  'karten.json',
+  'workflow.json',
+  'startanleitung.json',
+  'laufstand.json'
+])
+const REPARATUR_TABU_ORDNER = new Set(['pruefung', 'laufberichte', 'node_modules', '.git'])
+
+// Das einzige Schreib-Werkzeug der lokalen KI: gezieltes Ersetzen. Der alte
+// Text muss genau und eindeutig in der Datei stehen — kein freies Schreiben,
+// kein Anlegen, kein Löschen. zaehler.ersetzungen zählt die echten Änderungen.
+function ersetzen(projektPfad, eingabe, zaehler) {
+  const ziel = imProjekt(projektPfad, eingabe.pfad)
+  if (!ziel) return 'Abgelehnt: Pfade außerhalb des Projektordners sind gesperrt.'
+  const relativ = path.relative(path.resolve(projektPfad), ziel).toLowerCase()
+  const oberster = relativ.split(path.sep)[0]
+  if (REPARATUR_TABU_ORDNER.has(oberster))
+    return `Abgelehnt: Der Ordner „${oberster}" ist für die lokale Reparatur gesperrt.`
+  if (REPARATUR_TABU_DATEIEN.has(relativ))
+    return 'Abgelehnt: FlowForge-Verwaltungsdateien sind gesperrt.'
+  const alt = String(eingabe.alt ?? '')
+  const neu = String(eingabe.neu ?? '')
+  if (!alt) return 'Abgelehnt: leerer alt-Text.'
+  if (alt === neu) return 'Abgelehnt: alt und neu sind identisch — nichts zu ersetzen.'
+  let inhalt
+  try {
+    inhalt = fs.readFileSync(ziel, 'utf8')
+  } catch {
+    return `Datei nicht lesbar oder nicht vorhanden: ${eingabe.pfad}`
+  }
+  const vorkommen = inhalt.split(alt).length - 1
+  if (vorkommen === 0)
+    return (
+      'Nicht gefunden: Der alt-Text steht so nicht in der Datei. Er muss ZEICHENGENAU ' +
+      'stimmen (auch Einrückung und Zeilenumbrüche) — lies die Stelle mit datei_lesen nach.'
+    )
+  if (vorkommen > 1)
+    return `Nicht eindeutig: Der alt-Text kommt ${vorkommen}-mal vor. Nimm umgebende Zeilen dazu, bis er eindeutig ist.`
+  try {
+    fs.writeFileSync(ziel, inhalt.replace(alt, neu), 'utf8')
+  } catch {
+    return `Die Datei ließ sich nicht schreiben: ${eingabe.pfad}`
+  }
+  zaehler.ersetzungen++
+  return `Ersetzt in ${eingabe.pfad}.`
+}
+
+const ERSETZEN_WERKZEUG = {
+  type: 'function',
+  function: {
+    name: 'ersetzen',
+    description:
+      'Ersetzt in einer Projektdatei genau eine Textstelle. alt muss zeichengenau und eindeutig in der Datei stehen.',
+    parameters: {
+      type: 'object',
+      properties: {
+        pfad: { type: 'string', description: 'Datei relativ zum Projekt, z.B. "js/main.js"' },
+        alt: { type: 'string', description: 'Der bisherige Text — zeichengenau, samt Einrückung' },
+        neu: { type: 'string', description: 'Der neue Text an dieser Stelle' }
+      },
+      required: ['pfad', 'alt', 'neu']
+    }
+  }
+}
+
+function werkzeugAusfuehren(projektPfad, name, eingabe, zaehler) {
   if (name === 'ordner_auflisten') return ordnerAuflisten(projektPfad, eingabe)
   if (name === 'datei_lesen') return dateiLesen(projektPfad, eingabe)
   if (name === 'suchen') return suchen(projektPfad, eingabe)
+  if (name === 'ersetzen' && zaehler) return ersetzen(projektPfad, eingabe, zaehler)
   return `Unbekanntes Werkzeug: ${name}`
 }
 
 // Der Recherche-Kreislauf: Auftrag rein, kompaktes Fazit raus.
 // aufSchritt (optional) meldet jede Werkzeug-Nutzung für den Liveticker.
-export async function lokalRecherchieren({ projektPfad, auftrag, modell, adresse = STANDARD_ADRESSE, aufSchritt }) {
+export function lokalRecherchieren({ projektPfad, auftrag, modell, adresse = STANDARD_ADRESSE, aufSchritt }) {
   const nachrichten = [
     {
       role: 'system',
@@ -240,7 +335,47 @@ export async function lokalRecherchieren({ projektPfad, auftrag, modell, adresse
     },
     { role: 'user', content: String(auftrag ?? '') }
   ]
+  return kreislauf({ projektPfad, nachrichten, werkzeuge: WERKZEUGE, modell, adresse, aufSchritt })
+}
 
+// Der Reparatur-Kreislauf (BAUPLAN 20): Beanstandungen des Prüfers rein,
+// gezielte Ersetzungen im Projekt, kurzer Bericht raus. Zusätzlich zu den
+// Lese-Werkzeugen gibt es genau das Ersetzen-Werkzeug — an kurzer Leine.
+// ergebnis.ersetzungen zählt die echten Änderungen: 0 heißt „nichts passiert"
+// — dann spart sich FlowForge die Nachprüfung.
+export async function lokalReparieren({ projektPfad, auftrag, modell, adresse = STANDARD_ADRESSE, aufSchritt }) {
+  const nachrichten = [
+    {
+      role: 'system',
+      content:
+        'Du bist ein Reparatur-Helfer in einem Projektordner. Du bekommst Beanstandungen ' +
+        'eines Prüfers und behebst GENAU diese — nicht mehr, keine Verschönerungen, keine ' +
+        'neuen Dateien. Finde die betroffenen Stellen mit suchen und datei_lesen, und ' +
+        'behebe sie mit dem Werkzeug ersetzen: Der alt-Text muss ZEICHENGENAU so in der ' +
+        'Datei stehen (samt Einrückung) und eindeutig sein — nimm zur Not umgebende ' +
+        'Zeilen dazu. Lies eine Stelle immer erst mit datei_lesen, bevor du sie ersetzt. ' +
+        'Wenn du fertig bist, antworte OHNE weiteren Werkzeugaufruf mit einer kurzen ' +
+        'Liste auf Deutsch: was du wo ersetzt hast. Kannst du eine Stelle nicht finden ' +
+        'oder nicht beheben, schreibe genau das — erfinde nichts.'
+    },
+    { role: 'user', content: String(auftrag ?? '') }
+  ]
+  const zaehler = { ersetzungen: 0 }
+  const ergebnis = await kreislauf({
+    projektPfad,
+    nachrichten,
+    werkzeuge: [...WERKZEUGE, ERSETZEN_WERKZEUG],
+    modell,
+    adresse,
+    aufSchritt,
+    zaehler
+  })
+  return { ...ergebnis, ersetzungen: zaehler.ersetzungen }
+}
+
+// Gemeinsamer Kern beider Kreisläufe: Ollama-Runden mit Werkzeugaufrufen,
+// bis ein Fazit kommt oder die Runden ausgehen.
+async function kreislauf({ projektPfad, nachrichten, werkzeuge, modell, adresse, aufSchritt, zaehler = null }) {
   let schritte = 0
   // Denk-Modelle (z.B. gpt-oss) schreiben manchmal alles ins Denkfeld und
   // lassen die eigentliche Antwort leer (real beobachtet am 13.08.2026:
@@ -257,7 +392,7 @@ export async function lokalRecherchieren({ projektPfad, auftrag, modell, adresse
         body: JSON.stringify({
           model: modell,
           messages: nachrichten,
-          tools: WERKZEUGE,
+          tools: werkzeuge,
           stream: false,
           options: { temperature: 0.2, num_ctx: KONTEXT_FENSTER }
         })
@@ -306,7 +441,7 @@ export async function lokalRecherchieren({ projektPfad, auftrag, modell, adresse
       }
       schritte++
       aufSchritt?.(name, eingabe)
-      const ergebnis = werkzeugAusfuehren(projektPfad, name, eingabe)
+      const ergebnis = werkzeugAusfuehren(projektPfad, name, eingabe, zaehler)
       nachrichten.push({ role: 'tool', tool_name: name, content: String(ergebnis) })
     }
   }

@@ -127,6 +127,8 @@ Der Verbrauch steht je Block und für den ganzen Lauf im Bericht — seit 13.08.
   prüft. Parallelität **innerhalb** von Blöcken (z.B. ein Audit-Block, der intern zwei
   Prüfer startet) gibt es noch nicht.
 - **Fehlschlag-Rückführung:** „bei Fehlschlag zurück zu Block X" (braucht der Prüfer sofort).
+  Sind alle Beanstandungen mechanisch, versucht zuerst die lokale Vorreparatur (§4.3) —
+  ohne reguläre Runden zu verbrauchen.
   Standard **2 Reparatur-Runden** (pro Workflow verstellbar); danach hält der Lauf an und stellt
   eine Folgen-Frage („Weitermachen, zurückstellen oder Stand wiederherstellen?"). Im
   Verzweigten laufen genau die Blöcke auf den Wegen von X zum Prüfer erneut — parallele
@@ -198,6 +200,10 @@ mindestens ein Test wird einmal mit absichtlich verfälschter Erwartung ausgefü
 (Rot) und danach unverändert echt (Grün) — ein Test, der nie rot war, beweist nichts.
 Überstrenge Fallen (pixelgenaue Vergleiche, Wortverbote, Datei-Inventuren) sind per
 Auftrag untersagt.
+Jede Beanstandung markiert er als eigene Zeile „BEANSTANDUNG (mechanisch): …"
+(Tippfehler, falscher Wert, vergessener Randfall) oder „BEANSTANDUNG
+(grundsätzlich): …" (braucht Umbau oder Entscheidungen) — diese Vorsortierung
+steuert die lokale Vorreparatur (§unten); im Zweifel gilt grundsätzlich.
 In einer **Reparatur-Runde prüft er nur seine Beanstandungen der letzten Runde
 nach** — keine erneute Vollprüfung. Ehrlichkeits-Notiz: „Prüfer ≠ Bauer" heißt
 technisch „frischer Agent ohne das Arbeitswissen des Bauers" — jeder Block läuft
@@ -241,9 +247,37 @@ Ehrlichkeits-Vorkehrungen: Jedes Fazit
 trägt den Warnhinweis „kleines Modell — Fundorte selbst nachprüfen" (in der Erprobung
 erfand das 7B-Modell abgelehnte Dateiinhalte), Start/Schritte/Fazit stehen im Ticker,
 der Laufbericht weist den Anteil der lokalen KI aus (Recherchen, Schritte,
-Fehlschläge), und ist Ollama beim Laufstart nicht erreichbar, sagt der Ticker das
+Fehlschläge, Reparatur-Versuche), und ist Ollama beim Laufstart nicht erreichbar, sagt der Ticker das
 ehrlich und alles läuft wie gewohnt über den Motor. V1-Experiment auf Georgs Wunsch —
 der vollwertige lokale Motor bleibt V2 (§2).
+
+**Lokale Vorreparatur** (seit Bauschritt 20): Scheitert eine Prüfung und sind
+**alle** Beanstandungen als mechanisch markiert (Vorsortierung des Prüfers,
+s.o. — ohne Marken wird sicher eskaliert), repariert zuerst die lokale KI:
+höchstens **2 Versuche je Rückführung**, die keine regulären Reparatur-Runden
+verbrauchen. Ihr einziges Schreib-Werkzeug ist **gezieltes Ersetzen** (der alte
+Text muss zeichengenau und eindeutig sein — kein freies Datei-Schreiben), hart
+im Code begrenzt auf den Projektordner; Prüfmappe und Verwaltungsdateien sind
+tabu. Vor jedem Versuch legt FlowForge einen Sicherungspunkt „Stand vor lokaler
+Reparatur" an; die **Nachprüfung des Prüfers** (nur die Beanstandungen) ist der
+Schiedsrichter. Scheitert sie, wird der Stand zurückgerollt, BEVOR der
+Motor-Bauer mit der Original-Kritik übernimmt — er repariert den sauberen
+Stand, nicht das Gebastel. Ersetzt ein Versuch gar nichts, zählt er als
+verbraucht, ohne eine Nachprüfung zu kosten. Jeder Versuch steht samt Ausgang
+im Ticker („Lokale Reparatur, Versuch 1 von 2 …") und in der
+Lokale-Helfer-Zeile des Laufberichts. Aktiv nur, wenn die lokale KI
+eingeschaltet und beim Laufstart erreichbar war — sonst läuft die Rückführung
+wie gehabt.
+
+**Häkchen je Block** (seit Bauschritt 20): An jeder Block-Karte im Schaubild
+sitzt ein Abwahl-Häkchen **„lokale KI erlaubt"** (Standard: an, erbt den
+globalen Schalter). Abgewählt ist es eine echte Sperre: FlowForge lehnt
+`lokal_recherchieren` für die Agenten dieses Blocks hart ab (erkannt am
+laufenden Block, Mechanik aus Bauschritt 19) und streicht den Hinweis auf die
+lokale KI aus dem Arbeitsauftrag. Ein Block ohne lokale KI bekommt auch keine
+lokale Vorreparatur (maßgeblich ist das Häkchen des Rückführungs-Ziels, dessen
+Reparatur-Runde ersetzt würde). Eine Gegenrichtung (global aus, einzeln an)
+gibt es bewusst nicht.
 
 **Prüfmappe & Arbeitsablage:** Der Ordner `pruefung/` gehört den Prüf-Blöcken —
 für alle anderen Blöcke ist er schreibgesperrt (hartes Nein; der Bauer darf die

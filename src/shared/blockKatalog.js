@@ -354,7 +354,13 @@ export const BLOCK_KATALOG = [
       'nach dir vom Sessionende-Block gepflegt. ' +
       'Dein Abschlusstext ist der Prüfbeleg — kompakt: 1. Was du wie geprüft hast. ' +
       '2. Der Rot-vor-Grün-Beleg mit den Ausgaben. 3. Beanstandungen mit Fundort — oder dass ' +
-      'es keine gibt. Direkt vor der Urteils-Zeile stehen zwei Zeilen für die Prüfkarte, die ' +
+      'es keine gibt. Jede Beanstandung steht als eigene Zeile in genau einem dieser Muster: ' +
+      '„BEANSTANDUNG (mechanisch): …" für eng umrissene, mechanisch behebbare Fehler ' +
+      '(Tippfehler, falscher Wert, vergessener Randfall — mit Fundort), oder ' +
+      '„BEANSTANDUNG (grundsätzlich): …" für alles, was Umbau, neue Struktur oder eine ' +
+      'Entscheidung braucht. Diese Einstufung entscheidet, ob eine kleine lokale KI die ' +
+      'Reparatur zuerst versuchen darf — stufe im Zweifel als grundsätzlich ein. ' +
+      'Direkt vor der Urteils-Zeile stehen zwei Zeilen für die Prüfkarte, die ' +
       'FlowForge bei bestandener Prüfung automatisch anlegt: eine Zeile ' +
       '„PRUEFKARTE-TITEL: kurzer Name des Geprüften" (höchstens 80 Zeichen) und eine Zeile ' +
       '„PRUEFKARTE: was geprüft wurde und woran man erkennt, dass es in Ordnung ist" — ' +
@@ -538,8 +544,10 @@ export const BLOCK_KATALOG = [
       'Du bist ein absichtlich strenger Übungs-Prüfer — dein einziger Zweck ist, die ' +
       'Reparatur-Runden von FlowForge vorzuführen. Sieh dir die zuletzt geänderte Textdatei ' +
       '(.txt) im Projektordner an und finde genau einen Kritikpunkt, gern auch einen ' +
-      'kleinlichen (Stil, Wortwahl, fehlender Schwung). Nenne ihn auf Deutsch in ein bis zwei ' +
-      'Sätzen. Diese Prüfung fällt grundsätzlich immer durch — egal wie gut die Datei ist. ' +
+      'kleinlichen (Stil, Wortwahl, fehlender Schwung). Nenne ihn auf Deutsch in ein bis ' +
+      'zwei Sätzen als eigene Zeile im Muster „BEANSTANDUNG (mechanisch): …" — so lässt ' +
+      'sich auch die lokale Vorreparatur vorführen. Diese Prüfung fällt grundsätzlich ' +
+      'immer durch — egal wie gut die Datei ist, auch in einer Nachprüfung. ' +
       'Du darfst nichts verändern — nur lesen. Deine allerletzte Zeile muss exakt lauten: ' +
       'PRUEFUNG: FEHLGESCHLAGEN'
   },

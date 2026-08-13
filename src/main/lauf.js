@@ -38,7 +38,12 @@ import {
   pruefkarteAusErgebnis
 } from './pruefkarten.js'
 import { starteLaufMotor } from './motor/claudeCodeMotor.js'
-import { lokaleHelferPruefen } from './motor/lokaleHelfer.js'
+import {
+  lokaleHelferPruefen,
+  lokalReparieren,
+  beanstandungenEinstufen,
+  LOKALE_REPARATUR_VERSUCHE
+} from './motor/lokaleHelfer.js'
 import {
   KONTEXT_FENSTER_STANDARD,
   FORTSETZUNG_WAECHTER_PROZENT
@@ -656,7 +661,14 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           startanleitungNachforderung: false,
           uebergabe: '',
           uebergabeVerloren: false,
-          warPausiert: false
+          warPausiert: false,
+          // Lokale Vorreparatur (BAUPLAN 20), nur an Prüf-Knoten genutzt:
+          // Versuchszähler (Budget je Rückführung), die Original-Kritik der
+          // mechanischen Beanstandungen und ob der nächste Anlauf dieses
+          // Prüfers die Nachprüfung eines lokalen Versuchs ist.
+          lokaleVersuche: 0,
+          lokaleKritik: null,
+          lokaleNachpruefung: false
         }
       ])
     )
@@ -880,6 +892,9 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           // Nur Prüf-Blöcke dürfen die Prüfmappe verändern (Entscheidung Georg,
           // 12.08.2026) — der Bauer weicht sonst Prüfungen auf, statt zu reparieren.
           darfPruefen: Boolean(k.def.prueft),
+          // Häkchen je Block (BAUPLAN 20): abgewählt = lokal_recherchieren
+          // wird für die Agenten dieses Blocks hart abgelehnt.
+          lokaleKi: k.eintrag.lokaleKi !== false,
           uebertrag
         })
         .catch((fehler) => ({
@@ -951,11 +966,21 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
               )
               .join('')
         if (k.rueckmeldung) auftrag += texte.agentenUebergabe.prueferRueckmeldung(k.rueckmeldung)
-        if (k.nachpruefung) auftrag += texte.agentenUebergabe.prueferNachpruefung(k.nachpruefung)
+        // Nachprüfung: ehrlich unterschieden, ob der Bauer oder die lokale
+        // Vorreparatur (BAUPLAN 20) die Beanstandungen behoben hat.
+        if (k.nachpruefung)
+          auftrag += k.lokaleNachpruefung
+            ? texte.agentenUebergabe.lokaleNachpruefung(k.nachpruefung)
+            : texte.agentenUebergabe.prueferNachpruefung(k.nachpruefung)
         if (k.startanleitungNachforderung)
           auftrag += texte.agentenUebergabe.startanleitungNachforderung
         if (k.uebergabe) auftrag += texte.agentenUebergabe.uebertragFortsetzung(k.uebergabe)
         else if (k.uebergabeVerloren) auftrag += texte.agentenUebergabe.uebertragOhneUebergabe
+        // Häkchen je Block (BAUPLAN 20): Ist die lokale KI für diesen Block
+        // abgewählt, fliegt ihr Hinweis aus dem Auftrag — die harte Sperre
+        // für das Werkzeug selbst sitzt im Motor.
+        if (k.eintrag.lokaleKi === false)
+          auftrag = auftrag.replace(/\(bevorzugt[^()]*lokal_recherchieren[^()]*\)/g, '(Agent-Werkzeug)')
 
         const uebertragErlaubt =
           workflow.uebertragGrenze == null || uebertraege < workflow.uebertragGrenze
@@ -1272,11 +1297,127 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         const bestanden = pruefUrteil(ergebnis.ergebnisText)
         blockErgebnis.zustand = bestanden === true ? 'pruefung-bestanden' : 'pruefung-nicht-bestanden'
         if (bestanden === true) {
+          // Bestandene Nachprüfung einer lokalen Reparatur (BAUPLAN 20):
+          // die Wette hat gehalten — keine Motor-Reparatur nötig.
+          if (k.lokaleNachpruefung) {
+            k.lokaleNachpruefung = false
+            k.lokaleVersuche = 0
+            k.lokaleKritik = null
+            bericht.lokaleHelfer ??= { recherchen: 0, schritte: 0, gescheitert: 0 }
+            bericht.lokaleHelfer.reparaturenGehalten =
+              (bericht.lokaleHelfer.reparaturenGehalten ?? 0) + 1
+            tickern(texte.ticker.lokaleReparaturGehalten)
+          }
           tickern(texte.ticker.pruefungBestanden)
           pruefkarteNachBestandenerPruefung(id, ergebnis.ergebnisText)
         } else {
           tickern(bestanden === false ? texte.ticker.pruefungNichtBestanden : texte.ticker.pruefungOhneErgebnis)
           const zielId = rueckfuehrungsZiel(workflow.bloecke, workflow.pfeile, id)
+
+          // Lokale Vorreparatur (BAUPLAN 20): Mechanische Beanstandungen
+          // repariert zuerst die lokale KI — erst wenn das Budget (2 je
+          // Rückführung) verbraucht ist, übernimmt der Motor-Bauer. Lokale
+          // Versuche verbrauchen KEINE regulären Reparatur-Runden.
+          const warLokaleNachpruefung = k.lokaleNachpruefung
+          k.lokaleNachpruefung = false
+          // Nach einem Rollback passt nur die Original-Kritik zum
+          // wiederhergestellten Stand — nicht die der Nachprüfung.
+          let eskalationsKritik = null
+          if (warLokaleNachpruefung) {
+            // Gescheiterte Nachprüfung: Stand zurückrollen, BEVOR es weitergeht
+            // — der Motor-Bauer soll reparieren, nicht erst das Gebastel der
+            // lokalen KI verstehen müssen. Der neueste Punkt ist garantiert
+            // „Stand vor lokaler Reparatur" (der Fehlschlag-Zweig legt keine an).
+            tickern(
+              texte.ticker.lokaleReparaturZurueckgerollt(k.lokaleVersuche, LOKALE_REPARATUR_VERSUCHE)
+            )
+            await aufLetztenPunktZuruecksetzen(projektPfad)
+            eskalationsKritik = k.lokaleKritik
+          }
+          const zielK = zielId ? knoten.get(zielId) : null
+          // Nur aktiv, wenn die lokale KI beim Laufstart bereitstand und das
+          // Häkchen am Ziel-Block (dessen Reparatur-Runde ersetzt würde) an ist.
+          const lokalErlaubt =
+            Boolean(lokaleHelfer) &&
+            zielK != null &&
+            zielK.eintrag.lokaleKi !== false &&
+            !lauf.sanft &&
+            !lauf.hart &&
+            !endZustand
+          if (lokalErlaubt && !warLokaleNachpruefung) {
+            // Frischer Fehlschlag: Opus sortiert vor — nur wenn ALLE
+            // Beanstandungen mechanisch markiert sind, lohnt die lokale Wette.
+            k.lokaleVersuche = 0
+            k.lokaleKritik =
+              beanstandungenEinstufen(ergebnis.ergebnisText) === 'mechanisch'
+                ? prueferKritik(ergebnis.ergebnisText)
+                : null
+            if (!k.lokaleKritik) tickern(texte.ticker.lokaleReparaturNichtMechanisch(zielK.def.name))
+          }
+          if (lokalErlaubt && k.lokaleKritik) {
+            while (
+              k.lokaleVersuche < LOKALE_REPARATUR_VERSUCHE &&
+              !lauf.sanft &&
+              !lauf.hart &&
+              !endZustand
+            ) {
+              k.lokaleVersuche++
+              // Sicherungspunkt vor jedem Versuch — ohne Rückroll-Punkt läuft
+              // kein lokaler Versuch.
+              const punkt = await sicherungspunktAnlegen(
+                projektPfad,
+                texte.sicherungen.beschriftungVorLokalerReparatur
+              )
+              if (!punkt.ok) break
+              tickern(
+                texte.ticker.lokaleReparaturStart(
+                  k.lokaleVersuche,
+                  LOKALE_REPARATUR_VERSUCHE,
+                  lokaleHelfer.modell
+                )
+              )
+              const reparatur = await lokalReparieren({
+                projektPfad,
+                auftrag: texte.agentenLokaleHelfer.reparaturAuftrag(k.lokaleKritik),
+                modell: lokaleHelfer.modell,
+                adresse: lokaleHelfer.adresse,
+                aufSchritt: (name, eingabe) =>
+                  tickern(
+                    name === 'ersetzen'
+                      ? texte.ticker.lokaleReparaturSchritt(eingabe?.pfad)
+                      : texte.ticker.lokaleHelferSchritt(name)
+                  )
+              })
+              bericht.lokaleHelfer ??= { recherchen: 0, schritte: 0, gescheitert: 0 }
+              bericht.lokaleHelfer.reparaturen = (bericht.lokaleHelfer.reparaturen ?? 0) + 1
+              bericht.lokaleHelfer.schritte += reparatur.schritte ?? 0
+              if (reparatur.ok && reparatur.ersetzungen > 0) {
+                // Die Nachprüfung des Prüfers ist der Schiedsrichter: nur die
+                // Beanstandungen, als frischer Agent in der Lauf-Session.
+                tickern(texte.ticker.lokaleReparaturFertig(reparatur.ersetzungen))
+                k.nachpruefung = k.lokaleKritik
+                k.lokaleNachpruefung = true
+                k.status = 'offen'
+                return
+              }
+              // Nichts ersetzt (oder Ollama gescheitert): nichts zurückzurollen
+              // und keine Nachprüfung nötig — der Versuch ist trotzdem verbraucht.
+              tickern(
+                reparatur.ok
+                  ? texte.ticker.lokaleReparaturNichtsErsetzt
+                  : texte.ticker.lokaleReparaturGescheitert(reparatur.fehler)
+              )
+            }
+            // Budget aufgebraucht: der Motor-Bauer übernimmt mit der
+            // Original-Kritik. Der Zähler gilt je Rückführung — bei der
+            // nächsten frischen Beanstandung darf die lokale KI wieder ran.
+            tickern(texte.ticker.lokaleReparaturOpusUebernimmt(zielK.def.name))
+            eskalationsKritik = eskalationsKritik ?? k.lokaleKritik
+            k.lokaleVersuche = 0
+            k.lokaleKritik = null
+          }
+
+          const kritik = eskalationsKritik ?? prueferKritik(ergebnis.ergebnisText)
           if (rundenUebrig > 0 && zielId && !lauf.sanft && !lauf.hart && !endZustand) {
             rundenUebrig--
             const genutzt = workflow.reparaturRunden - rundenUebrig
@@ -1286,10 +1427,10 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
               const nk = knoten.get(nochmalId)
               if (nk.status === 'fertig') nk.status = 'offen'
             }
-            knoten.get(zielId).rueckmeldung = prueferKritik(ergebnis.ergebnisText)
+            knoten.get(zielId).rueckmeldung = kritik
             // Der Prüfer selbst prüft in der nächsten Runde nur seine
             // Beanstandungen nach — keine erneute Vollprüfung.
-            k.nachpruefung = prueferKritik(ergebnis.ergebnisText)
+            k.nachpruefung = kritik
             const zielName = knoten.get(zielId).def.name
             tickern(texte.ticker.rueckfuehrung(zielName, genutzt, workflow.reparaturRunden))
             return

@@ -56,6 +56,10 @@ function bereinigen(roh) {
       blockId: def.id,
       feldWerte,
       zurueckZu: typeof eintrag?.zurueckZu === 'string' ? eintrag.zurueckZu : null,
+      // Häkchen je Block (BAUPLAN 20): „lokale KI erlaubt" — Standard an,
+      // erbt den globalen Schalter. Abgewählt wird es als echte Sperre
+      // durchgesetzt (lauf.js/Motor); nur die Abwahl ist eine Information.
+      lokaleKi: eintrag?.lokaleKi !== false,
       // Prüfkarten am Prüf-Block (BAUPLAN 18): ids der Karten, deren
       // aufbewahrte Prüfungen dieser Prüfer zusätzlich ausführt. Gelöschte
       // Karten werden erst beim Anzeigen/Laufstart still ignoriert — die

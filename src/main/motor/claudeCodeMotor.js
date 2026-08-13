@@ -231,10 +231,16 @@ function liegtImProjekt(datei, projektPfad) {
 // Mit Sperre „darf nur lesen": hartes Nein für alles außer Lese-Werkzeugen und
 // rein lesenden Befehlen. Die Prüfmappe dürfen nur Prüf-Blöcke verändern.
 // Exportiert, damit sich die Einstufung ohne laufenden Motor prüfen lässt.
-export function pruefeWerkzeug(name, eingabe, projektPfad, nurLesen, darfPruefen) {
+export function pruefeWerkzeug(name, eingabe, projektPfad, nurLesen, darfPruefen, lokaleKi = true) {
   if (name.startsWith(MENSCH_PRAEFIX)) return { erlaubt: true }
-  // Lokale Helfer-KI: rein lesend (im Code erzwungen) — immer erlaubt.
-  if (name.startsWith(HELFER_PRAEFIX)) return { erlaubt: true }
+  // Lokale Helfer-KI: rein lesend (im Code erzwungen) — erlaubt, außer das
+  // Häkchen „lokale KI erlaubt" ist am laufenden Block abgewählt (BAUPLAN 20):
+  // dann ist das eine echte Sperre, kein bloßer Hinweis.
+  if (name.startsWith(HELFER_PRAEFIX)) {
+    if (!lokaleKi)
+      return { gesperrt: texte.rechteFrage.lokaleKiGesperrtFuerAgent, tickerText: texte.ticker.lokaleKiGesperrt }
+    return { erlaubt: true }
+  }
   // Startanleitung setzen schreibt ins Projekt — validiert im Werkzeug selbst,
   // aber unter der Sperre „darf nur lesen" gesperrt.
   if (name.startsWith(START_PRAEFIX)) {
@@ -658,7 +664,8 @@ export function starteLaufMotor(optionen) {
       eingabeDaten,
       projektPfad,
       block?.nurLesen ?? true,
-      block?.darfPruefen ?? false
+      block?.darfPruefen ?? false,
+      block?.lokaleKi ?? true
     )
     if (urteil.gesperrt) return nein(urteil.gesperrt, urteil.tickerText)
     if (urteil.erlaubt)
@@ -768,7 +775,8 @@ export function starteLaufMotor(optionen) {
             eingabeDaten ?? {},
             projektPfad,
             block?.nurLesen ?? true,
-            block?.darfPruefen ?? false
+            block?.darfPruefen ?? false,
+            block?.lokaleKi ?? true
           )
           if (urteil.erlaubt) return { behavior: 'allow', updatedInput: eingabeDaten }
           if (urteil.gesperrt) {
@@ -1041,7 +1049,9 @@ export function starteLaufMotor(optionen) {
     // Führt genau einen Block in der Lauf-Session aus: Der Koordinator
     // bekommt den Dispatch, startet den Block-Agenten (der Hook setzt den
     // Auftrag ein), und das Fazit kommt als Ergebnis zurück.
-    blockAusfuehren({ auftrag, blockName, nurLesen = false, darfPruefen = false, uebertrag }) {
+    // lokaleKi (BAUPLAN 20): false = Häkchen „lokale KI erlaubt" ist an diesem
+    // Block abgewählt — lokal_recherchieren wird für seine Agenten hart abgelehnt.
+    blockAusfuehren({ auftrag, blockName, nurLesen = false, darfPruefen = false, lokaleKi = true, uebertrag }) {
       if (tot)
         return Promise.resolve({
           zustand: 'fehlgeschlagen',
@@ -1057,6 +1067,7 @@ export function starteLaufMotor(optionen) {
           blockName,
           nurLesen,
           darfPruefen,
+          lokaleKi,
           uebertrag: uebertrag ?? { aktiv: false, testModus: false, anweisung: '' },
           aufloesen,
           blockTaskIds: new Set(),
