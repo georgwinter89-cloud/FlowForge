@@ -800,6 +800,16 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
               ? { ...e, text: `${holeName()}: ${e.text}` }
               : e
           if (daten.art === 'ticker') bericht.ticker.push({ zeit: jetztIso(), text: daten.text })
+          // Lokale Helfer-KI: Recherchen und Schritte für den Laufbericht
+          // zählen (Wunsch Georg, 13.08.2026) — der Effekt steht damit
+          // schwarz auf weiß im Bericht statt nur verstreut im Ticker.
+          if (daten.art === 'lokale-helfer') {
+            bericht.lokaleHelfer ??= { recherchen: 0, schritte: 0, gescheitert: 0 }
+            bericht.lokaleHelfer.recherchen++
+            bericht.lokaleHelfer.schritte += daten.schritte ?? 0
+            if (daten.gescheitert) bericht.lokaleHelfer.gescheitert++
+            return
+          }
           // Letzter Kontext-Stand am Lauf gespiegelt — der Kontext-Balken der
           // Projektübersicht braucht ihn außerhalb der Lauf-Ansicht.
           if (daten.art === 'verbrauch' && daten.verbrauch?.kontextProzentBis != null)

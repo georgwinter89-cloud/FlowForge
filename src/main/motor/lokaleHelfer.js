@@ -242,6 +242,11 @@ export async function lokalRecherchieren({ projektPfad, auftrag, modell, adresse
   ]
 
   let schritte = 0
+  // Denk-Modelle (z.B. gpt-oss) schreiben manchmal alles ins Denkfeld und
+  // lassen die eigentliche Antwort leer (real beobachtet am 13.08.2026:
+  // „kein Fazit geliefert" gleich beim ersten Einsatz). Einmal nachhaken
+  // statt aufgeben — erst danach ist es ehrlich ein Fehlschlag.
+  let nachgehakt = false
   for (let runde = 0; runde < MAX_RUNDEN; runde++) {
     let antwort
     try {
@@ -272,8 +277,20 @@ export async function lokalRecherchieren({ projektPfad, auftrag, modell, adresse
     const aufrufe = Array.isArray(nachricht.tool_calls) ? nachricht.tool_calls : []
     if (!aufrufe.length) {
       const fazit = String(nachricht.content ?? '').trim()
-      if (!fazit) return { ok: false, fehler: 'Die lokale KI hat kein Fazit geliefert.', schritte }
-      return { ok: true, fazit, schritte }
+      if (fazit) return { ok: true, fazit, schritte }
+      if (!nachgehakt) {
+        nachgehakt = true
+        nachrichten.push(nachricht)
+        nachrichten.push({
+          role: 'user',
+          content:
+            'Deine Antwort war leer. Gib jetzt dein Fazit als normale Antwort aus — ' +
+            'kompakt, auf Deutsch, mit Fundorten aus den Werkzeug-Ergebnissen. ' +
+            'Kein Werkzeugaufruf mehr.'
+        })
+        continue
+      }
+      return { ok: false, fehler: 'Die lokale KI hat kein Fazit geliefert.', schritte }
     }
 
     nachrichten.push(nachricht)

@@ -900,6 +900,11 @@ export const texte = {
       `Der Kontext von „${block}" war voll, aber die Übergabe ging verloren — die frische Session hat den Stand selbst aus Projektordner und Karten gelesen.`,
     fortgesetztHinweis: 'Dieser Lauf wurde nach einer Unterbrechung am letzten Sicherungspunkt fortgesetzt.',
     blockTokens: (tokens) => `Verbrauch: ${tokens.toLocaleString('de-DE')} Tokens`,
+    // Lokale Helfer-KI (Wunsch Georg, 13.08.2026): ihr Anteil im Bericht.
+    lokaleHelferZeile: (l) =>
+      `Lokale Helfer-KI: ${l.recherchen} ${l.recherchen === 1 ? 'Recherche' : 'Recherchen'} · ` +
+      `${l.schritte} ${l.schritte === 1 ? 'Schritt' : 'Schritte'} übernommen — ohne Kontingent` +
+      (l.gescheitert > 0 ? ` (${l.gescheitert} davon gescheitert)` : ''),
     // Token-Aufschlüsselung & theoretische API-Kosten (Wunsch Georg, 13.08.2026).
     aufschluesselungZeile: (a) =>
       `Eingabe ${a.eingabe.toLocaleString('de-DE')} · Ausgabe ${a.ausgabe.toLocaleString('de-DE')} · ` +

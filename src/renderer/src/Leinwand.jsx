@@ -306,6 +306,11 @@ function Laufbericht({ bericht }) {
               {bericht.modus === 'abo' ? tb.apiKostenAboZusatz : ''}
             </p>
           )}
+          {/* Lokale Helfer-KI (Wunsch Georg, 13.08.2026): ihr Anteil steht
+              schwarz auf weiß im Bericht — Recherchen, Schritte, Fehlschläge. */}
+          {bericht.lokaleHelfer && (
+            <p className="feld-hinweis">{tb.lokaleHelferZeile(bericht.lokaleHelfer)}</p>
+          )}
           {(bericht.blockErgebnisse ?? []).length > 0 && (
             <div>
               <p className="bericht-abschnitt">{tb.blockErgebnisseLabel}</p>

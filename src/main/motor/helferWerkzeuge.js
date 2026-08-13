@@ -30,6 +30,13 @@ export async function helferWerkzeugServer({ projektPfad, modell, adresse, aufEr
         aufSchritt: (name) =>
           aufEreignis({ art: 'ticker', text: texte.ticker.lokaleHelferSchritt(name) })
       })
+      // Zähl-Ereignis für den Laufbericht (Wunsch Georg, 13.08.2026): So steht
+      // der Anteil der lokalen KI schwarz auf weiß im Bericht.
+      aufEreignis({
+        art: 'lokale-helfer',
+        schritte: ergebnis.schritte ?? 0,
+        gescheitert: !ergebnis.ok
+      })
       if (!ergebnis.ok) {
         aufEreignis({ art: 'ticker', text: texte.ticker.lokaleHelferGescheitert(ergebnis.fehler) })
         return {

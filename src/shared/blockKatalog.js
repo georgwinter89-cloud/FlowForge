@@ -195,7 +195,8 @@ export const BLOCK_KATALOG = [
       'auflisten, suchen, Dateien ansehen) laufen durch; Programme oder Tests auszuführen ist ' +
       'für diesen Block gesperrt — versuche es gar nicht erst. Antworte auf Deutsch. ' +
       'Halte dein eigenes Arbeitsgedächtnis schlank: Delegiere das Durchsuchen und Einlesen ' +
-      'an Unteraufgaben (Agent-Werkzeug) — aber SPARSAM: höchstens ZWEI Unteraufgaben in ' +
+      'an Unteraufgaben (bevorzugt lokal_recherchieren, falls es bereitsteht — sonst das ' +
+      'Agent-Werkzeug) — aber SPARSAM: höchstens ZWEI Unteraufgaben in ' +
       'diesem ganzen Auftrag, jede mit einem eng umrissenen Suchauftrag. Weder du noch die ' +
       'Helfer lesen das ganze Projekt ein: Gelesen werden die im Arbeitspaket genannten ' +
       'Stellen und ihre direkte Nachbarschaft (was sie aufruft, was sie verwenden) — mehr ' +
@@ -240,7 +241,8 @@ export const BLOCK_KATALOG = [
       'Ist das Feld leer, beschreiben die offenen Aufgaben-Karten den Fehler — wähle die ' +
       'passende und benenne sie. ' +
       'Halte dein eigenes Arbeitsgedächtnis schlank: Delegiere breites Suchen und Einlesen ' +
-      'an Unteraufgaben (Agent-Werkzeug) — der Wegwerf-Helfer wühlt in seinem eigenen Kontext ' +
+      'an Unteraufgaben (bevorzugt lokal_recherchieren, falls es bereitsteht — sonst das ' +
+      'Agent-Werkzeug) — der Wegwerf-Helfer wühlt in seinem eigenen Kontext ' +
       'und liefert dir nur sein kompaktes Fazit mit Fundorten zurück. Die entscheidenden ' +
       'Stellen für deinen Beleg liest du selbst nach. ' +
       'Verfolge den Fehler im Code: Lies die beteiligten Stellen, verfolge den Weg der Daten ' +
@@ -278,7 +280,9 @@ export const BLOCK_KATALOG = [
       'oder begründe, warum er dieses Paket nicht trifft. ' +
       'ARBEITSGEDÄCHTNIS-REGEL (dein Kontext ist der teuerste Teil des Laufs): Musst du mehr ' +
       'als zwei Dateien einlesen oder im Projekt suchen, erledigt das EINE Unteraufgabe ' +
-      '(Agent-Werkzeug) mit eng umrissenem Auftrag — der Helfer wühlt in seinem eigenen ' +
+      '(bevorzugt das Werkzeug lokal_recherchieren, falls es bereitsteht — es kostet kein ' +
+      'Kontingent; sonst das Agent-Werkzeug) mit eng umrissenem Auftrag — der Helfer wühlt ' +
+      'in seinem eigenen ' +
       'Kontext und liefert dir nur ein kompaktes Fazit mit Fundorten. Selbst öffnest du nur ' +
       'die Stellen, die du in diesem Paket wirklich änderst, keine Datei doppelt und nichts ' +
       'auf Vorrat — was du schon weißt, liest du nicht erneut. ' +
@@ -328,7 +332,8 @@ export const BLOCK_KATALOG = [
       'Alttest-Ballast. Bilddateien sind in der Mappe verboten (hartes Nein). ' +
       'Verlasse dich nicht auf den Umsetzungsbericht: Prüfe selbst nach — aber lies nicht ' +
       'das ganze Projekt. ARBEITSGEDÄCHTNIS-REGEL (dein Kontext ist der teuerste Teil des ' +
-      'Laufs): Starte als ersten Schritt EINE Unteraufgabe (Agent-Werkzeug), die die ' +
+      'Laufs): Starte als ersten Schritt EINE Unteraufgabe (bevorzugt das Werkzeug ' +
+      'lokal_recherchieren, falls es bereitsteht — sonst das Agent-Werkzeug), die die ' +
       'Umsetzung an den im Arbeitspaket genannten Stellen einliest und dir je ' +
       'Fertig-Kriterium mit Fundort meldet, wo und wie es umgesetzt ist — der Helfer wühlt ' +
       'in seinem eigenen Kontext, du bekommst nur sein kompaktes Fazit. Selbst liest du nur ' +
@@ -380,7 +385,8 @@ export const BLOCK_KATALOG = [
       'Die Prüfmappe pruefung/ ist beim Laufstart geleert — alte Prüfungen gibt es nicht; ' +
       'du schreibst dir deine Prüfungen frisch, statt alte abzuspielen. ' +
       'Verschaffe dir zuerst einen Überblick — halte dein eigenes Arbeitsgedächtnis schlank ' +
-      'und delegiere Suchen und Einlesen an Unteraufgaben (Agent-Werkzeug), die dir nur ihr ' +
+      'und delegiere Suchen und Einlesen an Unteraufgaben (bevorzugt lokal_recherchieren, ' +
+      'falls es bereitsteht — sonst das Agent-Werkzeug), die dir nur ihr ' +
       'kompaktes Fazit liefern: Was verspricht die Status-Karte, was legen die ' +
       'Entscheidungs-Karten fest, was sagt die Startanleitung? ' +
       'Schreibe dann wenige, robuste Prüfungen für die Kernversprechen des Projekts in den ' +
