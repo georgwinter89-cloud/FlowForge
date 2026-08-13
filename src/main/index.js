@@ -7,6 +7,7 @@ import {
   projektOeffnen,
   projektVergessen,
   kontingentVerhaltenSetzen,
+  pruefmappeUebersicht,
   karteAnlegen,
   karteAendern,
   karteErledigtSetzen,
@@ -134,6 +135,8 @@ function registriereIpc() {
   )
   ipcMain.handle('lauf-zustand', (_e, pfad) => laufZustand(pfad))
   ipcMain.handle('laufberichte-laden', (_e, pfad) => laufberichteLaden(pfad))
+  // Prüfmappen-Ansicht an der Prüferkarte (BAUPLAN 17) — nur zum Nachlesen.
+  ipcMain.handle('pruefmappe-lesen', (_e, pfad) => pruefmappeUebersicht(pfad))
   // Zustände für die Kacheln der Projektübersicht (SPEC §9, BAUPLAN 15).
   ipcMain.handle('projekt-zustaende', (_e, pfade) => projektZustaende(pfade))
 

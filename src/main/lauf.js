@@ -371,6 +371,26 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
   aktiveLaeufe.set(projektPfad, lauf)
   laeufeMelden()
 
+  // Lauf-Mappe statt Projekt-Mappe (Entscheidung Georg, 13.08.2026, BAUPLAN 17):
+  // Die Prüfmappe pruefung/ gehört zum Lauf — ein neuer Lauf startet mit leerer
+  // Mappe, der Prüfer baut seine Prüfungen frisch fürs aktuelle Paket. Geleert
+  // wird VOR dem Sicherungspunkt „Stand vor Lauf", damit auch „Sofort abbrechen"
+  // die alten Prüfungen nicht zurückholt. Die Wiederaufnahme eines
+  // unterbrochenen Laufs leert nicht — dessen Prüfungen gehören ja zu ihm.
+  let pruefmappeGeleert = false
+  if (!fortsetzung) {
+    try {
+      const mappe = path.join(projektPfad, 'pruefung')
+      if (fs.existsSync(mappe)) {
+        fs.rmSync(mappe, { recursive: true, force: true })
+        pruefmappeGeleert = true
+      }
+    } catch {
+      // Eine klemmende Datei darf den Start nicht verhindern — der Prüfer
+      // arbeitet dann eben mit dem, was liegen blieb.
+    }
+  }
+
   // Sicherheitsnetz vor dem Lauf: der Stand von jetzt ist immer wiederholbar —
   // und die Folgen-Frage kann genau hierauf zurücksetzen.
   const namen = kette.map((b) => blockDefinition(b.blockId).name)
@@ -516,6 +536,7 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
   // Lauf-Start sofort melden — noch vor der ersten Ticker-Zeile, damit die
   // Ansicht die Anzeige des vorigen Laufs sauber leeren kann.
   senden({ art: 'zustand', zustand: 'laeuft' })
+  if (pruefmappeGeleert) tickern(texte.ticker.pruefmappeGeleert)
   if (ausWarteschlange) tickern(texte.ticker.ausWarteschlangeGestartet)
   // Sichtbarer Hinweis (SPEC §5, BAUPLAN 12): parallele Läufe vervielfachen den
   // Verbrauch — ehrlich im Ticker und damit auch im Laufbericht.
@@ -773,9 +794,12 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           // Bei einer fortgesetzten Session steckt der alte Kontext schon in der
           // Messung — gezählt wird ehrlich nur der Zuwachs gegenüber dem alten
           // Session-Ende, sonst sähe die billige Reparatur-Runde teuer aus.
-          const zaehlTokens = fortsetzen
-            ? Math.max(0, (ergebnis.verbrauch.tokens ?? 0) - k.sessionTokens)
-            : ergebnis.verbrauch.tokens ?? 0
+          // Unteraufgaben (BAUPLAN 17) zählen ehrlich mit — sie sind Verbrauch,
+          // auch wenn sie den Füllstand der Hauptsession nicht belasten.
+          const zaehlTokens =
+            (fortsetzen
+              ? Math.max(0, (ergebnis.verbrauch.tokens ?? 0) - k.sessionTokens)
+              : ergebnis.verbrauch.tokens ?? 0) + (ergebnis.verbrauch.unterTokens ?? 0)
           gesamtVerbrauch.tokens += zaehlTokens
           blockTokens += zaehlTokens
           if (ergebnis.verbrauch.kostenUsd != null)

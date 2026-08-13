@@ -169,27 +169,50 @@ eine Angriffsliste wird mitgereicht und muss eingearbeitet werden, wenn ein
 Block davor eine liefert — so kommt „Bug jagen" ohne Angreifer aus.
 
 **Prüfer:** prüft **nur das aktuelle Arbeitspaket** gegen dessen Fertig-Kriterien
-(Entscheidung Georg, 12.08.2026) — nicht das ganze Projekt; die Prüfmappe früherer
-Läufe bleibt liegen (dafür: Gesamtprüfung). Schreibt wenige, robuste Tests in den
-festen Ordner **`pruefung/`**, führt sie aus und liefert einen Rot-vor-Grün-Beleg:
+(Entscheidung Georg, 12.08.2026) — nicht das ganze Projekt. Schreibt wenige, robuste
+Tests frisch fürs aktuelle Paket in den festen Ordner **`pruefung/`** (die Mappe ist
+beim Laufstart geleert, §unten), führt sie aus und liefert einen Rot-vor-Grün-Beleg:
 mindestens ein Test wird einmal mit absichtlich verfälschter Erwartung ausgeführt
 (Rot) und danach unverändert echt (Grün) — ein Test, der nie rot war, beweist nichts.
 Überstrenge Fallen (pixelgenaue Vergleiche, Wortverbote, Datei-Inventuren) sind per
-Auftrag untersagt; veraltete eigene Prüfungen passt er an, statt sie zu stapeln.
+Auftrag untersagt.
 In einer **Reparatur-Runde prüft er nur seine Beanstandungen der letzten Runde
 nach** — keine erneute Vollprüfung. Ehrlichkeits-Notiz: „Prüfer ≠ Bauer" heißt
 technisch „frische Session ohne das Arbeitswissen des Bauers" — jeder Block läuft
 ohnehin als frische Motor-Session; es ist kein anderes Gehirn. Prüfer-Blöcke melden
 ihr Urteil als letzte Zeile ihres Abschlusstexts („PRUEFUNG: BESTANDEN/FEHLGESCHLAGEN").
 
-**Gesamtprüfung** (seit 12.08.2026): eigener Prüf-Block für zwischendurch — lässt
-bewusst die **gesamte** Prüfmappe laufen und berichtet, was hält; veraltete
-Prüfungen darf er an die beschlossenen Entscheidungen anpassen. Gedacht als
-manueller Ein-Block-Lauf, nicht als Teil jeder Kette.
+**Gesamtprüfung** (seit 12.08.2026, umgebaut 13.08.2026): eigener Prüf-Block für
+zwischendurch — prüft mit **frisch geschriebenen** Prüfungen, ob das Projekt als
+Ganzes hält (Maßstab: Status-Karte, Entscheidungs-Karten, Startanleitung), statt
+eine gewachsene Projekt-Mappe abzuspielen. Gedacht als manueller Ein-Block-Lauf,
+nicht als Teil jeder Kette.
+
+**Kontext-Sparsamkeit** (Entscheidung Georg, 13.08.2026): Erkundungslastige Blöcke
+(Angreifer, Diagnose, Prüfer, Bauer) delegieren Suchen und Einlesen per Auftrag an
+**Unteraufgaben** — der Wegwerf-Helfer wühlt in seinem eigenen Kontext und liefert
+nur sein kompaktes Fazit zurück, statt dass der Block alles Gelesene im
+Arbeitsgedächtnis anhäuft. Unteraufgaben laufen unter denselben Rechten und Sperren
+wie ihr Block (auch „darf nur lesen" — deshalb ist das Unteraufgaben-Werkzeug dort
+erlaubt); ihre Zeilen sind im Ticker als „Unteraufgabe" gekennzeichnet. Ihr
+Verbrauch zählt ehrlich zum Laufbericht dazu, belastet aber nicht den
+Kontext-Füllstand der Hauptsession, der den automatischen Übertrag steuert.
 
 **Prüfmappe & Arbeitsablage:** Der Ordner `pruefung/` gehört den Prüf-Blöcken —
 für alle anderen Blöcke ist er schreibgesperrt (hartes Nein; der Bauer darf die
 Prüfmappe höchstens einmal ganz am Ende laufen lassen, nicht als Dauerschleife).
+**Lauf-Mappe statt Projekt-Mappe** (Entscheidung Georg, 13.08.2026): Die Prüfmappe
+gehört zum Lauf, nicht zum Projekt — beim Start eines neuen Laufs leert FlowForge
+sie automatisch (vor dem Sicherungspunkt „Stand vor Lauf"; die Wiederaufnahme eines
+unterbrochenen Laufs leert nicht). Wuchern ist damit strukturell unmöglich;
+gezielte Wiederholungsprüfung alter Features kommt mit den Prüfkarten (Bauschritt 18).
+**Bilddateien sind in der Prüfmappe verboten** (hartes Nein, auch für Prüf-Blöcke).
+An jeder Prüf-Blockkarte auf der Leinwand hängt ein aufklappbarer Bereich
+**„Prüfmappe"** (Wunsch Georg, 13.08.2026): je Prüfdatei Name, Größe und
+Zuletzt-geändert, in Alltagssprache — nur zum Nachlesen; gezählt werden
+Prüf-Dateien, nicht einzelne Testfälle. Alle Prüf-Blockkarten zeigen dieselbe
+Mappe; ohne Prüf-Block auf der Leinwand gibt es keinen Blick hinein (bewusst
+akzeptiert — die Bau-Vorlagen enthalten immer einen Prüfer).
 Der Ordner `arbeitsablage/` ist die Wegwerf-Fläche aller Agenten für Hilfsskripte
 und Probeläufe: von Sicherungspunkten ausgenommen, von FlowForge am Lauf-Ende
 automatisch geleert.

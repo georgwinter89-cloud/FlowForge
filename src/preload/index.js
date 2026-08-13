@@ -42,6 +42,7 @@ contextBridge.exposeInMainWorld('flowforge', {
     ipcRenderer.invoke('lauf-mensch-antworten', { frageId, antwort }),
   laufZustand: (pfad) => ipcRenderer.invoke('lauf-zustand', pfad),
   laufberichteLaden: (pfad) => ipcRenderer.invoke('laufberichte-laden', pfad),
+  pruefmappeLesen: (pfad) => ipcRenderer.invoke('pruefmappe-lesen', pfad),
   startanleitungLaden: (pfad) => ipcRenderer.invoke('startanleitung-laden', pfad),
   appStarten: (pfad) => ipcRenderer.invoke('app-starten', pfad),
   sicherungspunkteLaden: (pfad) => ipcRenderer.invoke('sicherungspunkte-laden', pfad),

@@ -237,3 +237,42 @@ export function karteLoeschen(projektPfad, id) {
     karten.splice(stelle, 1)
   })
 }
+
+// Prüfmappen-Ansicht (BAUPLAN 17): Was hat der letzte Lauf in pruefung/
+// hinterlassen? Je Prüfdatei Name, Größe und Zuletzt-geändert — nur zum
+// Nachlesen an der Prüferkarte; bearbeiten darf die Mappe weiterhin nur der
+// Prüfer. Gezählt werden Prüf-Dateien, nicht einzelne Testfälle darin.
+export function pruefmappeUebersicht(projektPfad) {
+  if (!istBekanntesProjekt(projektPfad) || !fs.existsSync(projektPfad))
+    return { ok: false, fehler: texte.fehler.projektNichtGefunden }
+  const mappe = path.join(projektPfad, 'pruefung')
+  const dateien = []
+  function sammle(ordner) {
+    let eintraege = []
+    try {
+      eintraege = fs.readdirSync(ordner, { withFileTypes: true })
+    } catch {
+      return
+    }
+    for (const eintrag of eintraege) {
+      const voll = path.join(ordner, eintrag.name)
+      if (eintrag.isDirectory()) {
+        sammle(voll)
+        continue
+      }
+      try {
+        const info = fs.statSync(voll)
+        dateien.push({
+          name: path.relative(mappe, voll).replaceAll(path.sep, '/'),
+          bytes: info.size,
+          geaendertAm: info.mtime.toISOString()
+        })
+      } catch {
+        // Eine gerade verschwundene Datei blockiert nicht die Liste.
+      }
+    }
+  }
+  sammle(mappe)
+  dateien.sort((a, b) => (a.name < b.name ? -1 : 1))
+  return { ok: true, dateien }
+}

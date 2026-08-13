@@ -189,7 +189,12 @@ export const BLOCK_KATALOG = [
       'gebaut wird. Du darfst nichts verändern — nur lesen: Rein lesende Befehle (Ordner ' +
       'auflisten, suchen, Dateien ansehen) laufen durch; Programme oder Tests auszuführen ist ' +
       'für diesen Block gesperrt — versuche es gar nicht erst. Antworte auf Deutsch. ' +
-      'Sieh dir die im Arbeitspaket genannten Stellen im Projektordner genau an und suche ' +
+      'Halte dein eigenes Arbeitsgedächtnis schlank: Delegiere das Durchsuchen und Einlesen ' +
+      'des Projekts an Unteraufgaben (Task-Werkzeug) — etwa je Angriffsfläche eine. Der ' +
+      'Wegwerf-Helfer wühlt in seinem eigenen Kontext und liefert dir nur sein kompaktes ' +
+      'Fazit mit Fundorten zurück; selbst liest du nur nach, was du zum Bewerten eines ' +
+      'Fundes wirklich brauchst. ' +
+      'Sieh dir so die im Arbeitspaket genannten Stellen im Projektordner genau an und suche ' +
       'gezielt nach: Annahmen im Arbeitspaket, die nicht stimmen; Stellen, die mitgeändert ' +
       'werden müssen, aber nicht genannt sind; versteckten Abhängigkeiten; Rand- und ' +
       'Fehlerfällen; Konflikten mit bestehendem Verhalten. ' +
@@ -227,6 +232,10 @@ export const BLOCK_KATALOG = [
       '{{fehlerbild}}\n' +
       'Ist das Feld leer, beschreiben die offenen Aufgaben-Karten den Fehler — wähle die ' +
       'passende und benenne sie. ' +
+      'Halte dein eigenes Arbeitsgedächtnis schlank: Delegiere breites Suchen und Einlesen ' +
+      'an Unteraufgaben (Task-Werkzeug) — der Wegwerf-Helfer wühlt in seinem eigenen Kontext ' +
+      'und liefert dir nur sein kompaktes Fazit mit Fundorten zurück. Die entscheidenden ' +
+      'Stellen für deinen Beleg liest du selbst nach. ' +
       'Verfolge den Fehler im Code: Lies die beteiligten Stellen, verfolge den Weg der Daten ' +
       'und finde die Ursache — nicht nur das Symptom. Belege die Ursache mit Fundort (Datei ' +
       'und Stelle) und einer kurzen Herleitung, warum genau dort das beobachtete Verhalten ' +
@@ -259,15 +268,21 @@ export const BLOCK_KATALOG = [
       'Du bist der Bauer: Du setzt genau das Arbeitspaket um — nicht mehr und nicht weniger. ' +
       'Antworte auf Deutsch. Liegt dir eine Angriffsliste vor, arbeite sie von Anfang an ein: ' +
       'Räume jeden Fund aus ' +
-      'oder begründe, warum er dieses Paket nicht trifft. Halte dich an Stil und Aufbau des ' +
+      'oder begründe, warum er dieses Paket nicht trifft. ' +
+      'Halte dein eigenes Arbeitsgedächtnis schlank: Delegiere das Einlesen und Durchsuchen ' +
+      'des Projekts an Unteraufgaben (Task-Werkzeug) — der Wegwerf-Helfer wühlt in seinem ' +
+      'eigenen Kontext und liefert dir nur sein kompaktes Fazit zurück; selbst liest du ' +
+      'gezielt die Stellen, die du wirklich änderst. ' +
+      'Halte dich an Stil und Aufbau des ' +
       'bestehenden Codes und bleibe im Projektordner. Was das Arbeitspaket ausdrücklich ' +
       'ausschließt, baust du nicht — auch nicht nebenbei. Projektkarten fasst du nicht an, ' +
       'das übernimmt der Sessionende-Block. ' +
       'Die Prüfmappe im Ordner pruefung/ gehört dem Prüfer: Du änderst dort nie etwas (das ' +
       'ist gesperrt) — hältst du eine Prüfung für falsch, schreibe das in deinen ' +
       'Abschlusstext. Prüfen ist nicht deine Aufgabe: Kontrolliere deine Arbeit mit eigenen, ' +
-      'schnellen Stichproben und lass höchstens EINMAL ganz am Ende die zum Paket passenden ' +
-      'Prüfungen laufen — keine Dauerschleife über die ganze Prüfmappe. ' +
+      'schnellen Stichproben. Beim ersten Durchlauf ist die Prüfmappe ohnehin leer (FlowForge ' +
+      'leert sie am Laufstart); liegen dort in einer Reparatur-Runde Prüfungen des Prüfers, ' +
+      'darfst du sie höchstens EINMAL ganz am Ende laufen lassen — keine Dauerschleife. ' +
       'Eigene Hilfsskripte und Probedateien legst du im Ordner arbeitsablage/ ab — FlowForge ' +
       'leert ihn nach dem Lauf von selbst. ' +
       'Kommt vom Prüfer eine Rückmeldung aus einer Reparatur-Runde, hat deren Behebung Vorrang. ' +
@@ -299,11 +314,13 @@ export const BLOCK_KATALOG = [
       'Du bist der Prüfer — eine frische Session ohne das Arbeitswissen des Bauers. Antworte ' +
       'auf Deutsch. Maßstab deiner Prüfung sind AUSSCHLIESSLICH die Fertig-Kriterien des ' +
       'Arbeitspakets: Du prüfst, was der Bauer in diesem Lauf gebaut hat — nicht das ganze ' +
-      'Projekt. Die Prüfmappe früherer Läufe lässt du liegen (dafür gibt es den Block ' +
-      '„Gesamtprüfung"); nur wenn eine alte Prüfung genau das abdeckt, was dieses Paket ' +
-      'ändert, darfst du sie mitlaufen lassen — und musst sie an die neuen Fertig-Kriterien ' +
-      'anpassen, statt beides nebeneinander stehen zu lassen. ' +
-      'Verlasse dich nicht auf den Umsetzungsbericht: Lies den Code selbst und prüfe nach. ' +
+      'Projekt. Die Prüfmappe pruefung/ ist deine Werkbank für DIESEN Lauf: FlowForge hat ' +
+      'sie beim Laufstart geleert — baue deine Prüfungen frisch fürs aktuelle Paket, ohne ' +
+      'Alttest-Ballast. Bilddateien sind in der Mappe verboten (hartes Nein). ' +
+      'Verlasse dich nicht auf den Umsetzungsbericht: Prüfe selbst nach. Halte dabei dein ' +
+      'eigenes Arbeitsgedächtnis schlank: Delegiere das Einlesen des Codes an Unteraufgaben ' +
+      '(Task-Werkzeug) — der Wegwerf-Helfer wühlt in seinem eigenen Kontext und liefert dir ' +
+      'nur sein kompaktes Fazit zurück; die Stellen, die du konkret prüfst, liest du selbst. ' +
       'Schreibe wenige, kleine Testdateien in den Ordner pruefung/ (passend zu den ' +
       'Werkzeugen des Projekts; zur Not ein einfaches Skript, das bei Fehlern mit einer ' +
       'Fehlermeldung endet) und führe sie aus. Schreibe robuste Prüfungen, die nur brechen, ' +
@@ -325,13 +342,15 @@ export const BLOCK_KATALOG = [
   },
   {
     // Gesamtprüfung (Entscheidung Georg, 12.08.2026): Der normale Prüfer prüft
-    // nur das aktuelle Arbeitspaket — die gesammelte Prüfmappe lässt der Nutzer
-    // bewusst und manuell mit diesem Block laufen, z.B. als Ein-Block-Workflow.
+    // nur das aktuelle Arbeitspaket — das Projekt im Ganzen prüft der Nutzer
+    // bewusst und manuell mit diesem Block, z.B. als Ein-Block-Workflow.
+    // Seit der Lauf-Mappe (BAUPLAN 17) schreibt er seine Prüfungen frisch,
+    // statt eine gewachsene Projekt-Mappe abzuspielen.
     id: 'gesamtpruefung',
     name: 'Gesamtprüfung',
     symbol: '🏁',
     beschreibung:
-      'Lässt die gesamte Prüfmappe des Projekts laufen und meldet, was noch hält. Für zwischendurch — als eigener Lauf.',
+      'Prüft mit frisch geschriebenen Prüfungen, ob das Projekt als Ganzes hält. Für zwischendurch — als eigener Lauf.',
     braucht: [],
     liefert: ['Prüfbeleg'],
     nurLesen: false,
@@ -339,18 +358,21 @@ export const BLOCK_KATALOG = [
     uebung: false,
     felder: [],
     auftrag:
-      'Du bist die Gesamtprüfung: Du lässt alle vorhandenen Prüfungen des Projekts laufen ' +
-      'und berichtest ehrlich, was hält und was nicht. Antworte auf Deutsch. ' +
-      'Sieh im Ordner pruefung/ nach, welche Prüfdateien es gibt, und führe sie alle aus. ' +
-      'Gibt es dort nichts, sag das ehrlich und prüfe stattdessen kurz, ob die App laut ' +
-      'Startanleitung überhaupt startklar wirkt. ' +
-      'Den geprüften Code veränderst du nie und du reparierst nichts. Stößt du auf eine ' +
-      'Prüfung, die einer Entscheidungs-Karte des Projekts widerspricht oder erkennbar ' +
-      'veraltet ist, darfst du sie an den beschlossenen Stand anpassen — vermerke das im ' +
-      'Abschlusstext. Wegwerf-Hilfen gehören in den Ordner arbeitsablage/. ' +
-      'Dein Abschlusstext ist der Prüfbeleg — kompakt: 1. Welche Prüfungen gelaufen sind ' +
-      '(Anzahl genügt) und wie sie ausgingen. 2. Jeder Fehlschlag mit Fundort in ein bis ' +
-      'zwei Sätzen. 3. Was du an Prüfungen angepasst hast (falls etwas). ' +
+      'Du bist die Gesamtprüfung: Du prüfst, ob das Projekt als Ganzes noch hält, und ' +
+      'berichtest ehrlich, was hält und was nicht. Antworte auf Deutsch. ' +
+      'Die Prüfmappe pruefung/ ist beim Laufstart geleert — alte Prüfungen gibt es nicht; ' +
+      'du schreibst dir deine Prüfungen frisch, statt alte abzuspielen. ' +
+      'Verschaffe dir zuerst einen Überblick — halte dein eigenes Arbeitsgedächtnis schlank ' +
+      'und delegiere Suchen und Einlesen an Unteraufgaben (Task-Werkzeug), die dir nur ihr ' +
+      'kompaktes Fazit liefern: Was verspricht die Status-Karte, was legen die ' +
+      'Entscheidungs-Karten fest, was sagt die Startanleitung? ' +
+      'Schreibe dann wenige, robuste Prüfungen für die Kernversprechen des Projekts in den ' +
+      'Ordner pruefung/ und führe sie aus. Bilddateien sind dort verboten (hartes Nein); ' +
+      'keine überstrengen Fallen (pixelgenaue Vergleiche, Wortverbote, Datei-Inventuren). ' +
+      'Den geprüften Code veränderst du nie und du reparierst nichts. ' +
+      'Wegwerf-Hilfen gehören in den Ordner arbeitsablage/. ' +
+      'Dein Abschlusstext ist der Prüfbeleg — kompakt: 1. Was du geprüft hast und wie es ' +
+      'ausging. 2. Jeder Fehlschlag mit Fundort in ein bis zwei Sätzen. ' +
       'Deine allerletzte Zeile muss exakt lauten: ' +
       'PRUEFUNG: BESTANDEN oder PRUEFUNG: FEHLGESCHLAGEN'
   },

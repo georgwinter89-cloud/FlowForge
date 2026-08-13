@@ -40,12 +40,15 @@ const OHNE_RUECKFRAGE = new Set([
 const SCHREIB_WERKZEUGE = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit'])
 
 // Sperre „darf nur lesen" (SPEC §4.2): nur diese Werkzeuge sind dann erlaubt.
-// Bewusst ohne Task (Unteraufgaben könnten indirekt schreiben) und ohne Bash.
+// Task ist dabei (BAUPLAN 17): Unteraufgaben halten den Kontext schlank, und
+// ihre eigenen Werkzeugaufrufe laufen durch dieselbe Rechte-Prüfung — schreiben
+// kann eine Unteraufgabe unter der Sperre also genauso wenig. Bewusst ohne Bash.
 const NUR_LESEN_ERLAUBT = new Set([
   'Read',
   'Glob',
   'Grep',
   'TodoWrite',
+  'Task',
   'NotebookRead',
   'BashOutput',
   'KillShell',
@@ -169,6 +172,12 @@ function liegtInPruefmappe(datei, projektPfad) {
   return relativ === PRUEF_ORDNER || relativ.startsWith(PRUEF_ORDNER + path.sep)
 }
 
+// Bilddateien sind in der Prüfmappe verboten (BAUPLAN 17, hartes Nein — auch
+// für Prüf-Blöcke): Prüfungen sind kleine Textdateien und Skripte; Bilder
+// blähen die Mappe auf und laden zu pixelgenauen Vergleichen ein.
+const BILD_ENDUNG = /\.(png|jpe?g|gif|bmp|webp|svg|ico|tiff?|heic|avif)$/i
+const BILD_IM_BEFEHL = /\.(png|jpe?g|gif|bmp|webp|svg|ico|tiff?|heic|avif)\b/i
+
 // Befehle, die die Prüfmappe verändern könnten: Der Befehl nennt den Prüfordner
 // UND enthält ein veränderndes Werkzeug oder eine Datei-Umleitung. Das ist eine
 // Faustregel (Befehlstexte sind nicht sicher zerlegbar) — sie trifft genau die
@@ -241,6 +250,9 @@ export function pruefeWerkzeug(name, eingabe, projektPfad, nurLesen, darfPruefen
     const datei = eingabe.file_path ?? eingabe.notebook_path
     if (istVerwaltungsdatei(datei, projektPfad))
       return { gesperrt: texte.rechteFrage.verwaltungGesperrtFuerAgent, tickerText: texte.ticker.verwaltungGesperrt }
+    // Bilddateien in der Prüfmappe: hartes Nein — auch für Prüf-Blöcke (BAUPLAN 17).
+    if (liegtInPruefmappe(datei, projektPfad) && BILD_ENDUNG.test(String(datei)))
+      return { gesperrt: texte.rechteFrage.pruefmappeBildFuerAgent, tickerText: texte.ticker.pruefmappeBildGesperrt }
     // Die Prüfmappe gehört dem Prüfer (Entscheidung Georg, 12.08.2026).
     if (!darfPruefen && liegtInPruefmappe(datei, projektPfad))
       return { gesperrt: texte.rechteFrage.pruefmappeGesperrtFuerAgent, tickerText: texte.ticker.pruefmappeGesperrt }
@@ -253,6 +265,10 @@ export function pruefeWerkzeug(name, eingabe, projektPfad, nurLesen, darfPruefen
     // Sicherungspunkt-Verwaltung von FlowForge kollidieren. Keine Rückfrage, hartes Nein.
     if (/\bgit\b/i.test(befehl))
       return { gesperrt: texte.rechteFrage.gitGesperrtFuerAgent, tickerText: texte.ticker.gitGesperrt }
+    // Bild in die Prüfmappe kopieren/schreiben: hartes Nein, auch für Prüfer —
+    // dieselbe Faustregel wie unten, verschärft um die Bild-Endung im Befehl.
+    if (befehlAendertPruefmappe(befehl) && BILD_IM_BEFEHL.test(befehl))
+      return { gesperrt: texte.rechteFrage.pruefmappeBildFuerAgent, tickerText: texte.ticker.pruefmappeBildGesperrt }
     if (!darfPruefen && befehlAendertPruefmappe(befehl))
       return { gesperrt: texte.rechteFrage.pruefmappeGesperrtFuerAgent, tickerText: texte.ticker.pruefmappeGesperrt }
     if (befehlOhneRueckfrage(befehl)) return { erlaubt: true }
@@ -275,6 +291,8 @@ function kuerzen(text, max = 160) {
 }
 
 // Übersetzt eine SDK-Nachricht in Klartext-Zeilen für den Liveticker.
+// Zeilen aus Unteraufgaben (BAUPLAN 17) bekommen einen Vorsatz — sonst wäre
+// im Ticker nicht zu erkennen, dass gerade ein Wegwerf-Helfer wühlt.
 function tickerZeilen(nachricht, projektPfad) {
   const t = texte.ticker
   if (nachricht.type === 'system' && nachricht.subtype === 'init')
@@ -334,7 +352,7 @@ function tickerZeilen(nachricht, projektPfad) {
         zeilen.push(t.werkzeug(block.name))
     }
   }
-  return zeilen
+  return nachricht.parent_tool_use_id ? zeilen.map((z) => t.unteraufgabeZeile(z)) : zeilen
 }
 
 // Fehlermeldung des Motors in Klartext übersetzen und einstufen — an der
@@ -492,6 +510,10 @@ export function starteMotorLauf(optionen) {
 
   const verbrauch = {
     tokens: 0,
+    // Verbrauch der Unteraufgaben (BAUPLAN 17): Wegwerf-Helfer wühlen in ihrem
+    // eigenen Kontext — ihre Tokens zählen zum ehrlichen Verbrauch, aber NICHT
+    // zum Füllstand der Hauptsession (der steuert den Übertrag).
+    unterTokens: 0,
     kontextProzentVon: 0,
     kontextProzentBis: 5,
     kostenUsd: null,
@@ -500,6 +522,8 @@ export function starteMotorLauf(optionen) {
     // Fenstergröße kommt erst später und würde ihn sonst verfälschen.
     uebertragBand: null
   }
+  // Letzter kumulierter Verbrauchs-Stand je Unteraufgabe (Task-Aufruf-Kennung).
+  const unterVerbrauch = new Map()
 
   function verbrauchMelden() {
     const band = kontextBand(verbrauch.tokens, verbrauch.kontextFenster)
@@ -616,11 +640,22 @@ export function starteMotorLauf(optionen) {
 
         if (nachricht.type === 'assistant' && nachricht.message?.usage) {
           const u = nachricht.message.usage
-          verbrauch.tokens =
+          const kumuliert =
             (u.input_tokens ?? 0) +
             (u.cache_creation_input_tokens ?? 0) +
             (u.cache_read_input_tokens ?? 0) +
             (u.output_tokens ?? 0)
+          // Nachrichten aus Unteraufgaben (BAUPLAN 17) tragen den Füllstand des
+          // Helfers, nicht der Hauptsession — sie dürfen die Übertrags-Schwelle
+          // nicht verfälschen. Ihr Verbrauch wird getrennt aufsummiert: je
+          // Unteraufgabe der letzte kumulierte Stand.
+          if (nachricht.parent_tool_use_id) {
+            unterVerbrauch.set(nachricht.parent_tool_use_id, kumuliert)
+            verbrauch.unterTokens = [...unterVerbrauch.values()].reduce((a, b) => a + b, 0)
+            verbrauchMelden()
+            continue
+          }
+          verbrauch.tokens = kumuliert
           verbrauchMelden()
 
           // Übertrags-Schwelle (SPEC §5): läuft der Kontext voll, wird der

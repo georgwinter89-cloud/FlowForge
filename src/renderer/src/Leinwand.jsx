@@ -19,12 +19,61 @@ const tb = texte.laufberichte
 const ts = texte.sicherungen
 const tg = texte.gespraech
 const tw = texte.wiederaufnahme
+const tp = texte.pruefmappe
 
 // Solange eine Karte noch nicht gemessen ist, rechnen Pfeile mit dieser Größe.
 const KARTE_STANDARD = { w: 240, h: 140 }
 
 function zeitText(zeitstempel) {
   return new Date(zeitstempel).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })
+}
+
+function groesseText(bytes) {
+  if (bytes < 1024) return tp.groesseBytes(bytes)
+  return tp.groesseKb(Math.max(1, Math.round(bytes / 1024)))
+}
+
+// Prüfmappen-Ansicht an der Prüferkarte (BAUPLAN 17): aufklappbar wie das
+// Block-Ergebnis, in Alltagssprache — welche Prüfungen der letzte Lauf in
+// pruefung/ hinterlassen hat. Alle Prüf-Blockkarten zeigen dieselbe Mappe;
+// gelesen wird beim Aufklappen frisch.
+function PruefmappenBereich({ pfad }) {
+  const [offen, setOffen] = useState(false)
+  const [dateien, setDateien] = useState(null)
+  function umschalten() {
+    const jetztOffen = !offen
+    setOffen(jetztOffen)
+    if (jetztOffen)
+      window.flowforge.pruefmappeLesen(pfad).then((e) => setDateien(e.ok ? e.dateien : []))
+  }
+  return (
+    <div className="block-ergebnis">
+      <button className="block-ergebnis-knopf" onClick={umschalten}>
+        <span>
+          {offen ? '▾' : '▸'} {tp.titel}
+        </span>
+        {offen && dateien != null && (
+          <span className="block-ergebnis-marke">{tp.anzahl(dateien.length)}</span>
+        )}
+      </button>
+      {offen && dateien != null && (
+        <div className="block-ergebnis-text">
+          {dateien.length === 0 ? (
+            <p className="feld-hinweis">{tp.leer}</p>
+          ) : (
+            <>
+              {dateien.map((datei) => (
+                <p key={datei.name} className="bericht-zeile">
+                  {datei.name} · {groesseText(datei.bytes)} · {zeitText(datei.geaendertAm)}
+                </p>
+              ))}
+              <p className="feld-hinweis">{tp.hinweis}</p>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  )
 }
 
 // Punkt auf dem Rand eines Karten-Rechtecks, vom Mittelpunkt aus in Richtung
@@ -60,7 +109,10 @@ function VerbrauchZeile({ verbrauch, modus, label }) {
   const teile = []
   if (verbrauch.kontextProzentVon != null)
     teile.push(t.verbrauchKontext(verbrauch.kontextProzentVon, verbrauch.kontextProzentBis))
-  if (verbrauch.tokens != null) teile.push(t.verbrauchTokens(verbrauch.tokens))
+  // Verbrauch der Unteraufgaben (BAUPLAN 17) zählt ehrlich mit — der
+  // Kontext-Füllstand daneben misst nur die Hauptsession.
+  if (verbrauch.tokens != null)
+    teile.push(t.verbrauchTokens(verbrauch.tokens + (verbrauch.unterTokens ?? 0)))
   if (verbrauch.kostenUsd != null)
     teile.push(modus === 'abo' ? t.verbrauchKostenAbo : t.verbrauchKosten(verbrauch.kostenUsd))
   if (teile.length === 0) return null
@@ -294,6 +346,7 @@ function SchaubildKarte({
   bearbeitbar,
   aktiv,
   letztesErgebnis,
+  pfad,
   onFeld,
   onSpeichern,
   onZurueckZu,
@@ -377,6 +430,7 @@ function SchaubildKarte({
           )}
         </div>
       )}
+      {def.prueft && <PruefmappenBereich pfad={pfad} />}
       {bearbeitbar && (
         <div
           className="pfeil-punkt"
@@ -1147,6 +1201,7 @@ export default function Leinwand({
                 bearbeitbar={bearbeitbar}
                 aktiv={aktiveInstanzen.has(eintrag.instanzId)}
                 letztesErgebnis={letzteErgebnisse.get(eintrag.instanzId) ?? null}
+                pfad={pfad}
                 onFeld={(feldId, wert) => feldSetzen(eintrag.instanzId, feldId, wert)}
                 onSpeichern={() => ketteSpeichern(workflowRef.current)}
                 onZurueckZu={(ziel) => zurueckZuSetzen(eintrag.instanzId, ziel)}

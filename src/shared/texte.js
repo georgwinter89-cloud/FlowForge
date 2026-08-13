@@ -546,6 +546,9 @@ export const texte = {
     // Prüfordner gehören dem Prüfer — kein anderer Block ändert sie.
     pruefmappeGesperrtFuerAgent:
       'Der Prüfordner „pruefung" gehört dem Prüfer: Nur Prüf-Blöcke dürfen dort Dateien anlegen oder ändern. Lass die Prüfmappe unverändert — wenn eine Prüfung deiner Meinung nach falsch ist, schreibe das in deinen Abschlusstext.',
+    // Bilder-Verbot in der Prüfmappe (BAUPLAN 17): hartes Nein, auch für Prüfer.
+    pruefmappeBildFuerAgent:
+      'Bilddateien sind im Prüfordner „pruefung" verboten (hartes Nein, auch für Prüfer): Prüfungen sind kleine Textdateien und Skripte. Prüfe ohne Bildvergleiche — die blockieren künftige, völlig erlaubte Änderungen.',
     verwaltungGesperrtFuerAgent:
       'Diese Datei verwaltet FlowForge selbst — sie ist für direkte Änderungen gesperrt. Karten liest und schreibst du über die karten-Werkzeuge.'
   },
@@ -557,6 +560,9 @@ export const texte = {
     durchsucht: 'Durchsucht das Projekt.',
     plant: 'Plant die Arbeitsschritte.',
     unteraufgabe: 'Startet eine Unteraufgabe.',
+    // Zeilen aus Unteraufgaben (BAUPLAN 17): der Wegwerf-Helfer wühlt in
+    // seinem eigenen Kontext — im Ticker klar gekennzeichnet.
+    unteraufgabeZeile: (text) => `Unteraufgabe · ${text}`,
     befehl: (befehl) => `Kommandozeile: ${befehl}`,
     internet: (ziel) => `Internetzugriff: ${ziel}`,
     werkzeug: (name) => `Nutzt Werkzeug: ${name}`,
@@ -572,6 +578,11 @@ export const texte = {
       'Befehl gestoppt — dieser Block darf nur lesen (rein lesende Befehle laufen durch).',
     pruefmappeGesperrt:
       'Änderung an der Prüfmappe gestoppt — die Prüfdateien gehören dem Prüfer.',
+    pruefmappeBildGesperrt:
+      'Bilddatei in der Prüfmappe gestoppt — Bilder sind dort verboten, auch für den Prüfer.',
+    // Lauf-Mappe statt Projekt-Mappe (BAUPLAN 17).
+    pruefmappeGeleert:
+      'Prüfmappe geleert — der Prüfer baut seine Prüfungen frisch fürs aktuelle Paket.',
     arbeitsablageGeleert: 'Arbeitsablage geleert.',
     verwaltungGesperrt: 'Schreib-Versuch auf eine FlowForge-Verwaltungsdatei gestoppt.',
     liestKarten: 'Liest die Projektkarten.',
@@ -685,6 +696,17 @@ export const texte = {
     kontingentHinweis:
       'Das Verhalten bei erschöpftem Abo-Kontingent und die Übertragsgrenze stellst du direkt im Schaubild-Tab über dem Schaubild ein.',
     schliessen: 'Schließen'
+  },
+  // Prüfmappen-Ansicht an der Prüferkarte (BAUPLAN 17): nur zum Nachlesen —
+  // bearbeiten darf die Mappe weiterhin nur der Prüfer.
+  pruefmappe: {
+    titel: 'Prüfmappe',
+    anzahl: (n) => (n === 1 ? '1 Prüfung' : `${n} Prüfungen`),
+    leer: 'Die Prüfmappe ist leer. Der Prüfer legt hier während des Laufs seine Prüfungen fürs aktuelle Paket ab — beim Start des nächsten Laufs wird sie geleert.',
+    hinweis:
+      'Gezählt werden Prüf-Dateien, nicht einzelne Testfälle darin. Nur zum Nachlesen — bearbeiten darf die Mappe nur der Prüfer.',
+    groesseBytes: (bytes) => `${bytes} Byte`,
+    groesseKb: (kb) => `${kb} KB`
   },
   laufberichte: {
     ueberschrift: 'Laufberichte',
