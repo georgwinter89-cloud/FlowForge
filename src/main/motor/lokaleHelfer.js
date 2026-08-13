@@ -31,15 +31,21 @@ import path from 'node:path'
 // Grafikkarte — dort laufen größere Modelle schneller und genauer).
 const STANDARD_ADRESSE = 'http://127.0.0.1:11434'
 
-// Deckel gegen Kontext-Überlauf des kleinen Modells (32k-Fenster):
-// jede Werkzeug-Antwort bleibt kompakt, die Runden sind begrenzt.
-const MAX_RUNDEN = 24
-const MAX_ZEILEN_JE_LESEN = 250
-const MAX_ZEICHEN_JE_ANTWORT = 12000
-const MAX_TREFFER_JE_SUCHE = 40
-const MAX_EINTRAEGE_JE_ORDNER = 200
+// Deckel gegen Kontext-Überlauf des kleinen Modells. num_ctx wird je Anfrage
+// mitgeschickt und überstimmt die Ollama-Einstellung — bewusst 32k, nicht
+// mehr: Das Arbeitsgedächtnis (KV-Cache) kostet bei 14B grob 190 KB je
+// Kontext-Token; 128k wären ~25 GB nur dafür und passen in keine 16-GB-Karte
+// — Ollama lagert dann still auf die CPU aus und alles kriecht. Außerdem
+// verlieren kleine Modelle in Riesen-Kontexten den Faden; die kompakten
+// Werkzeug-Antworten sind auch Konzentrationshilfe (Wunsch Georg, 13.08.2026:
+// großzügiger als die alten 16k, aber ehrlich begrenzt).
+const MAX_RUNDEN = 32
+const MAX_ZEILEN_JE_LESEN = 400
+const MAX_ZEICHEN_JE_ANTWORT = 24000
+const MAX_TREFFER_JE_SUCHE = 60
+const MAX_EINTRAEGE_JE_ORDNER = 300
 const ANTWORT_ZEITLIMIT_MS = 5 * 60 * 1000
-const KONTEXT_FENSTER = 16384
+const KONTEXT_FENSTER = 32768
 
 // Ordner, in denen nie gesucht oder gelistet wird — Ballast ohne Erkenntnis.
 const UEBERSPRUNGEN = new Set(['node_modules', '.git', 'laufberichte'])
