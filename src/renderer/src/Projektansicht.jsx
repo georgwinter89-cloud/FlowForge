@@ -54,7 +54,7 @@ function Karte({ karte, onBearbeiten, onErledigt, onLoeschen }) {
   )
 }
 
-export default function Projektansicht({ pfad, onZurueck }) {
+export default function Projektansicht({ pfad, initialTab }) {
   const [projekt, setProjekt] = useState(null)
   const [karten, setKarten] = useState([])
   const [fehler, setFehler] = useState('')
@@ -196,11 +196,6 @@ export default function Projektansicht({ pfad, onZurueck }) {
   if (fehler) {
     return (
       <section className="projektansicht">
-        <div className="ansicht-kopf">
-          <button className="knopf-sekundaer" onClick={onZurueck}>
-            ← {t.zurueck}
-          </button>
-        </div>
         <p className="fehlermeldung">{fehler}</p>
       </section>
     )
@@ -215,9 +210,6 @@ export default function Projektansicht({ pfad, onZurueck }) {
   return (
     <section className="projektansicht">
       <div className="ansicht-kopf">
-        <button className="knopf-sekundaer" onClick={onZurueck}>
-          ← {t.zurueck}
-        </button>
         <h1>{projekt?.name}</h1>
         <div className="kopf-rechts">
           {startFehler && <span className="start-fehler">{startFehler}</span>}
@@ -287,6 +279,7 @@ export default function Projektansicht({ pfad, onZurueck }) {
           {eigene !== null && (
             <Leinwand
               pfad={pfad}
+              initialTab={initialTab}
               karten={karten}
               kontingentVerhalten={projekt?.kontingentVerhalten ?? 'pausieren'}
               onKontingentVerhalten={kontingentVerhaltenSetzen}

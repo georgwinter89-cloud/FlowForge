@@ -70,7 +70,10 @@
 export const KONTEXT_FENSTER_STANDARD = 200000
 
 // Automatischer Übertrag (SPEC §5): echte Schwelle als absoluter Füllstand.
-export const UEBERTRAG_SCHWELLE_PROZENT = 85
+// Wohnt im shared-Blockkatalog, weil der Kontext-Balken der Oberfläche die
+// rote Marke an derselben Schwelle zeichnet; hier nur weitergereicht.
+import { UEBERTRAG_SCHWELLE_PROZENT } from '../../shared/blockKatalog.js'
+export { UEBERTRAG_SCHWELLE_PROZENT }
 
 // Test-Schalter „Übertrag schon bei 10 %" (BAUPLAN 11): Eine frische Session
 // startet schon mit ~8–10 % Grundlast (Systemtext, Werkzeuge) — eine absolute

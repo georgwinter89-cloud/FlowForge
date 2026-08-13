@@ -290,9 +290,11 @@ Angreifer durch die Diagnose.
   Block-Anatomie (§4.2). Eigene Blöcke gelten **global** (Abschnitt „Eigene Blöcke" in der
   Bibliothek jedes Projekts); sie sind nie Prüfer und haben keine Formularfelder.
 - **Erstellungsassistent in 4 Schritten:** Was soll der Block tun? → Was braucht/liefert er? →
-  Welche Sperren gelten (nur „darf nur lesen")? → Probelauf-Vorschau (Blockkarte wie in der
-  Bibliothek + der exakte Arbeitsauftrag, den der Agent bekäme). Bearbeiten nutzt denselben
-  Assistenten mit vorbefüllten Feldern.
+  Welche Sperren gelten (nur „darf nur lesen")? → Probelauf-Vorschau (der exakte
+  Arbeitsauftrag, den der Agent bekäme). Eine **Stepper-Leiste** zeigt die Schritte
+  (erledigte sind anklickbar), und die Blockkarte liegt auf allen Schritten als
+  **Live-Vorschau** rechts daneben — so, wie sie in der Bibliothek läge. Bearbeiten
+  nutzt denselben Assistenten mit vorbefüllten Feldern.
 - **KI-Assistent:** Nutzer beschreibt in normaler Sprache, die KI (der Motor, eine
   Einmal-Frage ohne Werkzeuge) füllt das Formular — alles bleibt von Hand änderbar; die
   harten Grenzen (Name 40, Beschreibung 200, Auftrag 4.000 Zeichen, je 5 Etiketten à 40)
@@ -387,7 +389,9 @@ Angreifer durch die Diagnose.
 - **Gespräch** (seit Bauschritt 9): Stellt der Agent eine Frage (Frage-Block,
   Spec-Interview — über das eingebaute mensch-Werkzeug), pausiert der Lauf und
   die Lauf-Ansicht zeigt eine Chat-Ansicht: Verlauf aus Fragen und Antworten,
-  Antwort per Options-Klick oder Freitext. Ist das Fenster nicht im Vordergrund,
+  Antwort per Options-Klick oder Freitext. Die Optionen liegen als Auswahlkarten
+  nebeneinander; benennt die erste Option ihre Empfehlung selbst („empfohlen …"),
+  trägt sie ein grünes Empfohlen-Abzeichen. Ist das Fenster nicht im Vordergrund,
   kommt eine Windows-Benachrichtigung. Das Gespräch steht auch im Laufbericht.
   Fragen stellen ist auch unter der Sperre „darf nur lesen" erlaubt.
 
@@ -446,10 +450,23 @@ programm der Datei. Ohne Startanleitung ist der Knopf grau und erklärt, wie sie
 
 ## 9. GUI-Grundaufbau
 
-- **Projektübersicht** beim Start: Projekte als Kacheln mit Zustand (seit Bauschritt 15:
-  „läuft", „wartet auf deine Antwort", „wartet in der Warteschlange", sonst der Ausgang
-  des letzten Laufs samt Zeitpunkt) + „Neues Projekt". Die Zustände aktualisieren sich
-  live, während Läufe im Hintergrund weiterlaufen.
+**Erscheinungsbild „dunkle Werkbank"** (seit 13.08.2026, Mockup-Runden 3+4 aus Georgs
+Design-Canvas): tiefdunkler Navy-Grund, Elektroblau als Marken- und Auswahlfarbe,
+Signalrot für alles Lebendige (läuft, wartet auf Antwort, Lauf starten), Schrift
+Archivo (lokal gebündelt), Zahlen und Protokolle in JetBrains Mono. Das Fenster hat
+eine eigene dunkle Titelleiste (Blitz-Logo, „FlowForge WERKBANK", Brotkrume zum
+Zurückspringen); Windows zeichnet nur die drei Fensterknöpfe. Der **Kontext-Füllstand**
+erscheint als Balken mit roter Marke an der Übertrags-Schwelle — in der Lauf-Ansicht
+und auf der Hero-Kachel.
+
+- **Projektübersicht** beim Start: Läuft gerade ein Lauf, liegt er als große
+  **Hero-Kachel** obenauf (Pulspunkt, Workflow, letzte Tickerzeile, Kontext-Balken,
+  „Zum Lauf"); darunter die übrigen Projekte als Kacheln mit Zustands-Abzeichen (seit
+  Bauschritt 15: „läuft", „wartet auf deine Antwort" — mit „Zum Gespräch", das direkt
+  in den Lauf-Tab springt —, „wartet in der Warteschlange", sonst der Ausgang des
+  letzten Laufs samt Zeitpunkt) + „Neues Projekt". Die Zustände aktualisieren sich
+  live, während Läufe im Hintergrund weiterlaufen; sind mehrere Läufe aktiv oder
+  eingereiht, erinnert eine Hinweisleiste an den vervielfachten Verbrauch.
 - **Projektansicht** dreigeteilt: links **Karten-Seitenleiste** (filterbar), Mitte
   **Leinwand**, rechts **Blockbibliothek** (Vorlagen + eigene Blöcke).
 - Die Mittelspalte hat **Tabs** (Feedback Georg, 07.08.2026 — vorher stapelte sich

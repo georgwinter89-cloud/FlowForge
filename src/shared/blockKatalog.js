@@ -26,6 +26,11 @@ export const REPARATUR_RUNDEN_MAX = 9
 export const UEBERTRAG_GRENZE_STANDARD = 5
 export const UEBERTRAG_GRENZE_MAX = 99
 
+// Echte Übertrags-Schwelle als absoluter Füllstand (SPEC §5). Liegt hier im
+// shared-Bereich, weil auch der Kontext-Balken der Oberfläche die rote Marke
+// an dieser Schwelle zeichnet — der Renderer darf keine Motor-Module laden.
+export const UEBERTRAG_SCHWELLE_PROZENT = 85
+
 export const BLOCK_KATALOG = [
   {
     // Seit 12.08.2026 (Entscheidung Georg) nicht mehr Teil der Vorlagen: Jeder

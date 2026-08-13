@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { texte } from '../../shared/texte.js'
+import KontextAnzeige from './KontextAnzeige.jsx'
 
 const t = texte.projektuebersicht
 const tn = texte.neuesProjekt
@@ -37,6 +38,35 @@ function KachelZustand({ zustand }) {
   )
 }
 
+// Hero-Kachel (Mockup 3a): der laufende Lauf groß über dem Raster — roter
+// Pulspunkt, Workflow-Zeile, letzte Tickerzeile, rechts der Kontext-Balken.
+function HeroKachel({ projekt, zustand, onOeffnen }) {
+  return (
+    <div className="hero-kachel">
+      <div className="hero-links">
+        <div className="hero-status">
+          <span className="hero-punkt" />
+          <span>{t.heroLaeuft}</span>
+        </div>
+        <div className="hero-name">{projekt.name}</div>
+        {zustand.workflow && <div className="hero-beschreibung">{zustand.workflow}</div>}
+        {zustand.letzteZeile && <div className="hero-ticker">{zustand.letzteZeile}</div>}
+      </div>
+      <div className="hero-rechts">
+        {zustand.kontext && (
+          <KontextAnzeige von={zustand.kontext.von} bis={zustand.kontext.bis} />
+        )}
+        <button
+          className="knopf-primaer"
+          onClick={() => onOeffnen(projekt.pfad, projekt.name, 'lauf')}
+        >
+          {t.zumLauf}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function NeuesProjektDialog({ onFertig, onAbbrechen }) {
   const [name, setName] = useState('')
   const [ablageort, setAblageort] = useState('')
@@ -52,7 +82,7 @@ function NeuesProjektDialog({ onFertig, onAbbrechen }) {
     if (!ablageort) return setFehler(tn.fehlerKeinOrt)
     const ergebnis = await window.flowforge.projektAnlegen(name, ablageort)
     if (!ergebnis.ok) return setFehler(ergebnis.fehler)
-    onFertig(ergebnis.pfad)
+    onFertig(ergebnis.pfad, name.trim())
   }
 
   return (
@@ -128,15 +158,35 @@ export default function Projektuebersicht({ onOeffnen }) {
       'mensch-frage-erledigt',
       'fertig'
     ])
-    return window.flowforge.aufLaufEreignis((ereignis) => {
+    const abmelden = window.flowforge.aufLaufEreignis((ereignis) => {
       if (relevant.has(ereignis.art)) zustaendeLaden()
     })
+    // Die Hero-Kachel zeigt Tickerzeile und Kontext-Balken des laufenden
+    // Laufs — ein sanfter Takt hält sie frisch, ohne jede Ticker-Zeile
+    // einzeln über die IPC-Brücke zu schieben.
+    const takt = setInterval(() => {
+      const irgendwasLaeuft = projekteRef.current.some((p) => p.gefunden)
+      if (irgendwasLaeuft) zustaendeLaden()
+    }, 5000)
+    return () => {
+      abmelden()
+      clearInterval(takt)
+    }
   }, [])
 
   async function vergessen(pfad) {
     await window.flowforge.projektVergessen(pfad)
     laden()
   }
+
+  // Hero (Mockup 3a): das erste laufende Projekt, das nicht auf eine Antwort
+  // wartet — wer auf den Menschen wartet, steht rot markiert im Raster.
+  const heroProjekt = projekte.find(
+    (p) => p.gefunden && zustaende[p.pfad]?.laeuft && !zustaende[p.pfad]?.brauchtAntwort
+  )
+  const rasterProjekte = projekte.filter((p) => p !== heroProjekt)
+  const aktiveZahl = projekte.filter((p) => zustaende[p.pfad]?.laeuft).length
+  const wartendeZahl = projekte.filter((p) => zustaende[p.pfad]?.wartet).length
 
   return (
     <section className="projektuebersicht">
@@ -152,38 +202,64 @@ export default function Projektuebersicht({ onOeffnen }) {
           <p className="leer-untertitel">{t.leerUntertitel}</p>
         </div>
       ) : (
-        <div className="kachel-raster">
-          {projekte.map((projekt) =>
-            projekt.gefunden ? (
-              <button
-                key={projekt.pfad}
-                className="projekt-kachel"
-                onClick={() => onOeffnen(projekt.pfad)}
-              >
-                <span className="kachel-name">{projekt.name}</span>
-                <span className="kachel-pfad">{projekt.pfad}</span>
-                <KachelZustand zustand={zustaende[projekt.pfad]} />
-              </button>
-            ) : (
-              <div key={projekt.pfad} className="projekt-kachel kachel-fehlt">
-                <span className="kachel-name">{projekt.name}</span>
-                <span className="kachel-pfad">{projekt.pfad}</span>
-                <span className="kachel-warnung">{t.nichtGefunden}</span>
-                <span className="feld-hinweis">{t.nichtGefundenHinweis}</span>
-                <button className="knopf-sekundaer" onClick={() => vergessen(projekt.pfad)}>
-                  {t.ausListeEntfernen}
-                </button>
-              </div>
-            )
+        <>
+          {heroProjekt && (
+            <HeroKachel
+              projekt={heroProjekt}
+              zustand={zustaende[heroProjekt.pfad]}
+              onOeffnen={onOeffnen}
+            />
           )}
-        </div>
+          <div className="kachel-raster">
+            {rasterProjekte.map((projekt) => {
+              const zustand = zustaende[projekt.pfad]
+              return projekt.gefunden ? (
+                <button
+                  key={projekt.pfad}
+                  className="projekt-kachel"
+                  // „Wartet auf Antwort" springt direkt ins Gespräch (Lauf-Tab).
+                  onClick={() =>
+                    onOeffnen(
+                      projekt.pfad,
+                      projekt.name,
+                      zustand?.brauchtAntwort ? 'lauf' : undefined
+                    )
+                  }
+                >
+                  <span className="kachel-name">{projekt.name}</span>
+                  <span className="kachel-pfad">{projekt.pfad}</span>
+                  <KachelZustand zustand={zustand} />
+                  {zustand?.brauchtAntwort && (
+                    <span className="knopf-primaer knopf-klein">{t.zumGespraech}</span>
+                  )}
+                </button>
+              ) : (
+                <div key={projekt.pfad} className="projekt-kachel kachel-fehlt">
+                  <span className="kachel-name">{projekt.name}</span>
+                  <span className="kachel-pfad">{projekt.pfad}</span>
+                  <span className="kachel-warnung">{t.nichtGefunden}</span>
+                  <span className="feld-hinweis">{t.nichtGefundenHinweis}</span>
+                  <button className="knopf-sekundaer" onClick={() => vergessen(projekt.pfad)}>
+                    {t.ausListeEntfernen}
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+          {aktiveZahl >= 1 && aktiveZahl + wartendeZahl >= 2 && (
+            <div className="hinweis hinweis-unten">
+              <span className="hinweis-punkt" />
+              {t.verbrauchsHinweis(aktiveZahl, wartendeZahl)}
+            </div>
+          )}
+        </>
       )}
       {dialogOffen && (
         <NeuesProjektDialog
           onAbbrechen={() => setDialogOffen(false)}
-          onFertig={(pfad) => {
+          onFertig={(pfad, name) => {
             setDialogOffen(false)
-            onOeffnen(pfad)
+            onOeffnen(pfad, name)
           }}
         />
       )}

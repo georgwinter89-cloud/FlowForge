@@ -202,7 +202,12 @@ export function projektZustaende(pfade) {
             lauf.offeneEntscheidung)
       ),
       wartet: warteschlange.some((eintrag) => eintrag.projektPfad === pfad),
-      letzterLauf: letzterBericht(pfad)
+      letzterLauf: letzterBericht(pfad),
+      // Für die Hero-Kachel der Projektübersicht (Mockup 3a) — alles
+      // null-sicher, ein Lauf ohne diese Felder bleibt gültig.
+      workflow: lauf?.bericht?.workflow ?? null,
+      letzteZeile: lauf?.bericht?.ticker?.at(-1)?.text ?? null,
+      kontext: lauf?.kontext ?? null
     }
   }
   return { ok: true, zustaende }
@@ -485,6 +490,9 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     blockErgebnisse: [],
     ticker: []
   }
+  // Die Projektübersicht (Hero-Kachel, Mockup 3a) liest Workflow-Name und
+  // letzte Tickerzeile des laufenden Berichts über projektZustaende mit.
+  lauf.bericht = bericht
 
   function senden(ereignis) {
     if (!fenster.isDestroyed())
@@ -792,6 +800,13 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
               ? { ...e, text: `${holeName()}: ${e.text}` }
               : e
           if (daten.art === 'ticker') bericht.ticker.push({ zeit: jetztIso(), text: daten.text })
+          // Letzter Kontext-Stand am Lauf gespiegelt — der Kontext-Balken der
+          // Projektübersicht braucht ihn außerhalb der Lauf-Ansicht.
+          if (daten.art === 'verbrauch' && daten.verbrauch?.kontextProzentBis != null)
+            lauf.kontext = {
+              von: daten.verbrauch.kontextProzentVon ?? 0,
+              bis: daten.verbrauch.kontextProzentBis
+            }
           senden({ instanzId: holeInstanz(), ...daten })
         },
         aufRechteFrage: rechteFrageStellen,

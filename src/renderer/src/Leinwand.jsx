@@ -10,6 +10,7 @@ import {
 import { schaubildReihenfolge, vorfahrenSortiert } from '../../shared/kettenRegeln.js'
 import { BlockChips } from './Blockbibliothek.jsx'
 import Bestaetigung from './Bestaetigung.jsx'
+import KontextAnzeige from './KontextAnzeige.jsx'
 
 const t = texte.lauf
 const tk = texte.kette
@@ -105,7 +106,7 @@ function VorschauGruppe({ ueberschrift, eintraege }) {
   )
 }
 
-function VerbrauchZeile({ verbrauch, modus, label }) {
+function VerbrauchZeile({ verbrauch, modus, label, mitBalken }) {
   if (!verbrauch) return null
   const teile = []
   if (verbrauch.kontextProzentVon != null)
@@ -118,10 +119,21 @@ function VerbrauchZeile({ verbrauch, modus, label }) {
     teile.push(modus === 'abo' ? t.verbrauchKostenAbo : t.verbrauchKosten(verbrauch.kostenUsd))
   if (teile.length === 0) return null
   return (
-    <p className="verbrauch-zeile">
-      {label ? `„${label}": ` : ''}
-      {teile.join(' · ')}
-    </p>
+    <div>
+      {/* Kontext-Füllstand als Balken (Mockup 3c) — nur im laufenden Lauf,
+          nicht in den historischen Laufberichten. */}
+      {mitBalken && verbrauch.kontextProzentBis != null && (
+        <KontextAnzeige
+          von={verbrauch.kontextProzentVon}
+          bis={verbrauch.kontextProzentBis}
+          label={label}
+        />
+      )}
+      <p className="verbrauch-zeile">
+        {label && !mitBalken ? `„${label}": ` : ''}
+        {teile.join(' · ')}
+      </p>
+    </div>
   )
 }
 
@@ -171,6 +183,14 @@ function Gespraech({ verlauf, frage, onAntwort }) {
             <div className="gespraech-optionen">
               {frage.optionen.map((option, i) => (
                 <button key={i} className="gespraech-option" onClick={() => senden(option)}>
+                  {/* „Empfohlen"-Abzeichen (Mockup 4a): Optionen sind nackte
+                      Strings ohne Flag — der Werkzeug-Prompt verlangt, dass
+                      die Empfehlung zuerst steht und benannt ist. Abzeichen
+                      darum nur auf Option 1 und nur, wenn der Text die
+                      Empfehlung tatsächlich benennt. */}
+                  {i === 0 && frage.optionen.length > 1 && /empfehl/i.test(option) && (
+                    <span className="option-empfohlen">{tg.empfohlen}</span>
+                  )}
                   {option}
                 </button>
               ))}
@@ -399,6 +419,14 @@ function SchaubildKarte({
       }
       onDrop={nimmtKarten ? onKarteAbgelegt : undefined}
     >
+      {/* Kategorie-Kicker (Mockup 3b): Arbeitsblock / Prüf-Block / Eigener Block. */}
+      <span className="karte-kicker">
+        {def.id?.startsWith('eigen-')
+          ? tk.kickerEigen
+          : def.prueft
+            ? tk.kickerPruef
+            : tk.kickerArbeit}
+      </span>
       <div className={'ketten-block-kopf' + (bearbeitbar ? ' schaubild-griff' : '')}>
         {nummer != null && <span className="block-nummer">{nummer}</span>}
         <span className="karte-titel">
@@ -502,6 +530,7 @@ function SchaubildKarte({
 
 export default function Leinwand({
   pfad,
+  initialTab,
   karten,
   kontingentVerhalten,
   onKontingentVerhalten,
@@ -545,7 +574,11 @@ export default function Leinwand({
   const [wiederaufnahme, setWiederaufnahme] = useState(null)
   // Tabs der Mittelspalte (Feedback Georg, 07.08.2026): Schaubild, Lauf,
   // Berichte und Sicherungspunkte gestapelt wurden unübersichtlich.
-  const [tab, setTab] = useState('schaubild')
+  // initialTab: „Zum Gespräch"/„Zum Lauf" auf der Projektübersicht öffnen
+  // das Projekt direkt mit dem Lauf-Tab vorn.
+  const [tab, setTab] = useState(
+    ['schaubild', 'lauf', 'berichte', 'punkte'].includes(initialTab) ? initialTab : 'schaubild'
+  )
   // Eigener Bestätigungs-Dialog statt window.confirm (Bugfix 13.08.2026):
   // null = zu, sonst { frage, knopf, gefahr, aktion }.
   const [bestaetigung, setBestaetigung] = useState(null)
@@ -1158,12 +1191,12 @@ export default function Leinwand({
               12): ein weiterer Start wartet dann in der Warteschlange und
               läuft von allein an, sobald Platz ist. */}
           <button
-            className="knopf-primaer knopf-klein"
+            className="knopf-start"
             disabled={bloecke.length === 0 || wartePosition > 0}
             title={wartePosition > 0 ? t.schonInWarteschlange : undefined}
             onClick={starten}
           >
-            {tk.starten}
+            ▶ {tk.starten}
           </button>
           <label className="runden-feld" title={tk.reparaturRundenHinweis}>
             {tk.reparaturRundenLabel}
@@ -1264,7 +1297,9 @@ export default function Leinwand({
                 refY="4"
                 orient="auto"
               >
-                <path d="M0,0 L10,4 L0,8 z" fill="#6b7484" />
+                {/* Pfeilspitzen-Farbe = .pfeil-linie (--akzent-hell); marker-fill
+                    kann keine CSS-Variablen aus Klassen erben. */}
+                <path d="M0,0 L10,4 L0,8 z" fill="#3b82f6" />
               </marker>
               <marker
                 id="pfeilspitze-vorschau"
@@ -1274,7 +1309,8 @@ export default function Leinwand({
                 refY="4"
                 orient="auto"
               >
-                <path d="M0,0 L10,4 L0,8 z" fill="#2563eb" />
+                {/* Vorschau-Pfeilspitze = .pfeil-vorschau (--akzent-text). */}
+                <path d="M0,0 L10,4 L0,8 z" fill="#7db0ff" />
               </marker>
             </defs>
             {pfeilLinien.map((linie, i) => (
@@ -1374,12 +1410,13 @@ export default function Leinwand({
           {(() => {
             const aktive = [...aktiveInstanzen].filter((id) => verbraeuche[id])
             if (aktive.length === 0)
-              return <VerbrauchZeile verbrauch={letzterVerbrauch} modus={modus} />
+              return <VerbrauchZeile verbrauch={letzterVerbrauch} modus={modus} mitBalken />
             return aktive.map((id) => (
               <VerbrauchZeile
                 key={id}
                 verbrauch={verbraeuche[id]}
                 modus={modus}
+                mitBalken
                 label={
                   aktive.length > 1
                     ? blockDefinition(bloecke.find((b) => b.instanzId === id)?.blockId)?.name

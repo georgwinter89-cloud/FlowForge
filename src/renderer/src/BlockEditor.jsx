@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import { texte } from '../../shared/texte.js'
 import { bekannteEtiketten, blockKategorie } from '../../shared/blockKatalog.js'
 import {
@@ -130,115 +130,151 @@ export default function BlockEditor({ block, onSpeichern, onAbbrechen }) {
 
   return (
     <div className="dialog-schleier">
-      <div className="dialog dialog-breit">
+      <div className="dialog dialog-breit dialog-editor">
         <h2>{bearbeiten ? t.ueberschriftBearbeiten : t.ueberschriftNeu}</h2>
-        <p className="feld-hinweis">
-          {t.schrittAnzeige(schritt, 4)} — {titel[schritt - 1]}
-        </p>
+        {/* Stepper (Mockup 4b): erledigte Schritte sind anklickbar (Zurück ist
+            ohnehin erlaubt), kommende bleiben gesperrt bis „Weiter". */}
+        <div className="stepper">
+          {titel.map((schrittTitel, i) => {
+            const nummer = i + 1
+            const klasse =
+              nummer < schritt
+                ? ' schritt-erledigt'
+                : nummer === schritt
+                  ? ' schritt-aktiv'
+                  : ''
+            return (
+              <Fragment key={nummer}>
+                {i > 0 && <span className="stepper-linie" />}
+                <button
+                  className={'stepper-schritt' + klasse}
+                  disabled={nummer > schritt}
+                  onClick={nummer < schritt ? () => setSchritt(nummer) : undefined}
+                >
+                  <span className="stepper-kreis">{nummer < schritt ? '✓' : nummer}</span>
+                  {schrittTitel}
+                </button>
+              </Fragment>
+            )
+          })}
+        </div>
 
-        {schritt === 1 && (
-          <>
-            <label className="feld">
-              <span>{t.kiFeld}</span>
-              <textarea
-                autoFocus
-                rows={3}
-                value={wunsch}
-                placeholder={t.kiPlatzhalter}
-                onChange={(e) => setWunsch(e.target.value)}
-              />
-              <span className="feld-hinweis">{t.kiHinweis}</span>
-            </label>
-            <div className="dialog-knoepfe knoepfe-links">
-              <button className="knopf-sekundaer" disabled={kiLaeuft} onClick={kiAusfuellen}>
-                {kiLaeuft ? t.kiLaeuft : '✨ ' + t.kiKnopf}
-              </button>
-            </div>
-            <div className="feld-nebeneinander">
-              <label className="feld">
-                <span>{t.nameFeld}</span>
-                <input value={werte.name} onChange={(e) => setzen('name', e.target.value)} />
-                <Zaehler wert={werte.name} max={BLOCK_NAME_MAX} />
-              </label>
-              <label className="feld feld-schmal">
-                <span>{t.symbolFeld}</span>
-                <input
-                  value={werte.symbol}
-                  maxLength={BLOCK_SYMBOL_MAX}
-                  onChange={(e) => setzen('symbol', e.target.value)}
+        <div className="editor-spalten">
+          <div className="editor-schritt">
+            {schritt === 1 && (
+              <>
+                <label className="feld">
+                  <span>{t.kiFeld}</span>
+                  <textarea
+                    autoFocus
+                    rows={3}
+                    value={wunsch}
+                    placeholder={t.kiPlatzhalter}
+                    onChange={(e) => setWunsch(e.target.value)}
+                  />
+                  <span className="feld-hinweis">{t.kiHinweis}</span>
+                </label>
+                <div className="dialog-knoepfe knoepfe-links">
+                  <button className="knopf-sekundaer" disabled={kiLaeuft} onClick={kiAusfuellen}>
+                    {kiLaeuft ? t.kiLaeuft : '✨ ' + t.kiKnopf}
+                  </button>
+                </div>
+                <div className="feld-nebeneinander">
+                  <label className="feld">
+                    <span>{t.nameFeld}</span>
+                    <input value={werte.name} onChange={(e) => setzen('name', e.target.value)} />
+                    <Zaehler wert={werte.name} max={BLOCK_NAME_MAX} />
+                  </label>
+                  <label className="feld feld-schmal">
+                    <span>{t.symbolFeld}</span>
+                    <input
+                      value={werte.symbol}
+                      maxLength={BLOCK_SYMBOL_MAX}
+                      onChange={(e) => setzen('symbol', e.target.value)}
+                    />
+                  </label>
+                </div>
+                <label className="feld">
+                  <span>{t.beschreibungFeld}</span>
+                  <input
+                    value={werte.beschreibung}
+                    onChange={(e) => setzen('beschreibung', e.target.value)}
+                  />
+                  <Zaehler wert={werte.beschreibung} max={BLOCK_BESCHREIBUNG_MAX} />
+                </label>
+                <label className="feld">
+                  <span>{t.auftragFeld}</span>
+                  <textarea
+                    rows={8}
+                    value={werte.auftrag}
+                    onChange={(e) => setzen('auftrag', e.target.value)}
+                  />
+                  <span className="feld-hinweis">{t.auftragHinweis}</span>
+                  <Zaehler wert={werte.auftrag} max={BLOCK_AUFTRAG_MAX} />
+                </label>
+              </>
+            )}
+
+            {schritt === 2 && (
+              <>
+                <EtikettenFeld
+                  label={t.brauchtFeld}
+                  hinweis={t.brauchtHinweis}
+                  etiketten={werte.braucht}
+                  onAendern={(neu) => setzen('braucht', neu)}
+                  datalistId="etiketten-braucht"
+                  vorschlaege={vorschlaege}
                 />
+                <EtikettenFeld
+                  label={t.liefertFeld}
+                  hinweis={t.liefertHinweis}
+                  etiketten={werte.liefert}
+                  onAendern={(neu) => setzen('liefert', neu)}
+                  datalistId="etiketten-liefert"
+                  vorschlaege={vorschlaege}
+                />
+              </>
+            )}
+
+            {schritt === 3 && (
+              <label className="feld feld-schalter">
+                <input
+                  type="checkbox"
+                  checked={werte.nurLesen}
+                  onChange={(e) => setzen('nurLesen', e.target.checked)}
+                />
+                <span>
+                  {t.nurLesenFeld}
+                  <span className="feld-hinweis">{t.nurLesenHinweis}</span>
+                </span>
               </label>
+            )}
+
+            {schritt === 4 && (
+              <>
+                <p className="feld-hinweis">{t.vorschauHinweis}</p>
+                <p className="vorschau-label">{t.vorschauAuftrag}</p>
+                <pre className="vorschau-auftrag">{werte.auftrag || '—'}</pre>
+              </>
+            )}
+          </div>
+          {/* Ständige Vorschau (Mockup 4b): der Block liegt auf allen
+              Schritten live rechts „in der Bibliothek". */}
+          <div className="editor-vorschau">
+            <span className="vorschau-label">{t.vorschauTitel}</span>
+            <div className="vorschau-panel">
+              <div
+                className={'bib-block vorschau-block kategorie-' + blockKategorie(vorschauDef)}
+              >
+                <p className="karte-titel">
+                  {vorschauDef.symbol} {werte.name || '—'}
+                </p>
+                {werte.beschreibung && <p className="feld-hinweis">{werte.beschreibung}</p>}
+                <BlockChips def={vorschauDef} />
+              </div>
             </div>
-            <label className="feld">
-              <span>{t.beschreibungFeld}</span>
-              <input
-                value={werte.beschreibung}
-                onChange={(e) => setzen('beschreibung', e.target.value)}
-              />
-              <Zaehler wert={werte.beschreibung} max={BLOCK_BESCHREIBUNG_MAX} />
-            </label>
-            <label className="feld">
-              <span>{t.auftragFeld}</span>
-              <textarea
-                rows={8}
-                value={werte.auftrag}
-                onChange={(e) => setzen('auftrag', e.target.value)}
-              />
-              <span className="feld-hinweis">{t.auftragHinweis}</span>
-              <Zaehler wert={werte.auftrag} max={BLOCK_AUFTRAG_MAX} />
-            </label>
-          </>
-        )}
-
-        {schritt === 2 && (
-          <>
-            <EtikettenFeld
-              label={t.brauchtFeld}
-              hinweis={t.brauchtHinweis}
-              etiketten={werte.braucht}
-              onAendern={(neu) => setzen('braucht', neu)}
-              datalistId="etiketten-braucht"
-              vorschlaege={vorschlaege}
-            />
-            <EtikettenFeld
-              label={t.liefertFeld}
-              hinweis={t.liefertHinweis}
-              etiketten={werte.liefert}
-              onAendern={(neu) => setzen('liefert', neu)}
-              datalistId="etiketten-liefert"
-              vorschlaege={vorschlaege}
-            />
-          </>
-        )}
-
-        {schritt === 3 && (
-          <label className="feld feld-schalter">
-            <input
-              type="checkbox"
-              checked={werte.nurLesen}
-              onChange={(e) => setzen('nurLesen', e.target.checked)}
-            />
-            <span>
-              {t.nurLesenFeld}
-              <span className="feld-hinweis">{t.nurLesenHinweis}</span>
-            </span>
-          </label>
-        )}
-
-        {schritt === 4 && (
-          <>
-            <p className="feld-hinweis">{t.vorschauHinweis}</p>
-            <div className={'bib-block vorschau-block kategorie-' + blockKategorie(vorschauDef)}>
-              <p className="karte-titel">
-                {vorschauDef.symbol} {werte.name || '—'}
-              </p>
-              {werte.beschreibung && <p className="feld-hinweis">{werte.beschreibung}</p>}
-              <BlockChips def={vorschauDef} />
-            </div>
-            <p className="vorschau-label">{t.vorschauAuftrag}</p>
-            <pre className="vorschau-auftrag">{werte.auftrag || '—'}</pre>
-          </>
-        )}
+          </div>
+        </div>
 
         {fehler && <p className="fehlermeldung">{fehler}</p>}
         <div className="dialog-knoepfe">

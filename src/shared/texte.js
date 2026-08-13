@@ -2,6 +2,11 @@
 export const texte = {
   appName: 'FlowForge',
   fensterTitel: 'FlowForge',
+  // Kopfleiste = Titelleiste der dunklen Werkbank (Mockup-Runden 3+4).
+  kopfleiste: {
+    werkbank: 'WERKBANK',
+    zuProjekten: 'Projekte'
+  },
   projektuebersicht: {
     ueberschrift: 'Projekte',
     leerHinweis: 'Noch keine Projekte.',
@@ -16,7 +21,15 @@ export const texte = {
     kachelWartetAntwort: 'wartet auf deine Antwort',
     kachelWarteschlange: 'wartet in der Warteschlange',
     kachelLetzterLauf: (zeit) => `Letzter Lauf: ${zeit} —`,
-    kachelKeinLauf: 'Noch kein Lauf.'
+    kachelKeinLauf: 'Noch kein Lauf.',
+    // Hero-Kachel für den laufenden Lauf (Mockup 3a).
+    heroLaeuft: 'Läuft',
+    zumLauf: 'Zum Lauf →',
+    zumGespraech: 'Zum Gespräch',
+    kontextLabel: 'Kontext-Füllstand',
+    verbrauchsHinweis: (aktiv, wartend) =>
+      `Parallele Läufe vervielfachen den Verbrauch — ${aktiv} ${aktiv === 1 ? 'Lauf' : 'Läufe'} aktiv` +
+      (wartend > 0 ? `, ${wartend} in der Warteschlange.` : '.')
   },
   neuesProjekt: {
     ueberschrift: 'Neues Projekt',
@@ -34,7 +47,6 @@ export const texte = {
     fehlerNameUnbrauchbar: 'Aus diesem Namen lässt sich kein Ordnername machen. Bitte wähle einen anderen Namen.'
   },
   projektansicht: {
-    zurueck: 'Zur Übersicht',
     leinwandTitel: 'Leinwand',
     // Tabs der Mittelspalte (Feedback Georg, 07.08.2026): Schaubild, Lauf,
     // Berichte und Sicherungspunkte gestapelt wurden unübersichtlich.
@@ -91,6 +103,7 @@ export const texte = {
     vorschauHinweis:
       'So liegt der Block in der Bibliothek — und genau diesen Arbeitsauftrag bekommt der Agent. Passt alles? Dann speichern.',
     vorschauAuftrag: 'Arbeitsauftrag an den Agenten',
+    vorschauTitel: 'Vorschau — so liegt er in der Bibliothek',
     zurueck: 'Zurück',
     weiter: 'Weiter',
     speichern: 'Block speichern',
@@ -119,6 +132,10 @@ export const texte = {
   },
   kette: {
     starten: 'Workflow starten',
+    // Kategorie-Kicker auf den Blockkarten (Mockup 3b).
+    kickerArbeit: 'Arbeitsblock',
+    kickerPruef: 'Prüf-Block',
+    kickerEigen: 'Eigener Block',
     leerHinweis:
       'Dein Schaubild ist noch leer. Zieh Blöcke aus der Bibliothek rechts hierher, schieb sie zurecht und verbinde sie mit Pfeilen — die Pfeile bestimmen die Reihenfolge. Von einer Karte dürfen auch mehrere Pfeile ausgehen: Solche Zweige laufen parallel und werden am nächsten gemeinsamen Block wieder zusammengeführt.',
     pfeilZiehenHinweis: 'Pfeil ziehen: hier drücken und zum nächsten Block ziehen',
@@ -241,7 +258,8 @@ export const texte = {
     verlaufUeberschrift: 'Gespräch',
     antwortPlatzhalter: 'Deine Antwort …',
     antworten: 'Antworten',
-    freitextHinweis: 'Du kannst eine Option anklicken — oder frei antworten.'
+    freitextHinweis: 'Du kannst eine Option anklicken — oder frei antworten.',
+    empfohlen: 'Empfohlen'
   },
   benachrichtigung: {
     frageTitel: 'FlowForge — der Agent hat eine Frage',

@@ -1,3 +1,24 @@
+/* Dunkle Werkbank (Mockup-Runden 3+4, 13.08.2026): dunkles Navy, Elektroblau
+   als Marken- und Auswahlfarbe, Signalrot für alles Lebendige. Schrift Archivo,
+   Zahlen und Protokolle in JetBrains Mono. Alle Farben kommen aus den Tokens
+   in :root — rohes Hex außerhalb davon nur, wo ein Kommentar es begründet. */
+
+@font-face {
+  font-family: 'Archivo';
+  src: url('./assets/fonts/Archivo-Variable.ttf') format('truetype-variations');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('./assets/fonts/JetBrainsMono-Variable.ttf') format('truetype-variations');
+  font-weight: 100 800;
+  font-style: normal;
+  font-display: block;
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -5,17 +26,55 @@
 }
 
 :root {
-  --hintergrund: #f5f6f8;
-  --flaeche: #ffffff;
-  --rand: #d9dde3;
-  --text: #1c2430;
-  --text-gedimmt: #6b7484;
+  color-scheme: dark;
+
+  /* Flächen */
+  --hintergrund: #0a0e18;
+  --flaeche: #0e1526;
+  --flaeche-tief: #070b13;
+  --flaeche-hervor: #101c36;
+  --flaeche-gewaehlt: #14243f;
+
+  /* Ränder */
+  --rand: #1c2438;
+  --rand-panel: #22304e;
+  --rand-kontrolle: #33415e;
+  --rand-block: #33518f;
+
+  /* Text */
+  --text: #eef2fa;
+  --text-zweit: #c3cde0;
+  --text-gedimmt: #9db1d9;
+  --text-leise: #8b96ad;
+  --text-blass: #54628a;
+
+  /* Akzente */
   --akzent: #2563eb;
-  --akzent-dunkel: #1d4ed8;
+  --akzent-hell: #3b82f6;
+  --akzent-text: #7db0ff;
+  --akzent-glut: rgba(37, 99, 235, 0.3);
+  --signal: #e11d2e;
+  --signal-punkt: #ef2d3f;
+  --signal-text: #f4606e;
+  --signal-glut: rgba(225, 29, 46, 0.35);
+  --gut-text: #4ade80;
+  --gut-rand: #2f9e63;
+  --lesend: #f4a05f;
+  --eigen: #b79bff;
+  --ticker-zeit: #5d7bb5;
+  --ticker-aktiv: #ff8a94;
+
+  /* Form */
+  --radius-panel: 14px;
+  --radius-karte: 12px;
+  --radius-knopf: 10px;
+  --radius-pille: 999px;
+  --schrift: 'Archivo', 'Segoe UI', system-ui, sans-serif;
+  --schrift-mono: 'JetBrains Mono', Consolas, monospace;
 }
 
 body {
-  font-family: 'Segoe UI', system-ui, sans-serif;
+  font-family: var(--schrift);
   color: var(--text);
   background: var(--hintergrund);
 }
@@ -26,24 +85,112 @@ body {
   height: 100vh;
 }
 
+/* Kopfleiste = Titelleiste: das Fenster hat keinen eigenen Rahmen mehr
+   (titleBarStyle hidden), die Leiste ist die Griff-Fläche zum Verschieben.
+   Rechts bleiben ~145px frei für die Windows-Knöpfe ─ □ ×. */
 .kopfleiste {
   display: flex;
   align-items: center;
-  padding: 0 20px;
-  height: 48px;
-  background: var(--flaeche);
+  gap: 12px;
+  padding: 0 145px 0 16px;
+  height: 56px;
+  flex-shrink: 0;
+  background: var(--hintergrund);
   border-bottom: 1px solid var(--rand);
+  -webkit-app-region: drag;
+}
+
+.kopfleiste button {
+  -webkit-app-region: no-drag;
+}
+
+.kopf-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: var(--akzent);
+  box-shadow: 0 0 18px rgba(37, 99, 235, 0.45);
+  flex-shrink: 0;
+}
+
+.kopf-wort {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.05;
 }
 
 .app-name {
   font-size: 16px;
-  font-weight: 600;
+  font-weight: 800;
+}
+
+.kopf-forge {
+  color: var(--akzent-hell);
+}
+
+.kopf-werkbank {
+  font-size: 8.5px;
+  letter-spacing: 0.42em;
+  color: var(--text-leise);
+  font-weight: 500;
+}
+
+.kopf-brotkrume {
+  margin-left: 14px;
+  border: none;
+  background: none;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--text-leise);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.kopf-brotkrume b {
+  color: var(--text);
+}
+
+.kopf-brotkrume:hover {
+  color: var(--text-zweit);
 }
 
 .inhalt {
   flex: 1;
   overflow-y: auto;
   padding: 32px;
+}
+
+/* Wiederkehrende Muster der Werkbank */
+
+.kicker {
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-weight: 800;
+  color: var(--text-leise);
+}
+
+.titel-gross {
+  font-weight: 900;
+  font-size: 32px;
+  line-height: 0.95;
+  text-transform: uppercase;
+  letter-spacing: 0.01em;
+}
+
+@keyframes ff-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
 }
 
 .projektuebersicht {
@@ -59,32 +206,74 @@ body {
 }
 
 .uebersicht-kopf h1 {
-  font-size: 24px;
+  font-weight: 900;
+  font-size: 34px;
+  line-height: 0.95;
+  text-transform: uppercase;
+  letter-spacing: 0.01em;
 }
 
 .knopf-primaer {
-  padding: 8px 16px;
+  padding: 9px 16px;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-knopf);
   background: var(--akzent);
   color: #ffffff;
-  font-size: 14px;
-  font-weight: 600;
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 700;
   cursor: pointer;
+  box-shadow: 0 0 18px var(--akzent-glut);
 }
 
 .knopf-primaer:hover {
-  background: var(--akzent-dunkel);
+  background: var(--akzent-hell);
+}
+
+/* LAUF STARTEN: Signalrot mit Glut (Mockup 3b) — das Lebendige ist rot. */
+.knopf-start {
+  padding: 9px 18px;
+  border: none;
+  border-radius: var(--radius-knopf);
+  background: var(--signal);
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  box-shadow: 0 0 22px var(--signal-glut);
+}
+
+.knopf-start:hover {
+  background: var(--signal-punkt);
 }
 
 .hinweis {
+  display: flex;
+  align-items: center;
+  gap: 9px;
   margin-bottom: 16px;
   padding: 10px 14px;
-  border: 1px solid var(--rand);
-  border-radius: 6px;
+  border: 1px solid var(--rand-panel);
+  border-radius: var(--radius-karte);
   background: var(--flaeche);
-  color: var(--text-gedimmt);
-  font-size: 14px;
+  color: var(--text-zweit);
+  font-size: 13px;
+}
+
+.hinweis-unten {
+  margin-top: 18px;
+  margin-bottom: 0;
+}
+
+.hinweis-punkt {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--signal-punkt);
+  animation: ff-pulse 1.4s infinite;
+  flex-shrink: 0;
 }
 
 .leer-zustand {
@@ -93,18 +282,18 @@ body {
   align-items: center;
   gap: 8px;
   padding: 80px 20px;
-  border: 2px dashed var(--rand);
-  border-radius: 12px;
+  border: 2px dashed var(--rand-panel);
+  border-radius: var(--radius-panel);
   text-align: center;
 }
 
 .leer-titel {
   font-size: 18px;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .leer-untertitel {
-  color: var(--text-gedimmt);
+  color: var(--text-leise);
   font-size: 14px;
 }
 
@@ -120,18 +309,19 @@ body {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 6px;
-  padding: 18px;
-  border: 1px solid var(--rand);
-  border-radius: 10px;
+  gap: 8px;
+  padding: 18px 20px;
+  border: 1px solid var(--rand-panel);
+  border-radius: var(--radius-panel);
   background: var(--flaeche);
+  color: var(--text);
   text-align: left;
   font-family: inherit;
   cursor: pointer;
 }
 
 .projekt-kachel:hover {
-  border-color: var(--akzent);
+  border-color: var(--rand-block);
 }
 
 .kachel-fehlt {
@@ -140,27 +330,28 @@ body {
 }
 
 .kachel-fehlt:hover {
-  border-color: var(--rand);
+  border-color: var(--rand-panel);
 }
 
 .kachel-name {
-  font-size: 16px;
-  font-weight: 600;
+  font-size: 19px;
+  font-weight: 800;
 }
 
 .kachel-pfad {
-  color: var(--text-gedimmt);
+  color: var(--text-leise);
   font-size: 12px;
   word-break: break-all;
 }
 
 .kachel-warnung {
-  color: #b45309;
+  color: var(--lesend);
   font-size: 13px;
   font-weight: 600;
 }
 
-/* Zustände auf den Kacheln (SPEC §9, BAUPLAN 15) */
+/* Zustände auf den Kacheln (SPEC §9, BAUPLAN 15): Abzeichen im Mockup-Stil —
+   Rot gefüllt = wartet auf den Menschen, Umrisse für alles Ruhige. */
 
 .kachel-marken {
   display: flex;
@@ -171,18 +362,92 @@ body {
 }
 
 .zustand-aktiv {
-  background: #dbeafe;
-  color: #1d4ed8;
+  background: transparent;
+  border: 1px solid var(--akzent-hell);
+  color: var(--akzent-text);
 }
 
 .zustand-antwort {
-  background: #fee2e2;
-  color: #b91c1c;
+  background: var(--signal);
+  border: 1px solid var(--signal);
+  color: #ffffff;
 }
 
 .zustand-wartend {
-  background: #fef3c7;
-  color: #b45309;
+  background: transparent;
+  border: 1px solid var(--rand-block);
+  color: var(--akzent-text);
+}
+
+/* Hero-Kachel: der laufende Lauf, groß über dem Raster (Mockup 3a). */
+
+.hero-kachel {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 26px;
+  padding: 22px 26px;
+  margin-bottom: 18px;
+  border: 1.5px solid var(--akzent);
+  border-radius: var(--radius-panel);
+  background: var(--flaeche);
+  box-shadow: 0 0 34px rgba(37, 99, 235, 0.16);
+}
+
+.hero-links {
+  min-width: 0;
+}
+
+.hero-status {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  font-weight: 700;
+  color: var(--signal-text);
+  text-transform: uppercase;
+}
+
+.hero-punkt {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--signal-punkt);
+  animation: ff-pulse 1.4s infinite;
+  box-shadow: 0 0 10px rgba(239, 45, 63, 0.8);
+}
+
+.hero-name {
+  font-weight: 800;
+  font-size: 30px;
+  line-height: 1.05;
+  margin: 10px 0 6px;
+}
+
+.hero-beschreibung {
+  font-size: 14.5px;
+  color: var(--text-zweit);
+  line-height: 1.5;
+}
+
+.hero-ticker {
+  margin-top: 14px;
+  font-family: var(--schrift-mono);
+  font-size: 11.5px;
+  color: var(--text-gedimmt);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hero-rechts {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 10px;
+  border-left: 1px solid var(--rand-panel);
+  padding-left: 26px;
+  min-width: 0;
 }
 
 /* Dialoge */
@@ -193,7 +458,8 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(28, 36, 48, 0.4);
+  /* Schleier über der dunklen Werkbank: fast schwarz, leicht durchscheinend. */
+  background: rgba(4, 6, 12, 0.6);
   z-index: 10;
 }
 
@@ -204,13 +470,15 @@ body {
   width: 480px;
   max-width: 90vw;
   padding: 24px;
-  border-radius: 12px;
+  border: 1px solid var(--rand-panel);
+  border-radius: var(--radius-panel);
   background: var(--flaeche);
-  box-shadow: 0 12px 40px rgba(28, 36, 48, 0.25);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
 }
 
 .dialog h2 {
-  font-size: 18px;
+  font-size: 19px;
+  font-weight: 800;
 }
 
 /* Projekt-Einstellungen: Rechte-Standard des Agenten (SPEC §7, BAUPLAN 15) */
@@ -230,40 +498,38 @@ body {
   flex-direction: column;
   gap: 6px;
   padding: 10px 12px;
-  border-radius: 8px;
+  border-radius: var(--radius-karte);
   font-size: 12px;
+  background: var(--flaeche-tief);
 }
 
 .rechte-frei {
-  background: #f0fdf4;
-  border: 1px solid #bbf7d0;
+  border: 1px solid var(--gut-rand);
 }
 
 .rechte-frage {
-  background: #fffbeb;
-  border: 1px solid #fde68a;
+  border: 1px solid var(--rand-kontrolle);
 }
 
 .rechte-gesperrt {
-  background: #fef2f2;
-  border: 1px solid #fecaca;
+  border: 1px solid var(--signal);
 }
 
 .rechte-titel {
-  font-weight: 600;
+  font-weight: 700;
   font-size: 12px;
 }
 
 .rechte-frei .rechte-titel {
-  color: #15803d;
+  color: var(--gut-text);
 }
 
 .rechte-frage .rechte-titel {
-  color: #b45309;
+  color: var(--lesend);
 }
 
 .rechte-gesperrt .rechte-titel {
-  color: #b91c1c;
+  color: var(--signal-text);
 }
 
 .rechte-liste {
@@ -279,7 +545,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
 }
 
@@ -287,23 +553,32 @@ body {
 .feld textarea,
 .feld select {
   padding: 8px 10px;
-  border: 1px solid var(--rand);
-  border-radius: 6px;
+  border: 1px solid var(--rand-kontrolle);
+  border-radius: var(--radius-knopf);
+  background: var(--flaeche-tief);
+  color: var(--text);
   font-family: inherit;
   font-size: 14px;
   font-weight: 400;
   resize: vertical;
 }
 
+.feld input:focus,
+.feld textarea:focus,
+.feld select:focus {
+  outline: none;
+  border-color: var(--akzent-hell);
+}
+
 .feld-hinweis {
-  color: var(--text-gedimmt);
+  color: var(--text-leise);
   font-size: 12px;
   font-weight: 400;
 }
 
 .zaehler-rot {
-  color: #dc2626;
-  font-weight: 600;
+  color: var(--signal-text);
+  font-weight: 700;
 }
 
 .ort-zeile {
@@ -313,7 +588,7 @@ body {
 }
 
 .ort-pfad {
-  color: var(--text-gedimmt);
+  color: var(--text-leise);
   font-size: 12px;
   font-weight: 400;
   word-break: break-all;
@@ -326,47 +601,52 @@ body {
 }
 
 .knopf-sekundaer {
-  padding: 8px 16px;
-  border: 1px solid var(--rand);
-  border-radius: 6px;
-  background: var(--flaeche);
+  padding: 9px 16px;
+  border: 1px solid var(--rand-kontrolle);
+  border-radius: var(--radius-knopf);
+  background: transparent;
   color: var(--text);
-  font-size: 14px;
+  font-family: inherit;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
 }
 
 .knopf-sekundaer:hover {
-  border-color: var(--akzent);
+  border-color: var(--rand-block);
+  background: var(--flaeche-hervor);
 }
 
 .knopf-klein {
-  padding: 4px 10px;
-  border: 1px solid var(--rand);
-  border-radius: 6px;
-  background: var(--flaeche);
+  padding: 5px 10px;
+  border: 1px solid var(--rand-kontrolle);
+  border-radius: 8px;
+  background: transparent;
   color: var(--text);
+  font-family: inherit;
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
 }
 
 .knopf-klein:hover {
-  border-color: var(--akzent);
+  border-color: var(--rand-block);
+  background: var(--flaeche-hervor);
 }
 
 .knopf-primaer.knopf-klein {
   border: none;
   background: var(--akzent);
   color: #ffffff;
+  box-shadow: 0 0 14px var(--akzent-glut);
 }
 
 .fehlermeldung {
   padding: 10px 14px;
-  border: 1px solid #fca5a5;
-  border-radius: 6px;
-  background: #fef2f2;
-  color: #b91c1c;
+  border: 1px solid var(--signal);
+  border-radius: var(--radius-knopf);
+  background: transparent;
+  color: var(--signal-text);
   font-size: 14px;
 }
 
@@ -386,7 +666,11 @@ body {
 }
 
 .ansicht-kopf h1 {
-  font-size: 20px;
+  font-weight: 900;
+  font-size: 26px;
+  line-height: 0.95;
+  text-transform: uppercase;
+  letter-spacing: 0.01em;
 }
 
 /* „App starten"-Knopf samt Fehlerzeile rechts im Kopf (SPEC §8). */
@@ -399,7 +683,7 @@ body {
 }
 
 .start-fehler {
-  color: #b91c1c;
+  color: var(--signal-text);
   font-size: 13px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -419,10 +703,13 @@ body {
   flex-direction: column;
   gap: 12px;
   padding: 16px;
-  border: 1px solid var(--rand);
-  border-radius: 10px;
+  border: 1px solid var(--rand-panel);
+  border-radius: var(--radius-panel);
   background: var(--flaeche);
   min-height: 0;
+  /* Grid-Kinder wachsen sonst auf min-content und sprengen die 1fr-Spalte —
+     Chips wickeln um, die Leinwand scrollt selbst. */
+  min-width: 0;
 }
 
 .spalten-kopf {
@@ -432,22 +719,28 @@ body {
 }
 
 .spalten-kopf h2 {
-  font-size: 16px;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  font-weight: 800;
+  color: var(--text-leise);
 }
 
 .filter-zeile {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 4px;
 }
 
 .filter-chip {
-  padding: 3px 10px;
-  border: 1px solid var(--rand);
-  border-radius: 999px;
-  background: var(--flaeche);
-  color: var(--text-gedimmt);
-  font-size: 12px;
+  padding: 4px 12px;
+  border: 1px solid var(--rand-panel);
+  border-radius: var(--radius-pille);
+  background: transparent;
+  color: var(--text-leise);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
   cursor: pointer;
 }
 
@@ -465,40 +758,66 @@ body {
   min-height: 0;
 }
 
+/* Karten in der Seitenleiste: dunkle Panels, die Sorte färbt den Kicker
+   (Mockup 3b) — statt der früheren farbigen Linksränder. */
 .karte {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 12px;
-  border: 1px solid var(--rand);
-  border-left: 4px solid var(--rand);
-  border-radius: 8px;
+  gap: 5px;
+  padding: 12px 13px;
+  border: 1px solid var(--rand-panel);
+  border-left: 4px solid var(--rand-panel);
+  border-radius: var(--radius-karte);
+  background: var(--flaeche-tief);
+}
+
+.karte .karte-sorte {
+  color: var(--text-leise);
 }
 
 .karte-status {
-  border-left-color: var(--akzent);
-  background: #eff6ff;
+  border-left-color: var(--akzent-hell);
+}
+
+.karte-status .karte-sorte {
+  color: var(--akzent-text);
 }
 
 .karte-aufgabe {
-  border-left-color: #16a34a;
+  border-left-color: var(--signal);
+}
+
+.karte-aufgabe .karte-sorte {
+  color: var(--signal-text);
 }
 
 .karte-entscheidung {
-  border-left-color: #d97706;
+  border-left-color: var(--eigen);
+}
+
+.karte-entscheidung .karte-sorte {
+  color: var(--eigen);
 }
 
 .karte-wissen {
-  border-left-color: #7c3aed;
+  border-left-color: var(--akzent-text);
+}
+
+.karte-wissen .karte-sorte {
+  color: var(--akzent-text);
 }
 
 /* Prüfkarten (BAUPLAN 18): legt FlowForge nach jeder bestandenen Prüfung an. */
 .karte-pruefung {
-  border-left-color: #0d9488;
+  border-left-color: var(--gut-rand);
+}
+
+.karte-pruefung .karte-sorte {
+  color: var(--gut-text);
 }
 
 .karte-erledigt {
-  opacity: 0.55;
+  opacity: 0.5;
 }
 
 .karte-kopf {
@@ -508,25 +827,26 @@ body {
 }
 
 .karte-sorte {
-  color: var(--text-gedimmt);
-  font-size: 11px;
-  font-weight: 600;
+  font-size: 10px;
+  font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.14em;
 }
 
 .karte-zustand {
-  color: var(--text-gedimmt);
+  color: var(--text-leise);
   font-size: 11px;
 }
 
 .karte-titel {
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .karte-text {
-  font-size: 13px;
+  font-size: 12.5px;
+  color: var(--text-zweit);
+  line-height: 1.45;
   white-space: pre-wrap;
 }
 
@@ -539,7 +859,7 @@ body {
 /* Leinwand: Übungs-Workflows, Liveticker, Laufberichte */
 
 .kopfleiste {
-  justify-content: space-between;
+  justify-content: flex-start;
 }
 
 .leinwand {
@@ -563,8 +883,9 @@ body {
   justify-content: space-between;
   gap: 12px;
   padding: 14px;
-  border: 1px solid var(--rand);
-  border-radius: 8px;
+  border: 1px solid var(--rand-panel);
+  border-radius: var(--radius-karte);
+  background: var(--flaeche-tief);
 }
 
 .lauf-ansicht {
@@ -578,35 +899,90 @@ body {
   align-items: center;
   justify-content: space-between;
   padding: 14px;
-  border: 2px solid var(--rand);
-  border-radius: 8px;
+  border: 2px solid var(--rand-panel);
+  border-radius: var(--radius-karte);
+  background: var(--flaeche-tief);
 }
 
 .block-laeuft {
   border-color: var(--akzent);
-  background: #eff6ff;
+  background: var(--flaeche-hervor);
   animation: block-pulsieren 1.6s ease-in-out infinite;
 }
 
 @keyframes block-pulsieren {
   0%,
   100% {
-    box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.25);
+    box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.35);
   }
   50% {
-    box-shadow: 0 0 0 6px rgba(37, 99, 235, 0.08);
+    box-shadow: 0 0 0 6px rgba(37, 99, 235, 0.1);
   }
 }
 
 .block-zustand {
-  color: var(--akzent);
+  color: var(--akzent-text);
   font-size: 13px;
   font-weight: 600;
 }
 
 .verbrauch-zeile {
-  color: var(--text-gedimmt);
+  color: var(--text-leise);
+  font-family: var(--schrift-mono);
+  font-size: 11.5px;
+}
+
+/* Kontext-Füllstand als Balken (Mockup 3a/3c): blauer Verlauf, rote Marke
+   an der Übertrags-Schwelle. */
+.kontext-balken-bereich {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.kontext-balken-zeile {
+  display: flex;
+  align-items: baseline;
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-weight: 800;
+  color: var(--text-leise);
+}
+
+.kontext-balken-wert {
+  margin-left: auto;
+  font-family: var(--schrift-mono);
   font-size: 12px;
+  letter-spacing: normal;
+  color: var(--text);
+}
+
+.kontext-balken {
+  position: relative;
+  height: 8px;
+  border-radius: var(--radius-pille);
+  /* Spur: eine Stufe heller als die tiefe Fläche, damit der leere Balken
+     auf Panels sichtbar bleibt. */
+  background: #1a2338;
+}
+
+.kontext-balken-fuellung {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  border-radius: var(--radius-pille);
+  background: linear-gradient(90deg, var(--akzent), var(--akzent-hell));
+}
+
+.kontext-balken-marke {
+  position: absolute;
+  top: -3px;
+  width: 2px;
+  height: 14px;
+  border-radius: 2px;
+  background: var(--signal-punkt);
 }
 
 .lauf-knoepfe {
@@ -615,34 +991,38 @@ body {
 }
 
 .knopf-gefahr {
-  padding: 4px 10px;
-  border: 1px solid #fca5a5;
-  border-radius: 6px;
-  background: #fef2f2;
-  color: #b91c1c;
+  padding: 5px 10px;
+  border: 1px solid var(--signal);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--signal-text);
+  font-family: inherit;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
 }
 
 .knopf-gefahr:hover {
-  border-color: #dc2626;
+  background: rgba(225, 29, 46, 0.12);
 }
 
 .ticker {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
   max-height: 320px;
   overflow-y: auto;
-  padding: 10px;
-  border: 1px solid var(--rand);
-  border-radius: 8px;
-  background: var(--hintergrund);
+  padding: 12px 14px;
+  border: 1px solid var(--rand-panel);
+  border-radius: var(--radius-panel);
+  background: var(--flaeche-tief);
 }
 
 .ticker-zeile {
-  font-size: 13px;
+  font-family: var(--schrift-mono);
+  font-size: 11.5px;
+  line-height: 1.7;
+  color: var(--text-zweit);
   white-space: pre-wrap;
   word-break: break-word;
   padding: 2px 6px;
@@ -653,32 +1033,32 @@ body {
 /* Blockfarbe je Ticker-Zeile (Wunsch Georg, 13.08.2026): dieselben Farben
    wie die Block-Karten — Bauer rot, Prüfer blau, nur-lesende Blöcke grün. */
 .ticker-zeile.ticker-bauer {
-  border-left-color: #dc2626;
-  background: #fef6f6;
+  border-left-color: var(--signal);
+  background: rgba(225, 29, 46, 0.07);
 }
 
 .ticker-zeile.ticker-pruefer {
-  border-left-color: #2563eb;
-  background: #f3f7fe;
+  border-left-color: var(--akzent-hell);
+  background: rgba(59, 130, 246, 0.07);
 }
 
 .ticker-zeile.ticker-leser {
-  border-left-color: #16a34a;
-  background: #f4fbf6;
+  border-left-color: var(--gut-rand);
+  background: rgba(47, 158, 99, 0.08);
 }
 
 .ticker-block {
   margin-right: 8px;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-gedimmt);
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--text-leise);
   white-space: nowrap;
 }
 
 .ticker-zeit {
   margin-right: 8px;
-  color: var(--text-gedimmt);
-  font-size: 11px;
+  color: var(--ticker-zeit);
+  font-size: 10.5px;
 }
 
 /* „Gerade arbeitet:"-Chips über dem Liveticker */
@@ -688,27 +1068,29 @@ body {
   flex-wrap: wrap;
   gap: 6px;
   font-size: 13px;
-  color: var(--text-gedimmt);
+  color: var(--text-leise);
 }
 
 .lauf-aktiv-chip {
-  padding: 2px 10px;
+  padding: 3px 11px;
   border: 1px solid;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 600;
+  border-radius: var(--radius-pille);
+  font-size: 11px;
+  font-weight: 700;
   color: var(--text);
+  animation: ff-pulse 2s infinite;
 }
 
 .roh-protokoll {
   max-height: 200px;
   overflow: auto;
   padding: 10px;
-  border: 1px solid var(--rand);
-  border-radius: 8px;
-  background: #1c2430;
-  color: #d1e0f0;
-  font-size: 11px;
+  border: 1px solid var(--rand-panel);
+  border-radius: var(--radius-karte);
+  background: var(--flaeche-tief);
+  color: var(--text-gedimmt);
+  font-family: var(--schrift-mono);
+  font-size: 10.5px;
   white-space: pre-wrap;
   word-break: break-all;
 }
@@ -718,36 +1100,43 @@ body {
   flex-direction: column;
   gap: 8px;
   align-items: flex-start;
-  padding: 12px;
-  border-radius: 8px;
-  border: 1px solid var(--rand);
+  padding: 12px 14px;
+  border-radius: var(--radius-karte);
+  border: 1px solid var(--rand-panel);
+  background: var(--flaeche-tief);
 }
 
 .ergebnis-erfolgreich {
-  border-color: #86efac;
-  background: #f0fdf4;
+  border-color: var(--gut-rand);
 }
 
 .ergebnis-fehlgeschlagen {
-  border-color: #fca5a5;
-  background: #fef2f2;
+  border-color: var(--signal);
 }
 
+/* Zustands-Abzeichen (Mockup 3a): Rot gefüllt = braucht den Menschen,
+   Umrisse für alles andere. */
 .zustand-marke {
-  padding: 2px 8px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 600;
+  padding: 2px 9px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .zustand-erfolgreich {
-  background: #dcfce7;
-  color: #15803d;
+  background: transparent;
+  border-color: var(--gut-rand);
+  color: var(--gut-text);
 }
 
 .zustand-fehlgeschlagen {
-  background: #fee2e2;
-  color: #b91c1c;
+  background: transparent;
+  border-color: var(--signal);
+  color: var(--signal-text);
 }
 
 .zustand-sanft-gestoppt,
@@ -755,13 +1144,15 @@ body {
 .zustand-zurueckgestellt,
 .zustand-wiederhergestellt,
 .zustand-laeuft {
-  background: #e5e7eb;
-  color: #374151;
+  background: transparent;
+  border-color: var(--rand-kontrolle);
+  color: var(--text-gedimmt);
 }
 
 .zustand-kontingent-erschoepft {
-  background: #fef3c7;
-  color: #b45309;
+  background: transparent;
+  border-color: var(--lesend);
+  color: var(--lesend);
 }
 
 .berichte-bereich {
@@ -774,9 +1165,10 @@ body {
 }
 
 .bericht {
-  border: 1px solid var(--rand);
-  border-radius: 8px;
+  border: 1px solid var(--rand-panel);
+  border-radius: var(--radius-karte);
   overflow: hidden;
+  background: var(--flaeche-tief);
 }
 
 .bericht-kopf {
@@ -787,7 +1179,8 @@ body {
   width: 100%;
   padding: 10px 12px;
   border: none;
-  background: var(--flaeche);
+  background: transparent;
+  color: var(--text);
   font-family: inherit;
   font-size: 13px;
   cursor: pointer;
@@ -795,7 +1188,7 @@ body {
 }
 
 .bericht-kopf:hover {
-  background: var(--hintergrund);
+  background: var(--flaeche-hervor);
 }
 
 .bericht-details {
@@ -803,19 +1196,20 @@ body {
   flex-direction: column;
   gap: 6px;
   padding: 10px 12px;
-  border-top: 1px solid var(--rand);
+  border-top: 1px solid var(--rand-panel);
 }
 
 .bericht-abschnitt {
-  color: var(--text-gedimmt);
-  font-size: 11px;
-  font-weight: 600;
+  color: var(--text-leise);
+  font-size: 10.5px;
+  font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.14em;
 }
 
 .bericht-zeile {
   font-size: 12px;
+  color: var(--text-zweit);
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -831,14 +1225,17 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 8px 12px;
-  border: 1px solid var(--rand);
-  border-radius: 8px;
-  font-size: 13px;
+  padding: 9px 12px;
+  border: 1px solid var(--rand-panel);
+  border-radius: var(--radius-karte);
+  background: var(--flaeche-tief);
+  font-family: var(--schrift-mono);
+  font-size: 12px;
 }
 
 .punkt-zeile button {
   flex-shrink: 0;
+  font-family: var(--schrift);
 }
 
 .vorschau-listen {
@@ -882,15 +1279,17 @@ body {
   align-items: center;
   gap: 6px;
   padding: 8px 10px;
-  border: 1px dashed var(--rand);
-  border-radius: 8px;
-  background: var(--flaeche);
+  border: 1px dashed var(--rand-kontrolle);
+  border-radius: var(--radius-karte);
+  background: var(--flaeche-tief);
 }
 
 .kontext-titel {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-gedimmt);
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-weight: 800;
+  color: var(--text-leise);
 }
 
 .kontext-chip {
@@ -898,34 +1297,36 @@ body {
   align-items: center;
   gap: 4px;
   max-width: 260px;
-  padding: 3px 8px;
-  border: 1px solid var(--rand);
-  border-left: 4px solid var(--rand);
-  border-radius: 999px;
-  background: #fff;
-  font-size: 12px;
+  padding: 3px 10px;
+  border: 1px solid var(--rand-kontrolle);
+  border-left: 4px solid var(--rand-kontrolle);
+  border-radius: var(--radius-pille);
+  background: var(--flaeche);
+  color: var(--text-zweit);
+  font-size: 11.5px;
+  font-weight: 600;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
 
 .kontext-chip.chip-status {
-  border-left-color: var(--akzent);
+  border-left-color: var(--akzent-hell);
 }
 
 .kontext-chip.chip-aufgabe {
-  border-left-color: #16a34a;
+  border-left-color: var(--signal);
 }
 
 .kontext-chip.chip-entscheidung {
-  border-left-color: #d97706;
+  border-left-color: var(--eigen);
 }
 
 .kontext-chip.chip-wissen {
-  border-left-color: #7c3aed;
+  border-left-color: var(--akzent-text);
 }
 
 .kontext-chip.chip-pruefung {
-  border-left-color: #0d9488;
+  border-left-color: var(--gut-rand);
 }
 
 /* Angehängte Prüfkarten an der Prüf-Blockkarte (BAUPLAN 18) */
@@ -949,7 +1350,7 @@ body {
 
 .chip-fest {
   flex-shrink: 0;
-  color: var(--text-gedimmt);
+  color: var(--text-blass);
   font-style: normal;
 }
 
@@ -959,13 +1360,13 @@ body {
   background: none;
   padding: 0 2px;
   cursor: pointer;
-  color: var(--text-gedimmt);
+  color: var(--text-leise);
   font-size: 13px;
   line-height: 1;
 }
 
 .chip-entfernen:hover {
-  color: #dc2626;
+  color: var(--signal-text);
 }
 
 /* Karten in der Seitenleiste lassen sich in die Vorauswahl ziehen */
@@ -979,25 +1380,28 @@ body {
   gap: 8px;
   font-size: 12px;
   font-weight: 600;
-  color: var(--text-gedimmt);
+  color: var(--text-leise);
 }
 
 .runden-feld input {
   width: 52px;
   padding: 4px 6px;
-  border: 1px solid var(--rand);
-  border-radius: 6px;
+  border: 1px solid var(--rand-kontrolle);
+  border-radius: 8px;
+  background: var(--flaeche-tief);
+  color: var(--text);
   font-family: inherit;
   font-size: 13px;
 }
 
 .runden-feld select {
   padding: 4px 6px;
-  border: 1px solid var(--rand);
-  border-radius: 6px;
+  border: 1px solid var(--rand-kontrolle);
+  border-radius: 8px;
   font-family: inherit;
   font-size: 13px;
-  background: #fff;
+  background: var(--flaeche-tief);
+  color: var(--text);
 }
 
 /* Schaubild-Leinwand (Bauschritt 6): frei platzierte Karten + Pfeile */
@@ -1009,18 +1413,18 @@ body {
   flex: 1;
   min-height: 320px;
   overflow: auto;
-  border: 1px solid var(--rand);
-  border-radius: 8px;
-  background: var(--hintergrund);
+  border: 1px solid var(--rand-panel);
+  border-radius: var(--radius-karte);
+  background: var(--flaeche-tief);
 }
 
 .schaubild-flaeche {
   position: relative;
   /* Punktraster und Ablagefläche bis an den Rand, auch wenn die Karten weniger
-     Platz brauchen als sichtbar ist. */
+     Platz brauchen als sichtbar ist. Rasterfarbe: kühles Blaugrau (Mockup 3b). */
   min-width: 100%;
   min-height: 100%;
-  background: radial-gradient(circle, #dfe3e9 1px, transparent 1px) 0 0 / 24px 24px;
+  background: radial-gradient(rgba(120, 150, 220, 0.13) 1px, transparent 1px) 0 0 / 24px 24px;
 }
 
 .pfeil-ebene {
@@ -1031,12 +1435,12 @@ body {
 }
 
 .pfeil-linie {
-  stroke: #6b7484;
-  stroke-width: 2;
+  stroke: var(--akzent-hell);
+  stroke-width: 1.6;
 }
 
 .pfeil-vorschau {
-  stroke: var(--akzent);
+  stroke: var(--akzent-text);
   stroke-dasharray: 6 4;
 }
 
@@ -1048,45 +1452,72 @@ body {
   width: 240px;
   padding: 12px;
   padding-bottom: 16px;
-  border: 2px solid var(--rand);
-  border-radius: 8px;
+  border: 2px solid var(--rand-block);
+  border-radius: var(--radius-karte);
   background: var(--flaeche);
-  box-shadow: 0 2px 6px rgba(28, 36, 48, 0.08);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
   touch-action: none;
 }
 
-/* Kategorie-Farben: Bauer rot, Prüfer blau, nur-lesende Blöcke grün */
+/* Kategorie-Kicker auf den Blockkarten (Mockup 3b): Bauer blau wie alle
+   Arbeitsblöcke, Prüfer rot, nur-lesende Blöcke orange markiert. */
+.karte-kicker {
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-weight: 800;
+}
+
+/* Kategorie-Farben: Bauer rot, Prüfer blau — seit der dunklen Werkbank trägt
+   der Prüfer das Signalrot (Prüf-Block im Mockup), Arbeitsblöcke den blauen
+   Blockrand, nur-lesende Blöcke das Lese-Orange. */
 
 .kategorie-bauer {
-  border-color: #f0b4b4;
-  background: #fef6f6;
+  border-color: var(--rand-block);
+  background: var(--flaeche);
+}
+
+.kategorie-bauer .karte-kicker {
+  color: var(--akzent-text);
 }
 
 .kategorie-pruefer {
-  border-color: #a8c7f5;
-  background: #f3f7fe;
+  /* Prüf-Block (Mockup 3b): rötlich getönter Grund unter dem Signal-Rand. */
+  border-color: var(--signal);
+  background: #151222;
+  box-shadow: 0 0 24px rgba(225, 29, 46, 0.18);
+}
+
+.kategorie-pruefer .karte-kicker {
+  color: var(--signal-text);
 }
 
 .kategorie-leser {
-  border-color: #a7dbb8;
-  background: #f4fbf6;
+  border-color: var(--rand-block);
+  background: var(--flaeche);
+}
+
+.kategorie-leser .karte-kicker {
+  color: var(--lesend);
 }
 
 .bib-block.kategorie-bauer {
-  border-left: 4px solid #dc2626;
+  border-left: 4px solid var(--akzent-hell);
 }
 
 .bib-block.kategorie-pruefer {
-  border-left: 4px solid #2563eb;
+  border-left: 4px solid var(--signal);
+  background: var(--flaeche);
+  box-shadow: none;
 }
 
 .bib-block.kategorie-leser {
-  border-left: 4px solid #16a34a;
+  border-left: 4px solid var(--lesend);
 }
 
 .schaubild-karte.block-laeuft {
   border-color: var(--akzent);
-  background: #eff6ff;
+  background: var(--flaeche-hervor);
 }
 
 .schaubild-griff {
@@ -1104,9 +1535,9 @@ body {
   width: 22px;
   height: 22px;
   border: 2px solid var(--akzent);
-  border-radius: 999px;
+  border-radius: var(--radius-pille);
   background: var(--flaeche);
-  color: var(--akzent);
+  color: var(--akzent-text);
   font-size: 12px;
   font-weight: 700;
   cursor: crosshair;
@@ -1123,18 +1554,18 @@ body {
   transform: translate(-50%, -50%);
   width: 20px;
   height: 20px;
-  border: 1px solid var(--rand);
-  border-radius: 999px;
+  border: 1px solid var(--rand-kontrolle);
+  border-radius: var(--radius-pille);
   background: var(--flaeche);
-  color: var(--text-gedimmt);
+  color: var(--text-leise);
   font-size: 12px;
   line-height: 1;
   cursor: pointer;
 }
 
 .pfeil-loeschen:hover {
-  border-color: #dc2626;
-  color: #dc2626;
+  border-color: var(--signal);
+  color: var(--signal-text);
 }
 
 /* Block-Ergebnis direkt an der Karte */
@@ -1151,9 +1582,9 @@ body {
   justify-content: space-between;
   gap: 6px;
   padding: 4px 6px;
-  border: 1px solid var(--rand);
-  border-radius: 6px;
-  background: var(--flaeche);
+  border: 1px solid var(--rand-kontrolle);
+  border-radius: 8px;
+  background: transparent;
   color: var(--text-gedimmt);
   font-family: inherit;
   font-size: 11px;
@@ -1163,42 +1594,45 @@ body {
 }
 
 .block-ergebnis-knopf:hover {
-  border-color: var(--akzent);
+  border-color: var(--rand-block);
 }
 
 .block-ergebnis-marke {
   padding: 1px 8px;
-  border-radius: 999px;
-  font-size: 10px;
-  font-weight: 600;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
   white-space: nowrap;
 }
 
 .marke-erfolgreich,
 .marke-pruefung-bestanden {
-  background: #dcfce7;
-  color: #15803d;
+  border-color: var(--gut-rand);
+  color: var(--gut-text);
 }
 
 .marke-fehlgeschlagen,
 .marke-pruefung-nicht-bestanden {
-  background: #fee2e2;
-  color: #b91c1c;
+  border-color: var(--signal);
+  color: var(--signal-text);
 }
 
 .marke-startanleitung-fehlt {
-  background: #fef3c7;
-  color: #b45309;
+  border-color: var(--lesend);
+  color: var(--lesend);
 }
 
 .block-ergebnis-text {
   max-height: 180px;
   overflow-y: auto;
   padding: 6px 8px;
-  border: 1px solid var(--rand);
-  border-radius: 6px;
-  background: var(--flaeche);
+  border: 1px solid var(--rand-kontrolle);
+  border-radius: 8px;
+  background: var(--flaeche-tief);
   font-size: 12px;
+  color: var(--text-zweit);
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -1209,18 +1643,18 @@ body {
   padding: 4px 0;
   border: none;
   background: none;
-  color: var(--text-gedimmt);
+  color: var(--akzent-text);
   font-family: inherit;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.08em;
   text-align: left;
   cursor: pointer;
 }
 
 .bereich-kopf:hover {
-  color: var(--akzent);
+  color: var(--akzent-hell);
 }
 
 .schaubild-leer {
@@ -1231,7 +1665,7 @@ body {
   width: 380px;
   max-width: 80vw;
   text-align: center;
-  color: var(--text-gedimmt);
+  color: var(--text-blass);
   font-size: 13px;
 }
 
@@ -1251,12 +1685,13 @@ body {
   justify-content: center;
   width: 20px;
   height: 20px;
-  border-radius: 999px;
-  background: var(--hintergrund);
-  border: 1px solid var(--rand);
+  border-radius: var(--radius-pille);
+  background: var(--flaeche-tief);
+  border: 1px solid var(--rand-kontrolle);
   color: var(--text-gedimmt);
-  font-size: 11px;
-  font-weight: 600;
+  font-family: var(--schrift-mono);
+  font-size: 10.5px;
+  font-weight: 700;
   flex-shrink: 0;
 }
 
@@ -1268,29 +1703,31 @@ body {
 
 .block-chip {
   padding: 1px 8px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 600;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
 .chip-braucht {
-  background: #fef3c7;
-  color: #92400e;
+  border-color: var(--rand-block);
+  color: var(--akzent-text);
 }
 
 .chip-liefert {
-  background: #dcfce7;
-  color: #15803d;
+  border-color: var(--gut-rand);
+  color: var(--gut-text);
 }
 
 .chip-sperre {
-  background: #e0e7ff;
-  color: #3730a3;
+  border-color: var(--lesend);
+  color: var(--lesend);
 }
 
 .chip-pruefer {
-  background: #fae8ff;
-  color: #86198f;
+  border-color: var(--signal);
+  color: var(--signal-text);
 }
 
 .feld-kompakt {
@@ -1308,7 +1745,7 @@ body {
 .bibliothek-liste {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   overflow-y: auto;
   min-height: 0;
 }
@@ -1317,28 +1754,28 @@ body {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: 12px;
-  border: 1px solid var(--rand);
-  border-radius: 8px;
-  background: var(--flaeche);
+  padding: 10px 12px;
+  border: 1px solid var(--rand-panel);
+  border-radius: var(--radius-knopf);
+  background: var(--flaeche-tief);
   cursor: grab;
 }
 
 .bib-block:hover {
-  border-color: var(--akzent);
+  border-color: var(--rand-block);
 }
 
 .bibliothek-gruppe {
   margin-top: 6px;
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 10px;
+  font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text-schwach, #6b7484);
+  letter-spacing: 0.14em;
+  color: var(--akzent-text);
 }
 
 .bib-vorlage {
-  border-left: 4px solid #9333ea;
+  border-left: 4px solid var(--eigen);
 }
 
 /* Folgen-Frage */
@@ -1354,10 +1791,11 @@ body {
   flex-direction: column;
   align-items: flex-start;
   gap: 4px;
-  padding: 12px;
-  border: 1px solid var(--rand);
-  border-radius: 8px;
-  background: var(--flaeche);
+  padding: 12px 14px;
+  border: 1px solid var(--rand-kontrolle);
+  border-radius: var(--radius-karte);
+  background: var(--flaeche-tief);
+  color: var(--text);
   font-family: inherit;
   font-size: 14px;
   text-align: left;
@@ -1365,7 +1803,9 @@ body {
 }
 
 .entscheidung-option:hover {
-  border-color: var(--akzent);
+  border-color: var(--akzent-hell);
+  background: var(--flaeche-hervor);
+  box-shadow: 0 0 18px rgba(37, 99, 235, 0.2);
 }
 
 .bericht-kopf-text {
@@ -1381,10 +1821,11 @@ body {
   justify-content: center;
   gap: 8px;
   flex: 1;
-  border: 2px dashed var(--rand);
-  border-radius: 8px;
+  border: 2px dashed var(--rand-panel);
+  border-radius: var(--radius-karte);
   padding: 20px;
   text-align: center;
+  color: var(--text-leise);
 }
 
 /* Gespräch mit dem Agenten (Bauschritt 9): Chat-Ansicht innerhalb des Laufs. */
@@ -1392,15 +1833,18 @@ body {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 12px;
-  border: 1px solid var(--akzent);
-  border-radius: 8px;
+  padding: 14px 16px;
+  border: 1px solid var(--rand-block);
+  border-radius: var(--radius-panel);
   background: var(--flaeche);
 }
 
 .gespraech-titel {
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-weight: 800;
+  color: var(--signal-text);
 }
 
 .gespraech-verlauf {
@@ -1413,29 +1857,35 @@ body {
 
 .gespraech-blase {
   max-width: 85%;
-  padding: 8px 12px;
-  border-radius: 12px;
-  font-size: 14px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  font-size: 13.5px;
+  line-height: 1.5;
   white-space: pre-wrap;
   word-break: break-word;
 }
 
 .blase-agent {
   align-self: flex-start;
-  background: #eef2f7;
+  background: var(--flaeche-tief);
+  border: 1px solid var(--rand-panel);
+  color: var(--text-zweit);
   border-bottom-left-radius: 4px;
 }
 
 .blase-mensch {
   align-self: flex-end;
   margin-top: 8px;
-  background: var(--akzent);
-  color: #ffffff;
+  background: var(--flaeche-gewaehlt);
+  border: 1px solid var(--rand-block);
+  color: var(--text-zweit);
   border-bottom-right-radius: 4px;
 }
 
 .blase-offen {
-  border: 1px solid var(--akzent);
+  border: 1px solid var(--rand-block);
+  background: var(--flaeche-tief);
+  color: var(--text);
 }
 
 .gespraech-eingabe {
@@ -1444,24 +1894,48 @@ body {
   gap: 8px;
 }
 
+/* Antwort-Optionen als Auswahlkarten (Mockup 4a): zwei Spalten, beim
+   Überfahren blauer Rahmen + Glut wie eine gewählte Karte. */
 .gespraech-optionen {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
 }
 
 .gespraech-option {
-  padding: 8px 12px;
-  border: 1px solid var(--rand);
-  border-radius: 8px;
-  background: var(--flaeche);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid var(--rand-kontrolle);
+  border-radius: 11px;
+  background: var(--flaeche-tief);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.45;
   text-align: left;
-  font-size: 14px;
   cursor: pointer;
 }
 
 .gespraech-option:hover {
-  border-color: var(--akzent);
+  border: 1.5px solid var(--akzent-hell);
+  padding: 11.5px 13.5px;
+  background: var(--flaeche-hervor);
+  box-shadow: 0 0 18px rgba(37, 99, 235, 0.2);
+}
+
+.option-empfohlen {
+  border: 1px solid var(--gut-rand);
+  border-radius: 5px;
+  padding: 1px 7px;
+  color: var(--gut-text);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
 }
 
 .gespraech-zeile {
@@ -1471,12 +1945,19 @@ body {
 
 .gespraech-zeile textarea {
   flex: 1;
-  padding: 8px 10px;
-  border: 1px solid var(--rand);
-  border-radius: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--rand-kontrolle);
+  border-radius: 11px;
+  background: var(--flaeche-tief);
+  color: var(--text);
   font-family: inherit;
-  font-size: 14px;
+  font-size: 13px;
   resize: vertical;
+}
+
+.gespraech-zeile textarea:focus {
+  outline: none;
+  border-color: var(--akzent-hell);
 }
 
 .gespraech-zeile .knopf-primaer {
@@ -1488,61 +1969,186 @@ body {
   opacity: 0.65;
 }
 
-/* Tabs der Mittelspalte (Feedback Georg): Schaubild, Lauf, Berichte, Punkte. */
+/* Tabs der Mittelspalte (Feedback Georg): Schaubild, Lauf, Berichte, Punkte.
+   Pillen-Leiste (Mockup 3b/3c): dunkler Container, der aktive Tab glüht rot. */
 .tab-leiste {
-  display: flex;
+  display: inline-flex;
   gap: 4px;
-  border-bottom: 1px solid var(--rand);
+  align-self: flex-start;
+  padding: 4px;
+  border: 1px solid var(--rand-panel);
+  border-radius: var(--radius-pille);
+  background: var(--flaeche);
 }
 
 .tab-knopf {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
-  border: 1px solid transparent;
-  border-bottom: none;
-  border-radius: 8px 8px 0 0;
+  gap: 7px;
+  padding: 7px 16px;
+  border: none;
+  border-radius: var(--radius-pille);
   background: none;
-  font-size: 14px;
-  color: var(--text-gedimmt);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text-leise);
   cursor: pointer;
+  white-space: nowrap;
 }
 
 .tab-knopf:hover {
-  color: inherit;
+  color: var(--text-zweit);
 }
 
 .tab-aktiv {
-  border-color: var(--rand);
-  background: var(--flaeche);
-  color: inherit;
-  font-weight: 600;
-  margin-bottom: -1px;
+  background: var(--signal);
+  color: #ffffff;
+}
+
+.tab-aktiv:hover {
+  color: #ffffff;
 }
 
 .tab-marke {
   font-size: 11px;
-  color: var(--akzent);
+  color: var(--akzent-text);
+}
+
+.tab-aktiv .tab-marke {
+  color: #ffffff;
 }
 
 .tab-punkt {
-  width: 9px;
-  height: 9px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
-  background: #dc2626;
+  background: var(--signal-punkt);
+  animation: ff-pulse 1.4s infinite;
+}
+
+.tab-aktiv .tab-punkt {
+  background: #ffffff;
 }
 
 /* Block-Editor mit KI-Assistent (SPEC §4.5, BAUPLAN 14) */
 
 .dialog-breit {
-  width: 640px;
+  width: 760px;
   max-height: 85vh;
   overflow-y: auto;
 }
 
+/* Der Editor braucht Platz für Schritt + ständige Vorschau nebeneinander. */
+.dialog-editor {
+  width: 920px;
+  max-width: 94vw;
+}
+
 .knoepfe-links {
   justify-content: flex-start;
+}
+
+/* Stepper-Leiste (Mockup 4b): erledigt grün, aktueller Schritt glüht blau. */
+.stepper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.stepper-schritt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: none;
+  background: none;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-leise);
+  cursor: default;
+}
+
+.stepper-schritt.schritt-erledigt {
+  color: var(--gut-text);
+  cursor: pointer;
+}
+
+.stepper-schritt.schritt-aktiv {
+  color: var(--text);
+}
+
+.stepper-kreis {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1.5px solid var(--rand-kontrolle);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.schritt-erledigt .stepper-kreis {
+  border-color: var(--gut-rand);
+}
+
+.schritt-aktiv .stepper-kreis {
+  border-color: var(--akzent);
+  background: var(--akzent);
+  color: #ffffff;
+  box-shadow: 0 0 14px rgba(37, 99, 235, 0.45);
+}
+
+.stepper-linie {
+  width: 28px;
+  height: 1px;
+  background: var(--rand-panel);
+  flex-shrink: 0;
+}
+
+/* Zwei Spalten im Editor (Mockup 4b): links der Schritt, rechts liegt der
+   Block schon jetzt „in der Bibliothek" — die Vorschau lebt auf Punktraster. */
+.editor-spalten {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr;
+  gap: 20px;
+  align-items: start;
+}
+
+.editor-schritt {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.editor-vorschau {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.vorschau-panel {
+  display: flex;
+  justify-content: center;
+  padding: 22px;
+  border: 1px dashed var(--rand-block);
+  border-radius: var(--radius-panel);
+  background: var(--flaeche-tief);
+  background-image: radial-gradient(rgba(120, 150, 220, 0.13) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.vorschau-panel .bib-block {
+  width: 200px;
+  background: var(--flaeche);
+  border: 1px solid var(--rand-block);
 }
 
 .feld-nebeneinander {
@@ -1582,11 +2188,18 @@ body {
 .etikett-eingabe input {
   flex: 1;
   padding: 8px 10px;
-  border: 1px solid var(--rand);
-  border-radius: 6px;
+  border: 1px solid var(--rand-kontrolle);
+  border-radius: var(--radius-knopf);
+  background: var(--flaeche-tief);
+  color: var(--text);
   font-family: inherit;
   font-size: 14px;
   font-weight: 400;
+}
+
+.etikett-eingabe input:focus {
+  outline: none;
+  border-color: var(--akzent-hell);
 }
 
 /* Chips im Editor tragen ein ×, in Bibliothek und Leinwand nicht. */
@@ -1601,8 +2214,11 @@ body {
 }
 
 .vorschau-label {
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-weight: 800;
+  color: var(--text-leise);
 }
 
 .vorschau-auftrag {
@@ -1610,11 +2226,12 @@ body {
   padding: 12px;
   max-height: 220px;
   overflow-y: auto;
-  border: 1px solid var(--rand);
-  border-radius: 8px;
-  background: var(--hintergrund);
-  font-family: inherit;
-  font-size: 13px;
+  border: 1px solid var(--rand-panel);
+  border-radius: var(--radius-karte);
+  background: var(--flaeche-tief);
+  color: var(--text-zweit);
+  font-family: var(--schrift-mono);
+  font-size: 11.5px;
   white-space: pre-wrap;
   word-break: break-word;
 }

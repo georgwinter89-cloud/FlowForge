@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain } from 'electron'
+import { app, BrowserWindow, Menu, dialog, ipcMain } from 'electron'
 import path from 'node:path'
 import { texte } from '../shared/texte.js'
 import {
@@ -53,6 +53,13 @@ function createWindow() {
     minHeight: 600,
     title: texte.fensterTitel,
     autoHideMenuBar: true,
+    // Dunkle Werkbank (Mockup-Runden 3+4): das Fenster malt schon vor dem
+    // ersten Renderer-Bild dunkel (kein weißer Blitz), die Titelleiste ist
+    // die eigene Kopfleiste — Windows zeichnet nur ─ □ × passend dunkel.
+    // Die Overlay-Höhe muss der CSS-Höhe der .kopfleiste entsprechen.
+    backgroundColor: '#0a0e18',
+    titleBarStyle: 'hidden',
+    titleBarOverlay: { color: '#0a0e18', symbolColor: '#c3cde0', height: 56 },
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),
       contextIsolation: true,
@@ -172,6 +179,10 @@ app.whenReady().then(() => {
   // Ohne gesetzte App-ID zeigt Windows keine Benachrichtigungen von FlowForge
   // (SPEC §6: Frage-Blöcke melden sich per Windows-Benachrichtigung).
   app.setAppUserModelId('de.georgwinter.flowforge')
+
+  // Verpackt gibt es kein Menü — sonst schiebt die Alt-Taste das native Menü
+  // über die versteckte Titelleiste. Im Dev bleiben F12/Strg+R über das Menü.
+  if (app.isPackaged) Menu.setApplicationMenu(null)
   // Eigene Blöcke VOR der IPC-Registrierung laden: workflowLaden wirft Blöcke,
   // die es nicht auflösen kann, stillschweigend aus dem Schaubild.
   eigeneBloeckeLaden()
