@@ -232,9 +232,12 @@ der Nutzer selbst, was erneut geprüft wird — er zieht Prüfkarten auf den Pr�
   **außerhalb des Projektordners** (wie die Sicherungspunkte): kein Agent
   sieht das Archiv, es kostet keinen Lauf Kontext.
 - **Ziehen auf den Prüfer:** Der Nutzer zieht Prüfkarten auf eine
-  Prüf-Blockkarte im Schaubild; sie hängen dort sichtbar an. Beim Lauf legt
-  FlowForge die aufbewahrten Prüfdateien in die Prüfmappe, und der Prüfer
-  führt sie zusätzlich zu seinen Paket-Prüfungen aus. Passt eine alte Prüfung
+  Prüf-Blockkarte im Schaubild; sie hängen dort sichtbar an. Beim Lauf-Start
+  legt FlowForge — **nach** der automatischen Leerung aus Schritt 17 — die
+  aufbewahrten Prüfdateien der gezogenen Karten in die Prüfmappe, und der
+  Prüfer führt sie zusätzlich zu seinen Paket-Prüfungen aus. Die Mappe ist
+  damit nur die Werkbank des Laufs; das Gedächtnis ist das Archiv hinter den
+  Prüfkarten, das die Leerung nie berührt. Passt eine alte Prüfung
   nicht mehr zum heutigen Code, passt der Prüfer sie an — die angepasste
   Fassung ersetzt die aufbewahrte, die Karte veraltet nicht.
 - Prüfkarten erscheinen in der Karten-Seitenleiste (filterbar): „Was ist in
