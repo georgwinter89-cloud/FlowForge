@@ -359,6 +359,49 @@ eine weitere Prüfung nach vorhandenem Muster): Im Ticker steht „Lokale KI
 entwirft", der Block-Agent übernimmt den Entwurf nach Gegenlesen, und der
 Laufbericht weist den Entwurf als übernommen aus.
 
+### 22 — Lokaler Bauer: kleine Teilaufträge lokal bauen, Opus dirigiert
+(Idee Georg, 13.08.2026: Wenn die lokale KI gut genug ist, übernimmt sie das
+Coding — Opus bleibt Direktor: Verstehen, Zerlegen, Abnahme. Georgs
+Kerngedanke: alles in möglichst kleine Aufträge für die lokale KI zerlegen —
+kleine Aufträge heben die Trefferquote UND machen Fehlschläge billig, weil
+jedes Teilstück sofort einzeln abgenommen wird statt erst am Ende aufzufallen.
+Vorbedingung: Die Quoten aus Schritt 20/21 [Entwürfe übernommen, Reparaturen
+gehalten] zeigen über mehrere echte Läufe, dass lokale Arbeit überwiegend
+hält — sonst frisst das Prüf-Pingpong die Ersparnis. Stärkere Hardware
+[z.B. zweite Grafikkarte, größeres Modell] verbessert die Quote, ersetzt
+aber weder Messung noch Schiedsrichter.)
+- **Opus zerlegt, lokal wird gebaut:** Der Bauer-Auftrag bekommt einen
+  Zerleger-Schritt: Opus zerlegt das Arbeitspaket in möglichst kleine,
+  einzeln prüfbare Teilaufträge — jeder mit Fundstellen/Vorbild, eigenem
+  Fertig-Kriterium und vorher festgenagelten Schnittstellen (welche Datei,
+  welcher Funktionsname, was rein, was raus), damit die Teile zusammenstecken
+  wie Blöcke (braucht/liefert nach innen gewendet). Die Lehre aus 20/21
+  gilt als Regel: eng und konkret gewinnt.
+- **Ehrliche Grenze der Kleinteiligkeit:** Einen trivialen Auftrag präzise zu
+  beschreiben kostet fast so viel Opus-Arbeit, wie ihn selbst zu erledigen.
+  Der Zerleger bündelt deshalb nach Zusammengehörigkeit (dieselbe Lehre wie
+  bei der Paketgröße, SPEC §4.3) und behält Kleinst-Änderungen selbst.
+- **Schreibrecht an derselben kurzen Leine wie der Bauer:** Die lokale KI
+  baut Teilaufträge mit echtem Schreibrecht im Projektordner — unter den
+  unveränderten harten Sperren (Prüfmappe, Verwaltungsdateien, Git). Vor
+  jedem Teilauftrag ein Sicherungspunkt; scheitert die Abnahme, wird
+  zurückgerollt (Mechanik aus Schritt 20 wiederverwendet).
+- **Abnahme je Teilstück, Eskalation ohne Pingpong:** Opus liest jedes
+  Teilstück sofort gegen (Gegenlesen ist billiger als Selberschreiben).
+  Hält ein Teilauftrag nach 2 lokalen Anläufen nicht, baut Opus GENAU
+  dieses Teilstück selbst und macht mit dem nächsten weiter. Der
+  Prüfer-Block bleibt unverändert der Schluss-Schiedsrichter
+  (Rot-vor-Grün fürs ganze Paket).
+- **Ehrlichkeit:** Ticker je Teilauftrag („Lokale KI baut Teilstück 2 von
+  5 …"); der Laufbericht zählt lokal gehaltene und von Opus übernommene
+  Teilstücke in der Lokale-Helfer-Zeile — die theoretischen API-Kosten
+  zeigen, ob sich die Wette rechnet. Häkchen je Block (Schritt 20) gilt;
+  aktiv nur, wenn die lokale KI eingeschaltet und erreichbar ist.
+**Alltagstest:** Georg fährt ein kleines Paket: Im Ticker ist sichtbar, wie
+Opus zerlegt und die lokale KI Teilstück für Teilstück baut; der Laufbericht
+zeigt, wie viele Teilstücke lokal gehalten haben — und an den theoretischen
+Kosten, was der Lauf gegenüber reiner Opus-Arbeit gespart hat.
+
 ## Reihenfolge-Begründung (kurz)
 Motor-Durchstich früh (3), weil dort das größte technische Risiko liegt — inklusive
 Rechte-Durchsetzung und Verbrauchs-Messung, den zwei größten Adapter-Risiken.
