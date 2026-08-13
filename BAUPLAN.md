@@ -332,6 +332,33 @@ Nachprüfung besteht, und der Laufbericht zeigt, dass keine Opus-Reparatur
 nötig war. Ein Gegenlauf mit dem strengen Übungs-Prüfer zeigt die Eskalation:
 zwei lokale Versuche, dann übernimmt sichtbar der Opus-Bauer.
 
+### 21 — Lokale Entwürfe: einfache Schreibarbeit mit Opus-Abnahme
+(Idee Georg, 13.08.2026: Die lokale KI soll auch einfache, wiederkehrende
+Schreibarbeit übernehmen. Leitplanke aus der Brainstorming-Runde: Entwurf
+lokal, Abnahme bei Opus — ungeprüft zählt nichts. Die Ersparnis kommt daher,
+dass Gegenlesen [Eingabe-Tokens] deutlich billiger ist als Selberschreiben
+[Ausgabe-Tokens]; sie trägt nur bei schablonenhafter Arbeit mit Vorbild.)
+- **Neues Werkzeug `lokal_entwerfen`:** Der Block-Agent delegiert eng
+  umrissene, schablonenhafte Schreibarbeit (der Auftrag nennt ein Vorbild —
+  z.B. „eine weitere Prüfdatei nach dem Muster von X") an die lokale KI.
+- **Entwürfe landen ausschließlich in der Arbeitsablage:** Das
+  Schreibwerkzeug der lokalen KI ist hart auf `arbeitsablage/` begrenzt —
+  die Wegwerf-Fläche, von Sicherungspunkten ausgenommen, am Laufende geleert.
+  In Projektdateien oder die Prüfmappe schreibt sie hier nie (die gezielte
+  Vorreparatur aus Schritt 20 bleibt der einzige direkte Eingriff, mit
+  eigenen Leitplanken).
+- **Abnahme durch den Block-Agenten:** Der Opus-Agent liest den Entwurf
+  gegen und übernimmt ihn selbst an den Zielort — oder verwirft ihn und
+  schreibt selbst. Sein Auftrag verlangt die ausdrückliche Abnahme; ein
+  unbrauchbarer Entwurf ist ehrlich billiger Ausschuss, kein Schaden.
+- **Ehrlichkeit:** „Lokale KI entwirft …" im Ticker; der Laufbericht zählt
+  Entwürfe (übernommen/verworfen) in der Lokale-Helfer-Zeile mit. Das
+  Häkchen je Block (Schritt 20) gilt auch fürs Entwerfen.
+**Alltagstest:** Georg fährt ein Paket mit schablonenhafter Arbeit (z.B.
+eine weitere Prüfung nach vorhandenem Muster): Im Ticker steht „Lokale KI
+entwirft", der Block-Agent übernimmt den Entwurf nach Gegenlesen, und der
+Laufbericht weist den Entwurf als übernommen aus.
+
 ## Reihenfolge-Begründung (kurz)
 Motor-Durchstich früh (3), weil dort das größte technische Risiko liegt — inklusive
 Rechte-Durchsetzung und Verbrauchs-Messung, den zwei größten Adapter-Risiken.
