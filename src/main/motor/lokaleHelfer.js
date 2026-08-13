@@ -21,6 +21,14 @@
 // Der Block-Agent (Motor) liest jeden Entwurf gegen und übernimmt ihn selbst
 // an den Zielort — ungeprüft zählt nichts.
 //
+// Lokaler Bauer (BAUPLAN 22): Ein Bau-Kreislauf für eng umrissene, einzeln
+// prüfbare Teilaufträge — mit echtem Schreibrecht im Projektordner (gezieltes
+// Ersetzen plus ganze Dateien schreiben), unter denselben harten Sperren wie
+// der Bauer: Prüfmappe, Verwaltungsdateien und Git bleiben tabu. Den
+// Sicherungspunkt vor jedem Teilauftrag und das Rückrollen bei gescheiterter
+// Abnahme übernimmt FlowForge (helferWerkzeuge.js) — Opus liest jedes
+// Teilstück sofort gegen.
+//
 // Bewusst ohne Electron-Abhängigkeiten: das Modul ist einzeln (mit node)
 // erprobbar, wie es die Bauplan-Regel für neue Bausteine verlangt.
 import fs from 'node:fs'
@@ -253,16 +261,28 @@ export function beanstandungenEinstufen(pruefbeleg) {
   return marken.every((m) => m[1].toLowerCase() === 'mechanisch') ? 'mechanisch' : 'grundsaetzlich'
 }
 
-// Tabu-Zonen des Ersetzen-Werkzeugs — dieselben harten Sperren wie beim
-// Bauer, durchgesetzt im FlowForge-Code (nicht per Bitte an das Modell).
-const REPARATUR_TABU_DATEIEN = new Set([
+// Tabu-Zonen der Schreib-Werkzeuge (Vorreparatur UND lokaler Bauer) —
+// dieselben harten Sperren wie beim Bauer, durchgesetzt im FlowForge-Code
+// (nicht per Bitte an das Modell).
+const SCHREIB_TABU_DATEIEN = new Set([
   'projekt.json',
   'karten.json',
   'workflow.json',
   'startanleitung.json',
   'laufstand.json'
 ])
-const REPARATUR_TABU_ORDNER = new Set(['pruefung', 'laufberichte', 'node_modules', '.git'])
+const SCHREIB_TABU_ORDNER = new Set(['pruefung', 'laufberichte', 'node_modules', '.git'])
+
+// Gemeinsame Tabu-Prüfung: null = erlaubt, sonst die Ablehnung als Text.
+function schreibTabu(projektPfad, ziel) {
+  const relativ = path.relative(path.resolve(projektPfad), ziel).toLowerCase()
+  const oberster = relativ.split(path.sep)[0]
+  if (SCHREIB_TABU_ORDNER.has(oberster))
+    return `Abgelehnt: Der Ordner „${oberster}" ist für die lokale KI gesperrt.`
+  if (SCHREIB_TABU_DATEIEN.has(relativ))
+    return 'Abgelehnt: FlowForge-Verwaltungsdateien sind gesperrt.'
+  return null
+}
 
 // Das einzige Schreib-Werkzeug der lokalen KI: gezieltes Ersetzen. Der alte
 // Text muss genau und eindeutig in der Datei stehen — kein freies Schreiben,
@@ -270,12 +290,8 @@ const REPARATUR_TABU_ORDNER = new Set(['pruefung', 'laufberichte', 'node_modules
 function ersetzen(projektPfad, eingabe, zaehler) {
   const ziel = imProjekt(projektPfad, eingabe.pfad)
   if (!ziel) return 'Abgelehnt: Pfade außerhalb des Projektordners sind gesperrt.'
-  const relativ = path.relative(path.resolve(projektPfad), ziel).toLowerCase()
-  const oberster = relativ.split(path.sep)[0]
-  if (REPARATUR_TABU_ORDNER.has(oberster))
-    return `Abgelehnt: Der Ordner „${oberster}" ist für die lokale Reparatur gesperrt.`
-  if (REPARATUR_TABU_DATEIEN.has(relativ))
-    return 'Abgelehnt: FlowForge-Verwaltungsdateien sind gesperrt.'
+  const tabu = schreibTabu(projektPfad, ziel)
+  if (tabu) return tabu
   const alt = String(eingabe.alt ?? '')
   const neu = String(eingabe.neu ?? '')
   if (!alt) return 'Abgelehnt: leerer alt-Text.'
@@ -374,6 +390,50 @@ const ENTWURF_WERKZEUG = {
   }
 }
 
+// --- Lokaler Bauer (BAUPLAN 22) --------------------------------------------
+
+// Das zweite Schreibwerkzeug des Bau-Kreislaufs: ganze Dateien schreiben —
+// für neue Dateien oder komplette Neuschriebe im Teilauftrag. Dieselben
+// Tabu-Zonen wie beim Ersetzen; zaehler.geschrieben sammelt die Pfade.
+function dateiSchreiben(projektPfad, eingabe, zaehler) {
+  const ziel = imProjekt(projektPfad, eingabe.pfad)
+  if (!ziel) return 'Abgelehnt: Pfade außerhalb des Projektordners sind gesperrt.'
+  const tabu = schreibTabu(projektPfad, ziel)
+  if (tabu) return tabu
+  const inhalt = String(eingabe.inhalt ?? '')
+  if (!inhalt.trim())
+    return 'Abgelehnt: leerer Inhalt — schreibe die vollständige Datei in inhalt.'
+  try {
+    fs.mkdirSync(path.dirname(ziel), { recursive: true })
+    fs.writeFileSync(ziel, inhalt, 'utf8')
+  } catch {
+    return `Die Datei ließ sich nicht schreiben: ${eingabe.pfad}`
+  }
+  const pfadNormal = path
+    .relative(path.resolve(projektPfad), ziel)
+    .split(path.sep)
+    .join('/')
+  if (!zaehler.geschrieben.includes(pfadNormal)) zaehler.geschrieben.push(pfadNormal)
+  return `Geschrieben: ${pfadNormal} (${inhalt.length} Zeichen).`
+}
+
+const DATEI_SCHREIBEN_WERKZEUG = {
+  type: 'function',
+  function: {
+    name: 'datei_schreiben',
+    description:
+      'Schreibt eine Datei im Projekt vollständig neu (auch neue Dateien). Für kleine Änderungen an bestehenden Dateien nimm stattdessen ersetzen.',
+    parameters: {
+      type: 'object',
+      properties: {
+        pfad: { type: 'string', description: 'Datei relativ zum Projekt, z.B. "js/neu.js"' },
+        inhalt: { type: 'string', description: 'Der vollständige Dateiinhalt' }
+      },
+      required: ['pfad', 'inhalt']
+    }
+  }
+}
+
 function werkzeugAusfuehren(projektPfad, name, eingabe, zaehler) {
   if (name === 'ordner_auflisten') return ordnerAuflisten(projektPfad, eingabe)
   if (name === 'datei_lesen') return dateiLesen(projektPfad, eingabe)
@@ -384,6 +444,8 @@ function werkzeugAusfuehren(projektPfad, name, eingabe, zaehler) {
     return ersetzen(projektPfad, eingabe, zaehler)
   if (name === 'entwurf_schreiben' && Array.isArray(zaehler?.dateien))
     return entwurfSchreiben(projektPfad, eingabe, zaehler)
+  if (name === 'datei_schreiben' && Array.isArray(zaehler?.geschrieben))
+    return dateiSchreiben(projektPfad, eingabe, zaehler)
   return `Unbekanntes Werkzeug: ${name}`
 }
 
@@ -482,7 +544,46 @@ export async function lokalEntwerfen({ projektPfad, auftrag, modell, adresse = S
   return { ...ergebnis, dateien: zaehler.dateien }
 }
 
-// Gemeinsamer Kern beider Kreisläufe: Ollama-Runden mit Werkzeugaufrufen,
+// Der Bau-Kreislauf (BAUPLAN 22): ein eng umrissener, einzeln prüfbarer
+// Teilauftrag rein, echte Änderungen im Projektordner raus. Zusätzlich zu den
+// Lese-Werkzeugen gibt es gezieltes Ersetzen UND ganze Dateien schreiben —
+// unter den unveränderten Tabu-Zonen. ergebnis.ersetzungen und
+// ergebnis.dateien zählen die echten Änderungen: beides leer heißt „nichts
+// gebaut" — dann gibt es auch nichts abzunehmen oder zurückzurollen.
+export async function lokalBauen({ projektPfad, auftrag, modell, adresse = STANDARD_ADRESSE, aufSchritt }) {
+  const nachrichten = [
+    {
+      role: 'system',
+      content:
+        'Du bist ein Bau-Helfer in einem Projektordner. Du bekommst einen eng umrissenen ' +
+        'Teilauftrag mit Fundstellen oder Vorbild, festen Schnittstellen und einem ' +
+        'Fertig-Kriterium. Lies zuerst die im Auftrag genannten Stellen (datei_lesen), ' +
+        'dann setze GENAU den Teilauftrag um: Bestehende Dateien änderst du mit ersetzen ' +
+        '(der alt-Text muss ZEICHENGENAU so in der Datei stehen, samt Einrückung, und ' +
+        'eindeutig sein — nimm zur Not umgebende Zeilen dazu); neue Dateien oder komplette ' +
+        'Neuschriebe schreibst du mit datei_schreiben als vollständige Datei. Halte dich ' +
+        'exakt an die im Auftrag genannten Datei- und Funktionsnamen — keine Extras, keine ' +
+        'Verschönerungen, nichts außerhalb des Teilauftrags. Ein stärkeres Modell liest ' +
+        'deine Arbeit sofort gegen. Wenn du fertig bist, antworte OHNE weiteren ' +
+        'Werkzeugaufruf mit einer kurzen Liste auf Deutsch: was du wo geändert oder ' +
+        'angelegt hast. Konntest du etwas nicht, schreibe genau das — erfinde nichts.'
+    },
+    { role: 'user', content: String(auftrag ?? '') }
+  ]
+  const zaehler = { ersetzungen: 0, geschrieben: [] }
+  const ergebnis = await kreislauf({
+    projektPfad,
+    nachrichten,
+    werkzeuge: [...WERKZEUGE, ERSETZEN_WERKZEUG, DATEI_SCHREIBEN_WERKZEUG],
+    modell,
+    adresse,
+    aufSchritt,
+    zaehler
+  })
+  return { ...ergebnis, ersetzungen: zaehler.ersetzungen, dateien: zaehler.geschrieben }
+}
+
+// Gemeinsamer Kern der Kreisläufe: Ollama-Runden mit Werkzeugaufrufen,
 // bis ein Fazit kommt oder die Runden ausgehen.
 async function kreislauf({ projektPfad, nachrichten, werkzeuge, modell, adresse, aufSchritt, zaehler = null }) {
   let schritte = 0

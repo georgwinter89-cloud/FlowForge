@@ -30,9 +30,9 @@ Sitzungen hinweg Software entsteht — ohne dass dem Agenten der Kontext überl�
     (Umschalter in den Einstellungen, kein Umbau). Im API-Modus gilt statt der
     Kontingent-Pause eine einstellbare **Ausgaben-Obergrenze** pro Lauf.
   - **Lokale KI schon in V1 — aber nur als Helfer** (Experiment, seit 13.08.2026): Die
-    Block-Agenten können Recherche-Aufträge an eine lokale KI über Ollama abgeben
-    (§4.3 „Lokale Helfer-KI") — ein eigener kleiner Recherche-Kreislauf von FlowForge,
-    kein Motor. Der Motor selbst bleibt die Claude-CLI.
+    Block-Agenten können Recherche-, Entwurfs- und kleine Bau-Aufträge an eine lokale KI
+    über Ollama abgeben (§4.3 „Lokale Helfer-KI") — eigene kleine Helfer-Kreisläufe von
+    FlowForge, kein Motor. Der Motor selbst bleibt die Claude-CLI.
   - **V2-Motoren:** eigene Agenten-Kreisläufe gegen beliebige Anbieter-APIs sowie ein
     vollwertiger lokaler Motor (z.B. über Ollama). Die restliche App merkt nicht,
     welcher Motor dranhängt.
@@ -247,7 +247,7 @@ Ehrlichkeits-Vorkehrungen: Jedes Fazit
 trägt den Warnhinweis „kleines Modell — Fundorte selbst nachprüfen" (in der Erprobung
 erfand das 7B-Modell abgelehnte Dateiinhalte), Start/Schritte/Fazit stehen im Ticker,
 der Laufbericht weist den Anteil der lokalen KI aus (Recherchen, Schritte,
-Fehlschläge, Reparatur-Versuche, Entwürfe), und ist Ollama beim Laufstart nicht erreichbar, sagt der Ticker das
+Fehlschläge, Reparatur-Versuche, Entwürfe, Teilstücke), und ist Ollama beim Laufstart nicht erreichbar, sagt der Ticker das
 ehrlich und alles läuft wie gewohnt über den Motor. V1-Experiment auf Georgs Wunsch —
 der vollwertige lokale Motor bleibt V2 (§2).
 
@@ -287,11 +287,38 @@ Laufbericht zählt Entwürfe (übernommen/verworfen) in der Lokale-Helfer-Zeile.
 Entwerfen und Abnehmen sind Schreibarbeit und unter „darf nur lesen" gesperrt;
 das Häkchen je Block (s.u.) gilt auch fürs Entwerfen.
 
+**Lokaler Bauer** (seit Bauschritt 22): Über das Werkzeug `lokal_bauen` delegiert
+der Block-Agent eng umrissene, **einzeln prüfbare Bau-Teilaufträge** an die lokale
+KI — sie baut mit echtem Schreibrecht direkt im Projektordner, unter den
+unveränderten harten Sperren (Prüfmappe, Verwaltungsdateien, Git tabu; gezieltes
+Ersetzen plus ganze Dateien schreiben, hart im Code begrenzt). Der Bauer-Auftrag
+weist den Agenten an, das Arbeitspaket in möglichst kleine Teilaufträge zu
+zerlegen — jeder mit Fundstellen/Vorbild, eigenem Fertig-Kriterium und vorher
+festgenagelten Schnittstellen —, dabei aber nach Zusammengehörigkeit zu bündeln
+und Kleinst-Änderungen selbst zu erledigen (einen trivialen Auftrag präzise zu
+beschreiben kostet fast so viel wie ihn selbst zu erledigen). Vor jedem
+Teilauftrag legt FlowForge einen Sicherungspunkt „Stand vor lokalem Teilstück"
+an. Die **Abnahme je Teilstück** liegt beim Agenten: Er liest sofort gegen
+(Gegenlesen ist billiger als Selberschreiben) und meldet mit
+`teilstueck_abnehmen` gehalten oder nicht gehalten — bei „nicht gehalten" rollt
+FlowForge den Stand automatisch zurück, BEVOR der Agent selbst baut; auch ein
+gescheiterter Bau-Versuch mit halben Änderungen wird sofort zurückgerollt. Die
+Reihenfolge ist erzwungen (erst abnehmen, dann das nächste Teilstück), damit der
+Rückroll-Punkt eindeutig bleibt. Hält ein Teilauftrag nach 2 lokalen Anläufen
+nicht, baut der Agent genau dieses Teilstück selbst und macht weiter — kein
+Pingpong; der Prüfer-Block bleibt unverändert der Schluss-Schiedsrichter.
+Ehrlichkeit: jedes Teilstück im Ticker („Lokale KI baut Teilstück …", Abnahme,
+Rückrollen), der Laufbericht zählt lokal gehaltene und vom Agenten selbst
+gebaute Teilstücke in der Lokale-Helfer-Zeile. Bauen und Abnehmen sind
+Schreibarbeit und unter „darf nur lesen" gesperrt; das Häkchen je Block (s.u.)
+gilt auch hier.
+
 **Häkchen je Block** (seit Bauschritt 20): An jeder Block-Karte im Schaubild
 sitzt ein Abwahl-Häkchen **„lokale KI erlaubt"** (Standard: an, erbt den
 globalen Schalter). Abgewählt ist es eine echte Sperre: FlowForge lehnt die
 Werkzeuge der lokalen KI (`lokal_recherchieren`, `lokal_entwerfen`,
-`entwurf_abnehmen`) für die Agenten dieses Blocks hart ab (erkannt am
+`entwurf_abnehmen`, `lokal_bauen`, `teilstueck_abnehmen`) für die Agenten
+dieses Blocks hart ab (erkannt am
 laufenden Block, Mechanik aus Bauschritt 19) und streicht den Hinweis auf die
 lokale KI aus dem Arbeitsauftrag. Ein Block ohne lokale KI bekommt auch keine
 lokale Vorreparatur (maßgeblich ist das Häkchen des Rückführungs-Ziels, dessen

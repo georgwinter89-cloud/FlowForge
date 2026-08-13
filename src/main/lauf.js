@@ -844,6 +844,26 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
                 (bericht.lokaleHelfer.entwuerfeVerworfen ?? 0) + 1
             return
           }
+          // Lokaler Bauer (BAUPLAN 22): Bau-Versuche und die Abnahme je
+          // Teilstück (gehalten / vom Agenten selbst gebaut) in der Helfer-Zeile.
+          if (daten.art === 'lokale-helfer-bauen') {
+            bericht.lokaleHelfer ??= { recherchen: 0, schritte: 0, gescheitert: 0 }
+            bericht.lokaleHelfer.schritte += daten.schritte ?? 0
+            if (daten.gescheitert)
+              bericht.lokaleHelfer.teilstueckeGescheitert =
+                (bericht.lokaleHelfer.teilstueckeGescheitert ?? 0) + 1
+            return
+          }
+          if (daten.art === 'lokale-helfer-teilstueck-urteil') {
+            bericht.lokaleHelfer ??= { recherchen: 0, schritte: 0, gescheitert: 0 }
+            if (daten.gehalten)
+              bericht.lokaleHelfer.teilstueckeGehalten =
+                (bericht.lokaleHelfer.teilstueckeGehalten ?? 0) + 1
+            else
+              bericht.lokaleHelfer.teilstueckeVerworfen =
+                (bericht.lokaleHelfer.teilstueckeVerworfen ?? 0) + 1
+            return
+          }
           // Letzter Kontext-Stand am Lauf gespiegelt — der Kontext-Balken der
           // Projektübersicht braucht ihn außerhalb der Lauf-Ansicht.
           if (daten.art === 'verbrauch' && daten.verbrauch?.kontextProzentBis != null)
@@ -998,6 +1018,10 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           auftrag += texte.agentenUebergabe.startanleitungNachforderung
         if (k.uebergabe) auftrag += texte.agentenUebergabe.uebertragFortsetzung(k.uebergabe)
         else if (k.uebergabeVerloren) auftrag += texte.agentenUebergabe.uebertragOhneUebergabe
+        // Lokaler Bauer (BAUPLAN 22): Bau-Blöcke bekommen die Zerlege-Anweisung
+        // — nur wenn die lokale KI bereitsteht und das Häkchen am Block an ist.
+        if (lokaleHelfer && k.def.startanleitungPflicht && k.eintrag.lokaleKi !== false)
+          auftrag += texte.agentenLokaleHelfer.bauenAuftragZusatz
         // Häkchen je Block (BAUPLAN 20): Ist die lokale KI für diesen Block
         // abgewählt, fliegt ihr Hinweis aus dem Auftrag — die harte Sperre
         // für das Werkzeug selbst sitzt im Motor.

@@ -9,9 +9,19 @@
 // arbeitsablage/) und entwurf_abnehmen (die ausdrückliche Abnahme-Meldung des
 // Block-Agenten: übernommen oder verworfen — ungeprüft zählt nichts). Beide
 // sind Schreibarbeit und unter „darf nur lesen" gesperrt (claudeCodeMotor).
+//
+// Lokaler Bauer (BAUPLAN 22): lokal_bauen delegiert einen eng umrissenen,
+// einzeln prüfbaren Bau-Teilauftrag an die lokale KI — mit echtem Schreibrecht
+// im Projektordner. FlowForge legt vor jedem Teilauftrag einen Sicherungspunkt
+// an; die Abnahme meldet der Block-Agent mit teilstueck_abnehmen, und bei
+// „nicht gehalten" rollt FlowForge den Stand zurück, BEVOR der Agent selbst
+// baut (Mechanik aus Bauschritt 20 wiederverwendet). Die Reihenfolge ist
+// erzwungen: erst abnehmen, dann das nächste Teilstück — sonst wäre der
+// Rückroll-Punkt nicht mehr eindeutig.
 import { z } from 'zod'
 import { texte } from '../../shared/texte.js'
-import { lokalEntwerfen, lokalRecherchieren } from './lokaleHelfer.js'
+import { lokalBauen, lokalEntwerfen, lokalRecherchieren } from './lokaleHelfer.js'
+import { sicherungspunktAnlegen, aufLetztenPunktZuruecksetzen } from '../sicherungspunkte.js'
 
 export async function helferWerkzeugServer({ projektPfad, modell, adresse, aufEreignis }) {
   const { createSdkMcpServer, tool } = await import('@anthropic-ai/claude-agent-sdk')
@@ -148,10 +158,156 @@ export async function helferWerkzeugServer({ projektPfad, modell, adresse, aufEr
     { alwaysLoad: true }
   )
 
+  // Lokaler Bauer (BAUPLAN 22): das offene Teilstück dieses Motors — gesetzt
+  // von lokal_bauen, aufgelöst von teilstueck_abnehmen. Solange es offen ist,
+  // ist der neueste Sicherungspunkt garantiert „Stand vor lokalem Teilstück"
+  // — nur darum darf die Abnahme mit dem letzten Punkt zurückrollen.
+  let offenesTeilstueck = null
+
+  const bauen = tool(
+    'lokal_bauen',
+    texte.agentenLokaleHelfer.bauenBeschreibung,
+    {
+      teilstueck: z
+        .string()
+        .describe('Kurzname des Teilstücks für Ticker und Abnahme, z.B. "2 von 5: Speichern-Knopf".'),
+      auftrag: z
+        .string()
+        .describe(
+          'Der Teilauftrag: Fundstellen oder Vorbild, feste Schnittstellen (welche Datei, welcher Funktionsname, was rein, was raus) und das Fertig-Kriterium.'
+        )
+    },
+    async ({ teilstueck, auftrag }) => {
+      if (offenesTeilstueck != null)
+        return {
+          content: [
+            { type: 'text', text: texte.agentenLokaleHelfer.bauenErstAbnehmen(offenesTeilstueck) }
+          ],
+          isError: true
+        }
+      // Sicherungspunkt vor jedem Teilauftrag — ohne Rückroll-Punkt baut die
+      // lokale KI nicht (dieselbe Regel wie bei der Vorreparatur).
+      const punkt = await sicherungspunktAnlegen(
+        projektPfad,
+        texte.sicherungen.beschriftungVorLokalemTeilstueck
+      )
+      if (!punkt.ok)
+        return {
+          content: [{ type: 'text', text: texte.agentenLokaleHelfer.bauenKeinSicherungspunkt }],
+          isError: true
+        }
+      aufEreignis({ art: 'ticker', text: texte.ticker.lokaleBauenStart(teilstueck, modell) })
+      const ergebnis = await lokalBauen({
+        projektPfad,
+        auftrag,
+        modell,
+        adresse,
+        aufSchritt: (name, eingabe) =>
+          aufEreignis({
+            art: 'ticker',
+            text:
+              name === 'datei_schreiben'
+                ? texte.ticker.lokaleBauenSchritt(eingabe?.pfad)
+                : name === 'ersetzen'
+                  ? texte.ticker.lokaleReparaturSchritt(eingabe?.pfad)
+                  : texte.ticker.lokaleHelferSchritt(name)
+          })
+      })
+      const aenderungen = (ergebnis.ersetzungen ?? 0) + (ergebnis.dateien?.length ?? 0)
+      // Zähl-Ereignis für die Lokale-Helfer-Zeile des Laufberichts (BAUPLAN 22).
+      aufEreignis({
+        art: 'lokale-helfer-bauen',
+        schritte: ergebnis.schritte ?? 0,
+        gescheitert: !ergebnis.ok || aenderungen === 0
+      })
+      if (!ergebnis.ok || aenderungen === 0) {
+        // Ein gescheiterter Versuch mit halben Änderungen wird sofort
+        // zurückgerollt — der Agent baut auf sauberem Stand, nicht auf Gebastel.
+        if (aenderungen > 0) {
+          await aufLetztenPunktZuruecksetzen(projektPfad)
+          aufEreignis({ art: 'ticker', text: texte.ticker.lokaleBauenZurueckgerollt })
+        }
+        aufEreignis({
+          art: 'ticker',
+          text: ergebnis.ok
+            ? texte.ticker.lokaleBauenNichtsGebaut
+            : texte.ticker.lokaleBauenGescheitert(ergebnis.fehler)
+        })
+        return {
+          content: [
+            {
+              type: 'text',
+              text: ergebnis.ok
+                ? texte.agentenLokaleHelfer.bauenKeineAenderung
+                : texte.agentenLokaleHelfer.bauenGescheitert(ergebnis.fehler)
+            }
+          ],
+          isError: true
+        }
+      }
+      offenesTeilstueck = teilstueck
+      aufEreignis({
+        art: 'ticker',
+        text: texte.ticker.lokaleBauenFertig(aenderungen, ergebnis.schritte)
+      })
+      return {
+        content: [
+          {
+            type: 'text',
+            text: texte.agentenLokaleHelfer.bauenFazit(
+              ergebnis.fazit,
+              ergebnis.dateien ?? [],
+              ergebnis.ersetzungen ?? 0
+            )
+          }
+        ]
+      }
+    },
+    { alwaysLoad: true }
+  )
+
+  // Die Abnahme je Teilstück (BAUPLAN 22): gehalten = der Agent hat
+  // gegengelesen und übernimmt; nicht gehalten = FlowForge rollt den Stand
+  // auf den Punkt vor dem Teilstück zurück, der Agent baut selbst.
+  const teilstueckAbnehmen = tool(
+    'teilstueck_abnehmen',
+    texte.agentenLokaleHelfer.abnehmenTeilstueckBeschreibung,
+    {
+      teilstueck: z.string().describe('Das Teilstück aus dem lokal_bauen-Aufruf, um das es geht.'),
+      gehalten: z
+        .boolean()
+        .describe('true = gegengelesen und übernommen; false = verworfen, der Stand wird zurückgerollt.')
+    },
+    async ({ teilstueck, gehalten }) => {
+      if (offenesTeilstueck == null)
+        return {
+          content: [{ type: 'text', text: texte.agentenLokaleHelfer.teilstueckOhneOffenes }]
+        }
+      offenesTeilstueck = null
+      aufEreignis({ art: 'lokale-helfer-teilstueck-urteil', gehalten: Boolean(gehalten) })
+      if (!gehalten) {
+        await aufLetztenPunktZuruecksetzen(projektPfad)
+        aufEreignis({ art: 'ticker', text: texte.ticker.teilstueckVerworfen(teilstueck) })
+        return {
+          content: [
+            { type: 'text', text: texte.agentenLokaleHelfer.teilstueckVerworfenText(teilstueck) }
+          ]
+        }
+      }
+      aufEreignis({ art: 'ticker', text: texte.ticker.teilstueckGehalten(teilstueck) })
+      return {
+        content: [
+          { type: 'text', text: texte.agentenLokaleHelfer.teilstueckGehaltenText(teilstueck) }
+        ]
+      }
+    },
+    { alwaysLoad: true }
+  )
+
   return createSdkMcpServer({
     name: 'helfer',
     version: '1.0.0',
     instructions: texte.agentenLokaleHelfer.serverHinweis,
-    tools: [recherchieren, entwerfen, abnehmen]
+    tools: [recherchieren, entwerfen, abnehmen, bauen, teilstueckAbnehmen]
   })
 }

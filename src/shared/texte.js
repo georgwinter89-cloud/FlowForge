@@ -457,7 +457,13 @@ export const texte = {
       'lokale KI schreibt einen Entwurf in die arbeitsablage/ — nie an den Zielort. Du ' +
       'liest den Entwurf gegen, übernimmst ihn selbst an den Zielort (oder verwirfst ihn ' +
       'und schreibst selbst — ungeprüft zählt nichts) und meldest die Entscheidung mit ' +
-      'entwurf_abnehmen. Für Neues ohne Vorbild schreibst du direkt selbst.\n',
+      'entwurf_abnehmen. Für Neues ohne Vorbild schreibst du direkt selbst.\n' +
+      'Für eng umrissene, einzeln prüfbare Umsetzungs-Teilaufträge steht dir lokal_bauen ' +
+      'bereit: Die lokale KI baut das Teilstück direkt im Projekt (FlowForge legt vorher ' +
+      'einen Sicherungspunkt an). Du liest jedes Teilstück SOFORT gegen und meldest die ' +
+      'Abnahme mit teilstueck_abnehmen — bei „nicht gehalten" rollt FlowForge den Stand ' +
+      'automatisch zurück und du baust selbst. Höchstens 2 lokale Anläufe je Teilstück, ' +
+      'dann baust du es selbst — kein Pingpong.\n',
     // Lokale Entwürfe (BAUPLAN 21): schablonenhafte Schreibarbeit lokal
     // entwerfen lassen, Abnahme beim Block-Agenten — ungeprüft zählt nichts.
     entwerfenBeschreibung:
@@ -486,7 +492,74 @@ export const texte = {
     abgenommen: (entwurf, uebernommen) =>
       uebernommen
         ? `Abnahme vermerkt: Entwurf „${entwurf}" übernommen.`
-        : `Abnahme vermerkt: Entwurf „${entwurf}" verworfen — du schreibst selbst.`
+        : `Abnahme vermerkt: Entwurf „${entwurf}" verworfen — du schreibst selbst.`,
+    // Lokaler Bauer (BAUPLAN 22): kleine Teilaufträge baut die lokale KI
+    // direkt im Projekt — Opus zerlegt, liest jedes Teilstück sofort gegen
+    // und bleibt der Schiedsrichter. Ungeprüft zählt nichts.
+    bauenBeschreibung:
+      'Delegiert einen eng umrissenen, einzeln prüfbaren Bau-Teilauftrag an die lokale ' +
+      'Helfer-KI — sie baut mit Schreibrecht direkt im Projektordner (Prüfmappe und ' +
+      'FlowForge-Verwaltungsdateien bleiben gesperrt; FlowForge legt vorher automatisch ' +
+      'einen Sicherungspunkt an). Nenne im Auftrag Fundstellen oder Vorbild, feste ' +
+      'Schnittstellen (Datei, Funktionsname, was rein, was raus) und das Fertig-Kriterium. ' +
+      'Danach liest du das Teilstück sofort gegen und meldest die Abnahme mit ' +
+      'teilstueck_abnehmen — Pflicht, bevor du das nächste Teilstück baust.',
+    bauenFazit: (fazit, dateien, ersetzungen) =>
+      'Teilstück der lokalen Helfer-KI (kleines Modell — ungeprüft zählt nichts):\n' +
+      (dateien.length ? 'Geschriebene Dateien: ' + dateien.join(', ') + '\n' : '') +
+      (ersetzungen > 0
+        ? `Gezielte Ersetzungen: ${ersetzungen}\n`
+        : '') +
+      fazit +
+      '\n\nLies das Teilstück jetzt vollständig gegen — die geänderten Stellen selbst, ' +
+      'nicht nur den Bericht. Dann melde deine Abnahme mit teilstueck_abnehmen: gehalten ' +
+      '(du übernimmst es; kleine Korrekturen machst du danach selbst) oder nicht gehalten ' +
+      '(FlowForge rollt den Stand auf den Sicherungspunkt zurück und du baust selbst).',
+    bauenErstAbnehmen: (teilstueck) =>
+      `Zuerst die Abnahme: Melde das offene Teilstück „${teilstueck}" mit ` +
+      'teilstueck_abnehmen, bevor du das nächste baust — sonst ist der Rückroll-Punkt ' +
+      'nicht mehr eindeutig.',
+    bauenKeinSicherungspunkt:
+      'Es ließ sich kein Sicherungspunkt anlegen — ohne Rückroll-Punkt baut die lokale KI ' +
+      'nicht. Baue dieses Teilstück selbst.',
+    bauenGescheitert: (fehler) =>
+      'Die lokale Helfer-KI konnte das Teilstück nicht bauen: ' +
+      fehler +
+      ' Der Projektstand ist sauber (halbe Änderungen wurden zurückgerollt). Baue dieses ' +
+      'Teilstück selbst — oder versuche es einmal mit einem präziseren Teilauftrag erneut ' +
+      '(höchstens 2 lokale Anläufe je Teilstück).',
+    bauenKeineAenderung:
+      'Die lokale Helfer-KI hat nichts gebaut (keine Änderung im Projekt). Baue dieses ' +
+      'Teilstück selbst — oder versuche es einmal mit einem präziseren Teilauftrag erneut ' +
+      '(höchstens 2 lokale Anläufe je Teilstück).',
+    abnehmenTeilstueckBeschreibung:
+      'Meldet die Abnahme zu einem mit lokal_bauen gebauten Teilstück: gehalten ' +
+      '(gegengelesen und übernommen) oder nicht gehalten (FlowForge rollt den Stand auf ' +
+      'den Sicherungspunkt vor dem Teilstück zurück — danach baust du es selbst). ' +
+      'Pflicht nach jedem lokal_bauen, bevor das nächste Teilstück gebaut wird.',
+    teilstueckGehaltenText: (teilstueck) =>
+      `Abnahme vermerkt: Teilstück „${teilstueck}" gehalten.`,
+    teilstueckVerworfenText: (teilstueck) =>
+      `Abnahme vermerkt: Teilstück „${teilstueck}" nicht gehalten — der Stand ist auf den ` +
+      'Punkt vor dem Teilstück zurückgerollt. Baue es jetzt selbst (oder gib der lokalen ' +
+      'KI genau einen präziseren zweiten Anlauf, falls sie noch keinen hatte).',
+    teilstueckOhneOffenes:
+      'Kein offenes Teilstück — nichts abzunehmen und nichts zurückzurollen. (Ein ' +
+      'gescheiterter lokal_bauen-Versuch ist schon aufgeräumt.)',
+    // Zusatz im Bauer-Auftrag (nur wenn die lokale KI bereitsteht und das
+    // Häkchen am Block an ist — eingesetzt von der Lauf-Verwaltung).
+    bauenAuftragZusatz:
+      '\n\nZusatz von FlowForge — lokaler Bauer (die lokale KI steht bereit): Zerlege das ' +
+      'Arbeitspaket in möglichst kleine, einzeln prüfbare Teilaufträge — jeder mit ' +
+      'Fundstellen oder Vorbild, eigenem Fertig-Kriterium und vorher festgelegten ' +
+      'Schnittstellen (welche Datei, welcher Funktionsname, was rein, was raus), damit die ' +
+      'Teile zusammenstecken. Rufe je Teilauftrag lokal_bauen und lies das Teilstück ' +
+      'SOFORT gegen — Gegenlesen ist billiger als Selberschreiben; melde jede Abnahme mit ' +
+      'teilstueck_abnehmen, bevor du das nächste Teilstück baust. Hält ein Teilauftrag ' +
+      'nach 2 lokalen Anläufen nicht, baue GENAU dieses Teilstück selbst und mach mit dem ' +
+      'nächsten weiter — kein Pingpong. Bündle nach Zusammengehörigkeit: Einen trivialen ' +
+      'Auftrag präzise zu beschreiben kostet fast so viel, wie ihn selbst zu erledigen — ' +
+      'Kleinst-Änderungen erledigst du direkt selbst.'
   },
   // KI-Assistent des Block-Editors (SPEC §4.5, BAUPLAN 14) — Texte an den Motor.
   agentenBlockAssistent: {
@@ -584,13 +657,15 @@ export const texte = {
     obergrenzeHinweis: 'Erreicht ein Lauf diese Grenze, hält der Motor von selbst an.',
     // Lokale Helfer-KI (Experiment, Wunsch Georg 13.08.2026).
     lokaleHelferUeberschrift: 'Lokale Helfer-KI (Experiment)',
-    lokaleHelferAktiv: 'Recherche- und Entwurfs-Aufträge an eine lokale KI (Ollama) geben',
+    lokaleHelferAktiv: 'Recherche-, Entwurfs- und kleine Bau-Aufträge an eine lokale KI (Ollama) geben',
     lokaleHelferHinweis:
-      'Die Block-Agenten geben Einlesen, Suchen und schablonenhafte Entwürfe an eine ' +
-      'kleine KI auf deinem Rechner ab — das kostet kein Abo-Kontingent, nur Rechenzeit. ' +
-      'Schreiben darf die lokale KI nur eng begrenzt: Entwürfe landen in der ' +
-      'Wegwerf-Ablage und werden vom Motor gegengelesen, und die Vorreparatur ersetzt ' +
-      'gezielt nach Prüfer-Beanstandungen — mit Sicherungspunkt und Nachprüfung. ' +
+      'Die Block-Agenten geben Einlesen, Suchen, schablonenhafte Entwürfe und kleine ' +
+      'Bau-Teilaufträge an eine kleine KI auf deinem Rechner ab — das kostet kein ' +
+      'Abo-Kontingent, nur Rechenzeit. Schreiben darf die lokale KI nur an kurzer Leine: ' +
+      'Entwürfe landen in der Wegwerf-Ablage und werden vom Motor gegengelesen, die ' +
+      'Vorreparatur ersetzt gezielt nach Prüfer-Beanstandungen, und jedes gebaute ' +
+      'Teilstück wird sofort abgenommen — immer mit Sicherungspunkt und automatischem ' +
+      'Zurückrollen, wenn es nicht hält. ' +
       'Achtung: Kleine Modelle arbeiten langsamer und ungenauer; wichtige Fundorte ' +
       'prüft der Agent selbst nach. Voraussetzung: Ollama läuft und das Modell ist ' +
       'heruntergeladen.',
@@ -773,6 +848,24 @@ export const texte = {
     lokaleEntwurfGescheitert: (fehler) => `Lokaler Entwurf gescheitert: ${fehler}`,
     entwurfUebernommen: (entwurf) => `Entwurf übernommen: ${entwurf}.`,
     entwurfVerworfen: (entwurf) => `Entwurf verworfen: ${entwurf} — der Agent schreibt selbst.`,
+    // Lokaler Bauer (BAUPLAN 22): jedes Teilstück ehrlich im Ticker —
+    // Zerlegen, Bauen, Abnahme und Rückrollen sind sichtbar.
+    lokaleBauenStart: (teilstueck, modell) =>
+      `Lokale KI baut Teilstück „${teilstueck}" (${modell}) — Sicherungspunkt liegt an.`,
+    lokaleBauenSchritt: (pfad) =>
+      pfad ? `Lokale KI · schreibt ${pfad}.` : 'Lokale KI · schreibt eine Datei.',
+    lokaleBauenFertig: (aenderungen, schritte) =>
+      `Lokale KI fertig — ${aenderungen} ${aenderungen === 1 ? 'Änderung' : 'Änderungen'} im Projekt ` +
+      `(${schritte} ${schritte === 1 ? 'Schritt' : 'Schritte'}). Der Agent liest gegen.`,
+    lokaleBauenNichtsGebaut:
+      'Lokale KI hat nichts gebaut — der Agent baut dieses Teilstück selbst.',
+    lokaleBauenGescheitert: (fehler) => `Lokales Bauen gescheitert: ${fehler}`,
+    lokaleBauenZurueckgerollt:
+      'Halbfertige Änderungen des gescheiterten Bau-Versuchs zurückgerollt — der Stand ist wieder sauber.',
+    teilstueckGehalten: (teilstueck) =>
+      `Teilstück „${teilstueck}" gehalten — Abnahme bestanden.`,
+    teilstueckVerworfen: (teilstueck) =>
+      `Teilstück „${teilstueck}" nicht gehalten — Stand zurückgerollt, der Agent baut selbst.`,
     // Lokale Vorreparatur (BAUPLAN 20): jeder Versuch ehrlich im Ticker.
     lokaleReparaturNichtMechanisch: (zielName) =>
       `Keine rein mechanischen Beanstandungen — die Reparatur geht direkt an „${zielName}" (Motor).`,
@@ -901,6 +994,9 @@ export const texte = {
     // Lokale Vorreparatur (BAUPLAN 20): auf genau diesen Punkt wird
     // zurückgerollt, wenn die Nachprüfung scheitert.
     beschriftungVorLokalerReparatur: 'Stand vor lokaler Reparatur',
+    // Lokaler Bauer (BAUPLAN 22): auf genau diesen Punkt wird zurückgerollt,
+    // wenn die Abnahme des Teilstücks scheitert.
+    beschriftungVorLokalemTeilstueck: 'Stand vor lokalem Teilstück',
     beschriftungWiederhergestellt: (zeit) => `Zurückgeholt: Stand von ${zeit}`,
     fehlerAnlegen: 'Der Sicherungspunkt konnte nicht angelegt werden. Der Lauf wurde sicherheitshalber nicht gestartet.',
     fehlerVorschau: 'Die Vorschau konnte nicht erstellt werden.',
@@ -1011,7 +1107,16 @@ export const texte = {
         ? ` · ${l.entwuerfe} ${l.entwuerfe === 1 ? 'Entwurf' : 'Entwürfe'} (${l.entwuerfeUebernommen ?? 0} übernommen, ${l.entwuerfeVerworfen ?? 0} verworfen${(l.entwuerfeGescheitert ?? 0) > 0 ? `, ${l.entwuerfeGescheitert} ${l.entwuerfeGescheitert === 1 ? 'Versuch' : 'Versuche'} gescheitert` : ''})`
         : (l.entwuerfeGescheitert ?? 0) > 0
           ? ` · ${l.entwuerfeGescheitert} Entwurfs-${l.entwuerfeGescheitert === 1 ? 'Versuch' : 'Versuche'} gescheitert`
-          : ''),
+          : '') +
+      // Lokaler Bauer (BAUPLAN 22): lokal gehaltene und vom Agenten selbst
+      // gebaute Teilstücke — daran sieht Georg, ob sich die Wette rechnet.
+      ((l.teilstueckeGehalten ?? 0) + (l.teilstueckeVerworfen ?? 0) > 0 ||
+      (l.teilstueckeGescheitert ?? 0) > 0
+        ? ` · Teilstücke: ${l.teilstueckeGehalten ?? 0} lokal gebaut und gehalten, ${l.teilstueckeVerworfen ?? 0} hat der Agent selbst gebaut` +
+          ((l.teilstueckeGescheitert ?? 0) > 0
+            ? `, ${l.teilstueckeGescheitert} Bau-${l.teilstueckeGescheitert === 1 ? 'Versuch' : 'Versuche'} ohne Ergebnis`
+            : '')
+        : ''),
     // Token-Aufschlüsselung & theoretische API-Kosten (Wunsch Georg, 13.08.2026).
     aufschluesselungZeile: (a) =>
       `Eingabe ${a.eingabe.toLocaleString('de-DE')} · Ausgabe ${a.ausgabe.toLocaleString('de-DE')} · ` +
