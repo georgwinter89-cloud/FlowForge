@@ -784,6 +784,12 @@ export const texte = {
     // Session-Fortsetzung bei Wiederholungen (BAUPLAN 16).
     sessionFortgesetztHinweis: 'Session fortgesetzt statt neu gestartet — der Block kannte seine bisherige Arbeit noch.',
     blockTokens: (tokens) => `Verbrauch: ${tokens.toLocaleString('de-DE')} Tokens`,
+    // Token-Aufschlüsselung & theoretische API-Kosten (Wunsch Georg, 13.08.2026).
+    aufschluesselungZeile: (a) =>
+      `Eingabe ${a.eingabe.toLocaleString('de-DE')} · Ausgabe ${a.ausgabe.toLocaleString('de-DE')} · ` +
+      `Cache gelesen ${a.cacheLesen.toLocaleString('de-DE')} · Cache geschrieben ${a.cacheSchreiben.toLocaleString('de-DE')}`,
+    apiKosten: (usd) => `Theoretische API-Kosten: ${usd.toFixed(2).replace('.', ',')} $`,
+    apiKostenAboZusatz: ' — bei dir im Abo enthalten, nur zur Einordnung',
     erlaubt: 'erlaubt',
     abgelehnt: 'abgelehnt',
     automatischErlaubt: 'automatisch erlaubt (Automodus)',

@@ -227,6 +227,12 @@ function BlockErgebnisZeile({ eintrag }) {
             {zeitText(eintrag.zeit)}
             {eintrag.tokens != null && ` · ${tb.blockTokens(eintrag.tokens)}`}
           </p>
+          {eintrag.aufschluesselung && (
+            <p className="feld-hinweis">{tb.aufschluesselungZeile(eintrag.aufschluesselung)}</p>
+          )}
+          {eintrag.kostenUsd != null && (
+            <p className="feld-hinweis">{tb.apiKosten(eintrag.kostenUsd)}</p>
+          )}
           {eintrag.sessionFortgesetzt && (
             <p className="feld-hinweis">{tb.sessionFortgesetztHinweis}</p>
           )}
@@ -268,6 +274,20 @@ function Laufbericht({ bericht }) {
         <div className="bericht-details">
           {dauer && <p className="feld-hinweis">{dauer}</p>}
           <VerbrauchZeile verbrauch={bericht.verbrauch} modus={bericht.modus} />
+          {/* Token-Aufschlüsselung & theoretische API-Kosten (Wunsch Georg,
+              13.08.2026) — die Kosten rechnet der Motor aus den Preisen der
+              genutzten Modelle; im Abo-Modus nur zur Einordnung. */}
+          {bericht.verbrauch?.aufschluesselung && (
+            <p className="feld-hinweis">
+              {tb.aufschluesselungZeile(bericht.verbrauch.aufschluesselung)}
+            </p>
+          )}
+          {bericht.verbrauch?.kostenUsd != null && (
+            <p className="feld-hinweis">
+              {tb.apiKosten(bericht.verbrauch.kostenUsd)}
+              {bericht.modus === 'abo' ? tb.apiKostenAboZusatz : ''}
+            </p>
+          )}
           {(bericht.blockErgebnisse ?? []).length > 0 && (
             <div>
               <p className="bericht-abschnitt">{tb.blockErgebnisseLabel}</p>

@@ -75,6 +75,10 @@ Jeder Workflow-Lauf hinterlässt automatisch einen kompakten, strukturierten Ber
 Blöcke, Ergebnisse, Fehlschläge). Reines Nachschlagewerk in der App — wird **niemals automatisch
 in den Kontext künftiger Sessions geladen** und nie von Hand gepflegt. Zusätzlich ist das
 Ergebnis des letzten Laufs direkt an jeder Block-Karte auf der Leinwand aufklappbar.
+Der Verbrauch steht je Block und für den ganzen Lauf im Bericht — seit 13.08.2026 mit
+**Token-Aufschlüsselung** (Eingabe, Ausgabe, Cache gelesen, Cache geschrieben) und den
+**theoretischen API-Kosten**, die der Motor aus den Preisen der genutzten Modelle berechnet
+(im Abo-Modus nur zur Einordnung ausgewiesen).
 
 ### 3.3 Sicherungspunkte
 
@@ -290,6 +294,10 @@ Angreifer durch die Diagnose.
 - **Session = Abschnitt eines Workflow-Laufs.** Das **Sessionende** (Karten aktualisieren,
   Laufbericht schreiben) ist fest eingebaut, kein optionaler Block.
 - **Automatischer Übertrag** (seit Bauschritt 11): Die App misst den echten Kontext-Füllstand.
+  Die Fenstergröße des Modells kennt FlowForge seit 13.08.2026 schon ab der Startmeldung des
+  Motors (aus der Modellkennung bzw. der gemerkten Größe früherer Sessions) — vorher rechnete
+  der erste Block eines Laufs mit einem 200.000er-Standardwert, zeigte zu hohe Prozente und
+  hätte zu früh übertragen.
   Bei ~85 % unterbricht sie den laufenden Block; der Agent aktualisiert die Karten (sofern der
   Block schreiben darf), schreibt eine Übergabe (Erledigtes, nächster Schritt, Wissenswertes),
   und derselbe Block arbeitet sofort als frische Session nahtlos weiter — bis der Workflow

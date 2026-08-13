@@ -14,6 +14,7 @@ import {
 } from './schnittstelle.js'
 import { kartenWerkzeugServer } from './kartenWerkzeuge.js'
 import { menschWerkzeugServer } from './menschWerkzeuge.js'
+import { kontextFensterFuerModell, kontextFensterMerken } from './motorWissen.js'
 import { startWerkzeugServer } from './startWerkzeuge.js'
 
 const laden = createRequire(import.meta.url)
@@ -517,6 +518,10 @@ export function starteMotorLauf(optionen) {
     kontextProzentVon: 0,
     kontextProzentBis: 5,
     kostenUsd: null,
+    // Token-Aufschlüsselung (Wunsch Georg, 13.08.2026): Eingabe, Ausgabe,
+    // Cache gelesen/geschrieben — kumuliert über alle Modelle der Session
+    // (Unteraufgaben eingeschlossen), gemeldet am Session-Ende.
+    aufschluesselung: null,
     kontextFenster: kontextFenster > 0 ? kontextFenster : KONTEXT_FENSTER_STANDARD,
     // Beim Übertrag: der Füllstand im Moment der Auslösung — die endgültige
     // Fenstergröße kommt erst später und würde ihn sonst verfälschen.
@@ -638,6 +643,23 @@ export function starteMotorLauf(optionen) {
         for (const zeile of tickerZeilen(nachricht, projektPfad))
           aufEreignis({ art: 'ticker', text: zeile })
 
+        // Kontextfenster ab der Startmeldung (Befund Georg, 13.08.2026: der
+        // erste Block eines Laufs rechnete mit dem 200.000er-Standard — Anzeige
+        // zu hoch, Übertrag zu früh). Die Startmeldung nennt das Modell; das
+        // Motor-Wissen liefert die gemerkte bzw. an der Kennung erkennbare
+        // Größe. Vorwissen aus früheren Blöcken desselben Laufs geht vor.
+        if (
+          nachricht.type === 'system' &&
+          nachricht.subtype === 'init' &&
+          kontextFenster === KONTEXT_FENSTER_STANDARD
+        ) {
+          const bekannt = kontextFensterFuerModell(nachricht.model)
+          if (bekannt > 0) {
+            verbrauch.kontextFenster = bekannt
+            verbrauchMelden()
+          }
+        }
+
         if (nachricht.type === 'assistant' && nachricht.message?.usage) {
           const u = nachricht.message.usage
           const kumuliert =
@@ -688,8 +710,23 @@ export function starteMotorLauf(optionen) {
         if (nachricht.type === 'result') {
           if (typeof nachricht.total_cost_usd === 'number')
             verbrauch.kostenUsd = nachricht.total_cost_usd
-          for (const m of Object.values(nachricht.modelUsage ?? {}))
-            if (m.contextWindow > 0) verbrauch.kontextFenster = m.contextWindow
+          // modelUsage ist der kumulierte Stand der Session je Modell —
+          // Unteraufgaben eingeschlossen. Daraus kommen die Fenstergröße
+          // (gemerkt fürs Motor-Wissen) und die Token-Aufschlüsselung.
+          const summe = { eingabe: 0, ausgabe: 0, cacheLesen: 0, cacheSchreiben: 0 }
+          let hatModelUsage = false
+          for (const [modell, m] of Object.entries(nachricht.modelUsage ?? {})) {
+            hatModelUsage = true
+            if (m.contextWindow > 0) {
+              verbrauch.kontextFenster = m.contextWindow
+              kontextFensterMerken(modell, m.contextWindow)
+            }
+            summe.eingabe += m.inputTokens ?? 0
+            summe.ausgabe += m.outputTokens ?? 0
+            summe.cacheLesen += m.cacheReadInputTokens ?? 0
+            summe.cacheSchreiben += m.cacheCreationInputTokens ?? 0
+          }
+          if (hatModelUsage) verbrauch.aufschluesselung = summe
           verbrauchMelden()
 
           if (uebertragPhase === 'angefordert' && !sanftAngefordert && !hartAngefordert) {

@@ -501,7 +501,13 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     if (Notification.isSupported()) new Notification({ title: titel, body: inhalt }).show()
   }
 
-  const gesamtVerbrauch = { tokens: 0, kostenUsd: null }
+  const gesamtVerbrauch = {
+    tokens: 0,
+    kostenUsd: null,
+    // Token-Aufschlüsselung (Wunsch Georg, 13.08.2026): Eingabe, Ausgabe,
+    // Cache gelesen/geschrieben — über alle Blöcke und Sessions des Laufs.
+    aufschluesselung: { eingabe: 0, ausgabe: 0, cacheLesen: 0, cacheSchreiben: 0 }
+  }
   // Die echte Kontextfenster-Größe lernt der Lauf aus der ersten Motor-Session
   // und reicht sie an alle weiteren durch — für eine richtige Übertrags-Schwelle.
   let bekanntesKontextFenster = 0
@@ -794,7 +800,20 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       // Verbrauch aller Sessions dieses Block-Anlaufs (auch über Überträge und
       // Pausen hinweg) — landet sichtbar am Block-Ergebnis im Laufbericht.
       let blockTokens = 0
+      let blockKosten = null
+      const blockAufschluesselung = { eingabe: 0, ausgabe: 0, cacheLesen: 0, cacheSchreiben: 0 }
+      let blockHatAufschluesselung = false
       let fortgesetztImLauf = false
+      // Hängt die Verbrauchs-Summen dieses Blocks an ein endgültiges Ergebnis.
+      function mitBlockVerbrauch(ergebnis) {
+        return {
+          ...ergebnis,
+          blockTokens,
+          blockKosten,
+          blockAufschluesselung: blockHatAufschluesselung ? { ...blockAufschluesselung } : null,
+          fortgesetztImLauf
+        }
+      }
       while (true) {
         standSpeichern()
         // Session-Fortsetzung bei Wiederholungen (BAUPLAN 16): Läuft derselbe
@@ -871,8 +890,20 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
               : ergebnis.verbrauch.tokens ?? 0) + (ergebnis.verbrauch.unterTokens ?? 0)
           gesamtVerbrauch.tokens += zaehlTokens
           blockTokens += zaehlTokens
-          if (ergebnis.verbrauch.kostenUsd != null)
+          if (ergebnis.verbrauch.kostenUsd != null) {
             gesamtVerbrauch.kostenUsd = (gesamtVerbrauch.kostenUsd ?? 0) + ergebnis.verbrauch.kostenUsd
+            blockKosten = (blockKosten ?? 0) + ergebnis.verbrauch.kostenUsd
+          }
+          // Aufschlüsselung je Session aufsummieren — der Motor meldet den
+          // kumulierten Endstand der Session (Unteraufgaben eingeschlossen).
+          const auf = ergebnis.verbrauch.aufschluesselung
+          if (auf) {
+            blockHatAufschluesselung = true
+            for (const feld of ['eingabe', 'ausgabe', 'cacheLesen', 'cacheSchreiben']) {
+              blockAufschluesselung[feld] += auf[feld] ?? 0
+              gesamtVerbrauch.aufschluesselung[feld] += auf[feld] ?? 0
+            }
+          }
           if (ergebnis.verbrauch.kontextFenster > 0)
             bekanntesKontextFenster = ergebnis.verbrauch.kontextFenster
         }
@@ -941,7 +972,7 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           const serverPause = ergebnis.fehlerArt === 'ueberlastet'
           if (kontingentPause && kontingentVerhaltenLaden(projektPfad) === 'stoppen')
             // die Ergebnis-Verarbeitung hält den Lauf an
-            return { ...ergebnis, blockTokens, fortgesetztImLauf }
+            return mitBlockVerbrauch(ergebnis)
           if (kontingentPause || serverPause) {
             if (!k.warPausiert) {
               k.warPausiert = true
@@ -957,14 +988,14 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
             tickern(serverPause ? texte.ticker.serverPause : texte.ticker.kontingentPause)
             await kontingentWarten()
             if (lauf.hart)
-              return { ...ergebnis, zustand: 'hart-abgebrochen', blockTokens, fortgesetztImLauf }
+              return mitBlockVerbrauch({ ...ergebnis, zustand: 'hart-abgebrochen' })
             if (lauf.sanft)
-              return { ...ergebnis, zustand: 'sanft-gestoppt', blockTokens, fortgesetztImLauf }
+              return mitBlockVerbrauch({ ...ergebnis, zustand: 'sanft-gestoppt' })
             tickern(texte.ticker.kontingentVersuch)
             continue
           }
         }
-        return { ...ergebnis, blockTokens, fortgesetztImLauf }
+        return mitBlockVerbrauch(ergebnis)
       }
     }
 
@@ -1094,6 +1125,8 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           zustand: 'fehlgeschlagen',
           ergebnisText: String(ergebnis.fehlertext ?? '').slice(0, 4000),
           tokens: ergebnis.blockTokens ?? null,
+          aufschluesselung: ergebnis.blockAufschluesselung ?? null,
+          kostenUsd: ergebnis.blockKosten ?? null,
           sessionFortgesetzt: Boolean(ergebnis.fortgesetztImLauf)
         })
         if (!endZustand) {
@@ -1125,6 +1158,11 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         // Verbrauch dieses Anlaufs (BAUPLAN 16): So sieht Georg im Laufbericht,
         // dass eine fortgesetzte Reparatur-Runde deutlich weniger kostet.
         tokens: ergebnis.blockTokens ?? null,
+        // Token-Aufschlüsselung und theoretische API-Kosten je Block
+        // (Wunsch Georg, 13.08.2026) — die Kosten rechnet der Motor selbst
+        // aus den Preisen der genutzten Modelle.
+        aufschluesselung: ergebnis.blockAufschluesselung ?? null,
+        kostenUsd: ergebnis.blockKosten ?? null,
         sessionFortgesetzt: Boolean(ergebnis.fortgesetztImLauf)
       }
       bericht.blockErgebnisse.push(blockErgebnis)
