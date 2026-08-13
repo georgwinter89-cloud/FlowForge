@@ -271,10 +271,12 @@ export const BLOCK_KATALOG = [
       'Antworte auf Deutsch. Liegt dir eine Angriffsliste vor, arbeite sie von Anfang an ein: ' +
       'Räume jeden Fund aus ' +
       'oder begründe, warum er dieses Paket nicht trifft. ' +
-      'Halte dein eigenes Arbeitsgedächtnis schlank: Delegiere das Einlesen und Durchsuchen ' +
-      'des Projekts an Unteraufgaben (Agent-Werkzeug) — der Wegwerf-Helfer wühlt in seinem ' +
-      'eigenen Kontext und liefert dir nur sein kompaktes Fazit zurück; selbst liest du ' +
-      'gezielt die Stellen, die du wirklich änderst. ' +
+      'ARBEITSGEDÄCHTNIS-REGEL (dein Kontext ist der teuerste Teil des Laufs): Musst du mehr ' +
+      'als zwei Dateien einlesen oder im Projekt suchen, erledigt das EINE Unteraufgabe ' +
+      '(Agent-Werkzeug) mit eng umrissenem Auftrag — der Helfer wühlt in seinem eigenen ' +
+      'Kontext und liefert dir nur ein kompaktes Fazit mit Fundorten. Selbst öffnest du nur ' +
+      'die Stellen, die du in diesem Paket wirklich änderst, keine Datei doppelt und nichts ' +
+      'auf Vorrat — was du schon weißt, liest du nicht erneut. ' +
       'Halte dich an Stil und Aufbau des ' +
       'bestehenden Codes und bleibe im Projektordner. Was das Arbeitspaket ausdrücklich ' +
       'ausschließt, baust du nicht — auch nicht nebenbei. Projektkarten fasst du nicht an, ' +
@@ -319,10 +321,13 @@ export const BLOCK_KATALOG = [
       'Projekt. Die Prüfmappe pruefung/ ist deine Werkbank für DIESEN Lauf: FlowForge hat ' +
       'sie beim Laufstart geleert — baue deine Prüfungen frisch fürs aktuelle Paket, ohne ' +
       'Alttest-Ballast. Bilddateien sind in der Mappe verboten (hartes Nein). ' +
-      'Verlasse dich nicht auf den Umsetzungsbericht: Prüfe selbst nach. Halte dabei dein ' +
-      'eigenes Arbeitsgedächtnis schlank: Delegiere das Einlesen des Codes an Unteraufgaben ' +
-      '(Agent-Werkzeug) — der Wegwerf-Helfer wühlt in seinem eigenen Kontext und liefert dir ' +
-      'nur sein kompaktes Fazit zurück; die Stellen, die du konkret prüfst, liest du selbst. ' +
+      'Verlasse dich nicht auf den Umsetzungsbericht: Prüfe selbst nach — aber lies nicht ' +
+      'das ganze Projekt. ARBEITSGEDÄCHTNIS-REGEL (dein Kontext ist der teuerste Teil des ' +
+      'Laufs): Starte als ersten Schritt EINE Unteraufgabe (Agent-Werkzeug), die die ' +
+      'Umsetzung an den im Arbeitspaket genannten Stellen einliest und dir je ' +
+      'Fertig-Kriterium mit Fundort meldet, wo und wie es umgesetzt ist — der Helfer wühlt ' +
+      'in seinem eigenen Kontext, du bekommst nur sein kompaktes Fazit. Selbst liest du nur ' +
+      'die Stellen, die du konkret prüfst, keine Datei doppelt und nichts auf Vorrat. ' +
       'Schreibe wenige, kleine Testdateien in den Ordner pruefung/ (passend zu den ' +
       'Werkzeugen des Projekts; zur Not ein einfaches Skript, das bei Fehlern mit einer ' +
       'Fehlermeldung endet) und führe sie aus. Schreibe robuste Prüfungen, die nur brechen, ' +
