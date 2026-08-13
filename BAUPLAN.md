@@ -196,26 +196,54 @@ sie wirklich brauchen — wie beim Delegieren an Unteragenten üblich.)
   eigenen Kontext und liefert nur sein Fazit zurück. Jeder Auftrag erprobt im
   Ein-Block-Workflow (Bauplan-Regel); der Verbrauchseffekt wird am
   Zugsimulator-Projekt nachgemessen.
-- **Prüfmappen-Deckel, erzwungen statt erbeten:** Der Ordner `pruefung/`
-  bekommt eine harte Grenze (Richtwert 200 KB gesamt; Bilddateien sind ganz
-  verboten). Überschreitende Schreibversuche werden abgelehnt mit dem Hinweis,
-  vorhandene Prüfungen zusammenzulegen statt zu stapeln — dieselbe Mechanik
-  wie bei der Karten-Längengrenze.
+- **Lauf-Mappe statt Projekt-Mappe** (Entscheidung Georg, 13.08.2026): Die
+  Prüfmappe `pruefung/` gehört zum Lauf, nicht zum Projekt — beim Start eines
+  neuen Laufs leert FlowForge sie automatisch (wie die Arbeitsablage; die
+  Wiederaufnahme eines unterbrochenen Laufs leert nicht). Der Prüfer baut
+  seine Prüfungen frisch fürs aktuelle Paket, ohne Alttest-Ballast und ohne
+  Anpass-Arbeit; Bilddateien in der Mappe sind verboten (hartes Nein). Die
+  Gesamtprüfung schreibt sich ihre Prüfungen bei Bedarf frisch, statt alte
+  abzuspielen. Wuchern wird damit strukturell unmöglich; ein Größen-Deckel
+  ist nicht mehr nötig. Gezielte Wiederholungsprüfung alter Features: über
+  Prüfkarten (Schritt 18).
 - **Prüfmappen-Ansicht an der Prüferkarte** (Wunsch Georg, 13.08.2026): An
   jeder Prüf-Blockkarte auf der Leinwand ein aufklappbarer Bereich „Prüfmappe"
   (dasselbe Muster wie das Block-Ergebnis an der Karte), in Alltagssprache:
-  wie viele Prüfungen in der Mappe liegen, wie voll der Deckel ist („143 von
-  200 KB"), je Prüfung Name, Größe und Zuletzt-geändert. Die Mappe gehört dem
-  Projekt — alle Prüf-Blockkarten zeigen dieselbe; liegt kein Prüf-Block auf
-  der Leinwand, gibt es keinen Blick hinein (bewusst akzeptiert, Entscheidung
-  Georg 13.08.2026 — die Bau-Vorlagen enthalten immer einen Prüfer).
+  welche Prüfungen der letzte Lauf hinterlassen hat — je Prüfung Name, Größe
+  und Zuletzt-geändert. Alle Prüf-Blockkarten zeigen dieselbe Mappe; liegt
+  kein Prüf-Block auf der Leinwand, gibt es keinen Blick hinein (bewusst
+  akzeptiert — die Bau-Vorlagen enthalten immer einen Prüfer).
   Ehrlichkeits-Notiz: gezählt werden Prüf-Dateien, nicht einzelne Testfälle
   darin. Nur zum Nachlesen — bearbeiten darf die Mappe weiterhin nur der Prüfer.
 **Alltagstest:** Georg lässt am Zugsimulator ein Paket bauen und vergleicht im
 Laufbericht den Verbrauch je Block mit dem 830.000er-Lauf vom 12.08. — deutlich
 weniger, und im Ticker tauchen Unteraufgaben auf. Ein Prüfer-Versuch, ein
-Bild in die Prüfmappe zu legen, wird sichtbar abgelehnt. Die Prüfmappen-Ansicht
-zeigt Anzahl und Größe der Prüfungen samt Deckel-Füllstand.
+Bild in die Prüfmappe zu legen, wird sichtbar abgelehnt. Nach einem zweiten
+Lauf zeigt die Prüfmappen-Ansicht nur noch dessen Prüfungen — die alten sind
+weg.
+
+### 18 — Prüfkarten: gezielte Wiederholungsprüfung
+(Idee Georg, 13.08.2026: Statt einer wachsenden Projekt-Prüfmappe entscheidet
+der Nutzer selbst, was erneut geprüft wird — er zieht Prüfkarten auf den Prüfer.)
+- **Neue Kartensorte „Prüfung":** Nach jeder bestandenen Prüfung legt FlowForge
+  automatisch eine Prüfkarte an — Text in Alltagssprache: was geprüft wurde
+  und woran „in Ordnung" erkennbar ist (übliche Längengrenzen). Dahinter
+  bewahrt FlowForge die Prüfdateien dieses Laufs auf — im verwalteten Bereich
+  **außerhalb des Projektordners** (wie die Sicherungspunkte): kein Agent
+  sieht das Archiv, es kostet keinen Lauf Kontext.
+- **Ziehen auf den Prüfer:** Der Nutzer zieht Prüfkarten auf eine
+  Prüf-Blockkarte im Schaubild; sie hängen dort sichtbar an. Beim Lauf legt
+  FlowForge die aufbewahrten Prüfdateien in die Prüfmappe, und der Prüfer
+  führt sie zusätzlich zu seinen Paket-Prüfungen aus. Passt eine alte Prüfung
+  nicht mehr zum heutigen Code, passt der Prüfer sie an — die angepasste
+  Fassung ersetzt die aufbewahrte, die Karte veraltet nicht.
+- Prüfkarten erscheinen in der Karten-Seitenleiste (filterbar): „Was ist in
+  diesem Projekt alles geprüft" ist ohne Dateiblick sichtbar. Löschen einer
+  Prüfkarte räumt ihre aufbewahrten Prüfdateien mit weg.
+**Alltagstest:** Georg baut ein Feature — die Prüfkarte erscheint von allein.
+Beim nächsten Paket zieht er sie auf den Prüfer und sieht im Laufbericht, dass
+Paket UND alte Prüfung geprüft wurden. Dann löscht er die Karte — sie
+verschwindet samt aufbewahrter Prüfungen.
 
 ## Reihenfolge-Begründung (kurz)
 Motor-Durchstich früh (3), weil dort das größte technische Risiko liegt — inklusive
