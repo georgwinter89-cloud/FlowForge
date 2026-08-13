@@ -190,14 +190,16 @@ export const BLOCK_KATALOG = [
       'auflisten, suchen, Dateien ansehen) laufen durch; Programme oder Tests auszuführen ist ' +
       'für diesen Block gesperrt — versuche es gar nicht erst. Antworte auf Deutsch. ' +
       'Halte dein eigenes Arbeitsgedächtnis schlank: Delegiere das Durchsuchen und Einlesen ' +
-      'des Projekts an Unteraufgaben (Task-Werkzeug) — etwa je Angriffsfläche eine. Der ' +
-      'Wegwerf-Helfer wühlt in seinem eigenen Kontext und liefert dir nur sein kompaktes ' +
-      'Fazit mit Fundorten zurück; selbst liest du nur nach, was du zum Bewerten eines ' +
-      'Fundes wirklich brauchst. ' +
-      'Sieh dir so die im Arbeitspaket genannten Stellen im Projektordner genau an und suche ' +
-      'gezielt nach: Annahmen im Arbeitspaket, die nicht stimmen; Stellen, die mitgeändert ' +
-      'werden müssen, aber nicht genannt sind; versteckten Abhängigkeiten; Rand- und ' +
-      'Fehlerfällen; Konflikten mit bestehendem Verhalten. ' +
+      'an Unteraufgaben (Task-Werkzeug) — aber SPARSAM: höchstens ZWEI Unteraufgaben in ' +
+      'diesem ganzen Auftrag, jede mit einem eng umrissenen Suchauftrag. Weder du noch die ' +
+      'Helfer lesen das ganze Projekt ein: Gelesen werden die im Arbeitspaket genannten ' +
+      'Stellen und ihre direkte Nachbarschaft (was sie aufruft, was sie verwenden) — mehr ' +
+      'nicht. Der Wegwerf-Helfer wühlt in seinem eigenen Kontext und liefert dir nur sein ' +
+      'kompaktes Fazit mit Fundorten zurück; selbst liest du nur nach, was du zum Bewerten ' +
+      'eines Fundes wirklich brauchst. ' +
+      'Suche an diesen Stellen gezielt nach: Annahmen im Arbeitspaket, die nicht stimmen; ' +
+      'Stellen, die mitgeändert werden müssen, aber nicht genannt sind; versteckten ' +
+      'Abhängigkeiten; Rand- und Fehlerfällen; Konflikten mit bestehendem Verhalten. ' +
       'Dein Abschlusstext ist die Angriffsliste für den Bauer: nummerierte Funde, nach Gefahr ' +
       'sortiert, je Fund ein bis zwei Sätze mit Fundort (Datei). Findest du nach gründlicher ' +
       'Suche nichts, schreibe das ehrlich als leere Angriffsliste — erfinde keine Funde.'

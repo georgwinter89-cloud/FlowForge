@@ -208,6 +208,10 @@ wie ihr Block (auch „darf nur lesen" — deshalb ist das Unteraufgaben-Werkzeu
 erlaubt); ihre Zeilen sind im Ticker als „Unteraufgabe" gekennzeichnet. Ihr
 Verbrauch zählt ehrlich zum Laufbericht dazu, belastet aber nicht den
 Kontext-Füllstand der Hauptsession, der den automatischen Übertrag steuert.
+**Gezügelter Angreifer** (Entscheidung Georg, 13.08.2026 — Befund: 425.000 Tokens
+für eine Angriffsliste, weil vier Späher je das ganze Projekt einlasen): höchstens
+zwei Unteraufgaben pro Angreifer-Lauf, jede eng umrissen; gelesen werden nur die im
+Arbeitspaket genannten Stellen und ihre direkte Nachbarschaft, nicht das ganze Projekt.
 
 **Prüfmappe & Arbeitsablage:** Der Ordner `pruefung/` gehört den Prüf-Blöcken —
 für alle anderen Blöcke ist er schreibgesperrt (hartes Nein; der Bauer darf die
