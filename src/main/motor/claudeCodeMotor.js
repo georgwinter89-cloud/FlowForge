@@ -13,6 +13,7 @@ import {
   UEBERTRAG_TEST_AUFSCHLAG_PUNKTE
 } from './schnittstelle.js'
 import { kartenWerkzeugServer } from './kartenWerkzeuge.js'
+import { helferWerkzeugServer } from './helferWerkzeuge.js'
 import { menschWerkzeugServer } from './menschWerkzeuge.js'
 import { kontextFensterFuerModell, kontextFensterMerken } from './motorWissen.js'
 import { startWerkzeugServer } from './startWerkzeuge.js'
@@ -76,6 +77,11 @@ const MENSCH_PRAEFIX = 'mcp__mensch__'
 // Startanleitungs-Werkzeug (BAUPLAN 10): schreibt validiert ins Projekt —
 // unter der Sperre „darf nur lesen" deshalb tabu.
 const START_PRAEFIX = 'mcp__start__'
+
+// Lokale Helfer-KI (Experiment, 13.08.2026): rein lesende Recherche über
+// Ollama — im Code auf Auflisten/Lesen/Suchen im Projektordner begrenzt,
+// deshalb ohne Rückfrage und auch unter „darf nur lesen" erlaubt.
+const HELFER_PRAEFIX = 'mcp__helfer__'
 
 // FlowForges eigene Verwaltungsdateien im Projektordner: direkte Änderungen
 // würden die harten Regeln umgehen (z.B. die Karten-Längengrenze oder die
@@ -227,6 +233,8 @@ function liegtImProjekt(datei, projektPfad) {
 // Exportiert, damit sich die Einstufung ohne laufenden Motor prüfen lässt.
 export function pruefeWerkzeug(name, eingabe, projektPfad, nurLesen, darfPruefen) {
   if (name.startsWith(MENSCH_PRAEFIX)) return { erlaubt: true }
+  // Lokale Helfer-KI: rein lesend (im Code erzwungen) — immer erlaubt.
+  if (name.startsWith(HELFER_PRAEFIX)) return { erlaubt: true }
   // Startanleitung setzen schreibt ins Projekt — validiert im Werkzeug selbst,
   // aber unter der Sperre „darf nur lesen" gesperrt.
   if (name.startsWith(START_PRAEFIX)) {
@@ -330,6 +338,8 @@ function tickerZeilen(nachricht, projektPfad, blockTaskIds) {
     // Werkzeug meldet sein Ergebnis ebenfalls selbst (festgelegt/abgelehnt).
     if (block.name.startsWith(MENSCH_PRAEFIX)) continue
     if (block.name.startsWith(START_PRAEFIX)) continue
+    // Die lokale Helfer-KI meldet Start, Schritte und Fazit selbst.
+    if (block.name.startsWith(HELFER_PRAEFIX)) continue
     switch (block.name) {
       case 'Write':
         zeilen.push(t.schreibtDatei(kurzerPfad(e.file_path, projektPfad)))
@@ -479,6 +489,9 @@ export function starteLaufMotor(optionen) {
     // Vorwissen aus früheren Sessions macht die Übertrags-Schwelle von
     // Anfang an richtig.
     kontextFenster = KONTEXT_FENSTER_STANDARD,
+    // Lokale Helfer-KI (Experiment): { modell } — nur gesetzt, wenn der
+    // Schalter an ist UND Ollama beim Laufstart erreichbar war.
+    lokaleHelfer = null,
     aufEreignis,
     aufRechteFrage,
     aufMenschFrage
@@ -665,6 +678,11 @@ export function starteLaufMotor(optionen) {
     // Startanleitung (BAUPLAN 10): das Pflicht-Artefakt der Bau-Blöcke wird
     // ausschließlich über dieses validierende Werkzeug geschrieben.
     const startServer = await startWerkzeugServer({ projektPfad, aufEreignis })
+    // Lokale Helfer-KI (Experiment): nur registriert, wenn beim Laufstart
+    // bestätigt war, dass Ollama läuft und das Modell da ist.
+    const helferServer = lokaleHelfer
+      ? await helferWerkzeugServer({ projektPfad, modell: lokaleHelfer.modell, aufEreignis })
+      : null
 
     // Saubere Umgebung: Alle ANTHROPIC_*/CLAUDE*-Variablen fliegen raus — sie
     // könnten Anmeldung oder Verhalten des Motors umleiten (z.B. wenn FlowForge
@@ -691,17 +709,25 @@ export function starteLaufMotor(optionen) {
         // Wiederaufnahme: dieselbe Lauf-Session weiterführen — der
         // Koordinator kennt die bisherigen Blöcke und Fazite noch.
         ...(fortsetzen ? { resume: fortsetzen } : {}),
-        mcpServers: { karten: kartenServer, mensch: menschServer, start: startServer },
+        mcpServers: {
+          karten: kartenServer,
+          mensch: menschServer,
+          start: startServer,
+          ...(helferServer ? { helfer: helferServer } : {})
+        },
         // Der Hauptfaden ist der Koordinator: schlanker eigener Systemtext
         // statt des vollen Werkzeug-Vorspanns — er arbeitet ja nicht selbst.
         systemPrompt: texte.agentenLaufSession.koordinatorSystem,
         // Jeder Block läuft als frischer Agent dieses Typs (BAUPLAN 19).
         // Sein Systemtext trägt die Projekt-Grundregeln (Windows-Pfade,
-        // Karten-Werkzeuge) — den Arbeitsauftrag setzt der Hook ein.
+        // Karten-Werkzeuge) — den Arbeitsauftrag setzt der Hook ein. Steht
+        // die lokale Helfer-KI bereit, wird sie dort angeboten (Experiment).
         agents: {
           block: {
             description: 'Führt genau einen Block-Arbeitsauftrag von FlowForge aus.',
-            prompt: texte.agentenLaufSession.blockAgentSystem(projektPfad, TITEL_MAX, TEXT_MAX),
+            prompt:
+              texte.agentenLaufSession.blockAgentSystem(projektPfad, TITEL_MAX, TEXT_MAX) +
+              (helferServer ? '\n' + texte.agentenLokaleHelfer.systemZusatz : ''),
             maxTurns: 300
           }
         },

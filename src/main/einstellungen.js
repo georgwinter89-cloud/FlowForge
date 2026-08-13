@@ -18,7 +18,12 @@ const STANDARD = {
   rechteAutomatisch: false,
   // Test-Schalter (BAUPLAN 11): Übertrag schon nach ~10 Prozentpunkten
   // Kontext-Verbrauch statt erst bei 85 % — nur zum Ausprobieren.
-  uebertragTest: false
+  uebertragTest: false,
+  // Lokale Helfer-KI (Experiment, Wunsch Georg 13.08.2026): Recherche-
+  // Unteraufgaben laufen über eine lokale KI (Ollama) statt über den Motor —
+  // kostet kein Kontingent. Nur aktiv, wenn Ollama beim Laufstart erreichbar ist.
+  lokaleHelferAktiv: false,
+  lokaleHelferModell: 'qwen2.5:7b'
 }
 
 function dateiPfad() {
@@ -51,7 +56,10 @@ export function einstellungenSpeichern(neu) {
     apiSchluessel: schluessel,
     ausgabenObergrenzeUsd: Number.isFinite(obergrenze) && obergrenze > 0 ? obergrenze : STANDARD.ausgabenObergrenzeUsd,
     rechteAutomatisch: Boolean(neu.rechteAutomatisch),
-    uebertragTest: Boolean(neu.uebertragTest)
+    uebertragTest: Boolean(neu.uebertragTest),
+    lokaleHelferAktiv: Boolean(neu.lokaleHelferAktiv),
+    lokaleHelferModell:
+      String(neu.lokaleHelferModell ?? '').trim() || STANDARD.lokaleHelferModell
   }
   const tmp = dateiPfad() + '.tmp'
   fs.writeFileSync(tmp, JSON.stringify(daten, null, 2), 'utf8')

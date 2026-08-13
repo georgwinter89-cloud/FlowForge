@@ -38,6 +38,7 @@ import {
   pruefkarteAusErgebnis
 } from './pruefkarten.js'
 import { starteLaufMotor } from './motor/claudeCodeMotor.js'
+import { lokaleHelferPruefen } from './motor/lokaleHelfer.js'
 import {
   KONTEXT_FENSTER_STANDARD,
   FORTSETZUNG_WAECHTER_PROZENT
@@ -595,9 +596,25 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     })
   }
 
+  // Lokale Helfer-KI (Experiment, 13.08.2026): nur nutzen, wenn Ollama jetzt
+  // wirklich läuft und das Modell da ist — sonst ehrlicher Hinweis und alles
+  // läuft wie gewohnt über den Motor.
+  let lokaleHelfer = null
+  let lokaleHelferHinweis = null
+  if (einstellungen.lokaleHelferAktiv) {
+    const status = await lokaleHelferPruefen(einstellungen.lokaleHelferModell)
+    if (status.erreichbar && status.modellDa) {
+      lokaleHelfer = { modell: einstellungen.lokaleHelferModell }
+      lokaleHelferHinweis = texte.ticker.lokaleHelferBereit(einstellungen.lokaleHelferModell)
+    } else {
+      lokaleHelferHinweis = texte.ticker.lokaleHelferNichtErreichbar
+    }
+  }
+
   // Lauf-Start sofort melden — noch vor der ersten Ticker-Zeile, damit die
   // Ansicht die Anzeige des vorigen Laufs sauber leeren kann.
   senden({ art: 'zustand', zustand: 'laeuft' })
+  if (lokaleHelferHinweis) tickern(lokaleHelferHinweis)
   if (pruefmappeGeleert) tickern(texte.ticker.pruefmappeGeleert)
   if (pruefkartenEingelegt > 0) tickern(texte.ticker.pruefkartenEingelegt(pruefkartenEingelegt))
   if (ausWarteschlange) tickern(texte.ticker.ausWarteschlangeGestartet)
@@ -759,6 +776,7 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         apiSchluessel: einstellungen.apiSchluessel,
         ausgabenObergrenzeUsd: einstellungen.ausgabenObergrenzeUsd,
         fortsetzen,
+        lokaleHelfer,
         ...(bekanntesKontextFenster > 0 ? { kontextFenster: bekanntesKontextFenster } : {}),
         aufEreignis(e) {
           // Ticker-Zeilen bekommen den Blocknamen vorangestellt, sobald

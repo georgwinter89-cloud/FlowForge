@@ -388,6 +388,35 @@ export const texte = {
     eintragOhneDateien: (titel, text) =>
       `- „${titel}" (keine aufbewahrten Prüfdateien — prüfe das Beschriebene mit frisch geschriebenen Prüfungen): ${text}\n`
   },
+  // Lokale Helfer-KI (Experiment, Wunsch Georg 13.08.2026): Recherche über
+  // Ollama statt über Motor-Unteraufgaben — kostet kein Kontingent. Das kleine
+  // Modell kann erfinden — deshalb trägt jedes Fazit einen ehrlichen
+  // Warnhinweis, und die Agenten prüfen wichtige Fundorte selbst nach.
+  agentenLokaleHelfer: {
+    werkzeugBeschreibung:
+      'Delegiert einen rein lesenden Recherche-Auftrag (Dateien auflisten, lesen, ' +
+      'durchsuchen) an die lokale Helfer-KI — sie kostet kein Kontingent. Liefert ein ' +
+      'kompaktes Fazit mit Fundorten. Achtung: kleines Modell — nutze es für Überblick ' +
+      'und Vorarbeit; die Stellen, auf die du deine Arbeit stützt, liest du selbst nach.',
+    serverHinweis:
+      'Die lokale Helfer-KI recherchiert rein lesend im Projektordner. Nutze sie ' +
+      'bevorzugt für Einlese- und Suchaufträge, statt eine Unteraufgabe des Motors zu starten.',
+    fazit: (text) =>
+      'Fazit der lokalen Helfer-KI (kleines Modell — prüfe Fundorte, auf die du deine ' +
+      'Arbeit stützt, selbst nach):\n' + text,
+    gescheitert: (fehler) =>
+      'Die lokale Helfer-KI konnte nicht recherchieren: ' +
+      fehler +
+      ' Erledige die Recherche stattdessen mit einer Unteraufgabe (Agent-Werkzeug) oder selbst.',
+    // Zusatz im Systemtext der Block-Agenten, wenn die lokale KI bereitsteht.
+    systemZusatz:
+      'Für Einlese- und Suchaufträge steht dir das Werkzeug lokal_recherchieren bereit ' +
+      '(lokale KI, kostet kein Kontingent) — nutze es bevorzugt für Recherche: sowohl ' +
+      'dort, wo dein Auftrag Unteraufgaben fürs Einlesen vorsieht, als auch für dein ' +
+      'eigenes Umsehen im Projekt. Es ist ein kleines Modell: gut für Überblick und ' +
+      'Fundstellen; die Stellen, auf die du deine Arbeit stützt, liest du selbst nach. ' +
+      'Scheitert es, nutze wie gewohnt das Agent-Werkzeug.\n'
+  },
   // KI-Assistent des Block-Editors (SPEC §4.5, BAUPLAN 14) — Texte an den Motor.
   agentenBlockAssistent: {
     keineWerkzeuge:
@@ -482,6 +511,20 @@ export const texte = {
     apiSchluesselPlatzhalter: 'sk-ant-…',
     obergrenzeFeld: 'Ausgaben-Obergrenze pro Lauf (US-Dollar)',
     obergrenzeHinweis: 'Erreicht ein Lauf diese Grenze, hält der Motor von selbst an.',
+    // Lokale Helfer-KI (Experiment, Wunsch Georg 13.08.2026).
+    lokaleHelferUeberschrift: 'Lokale Helfer-KI (Experiment)',
+    lokaleHelferAktiv: 'Recherche-Aufträge an eine lokale KI (Ollama) geben',
+    lokaleHelferHinweis:
+      'Die Block-Agenten geben reines Einlesen und Suchen an eine kleine KI auf deinem ' +
+      'Rechner ab — das kostet kein Abo-Kontingent, nur Rechenzeit. Die lokale KI kann ' +
+      'nur lesen, nichts verändern. Achtung: Kleine Modelle arbeiten langsamer und ' +
+      'ungenauer; wichtige Fundorte prüft der Agent selbst nach. Voraussetzung: Ollama ' +
+      'läuft und das Modell ist heruntergeladen.',
+    lokaleHelferModell: 'Modellname bei Ollama',
+    lokaleHelferStatusBereit: (modell) => `Ollama läuft, Modell „${modell}" ist da.`,
+    lokaleHelferStatusKeinModell: (modell) =>
+      `Ollama läuft, aber das Modell „${modell}" ist nicht heruntergeladen.`,
+    lokaleHelferStatusAus: 'Ollama ist gerade nicht erreichbar.',
     uebertragUeberschrift: 'Sessions & Übertrag',
     uebertragTest: 'Test-Schalter: Übertrag schon bei etwa 10 %',
     uebertragTestHinweis:
@@ -617,6 +660,21 @@ export const texte = {
       'Werkzeug-Versuch des Koordinators gestoppt — Arbeit erledigen nur die Block-Agenten.',
     parallelEigeneSession: (name) =>
       `„${name}" läuft parallel in einer eigenen Session — die Lauf-Session ist gerade beschäftigt.`,
+    // Lokale Helfer-KI (Experiment): sichtbar, wenn die lokale KI recherchiert.
+    lokaleHelferBereit: (modell) =>
+      `Lokale Helfer-KI bereit (${modell}) — Recherche-Aufträge kosten kein Kontingent.`,
+    lokaleHelferNichtErreichbar:
+      'Lokale Helfer-KI ist eingeschaltet, aber Ollama ist nicht erreichbar (oder das Modell fehlt) — Unteraufgaben laufen normal über den Motor.',
+    lokaleHelferStart: (modell) => `Lokale KI recherchiert (${modell}) …`,
+    lokaleHelferSchritt: (werkzeug) =>
+      werkzeug === 'datei_lesen'
+        ? 'Lokale KI · liest eine Datei.'
+        : werkzeug === 'suchen'
+          ? 'Lokale KI · durchsucht das Projekt.'
+          : 'Lokale KI · sieht sich einen Ordner an.',
+    lokaleHelferFertig: (schritte) =>
+      `Lokale KI fertig — Fazit nach ${schritte} ${schritte === 1 ? 'Schritt' : 'Schritten'}.`,
+    lokaleHelferGescheitert: (fehler) => `Lokale KI gescheitert: ${fehler}`,
     schreibtDatei: (pfad) => `Schreibt Datei: ${pfad}`,
     aendertDatei: (pfad) => `Ändert Datei: ${pfad}`,
     liestDatei: (pfad) => `Liest: ${pfad}`,

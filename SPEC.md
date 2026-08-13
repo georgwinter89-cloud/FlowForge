@@ -218,6 +218,20 @@ für eine Angriffsliste, weil vier Späher je das ganze Projekt einlasen): höch
 zwei Unteraufgaben pro Angreifer-Lauf, jede eng umrissen; gelesen werden nur die im
 Arbeitspaket genannten Stellen und ihre direkte Nachbarschaft, nicht das ganze Projekt.
 
+**Lokale Helfer-KI** (Experiment, Wunsch Georg, 13.08.2026): In den Einstellungen
+zuschaltbar (Standard: aus) — Recherche-Aufträge gehen dann an eine kleine KI auf dem
+eigenen Rechner (Ollama, Modellname einstellbar) statt an eine Motor-Unteraufgabe;
+das kostet kein Kontingent, nur Rechenzeit. Die Block-Agenten bekommen dafür das
+Werkzeug `lokal_recherchieren`; die lokale KI selbst hat genau drei rein lesende
+Werkzeuge (Ordner auflisten, Datei lesen, suchen), hart im Code auf den Projektordner
+begrenzt — schreiben, ausführen oder außerhalb lesen kann sie nicht, deshalb ist das
+Werkzeug auch unter „darf nur lesen" erlaubt. Ehrlichkeits-Vorkehrungen: Jedes Fazit
+trägt den Warnhinweis „kleines Modell — Fundorte selbst nachprüfen" (in der Erprobung
+erfand das 7B-Modell abgelehnte Dateiinhalte), Start/Schritte/Fazit stehen im Ticker,
+und ist Ollama beim Laufstart nicht erreichbar, sagt der Ticker das ehrlich und alles
+läuft wie gewohnt über den Motor. V1-Experiment auf Georgs Wunsch — der vollwertige
+lokale Motor bleibt V2 (§2).
+
 **Prüfmappe & Arbeitsablage:** Der Ordner `pruefung/` gehört den Prüf-Blöcken —
 für alle anderen Blöcke ist er schreibgesperrt (hartes Nein; der Bauer darf die
 Prüfmappe höchstens einmal ganz am Ende laufen lassen, nicht als Dauerschleife).

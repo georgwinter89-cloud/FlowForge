@@ -14,6 +14,7 @@ import {
   karteLoeschen
 } from './projekte.js'
 import { einstellungenLaden, einstellungenSpeichern } from './einstellungen.js'
+import { lokaleHelferPruefen } from './motor/lokaleHelfer.js'
 import {
   laufStarten,
   laufFortsetzen,
@@ -90,6 +91,8 @@ function registriereIpc() {
 
   ipcMain.handle('einstellungen-laden', () => einstellungenLaden())
   ipcMain.handle('einstellungen-speichern', (_e, neu) => einstellungenSpeichern(neu))
+  // Lokale Helfer-KI (Experiment): Statusanzeige in den Einstellungen.
+  ipcMain.handle('lokale-helfer-status', (_e, modell) => lokaleHelferPruefen(String(modell ?? '')))
 
   // Block-Editor mit KI-Assistent (SPEC §4.5, BAUPLAN 14).
   ipcMain.handle('eigene-bloecke-laden', () => eigeneBloeckeListe())

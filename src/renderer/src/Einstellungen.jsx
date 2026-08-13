@@ -10,6 +10,9 @@ export default function Einstellungen({ onSchliessen }) {
   const [obergrenze, setObergrenze] = useState(5)
   const [rechteAutomatisch, setRechteAutomatisch] = useState(false)
   const [uebertragTest, setUebertragTest] = useState(false)
+  const [lokaleHelferAktiv, setLokaleHelferAktiv] = useState(false)
+  const [lokaleHelferModell, setLokaleHelferModell] = useState('')
+  const [helferStatus, setHelferStatus] = useState(null)
   const [aboErlaubt, setAboErlaubt] = useState(true)
   const [fehler, setFehler] = useState('')
   const [geladen, setGeladen] = useState(false)
@@ -22,10 +25,25 @@ export default function Einstellungen({ onSchliessen }) {
       setObergrenze(e.einstellungen.ausgabenObergrenzeUsd)
       setRechteAutomatisch(Boolean(e.einstellungen.rechteAutomatisch))
       setUebertragTest(Boolean(e.einstellungen.uebertragTest))
+      setLokaleHelferAktiv(Boolean(e.einstellungen.lokaleHelferAktiv))
+      setLokaleHelferModell(e.einstellungen.lokaleHelferModell ?? '')
       setAboErlaubt(e.aboErlaubt)
       setGeladen(true)
     })
   }, [])
+
+  // Status der lokalen KI live anzeigen, sobald der Schalter an ist —
+  // Georg sieht sofort, ob Ollama läuft und das Modell da ist.
+  useEffect(() => {
+    if (!lokaleHelferAktiv || !lokaleHelferModell.trim()) return setHelferStatus(null)
+    let aktuell = true
+    window.flowforge.lokaleHelferStatus(lokaleHelferModell.trim()).then((s) => {
+      if (aktuell) setHelferStatus(s)
+    })
+    return () => {
+      aktuell = false
+    }
+  }, [lokaleHelferAktiv, lokaleHelferModell])
 
   async function speichern() {
     const ergebnis = await window.flowforge.einstellungenSpeichern({
@@ -33,7 +51,9 @@ export default function Einstellungen({ onSchliessen }) {
       apiSchluessel,
       ausgabenObergrenzeUsd: Number(obergrenze),
       rechteAutomatisch,
-      uebertragTest
+      uebertragTest,
+      lokaleHelferAktiv,
+      lokaleHelferModell
     })
     if (!ergebnis.ok) return setFehler(ergebnis.fehler)
     onSchliessen()
@@ -125,6 +145,39 @@ export default function Einstellungen({ onSchliessen }) {
               <span className="feld-hinweis"> — {t.rechteAutomatischHinweis}</span>
             </span>
           </label>
+        </div>
+        <p className="bericht-abschnitt">{t.lokaleHelferUeberschrift}</p>
+        <div className="feld">
+          <label className="wahl-zeile">
+            <input
+              type="checkbox"
+              checked={lokaleHelferAktiv}
+              onChange={(e) => setLokaleHelferAktiv(e.target.checked)}
+            />
+            <span>
+              {t.lokaleHelferAktiv}
+              <span className="feld-hinweis"> — {t.lokaleHelferHinweis}</span>
+            </span>
+          </label>
+          {lokaleHelferAktiv && (
+            <label className="feld">
+              <span>{t.lokaleHelferModell}</span>
+              <input
+                type="text"
+                value={lokaleHelferModell}
+                onChange={(e) => setLokaleHelferModell(e.target.value)}
+              />
+              {helferStatus && (
+                <span className="feld-hinweis">
+                  {helferStatus.erreichbar && helferStatus.modellDa
+                    ? t.lokaleHelferStatusBereit(lokaleHelferModell.trim())
+                    : helferStatus.erreichbar
+                      ? t.lokaleHelferStatusKeinModell(lokaleHelferModell.trim())
+                      : t.lokaleHelferStatusAus}
+                </span>
+              )}
+            </label>
+          )}
         </div>
         <p className="bericht-abschnitt">{t.uebertragUeberschrift}</p>
         <div className="feld">
