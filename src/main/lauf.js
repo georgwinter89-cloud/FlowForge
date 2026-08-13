@@ -602,9 +602,15 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
   let lokaleHelfer = null
   let lokaleHelferHinweis = null
   if (einstellungen.lokaleHelferAktiv) {
-    const status = await lokaleHelferPruefen(einstellungen.lokaleHelferModell)
+    const status = await lokaleHelferPruefen(
+      einstellungen.lokaleHelferModell,
+      einstellungen.lokaleHelferAdresse
+    )
     if (status.erreichbar && status.modellDa) {
-      lokaleHelfer = { modell: einstellungen.lokaleHelferModell }
+      lokaleHelfer = {
+        modell: einstellungen.lokaleHelferModell,
+        adresse: einstellungen.lokaleHelferAdresse
+      }
       lokaleHelferHinweis = texte.ticker.lokaleHelferBereit(einstellungen.lokaleHelferModell)
     } else {
       lokaleHelferHinweis = texte.ticker.lokaleHelferNichtErreichbar

@@ -16,7 +16,8 @@ contextBridge.exposeInMainWorld('flowforge', {
 
   einstellungenLaden: () => ipcRenderer.invoke('einstellungen-laden'),
   einstellungenSpeichern: (neu) => ipcRenderer.invoke('einstellungen-speichern', neu),
-  lokaleHelferStatus: (modell) => ipcRenderer.invoke('lokale-helfer-status', modell),
+  lokaleHelferStatus: (modell, adresse) =>
+    ipcRenderer.invoke('lokale-helfer-status', { modell, adresse }),
 
   eigeneBloeckeLaden: () => ipcRenderer.invoke('eigene-bloecke-laden'),
   eigenenBlockSpeichern: (block) => ipcRenderer.invoke('eigener-block-speichern', block),

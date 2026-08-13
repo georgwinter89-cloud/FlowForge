@@ -521,10 +521,16 @@ export const texte = {
       'ungenauer; wichtige Fundorte prüft der Agent selbst nach. Voraussetzung: Ollama ' +
       'läuft und das Modell ist heruntergeladen.',
     lokaleHelferModell: 'Modellname bei Ollama',
+    lokaleHelferAdresse: 'Adresse des Ollama-Rechners',
+    lokaleHelferAdresseHinweis:
+      'Leer lassen bzw. http://127.0.0.1:11434 = dieser Rechner. Es geht auch ein anderer ' +
+      'Rechner im Heimnetz, z.B. ein Gaming-PC: http://192.168.x.x:11434 — dort muss ' +
+      'Ollama laufen und für das Netzwerk freigegeben sein.',
     lokaleHelferStatusBereit: (modell) => `Ollama läuft, Modell „${modell}" ist da.`,
     lokaleHelferStatusKeinModell: (modell) =>
       `Ollama läuft, aber das Modell „${modell}" ist nicht heruntergeladen.`,
-    lokaleHelferStatusAus: 'Ollama ist gerade nicht erreichbar.',
+    lokaleHelferStatusVorhandene: (modelle) => `Vorhanden: ${modelle.join(', ')}.`,
+    lokaleHelferStatusAus: 'Ollama ist unter dieser Adresse gerade nicht erreichbar.',
     uebertragUeberschrift: 'Sessions & Übertrag',
     uebertragTest: 'Test-Schalter: Übertrag schon bei etwa 10 %',
     uebertragTestHinweis:

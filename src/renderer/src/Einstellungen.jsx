@@ -12,6 +12,7 @@ export default function Einstellungen({ onSchliessen }) {
   const [uebertragTest, setUebertragTest] = useState(false)
   const [lokaleHelferAktiv, setLokaleHelferAktiv] = useState(false)
   const [lokaleHelferModell, setLokaleHelferModell] = useState('')
+  const [lokaleHelferAdresse, setLokaleHelferAdresse] = useState('')
   const [helferStatus, setHelferStatus] = useState(null)
   const [aboErlaubt, setAboErlaubt] = useState(true)
   const [fehler, setFehler] = useState('')
@@ -27,6 +28,7 @@ export default function Einstellungen({ onSchliessen }) {
       setUebertragTest(Boolean(e.einstellungen.uebertragTest))
       setLokaleHelferAktiv(Boolean(e.einstellungen.lokaleHelferAktiv))
       setLokaleHelferModell(e.einstellungen.lokaleHelferModell ?? '')
+      setLokaleHelferAdresse(e.einstellungen.lokaleHelferAdresse ?? '')
       setAboErlaubt(e.aboErlaubt)
       setGeladen(true)
     })
@@ -37,13 +39,15 @@ export default function Einstellungen({ onSchliessen }) {
   useEffect(() => {
     if (!lokaleHelferAktiv || !lokaleHelferModell.trim()) return setHelferStatus(null)
     let aktuell = true
-    window.flowforge.lokaleHelferStatus(lokaleHelferModell.trim()).then((s) => {
-      if (aktuell) setHelferStatus(s)
-    })
+    window.flowforge
+      .lokaleHelferStatus(lokaleHelferModell.trim(), lokaleHelferAdresse.trim())
+      .then((s) => {
+        if (aktuell) setHelferStatus(s)
+      })
     return () => {
       aktuell = false
     }
-  }, [lokaleHelferAktiv, lokaleHelferModell])
+  }, [lokaleHelferAktiv, lokaleHelferModell, lokaleHelferAdresse])
 
   async function speichern() {
     const ergebnis = await window.flowforge.einstellungenSpeichern({
@@ -53,7 +57,8 @@ export default function Einstellungen({ onSchliessen }) {
       rechteAutomatisch,
       uebertragTest,
       lokaleHelferAktiv,
-      lokaleHelferModell
+      lokaleHelferModell,
+      lokaleHelferAdresse
     })
     if (!ergebnis.ok) return setFehler(ergebnis.fehler)
     onSchliessen()
@@ -160,23 +165,38 @@ export default function Einstellungen({ onSchliessen }) {
             </span>
           </label>
           {lokaleHelferAktiv && (
-            <label className="feld">
-              <span>{t.lokaleHelferModell}</span>
-              <input
-                type="text"
-                value={lokaleHelferModell}
-                onChange={(e) => setLokaleHelferModell(e.target.value)}
-              />
-              {helferStatus && (
-                <span className="feld-hinweis">
-                  {helferStatus.erreichbar && helferStatus.modellDa
-                    ? t.lokaleHelferStatusBereit(lokaleHelferModell.trim())
-                    : helferStatus.erreichbar
-                      ? t.lokaleHelferStatusKeinModell(lokaleHelferModell.trim())
-                      : t.lokaleHelferStatusAus}
-                </span>
-              )}
-            </label>
+            <>
+              <label className="feld">
+                <span>{t.lokaleHelferAdresse}</span>
+                <input
+                  type="text"
+                  placeholder="http://127.0.0.1:11434"
+                  value={lokaleHelferAdresse}
+                  onChange={(e) => setLokaleHelferAdresse(e.target.value)}
+                />
+                <span className="feld-hinweis">{t.lokaleHelferAdresseHinweis}</span>
+              </label>
+              <label className="feld">
+                <span>{t.lokaleHelferModell}</span>
+                <input
+                  type="text"
+                  value={lokaleHelferModell}
+                  onChange={(e) => setLokaleHelferModell(e.target.value)}
+                />
+                {helferStatus && (
+                  <span className="feld-hinweis">
+                    {helferStatus.erreichbar && helferStatus.modellDa
+                      ? t.lokaleHelferStatusBereit(lokaleHelferModell.trim())
+                      : helferStatus.erreichbar
+                        ? t.lokaleHelferStatusKeinModell(lokaleHelferModell.trim()) +
+                          (helferStatus.modelle?.length
+                            ? ' ' + t.lokaleHelferStatusVorhandene(helferStatus.modelle)
+                            : '')
+                        : t.lokaleHelferStatusAus}
+                  </span>
+                )}
+              </label>
+            </>
           )}
         </div>
         <p className="bericht-abschnitt">{t.uebertragUeberschrift}</p>

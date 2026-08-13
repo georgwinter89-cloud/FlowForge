@@ -219,8 +219,9 @@ zwei Unteraufgaben pro Angreifer-Lauf, jede eng umrissen; gelesen werden nur die
 Arbeitspaket genannten Stellen und ihre direkte Nachbarschaft, nicht das ganze Projekt.
 
 **Lokale Helfer-KI** (Experiment, Wunsch Georg, 13.08.2026): In den Einstellungen
-zuschaltbar (Standard: aus) — Recherche-Aufträge gehen dann an eine kleine KI auf dem
-eigenen Rechner (Ollama, Modellname einstellbar) statt an eine Motor-Unteraufgabe;
+zuschaltbar (Standard: aus) — Recherche-Aufträge gehen dann an eine kleine KI über
+Ollama (Modellname und Adresse einstellbar: der eigene Rechner oder ein anderer im
+Heimnetz, z.B. ein Gaming-PC mit stärkerer Grafikkarte) statt an eine Motor-Unteraufgabe;
 das kostet kein Kontingent, nur Rechenzeit. Die Block-Agenten bekommen dafür das
 Werkzeug `lokal_recherchieren`; die lokale KI selbst hat genau drei rein lesende
 Werkzeuge (Ordner auflisten, Datei lesen, suchen), hart im Code auf den Projektordner

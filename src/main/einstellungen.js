@@ -23,7 +23,10 @@ const STANDARD = {
   // Unteraufgaben laufen über eine lokale KI (Ollama) statt über den Motor —
   // kostet kein Kontingent. Nur aktiv, wenn Ollama beim Laufstart erreichbar ist.
   lokaleHelferAktiv: false,
-  lokaleHelferModell: 'qwen2.5:7b'
+  lokaleHelferModell: 'qwen2.5:7b',
+  // Adresse des Ollama-Servers — localhost oder ein anderer Rechner im
+  // Heimnetz (z.B. der Gaming-PC mit richtiger Grafikkarte).
+  lokaleHelferAdresse: 'http://127.0.0.1:11434'
 }
 
 function dateiPfad() {
@@ -59,7 +62,11 @@ export function einstellungenSpeichern(neu) {
     uebertragTest: Boolean(neu.uebertragTest),
     lokaleHelferAktiv: Boolean(neu.lokaleHelferAktiv),
     lokaleHelferModell:
-      String(neu.lokaleHelferModell ?? '').trim() || STANDARD.lokaleHelferModell
+      String(neu.lokaleHelferModell ?? '').trim() || STANDARD.lokaleHelferModell,
+    lokaleHelferAdresse: (() => {
+      const roh = String(neu.lokaleHelferAdresse ?? '').trim().replace(/\/+$/, '')
+      return /^https?:\/\/.+/.test(roh) ? roh : STANDARD.lokaleHelferAdresse
+    })()
   }
   const tmp = dateiPfad() + '.tmp'
   fs.writeFileSync(tmp, JSON.stringify(daten, null, 2), 'utf8')

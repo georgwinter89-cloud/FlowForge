@@ -681,7 +681,12 @@ export function starteLaufMotor(optionen) {
     // Lokale Helfer-KI (Experiment): nur registriert, wenn beim Laufstart
     // bestätigt war, dass Ollama läuft und das Modell da ist.
     const helferServer = lokaleHelfer
-      ? await helferWerkzeugServer({ projektPfad, modell: lokaleHelfer.modell, aufEreignis })
+      ? await helferWerkzeugServer({
+          projektPfad,
+          modell: lokaleHelfer.modell,
+          adresse: lokaleHelfer.adresse,
+          aufEreignis
+        })
       : null
 
     // Saubere Umgebung: Alle ANTHROPIC_*/CLAUDE*-Variablen fliegen raus — sie

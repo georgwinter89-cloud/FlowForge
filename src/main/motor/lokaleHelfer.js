@@ -14,7 +14,10 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
-const OLLAMA_ADRESSE = 'http://127.0.0.1:11434'
+// Standard-Adresse: Ollama auf diesem Rechner. Über die Einstellungen ist auch
+// ein anderer Rechner im Heimnetz möglich (z.B. ein Gaming-PC mit richtiger
+// Grafikkarte — dort laufen größere Modelle schneller und genauer).
+const STANDARD_ADRESSE = 'http://127.0.0.1:11434'
 
 // Deckel gegen Kontext-Überlauf des kleinen Modells (32k-Fenster):
 // jede Werkzeug-Antwort bleibt kompakt, die Runden sind begrenzt.
@@ -31,10 +34,10 @@ const UEBERSPRUNGEN = new Set(['node_modules', '.git', 'laufberichte'])
 
 // Ist Ollama erreichbar und das Modell vorhanden? Liefert eine ehrliche
 // Auskunft für den Laufstart (Ticker) und die Einstellungen-Anzeige.
-export async function lokaleHelferPruefen(modell) {
+export async function lokaleHelferPruefen(modell, adresse = STANDARD_ADRESSE) {
   try {
     const abbruch = AbortSignal.timeout(3000)
-    const antwort = await fetch(OLLAMA_ADRESSE + '/api/tags', { signal: abbruch })
+    const antwort = await fetch((adresse || STANDARD_ADRESSE) + '/api/tags', { signal: abbruch })
     if (!antwort.ok) return { erreichbar: false, modellDa: false }
     const daten = await antwort.json()
     const namen = (daten.models ?? []).map((m) => m.name)
@@ -221,7 +224,7 @@ function werkzeugAusfuehren(projektPfad, name, eingabe) {
 
 // Der Recherche-Kreislauf: Auftrag rein, kompaktes Fazit raus.
 // aufSchritt (optional) meldet jede Werkzeug-Nutzung für den Liveticker.
-export async function lokalRecherchieren({ projektPfad, auftrag, modell, aufSchritt }) {
+export async function lokalRecherchieren({ projektPfad, auftrag, modell, adresse = STANDARD_ADRESSE, aufSchritt }) {
   const nachrichten = [
     {
       role: 'system',
@@ -242,7 +245,7 @@ export async function lokalRecherchieren({ projektPfad, auftrag, modell, aufSchr
   for (let runde = 0; runde < MAX_RUNDEN; runde++) {
     let antwort
     try {
-      const httpAntwort = await fetch(OLLAMA_ADRESSE + '/api/chat', {
+      const httpAntwort = await fetch((adresse || STANDARD_ADRESSE) + '/api/chat', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         signal: AbortSignal.timeout(ANTWORT_ZEITLIMIT_MS),

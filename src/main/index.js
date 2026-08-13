@@ -92,7 +92,9 @@ function registriereIpc() {
   ipcMain.handle('einstellungen-laden', () => einstellungenLaden())
   ipcMain.handle('einstellungen-speichern', (_e, neu) => einstellungenSpeichern(neu))
   // Lokale Helfer-KI (Experiment): Statusanzeige in den Einstellungen.
-  ipcMain.handle('lokale-helfer-status', (_e, modell) => lokaleHelferPruefen(String(modell ?? '')))
+  ipcMain.handle('lokale-helfer-status', (_e, { modell, adresse } = {}) =>
+    lokaleHelferPruefen(String(modell ?? ''), String(adresse ?? '') || undefined)
+  )
 
   // Block-Editor mit KI-Assistent (SPEC §4.5, BAUPLAN 14).
   ipcMain.handle('eigene-bloecke-laden', () => eigeneBloeckeListe())

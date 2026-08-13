@@ -7,7 +7,7 @@ import { z } from 'zod'
 import { texte } from '../../shared/texte.js'
 import { lokalRecherchieren } from './lokaleHelfer.js'
 
-export async function helferWerkzeugServer({ projektPfad, modell, aufEreignis }) {
+export async function helferWerkzeugServer({ projektPfad, modell, adresse, aufEreignis }) {
   const { createSdkMcpServer, tool } = await import('@anthropic-ai/claude-agent-sdk')
 
   const recherchieren = tool(
@@ -26,6 +26,7 @@ export async function helferWerkzeugServer({ projektPfad, modell, aufEreignis })
         projektPfad,
         auftrag,
         modell,
+        adresse,
         aufSchritt: (name) =>
           aufEreignis({ art: 'ticker', text: texte.ticker.lokaleHelferSchritt(name) })
       })
