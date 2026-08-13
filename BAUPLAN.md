@@ -248,6 +248,52 @@ Beim nächsten Paket zieht er sie auf den Prüfer und sieht im Laufbericht, dass
 Paket UND alte Prüfung geprüft wurden. Dann löscht er die Karte — sie
 verschwindet samt aufbewahrter Prüfungen.
 
+### 19 — Ein Lauf, eine Session: Blöcke als Agenten
+(Entscheidung Georg, 13.08.2026. Anlass: der Kostenbefund am Zugsimulator —
+ein Paket-Lauf kostete theoretisch ~21 $ [755.000 gezählte Tokens, 17,5 Mio.
+Cache-Lesungen], vor allem durch fünf Session-Kaltstarts und Blöcke, die mit
+wachsendem Kontext alles selbst erledigen. Georgs Klarstellung: „Jeder Block
+sollte eigentlich nur ein neuer Agent sein" — die Frische-Session je Block war
+Bauweise-Erbe aus Schritt 3, nie die gewollte Architektur. Ein Modell-Schalter
+[Sonnet statt Opus] ist bewusst NICHT gewünscht.)
+- **Eine Motor-Session pro Lauf:** Die Session bleibt über den ganzen Lauf
+  offen (die Nachschiebe-Mechanik des Übertrags existiert schon). FlowForge
+  bleibt der Steuerer: Es reicht Block für Block als Auftrag nach und behält
+  Reihenfolge, Sicherungspunkte, Prüfer-Urteile, Reparatur-Runden,
+  Startanleitungs-Pflicht und Folgen-Fragen fest in der Hand — der
+  Koordinator in der Session verteilt nur Aufträge und sammelt Fazite ein.
+- **Jeder Block = ein neuer Agent:** Der Koordinator erledigt selbst nichts,
+  sondern startet je Block genau einen frischen Agenten (Unteraufgabe) mit
+  dem Arbeitsauftrag; dessen Fazit ist der Abschlusstext des Blocks
+  (Lieferungen/Übergaben wie bisher entlang der Pfeile durch FlowForge).
+  Das Frische-Prinzip bleibt: Agenten erben kein Arbeitsgedächtnis — der
+  Prüfer-Agent kennt das Bauer-Wissen weiterhin nicht (SPEC §4.3).
+- **Harte Sperren pro Block-Agent:** „darf nur lesen", Prüfmappen-Besitz,
+  Git- und Verwaltungsdatei-Sperren gelten heute pro Session — künftig
+  erkennt FlowForge am Werkzeugaufruf (Unteraufgaben-Kennung), welcher
+  Block-Agent zugreift, und setzt dessen Regeln durch. Der Koordinator
+  selbst bekommt die engsten Rechte (nur delegieren, nichts anfassen).
+  Diese Stelle wird einzeln erprobt, bevor die Kette umgestellt wird —
+  ein Bauer mit Prüfer-Rechten wäre der schlimmste stille Fehler.
+- **Bestehende Mechaniken:** Übertrag misst den Füllstand der Lauf-Session
+  (der Koordinator bleibt schlank, Überträge werden selten). Reparatur-
+  Runden laufen als neuer Agent mit der Prüferkritik im Auftrag — die
+  Session-Fortsetzung aus Schritt 16 wird dadurch weitgehend überflüssig
+  (die Lauf-Session läuft ja ohnehin weiter) und bleibt nur für die
+  Wiederaufnahme nach App-Neustart. Parallele Zweige starten parallele
+  Agenten; hakt das im Einzeltest, bleiben parallele Zweige übergangsweise
+  getrennte Sessions (ehrlich im Ticker vermerkt).
+- **Nachgeschärft im selben Schritt:** Die Blockaufträge verlieren die
+  Kaltstart-Prosa („frische Session", eigenes Einlesen des Projekts) und
+  werden auf kurze, fokussierte Agenten-Arbeit zugeschnitten; der
+  Verbrauchseffekt wird am Zugsimulator nachgemessen.
+**Alltagstest:** Georg fährt denselben Paket-Lauf am Zugsimulator wie am
+13.08. und vergleicht die beiden Laufberichte: deutlich weniger Verbrauch und
+theoretische Kosten als die ~21 $. Im Ticker ist sichtbar, dass der Motor nur
+einmal startet und die Blöcke als Agenten laufen. Ein Sperren-Test (z.B.
+Bauer-Agent versucht, in die Prüfmappe zu schreiben) wird weiterhin sichtbar
+abgelehnt, und der Prüfer liefert unverändert seinen Rot-vor-Grün-Beleg.
+
 ## Reihenfolge-Begründung (kurz)
 Motor-Durchstich früh (3), weil dort das größte technische Risiko liegt — inklusive
 Rechte-Durchsetzung und Verbrauchs-Messung, den zwei größten Adapter-Risiken.
