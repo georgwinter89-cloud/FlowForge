@@ -370,13 +370,20 @@ gehalten] zeigen über mehrere echte Läufe, dass lokale Arbeit überwiegend
 hält — sonst frisst das Prüf-Pingpong die Ersparnis. Stärkere Hardware
 [z.B. zweite Grafikkarte, größeres Modell] verbessert die Quote, ersetzt
 aber weder Messung noch Schiedsrichter.)
-- **Opus zerlegt, lokal wird gebaut:** Der Bauer-Auftrag bekommt einen
-  Zerleger-Schritt: Opus zerlegt das Arbeitspaket in möglichst kleine,
-  einzeln prüfbare Teilaufträge — jeder mit Fundstellen/Vorbild, eigenem
-  Fertig-Kriterium und vorher festgenagelten Schnittstellen (welche Datei,
-  welcher Funktionsname, was rein, was raus), damit die Teile zusammenstecken
-  wie Blöcke (braucht/liefert nach innen gewendet). Die Lehre aus 20/21
-  gilt als Regel: eng und konkret gewinnt.
+- **Lokale Subagents in Opus' Hand** (Klarstellung Georg, 13.08.2026): Der
+  lokale Bauer ist KEIN von FlowForge gesteuerter Sonder-Kreislauf, sondern
+  ein Werkzeug `lokal_bauen` des Opus-Agenten — dasselbe Muster wie
+  lokal_recherchieren und lokal_entwerfen: Opus startet lokale Unteraufgaben,
+  wann und wofür er es für richtig hält, wie heute seine Motor-Unteraufgaben.
+  Jeder Aufruf ist ein frischer lokaler Agent; FlowForge setzt die harten
+  Sperren wie immer am Werkzeugaufruf durch.
+- **Opus zerlegt, lokal wird gebaut:** Der Bauer-Auftrag weist Opus an, das
+  Arbeitspaket in möglichst kleine, einzeln prüfbare Teilaufträge zu
+  zerlegen — jeder mit Fundstellen/Vorbild, eigenem Fertig-Kriterium und
+  vorher festgenagelten Schnittstellen (welche Datei, welcher Funktionsname,
+  was rein, was raus), damit die Teile zusammenstecken wie Blöcke
+  (braucht/liefert nach innen gewendet) — und je Teilauftrag lokal_bauen zu
+  rufen. Die Lehre aus 20/21 gilt als Regel: eng und konkret gewinnt.
 - **Ehrliche Grenze der Kleinteiligkeit:** Einen trivialen Auftrag präzise zu
   beschreiben kostet fast so viel Opus-Arbeit, wie ihn selbst zu erledigen.
   Der Zerleger bündelt deshalb nach Zusammengehörigkeit (dieselbe Lehre wie
