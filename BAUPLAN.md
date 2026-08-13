@@ -201,12 +201,16 @@ sie wirklich brauchen — wie beim Delegieren an Unteragenten üblich.)
   verboten). Überschreitende Schreibversuche werden abgelehnt mit dem Hinweis,
   vorhandene Prüfungen zusammenzulegen statt zu stapeln — dieselbe Mechanik
   wie bei der Karten-Längengrenze.
-- **Prüfmappen-Ansicht** (Wunsch Georg, 13.08.2026): Knopf „Prüfmappe" im Kopf
-  der Projektansicht (neben „Projekt-Einstellungen"), in Alltagssprache: wie
-  viele Prüfungen in der Mappe liegen, wie voll der Deckel ist („143 von
-  200 KB"), je Prüfung Name, Größe und Zuletzt-geändert. Ehrlichkeits-Notiz:
-  gezählt werden Prüf-Dateien, nicht einzelne Testfälle darin. Nur zum
-  Nachlesen — bearbeiten darf die Mappe weiterhin nur der Prüfer.
+- **Prüfmappen-Ansicht an der Prüferkarte** (Wunsch Georg, 13.08.2026): An
+  jeder Prüf-Blockkarte auf der Leinwand ein aufklappbarer Bereich „Prüfmappe"
+  (dasselbe Muster wie das Block-Ergebnis an der Karte), in Alltagssprache:
+  wie viele Prüfungen in der Mappe liegen, wie voll der Deckel ist („143 von
+  200 KB"), je Prüfung Name, Größe und Zuletzt-geändert. Die Mappe gehört dem
+  Projekt — alle Prüf-Blockkarten zeigen dieselbe; liegt kein Prüf-Block auf
+  der Leinwand, gibt es keinen Blick hinein (bewusst akzeptiert, Entscheidung
+  Georg 13.08.2026 — die Bau-Vorlagen enthalten immer einen Prüfer).
+  Ehrlichkeits-Notiz: gezählt werden Prüf-Dateien, nicht einzelne Testfälle
+  darin. Nur zum Nachlesen — bearbeiten darf die Mappe weiterhin nur der Prüfer.
 **Alltagstest:** Georg lässt am Zugsimulator ein Paket bauen und vergleicht im
 Laufbericht den Verbrauch je Block mit dem 830.000er-Lauf vom 12.08. — deutlich
 weniger, und im Ticker tauchen Unteraufgaben auf. Ein Prüfer-Versuch, ein
