@@ -560,6 +560,42 @@ Beleg. Er übernimmt einen, bearbeitet einen vor dem Übernehmen und lehnt einen
 ab — die Karten in der Seitenleiste ändern sich genau entsprechend, und der
 Laufbericht zählt alle drei Ausgänge.
 
+### 27 — Nachlauf-Chat: Gespräch mit der Lauf-Session
+(Wunsch Georg, 14.08.2026. Entscheidung Georg: zwei Betriebsarten, im Chat
+umschaltbar — Standard „nur lesen + Karten anlegen", auf Zuruf „darf
+reparieren".)
+- **Chat-Fenster nach dem Lauf** (im Lauf-Tab): ein normales Chat-Fenster mit
+  dem Kontext des letzten Laufs — technisch die **fortgesetzte Lauf-Session**
+  (resume über die Session-Kennung, Mechanik aus Schritt 16/19): Der Agent
+  kennt Blöcke, Fazite und Verlauf des Laufs, ohne dass etwas nacherzählt
+  werden muss. Ist die Session weg oder ihr Kontext über der
+  Übertrags-Schwelle, startet stattdessen eine frische Session mit dem
+  Laufbericht als Kontext — ehrlich im Chat vermerkt, kein stiller Ausweichpfad.
+- **Eingaben:** mehrzeiliger Text (z.B. eine ganze Fehlermeldung) und
+  **Screenshots** — einfügen per Strg+V aus der Zwischenablage (PowerShell,
+  Terminal, App-Fenster …) oder über einen Datei-Knopf; Bilder gehen als Bild
+  an den Motor, der sie selbst liest.
+- **Zwei Betriebsarten, Schalter im Chat:** Standard ist nur-lesend (übliche
+  Lese-Regeln; Karten anlegen erlaubt — „leg das als Aufgabe an" ist der
+  Normalweg, der nächste Bau-Lauf arbeitet sie mit Sicherungspunkt und Prüfer
+  ab). Mit dem Schalter **„Chat darf reparieren"** schreibt der Chat wie ein
+  Bauer: Sicherungspunkt vor der ersten Änderung, übliche Rückfragen und
+  Befehls-Einstufung; Git, Prüfmappe und Verwaltungsdateien bleiben tabu.
+  Der Schalter gilt je Chat und steht sichtbar über dem Eingabefeld.
+- **Ehrlichkeit:** Chat-Nachrichten kosten Kontingent — der Verbrauch steht
+  sichtbar am Chat (dasselbe Muster wie im Lauf). Der Chat-Verlauf wandert als
+  eigener Abschnitt in den Laufbericht des Laufs; Reparaturen erscheinen im
+  Ticker und in der Sicherungspunkt-Liste. Läuft gerade ein Lauf im Projekt,
+  ist der Chat gesperrt (ein Schreiber pro Projekt, SPEC §5).
+**Alltagstest:** Georg fährt einen kleinen Lauf und öffnet danach den Chat. Er
+fragt „warum hat der Prüfer gemeckert?" — die Antwort nimmt erkennbar auf den
+Lauf Bezug, ohne dass er ihn nacherzählt. Er fügt mit Strg+V einen
+PowerShell-Screenshot mit einer Fehlermeldung ein; der Chat erklärt die
+Ursache und legt auf Zuruf eine Aufgaben-Karte an (sichtbar in der
+Seitenleiste). Dann schaltet er „Chat darf reparieren" ein und lässt einen
+Kleinstfehler direkt beheben: Vorher entsteht ein Sicherungspunkt, die
+Änderung steht im Ticker, und der Chat-Verlauf steht am Ende im Laufbericht.
+
 ## Reihenfolge-Begründung (kurz)
 Motor-Durchstich früh (3), weil dort das größte technische Risiko liegt — inklusive
 Rechte-Durchsetzung und Verbrauchs-Messung, den zwei größten Adapter-Risiken.
