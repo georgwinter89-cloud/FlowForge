@@ -250,11 +250,28 @@ Werkzeugnamen, dieselben harten Sperren) und führt sie normal aus — ehrlich i
 Ticker vermerkt („Werkzeugaufruf kam als Text getarnt — übersetzt").
 Ehrlichkeits-Vorkehrungen: Jedes Fazit
 trägt den Warnhinweis „kleines Modell — Fundorte selbst nachprüfen" (in der Erprobung
-erfand das 7B-Modell abgelehnte Dateiinhalte), Start/Schritte/Fazit stehen im Ticker,
+erfand das 7B-Modell abgelehnte Dateiinhalte), Start/Schritte/Fazit stehen im Ticker —
+**jede Schritt-Zeile nennt ihr Ziel** (seit 14.08.2026: welche Datei ab welcher Zeile
+gelesen, wonach gesucht, welcher Ordner angesehen wird; Pfade und Muster gekürzt, gilt
+für Recherche, Entwurf, Reparatur und Bauen gleichermaßen) —,
 der Laufbericht weist den Anteil der lokalen KI aus (Recherchen, Schritte,
 Fehlschläge, Reparatur-Versuche, Entwürfe, Teilstücke), und ist Ollama beim Laufstart nicht erreichbar, sagt der Ticker das
 ehrlich und alles läuft wie gewohnt über den Motor. V1-Experiment auf Georgs Wunsch —
 der vollwertige lokale Motor bleibt V2 (§2).
+
+**Trefferquote der lokalen KI** (seit Bauschritt 23): Im Lokale-KI-Abschnitt der
+Einstellungen sitzt der Schalter **„Trefferquote der lokalen KI erfassen"** (Standard:
+an, solange die lokale KI ein Experiment ist — minimaler Token-Mehrverbrauch). Ist er
+an, bekommt der Block-Agent das Pflicht-Werkzeug `recherche_bewerten` nach jedem
+`lokal_recherchieren`: übernommen (das Fazit fließt in seine Arbeit ein) oder verworfen
+(er recherchiert selbst nach), mit einem Satz Begründung. Ticker („Agent übernimmt/
+verwirft das Fazit der lokalen KI: …") und Laufbericht (Lokale-Helfer-Zeile: Fazite
+übernommen/verworfen) zählen mit — erst damit ist die Kosten-Wette der lokalen KI über
+alle drei Helfer-Arten ehrlich messbar. Ist der Schalter aus, gibt es weder Werkzeug
+noch Auftrags-Hinweis — kein Mehrverbrauch. Die Abnahmen bei Entwürfen und Teilstücken
+bleiben davon unberührt immer Pflicht (sie steuern Übernahme und Rückrollen — Mechanik,
+keine Messung). Das Bewerten ist eine reine Meldung und deshalb wie die Recherche auch
+unter „darf nur lesen" erlaubt; das Häkchen je Block (s.u.) sperrt es mit.
 
 **Lokale Vorreparatur** (seit Bauschritt 20): Scheitert eine Prüfung und sind
 **alle** Beanstandungen als mechanisch markiert (Vorsortierung des Prüfers,
@@ -312,6 +329,12 @@ Reihenfolge ist erzwungen (erst abnehmen, dann das nächste Teilstück), damit d
 Rückroll-Punkt eindeutig bleibt. Hält ein Teilauftrag nach 2 lokalen Anläufen
 nicht, baut der Agent genau dieses Teilstück selbst und macht weiter — kein
 Pingpong; der Prüfer-Block bleibt unverändert der Schluss-Schiedsrichter.
+**Ein verworfenes Teilstück ist kein Urteil über die übrigen** (Befund 14.08.2026,
+erster echter Lauf: nach einem einzigen verworfenen Teilstück versuchte der Agent
+die restlichen fünf gar nicht mehr lokal — die Quote war unmessbar): Der
+Bauer-Zusatz verlangt seitdem ausdrücklich, jedes Teilstück zuerst lokal zu
+versuchen; erst wenn mehrere hintereinander nicht halten, baut der Agent den
+Rest selbst.
 Ehrlichkeit: jedes Teilstück im Ticker („Lokale KI baut Teilstück …", Abnahme,
 Rückrollen), der Laufbericht zählt lokal gehaltene und vom Agenten selbst
 gebaute Teilstücke in der Lokale-Helfer-Zeile. Bauen und Abnehmen sind
@@ -321,9 +344,9 @@ gilt auch hier.
 **Häkchen je Block** (seit Bauschritt 20): An jeder Block-Karte im Schaubild
 sitzt ein Abwahl-Häkchen **„lokale KI erlaubt"** (Standard: an, erbt den
 globalen Schalter). Abgewählt ist es eine echte Sperre: FlowForge lehnt die
-Werkzeuge der lokalen KI (`lokal_recherchieren`, `lokal_entwerfen`,
-`entwurf_abnehmen`, `lokal_bauen`, `teilstueck_abnehmen`) für die Agenten
-dieses Blocks hart ab (erkannt am
+Werkzeuge der lokalen KI (`lokal_recherchieren`, `recherche_bewerten`,
+`lokal_entwerfen`, `entwurf_abnehmen`, `lokal_bauen`, `teilstueck_abnehmen`)
+für die Agenten dieses Blocks hart ab (erkannt am
 laufenden Block, Mechanik aus Bauschritt 19) und streicht den Hinweis auf die
 lokale KI aus dem Arbeitsauftrag. Ein Block ohne lokale KI bekommt auch keine
 lokale Vorreparatur (maßgeblich ist das Häkchen des Rückführungs-Ziels, dessen

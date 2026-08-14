@@ -23,7 +23,12 @@ import { texte } from '../../shared/texte.js'
 import { lokalBauen, lokalEntwerfen, lokalRecherchieren } from './lokaleHelfer.js'
 import { sicherungspunktAnlegen, aufLetztenPunktZuruecksetzen } from '../sicherungspunkte.js'
 
-export async function helferWerkzeugServer({ projektPfad, modell, adresse, aufEreignis }) {
+// bewerten (BAUPLAN 23): Ist der Trefferquoten-Schalter an, bekommt der
+// Block-Agent das Pflicht-Werkzeug recherche_bewerten nach jedem
+// lokal_recherchieren — erst damit ist die Kosten-Wette der lokalen KI über
+// alle drei Helfer-Arten ehrlich messbar. Ist er aus, gibt es weder Werkzeug
+// noch Hinweis: kein Mehrverbrauch.
+export async function helferWerkzeugServer({ projektPfad, modell, adresse, bewerten = false, aufEreignis }) {
   const { createSdkMcpServer, tool } = await import('@anthropic-ai/claude-agent-sdk')
 
   const recherchieren = tool(
@@ -43,8 +48,10 @@ export async function helferWerkzeugServer({ projektPfad, modell, adresse, aufEr
         auftrag,
         modell,
         adresse,
-        aufSchritt: (name) =>
-          aufEreignis({ art: 'ticker', text: texte.ticker.lokaleHelferSchritt(name) })
+        // Detail-Zeilen (BAUPLAN 23): Werkzeug UND Eingabe wandern in den
+        // Ticker — Georg liest mit, welche Datei die lokale KI gerade liest.
+        aufSchritt: (name, eingabe) =>
+          aufEreignis({ art: 'ticker', text: texte.ticker.lokaleHelferSchritt(name, eingabe) })
       })
       // Zähl-Ereignis für den Laufbericht (Wunsch Georg, 13.08.2026): So steht
       // der Anteil der lokalen KI schwarz auf weiß im Bericht.
@@ -62,7 +69,43 @@ export async function helferWerkzeugServer({ projektPfad, modell, adresse, aufEr
       }
       aufEreignis({ art: 'ticker', text: texte.ticker.lokaleHelferFertig(ergebnis.schritte) })
       return {
-        content: [{ type: 'text', text: texte.agentenLokaleHelfer.fazit(ergebnis.fazit) }]
+        content: [
+          {
+            type: 'text',
+            text:
+              texte.agentenLokaleHelfer.fazit(ergebnis.fazit) +
+              (bewerten ? texte.agentenLokaleHelfer.bewertenAufforderung : '')
+          }
+        ]
+      }
+    },
+    { alwaysLoad: true }
+  )
+
+  // Trefferquote (BAUPLAN 23): die ausdrückliche Bewertung je Recherche-Fazit
+  // — dasselbe Abnahme-Muster wie bei Entwürfen und Teilstücken, aber reine
+  // Messung (nichts wird übernommen oder zurückgerollt). Nur registriert,
+  // wenn der Schalter an ist.
+  const rechercheBewerten = tool(
+    'recherche_bewerten',
+    texte.agentenLokaleHelfer.bewertenBeschreibung,
+    {
+      uebernommen: z
+        .boolean()
+        .describe('true = das Fazit fließt in deine Arbeit ein; false = verworfen, du recherchierst selbst nach.'),
+      begruendung: z.string().describe('Ein Satz: warum übernommen oder verworfen.')
+    },
+    async ({ uebernommen, begruendung }) => {
+      aufEreignis({ art: 'lokale-helfer-recherche-urteil', uebernommen: Boolean(uebernommen) })
+      const satz = String(begruendung ?? '').replace(/\s+/g, ' ').trim().slice(0, 200)
+      aufEreignis({
+        art: 'ticker',
+        text: uebernommen
+          ? texte.ticker.rechercheUebernommen(satz)
+          : texte.ticker.rechercheVerworfen(satz)
+      })
+      return {
+        content: [{ type: 'text', text: texte.agentenLokaleHelfer.bewertet(Boolean(uebernommen)) }]
       }
     },
     { alwaysLoad: true }
@@ -92,7 +135,7 @@ export async function helferWerkzeugServer({ projektPfad, modell, adresse, aufEr
             text:
               name === 'entwurf_schreiben'
                 ? texte.ticker.lokaleEntwurfSchritt(eingabe?.pfad)
-                : texte.ticker.lokaleHelferSchritt(name)
+                : texte.ticker.lokaleHelferSchritt(name, eingabe)
           })
       })
       const dateien = ergebnis.dateien ?? []
@@ -210,7 +253,7 @@ export async function helferWerkzeugServer({ projektPfad, modell, adresse, aufEr
                 ? texte.ticker.lokaleBauenSchritt(eingabe?.pfad)
                 : name === 'ersetzen'
                   ? texte.ticker.lokaleReparaturSchritt(eingabe?.pfad)
-                  : texte.ticker.lokaleHelferSchritt(name)
+                  : texte.ticker.lokaleHelferSchritt(name, eingabe)
           })
       })
       const aenderungen = (ergebnis.ersetzungen ?? 0) + (ergebnis.dateien?.length ?? 0)
@@ -308,6 +351,13 @@ export async function helferWerkzeugServer({ projektPfad, modell, adresse, aufEr
     name: 'helfer',
     version: '1.0.0',
     instructions: texte.agentenLokaleHelfer.serverHinweis,
-    tools: [recherchieren, entwerfen, abnehmen, bauen, teilstueckAbnehmen]
+    tools: [
+      recherchieren,
+      entwerfen,
+      abnehmen,
+      bauen,
+      teilstueckAbnehmen,
+      ...(bewerten ? [rechercheBewerten] : [])
+    ]
   })
 }

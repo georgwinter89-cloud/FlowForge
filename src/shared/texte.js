@@ -441,6 +441,26 @@ export const texte = {
       'Die lokale Helfer-KI konnte nicht recherchieren: ' +
       fehler +
       ' Erledige die Recherche stattdessen mit einer Unteraufgabe (Agent-Werkzeug) oder selbst.',
+    // Trefferquote (BAUPLAN 23): nur wenn der Schalter „Trefferquote erfassen"
+    // an ist — sonst gibt es weder Werkzeug noch Hinweis (kein Mehrverbrauch).
+    // Die Abnahmen bei Entwürfen und Teilstücken bleiben davon unberührt
+    // (sie steuern Übernahme und Rückrollen — Mechanik, keine Messung).
+    bewertenAufforderung:
+      '\n\nBewerte dieses Fazit jetzt mit recherche_bewerten: uebernommen (es fließt in ' +
+      'deine Arbeit ein) oder verworfen (du recherchierst selbst nach) — mit einem Satz ' +
+      'Begründung.',
+    bewertenBeschreibung:
+      'Meldet, was aus dem Fazit einer lokalen Recherche wurde: übernommen (es fließt in ' +
+      'deine Arbeit ein) oder verworfen (du recherchierst selbst nach) — mit einem Satz ' +
+      'Begründung. Pflicht nach jedem lokal_recherchieren.',
+    bewertenSystemZusatz:
+      'Nach jedem lokal_recherchieren bewertest du das Fazit mit recherche_bewerten: ' +
+      'übernommen oder verworfen, mit einem Satz Begründung — FlowForge misst damit die ' +
+      'Trefferquote der lokalen KI.\n',
+    bewertet: (uebernommen) =>
+      uebernommen
+        ? 'Bewertung vermerkt: Fazit übernommen.'
+        : 'Bewertung vermerkt: Fazit verworfen — recherchiere selbst nach, was du brauchst.',
     // Lokale Vorreparatur (BAUPLAN 20): der Auftrag an das lokale Modell —
     // eng umrissen, nur die mechanischen Beanstandungen des Prüfers.
     reparaturAuftrag: (kritik) =>
@@ -563,7 +583,9 @@ export const texte = {
       'nach 2 lokalen Anläufen nicht, baue GENAU dieses Teilstück selbst und mach mit dem ' +
       'nächsten weiter — kein Pingpong. Bündle nach Zusammengehörigkeit: Einen trivialen ' +
       'Auftrag präzise zu beschreiben kostet fast so viel, wie ihn selbst zu erledigen — ' +
-      'Kleinst-Änderungen erledigst du direkt selbst.'
+      'Kleinst-Änderungen erledigst du direkt selbst. Ein verworfenes Teilstück ist KEIN ' +
+      'Urteil über die übrigen: Versuche jedes Teilstück zuerst lokal — erst wenn mehrere ' +
+      'hintereinander nicht halten, bau den Rest selbst.'
   },
   // KI-Assistent des Block-Editors (SPEC §4.5, BAUPLAN 14) — Texte an den Motor.
   agentenBlockAssistent: {
@@ -673,6 +695,13 @@ export const texte = {
       'Achtung: Kleine Modelle arbeiten langsamer und ungenauer; wichtige Fundorte ' +
       'prüft der Agent selbst nach. Voraussetzung: Ollama läuft und das Modell ist ' +
       'heruntergeladen.',
+    // Trefferquote (BAUPLAN 23): Standard an, solange die lokale KI ein
+    // Experiment ist — ohne Quote ist die Kosten-Wette blind.
+    lokaleHelferQuote: 'Trefferquote der lokalen KI erfassen',
+    lokaleHelferQuoteHinweis:
+      'Nach jeder lokalen Recherche meldet der Agent, ob er das Fazit übernommen oder ' +
+      'verworfen hat (minimaler Token-Mehrverbrauch). Ticker und Laufbericht zählen mit — ' +
+      'so siehst du, ob sich die lokale KI lohnt.',
     lokaleHelferModell: 'Modellname bei Ollama',
     lokaleHelferAdresse: 'Adresse des Ollama-Rechners',
     lokaleHelferAdresseHinweis:
@@ -837,16 +866,47 @@ export const texte = {
     lokaleHelferNichtErreichbar:
       'Lokale Helfer-KI ist eingeschaltet, aber Ollama ist nicht erreichbar (oder das Modell fehlt) — Unteraufgaben laufen normal über den Motor.',
     lokaleHelferStart: (modell) => `Lokale KI recherchiert (${modell}) …`,
-    lokaleHelferSchritt: (werkzeug) =>
-      werkzeug === 'aufruf_uebersetzt'
-        ? 'Lokale KI · Werkzeugaufruf kam als Text getarnt — FlowForge hat ihn übersetzt und führt ihn aus.'
-        : werkzeug === 'datei_lesen'
-          ? 'Lokale KI · liest eine Datei.'
-          : werkzeug === 'suchen'
-            ? 'Lokale KI · durchsucht das Projekt.'
-            : 'Lokale KI · sieht sich einen Ordner an.',
+    // Detail-Zeilen je Schritt (BAUPLAN 23): der Ticker nennt das Ziel —
+    // welche Datei (samt Startzeile), welches Suchmuster, welcher Ordner.
+    // Die Eingaben kommen vom kleinen Modell und können fehlen oder wuchern:
+    // defensiv lesen und kürzen.
+    lokaleHelferSchritt: (werkzeug, eingabe) => {
+      const kurz = (wert, max) => {
+        const einzeilig = String(wert ?? '').replace(/\s+/g, ' ').trim()
+        return einzeilig.length > max ? einzeilig.slice(0, max) + '…' : einzeilig
+      }
+      if (werkzeug === 'aufruf_uebersetzt')
+        return 'Lokale KI · Werkzeugaufruf kam als Text getarnt — FlowForge hat ihn übersetzt und führt ihn aus.'
+      if (werkzeug === 'datei_lesen') {
+        const pfad = kurz(eingabe?.pfad, 80)
+        if (!pfad) return 'Lokale KI · liest eine Datei.'
+        const von = Number(eingabe?.vonZeile)
+        return von > 1
+          ? `Lokale KI · liest ${pfad} ab Zeile ${von}.`
+          : `Lokale KI · liest ${pfad}.`
+      }
+      if (werkzeug === 'suchen') {
+        const muster = kurz(eingabe?.muster, 60)
+        return muster
+          ? `Lokale KI · durchsucht das Projekt nach „${muster}".`
+          : 'Lokale KI · durchsucht das Projekt.'
+      }
+      if (werkzeug === 'ordner_auflisten') {
+        const pfad = kurz(eingabe?.pfad, 80)
+        return pfad && pfad !== '.'
+          ? `Lokale KI · sieht sich ${pfad} an.`
+          : 'Lokale KI · sieht sich den Projektordner an.'
+      }
+      return `Lokale KI · nutzt Werkzeug ${kurz(werkzeug, 40) || '?'}.`
+    },
     lokaleHelferFertig: (schritte) =>
       `Lokale KI fertig — Fazit nach ${schritte} ${schritte === 1 ? 'Schritt' : 'Schritten'}.`,
+    // Trefferquote (BAUPLAN 23): sichtbar, ob der Agent das Fazit wirklich
+    // berücksichtigt hat — samt seiner Begründung.
+    rechercheUebernommen: (begruendung) =>
+      `Agent übernimmt das Fazit der lokalen KI${begruendung ? ': ' + begruendung : '.'}`,
+    rechercheVerworfen: (begruendung) =>
+      `Agent verwirft das Fazit der lokalen KI${begruendung ? ': ' + begruendung : '.'}`,
     lokaleHelferGescheitert: (fehler) => `Lokale KI gescheitert: ${fehler}`,
     lokaleKiGesperrt:
       'lokal_recherchieren gestoppt — die lokale KI ist für diesen Block abgeschaltet.',
@@ -1115,6 +1175,11 @@ export const texte = {
       `Lokale Helfer-KI: ${l.recherchen} ${l.recherchen === 1 ? 'Recherche' : 'Recherchen'} · ` +
       `${l.schritte} ${l.schritte === 1 ? 'Schritt' : 'Schritte'} übernommen — ohne Kontingent` +
       (l.gescheitert > 0 ? ` (${l.gescheitert} davon gescheitert)` : '') +
+      // Trefferquote (BAUPLAN 23): wie viele Recherche-Fazite der Agent
+      // wirklich übernommen hat — nur gezählt, wenn der Schalter an war.
+      ((l.recherchenUebernommen ?? 0) + (l.recherchenVerworfen ?? 0) > 0
+        ? ` · Fazite: ${l.recherchenUebernommen ?? 0} übernommen, ${l.recherchenVerworfen ?? 0} verworfen`
+        : '') +
       ((l.reparaturen ?? 0) > 0
         ? ` · ${l.reparaturen} Reparatur-${l.reparaturen === 1 ? 'Versuch' : 'Versuche'}, ${l.reparaturenGehalten ?? 0} ${(l.reparaturenGehalten ?? 0) === 1 ? 'hat' : 'haben'} gehalten`
         : '') +

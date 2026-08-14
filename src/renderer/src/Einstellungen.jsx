@@ -12,6 +12,7 @@ export default function Einstellungen({ onSchliessen }) {
   const [nurLesenBefehle, setNurLesenBefehle] = useState(false)
   const [uebertragTest, setUebertragTest] = useState(false)
   const [lokaleHelferAktiv, setLokaleHelferAktiv] = useState(false)
+  const [lokaleHelferQuote, setLokaleHelferQuote] = useState(true)
   const [lokaleHelferModell, setLokaleHelferModell] = useState('')
   const [lokaleHelferAdresse, setLokaleHelferAdresse] = useState('')
   const [helferStatus, setHelferStatus] = useState(null)
@@ -29,6 +30,7 @@ export default function Einstellungen({ onSchliessen }) {
       setNurLesenBefehle(Boolean(e.einstellungen.nurLesenBefehle))
       setUebertragTest(Boolean(e.einstellungen.uebertragTest))
       setLokaleHelferAktiv(Boolean(e.einstellungen.lokaleHelferAktiv))
+      setLokaleHelferQuote(e.einstellungen.lokaleHelferQuote !== false)
       setLokaleHelferModell(e.einstellungen.lokaleHelferModell ?? '')
       setLokaleHelferAdresse(e.einstellungen.lokaleHelferAdresse ?? '')
       setAboErlaubt(e.aboErlaubt)
@@ -60,6 +62,7 @@ export default function Einstellungen({ onSchliessen }) {
       nurLesenBefehle,
       uebertragTest,
       lokaleHelferAktiv,
+      lokaleHelferQuote,
       lokaleHelferModell,
       lokaleHelferAdresse
     })
@@ -180,6 +183,17 @@ export default function Einstellungen({ onSchliessen }) {
           </label>
           {lokaleHelferAktiv && (
             <>
+              <label className="wahl-zeile">
+                <input
+                  type="checkbox"
+                  checked={lokaleHelferQuote}
+                  onChange={(e) => setLokaleHelferQuote(e.target.checked)}
+                />
+                <span>
+                  {t.lokaleHelferQuote}
+                  <span className="feld-hinweis"> — {t.lokaleHelferQuoteHinweis}</span>
+                </span>
+              </label>
               <label className="feld">
                 <span>{t.lokaleHelferAdresse}</span>
                 <input

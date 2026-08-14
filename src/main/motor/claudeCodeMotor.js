@@ -257,12 +257,18 @@ export function pruefeWerkzeug(name, eingabe, projektPfad, nurLesen, darfPruefen
   // Lokale Helfer-KI: erlaubt, außer das Häkchen „lokale KI erlaubt" ist am
   // laufenden Block abgewählt (BAUPLAN 20): dann ist das eine echte Sperre,
   // kein bloßer Hinweis. Rein lesend (im Code erzwungen) ist nur die
-  // Recherche — Entwerfen und Abnehmen (BAUPLAN 21) sind Schreibarbeit und
-  // fallen unter „darf nur lesen".
+  // Recherche samt ihrer Bewertung (recherche_bewerten meldet nur die
+  // Trefferquote, BAUPLAN 23 — gerade die nur-lesenden Blöcke recherchieren
+  // am meisten). Entwerfen, Bauen und Abnehmen (BAUPLAN 21/22) sind
+  // Schreibarbeit und fallen unter „darf nur lesen".
   if (name.startsWith(HELFER_PRAEFIX)) {
     if (!lokaleKi)
       return { gesperrt: texte.rechteFrage.lokaleKiGesperrtFuerAgent, tickerText: texte.ticker.lokaleKiGesperrt }
-    if (nurLesen && name !== HELFER_PRAEFIX + 'lokal_recherchieren')
+    if (
+      nurLesen &&
+      name !== HELFER_PRAEFIX + 'lokal_recherchieren' &&
+      name !== HELFER_PRAEFIX + 'recherche_bewerten'
+    )
       return { gesperrt: texte.rechteFrage.nurLesenGesperrtFuerAgent, tickerText: texte.ticker.nurLesenGesperrt }
     return { erlaubt: true }
   }
@@ -722,6 +728,9 @@ export function starteLaufMotor(optionen) {
           projektPfad,
           modell: lokaleHelfer.modell,
           adresse: lokaleHelfer.adresse,
+          // Trefferquote (BAUPLAN 23): recherche_bewerten nur, wenn der
+          // Schalter an ist — sonst kein Werkzeug, kein Mehrverbrauch.
+          bewerten: Boolean(lokaleHelfer.bewerten),
           aufEreignis
         })
       : null
@@ -769,7 +778,11 @@ export function starteLaufMotor(optionen) {
             description: 'Führt genau einen Block-Arbeitsauftrag von FlowForge aus.',
             prompt:
               texte.agentenLaufSession.blockAgentSystem(projektPfad, TITEL_MAX, TEXT_MAX) +
-              (helferServer ? '\n' + texte.agentenLokaleHelfer.systemZusatz : ''),
+              (helferServer
+                ? '\n' +
+                  texte.agentenLokaleHelfer.systemZusatz +
+                  (lokaleHelfer.bewerten ? texte.agentenLokaleHelfer.bewertenSystemZusatz : '')
+                : ''),
             maxTurns: 300
           }
         },

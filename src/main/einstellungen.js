@@ -29,6 +29,11 @@ const STANDARD = {
   // Unteraufgaben laufen über eine lokale KI (Ollama) statt über den Motor —
   // kostet kein Kontingent. Nur aktiv, wenn Ollama beim Laufstart erreichbar ist.
   lokaleHelferAktiv: false,
+  // Trefferquote (BAUPLAN 23): Nach jeder lokalen Recherche meldet der
+  // Block-Agent, ob er das Fazit übernommen oder verworfen hat (minimaler
+  // Token-Mehrverbrauch). Standard an, solange die lokale KI ein Experiment
+  // ist — ohne Quote ist die Kosten-Wette blind.
+  lokaleHelferQuote: true,
   lokaleHelferModell: 'qwen2.5:7b',
   // Adresse des Ollama-Servers — localhost oder ein anderer Rechner im
   // Heimnetz (z.B. der Gaming-PC mit richtiger Grafikkarte).
@@ -68,6 +73,10 @@ export function einstellungenSpeichern(neu) {
     nurLesenBefehle: Boolean(neu.nurLesenBefehle),
     uebertragTest: Boolean(neu.uebertragTest),
     lokaleHelferAktiv: Boolean(neu.lokaleHelferAktiv),
+    // Fehlt das Feld (ältere Aufrufer), bleibt der Standard an — sonst fiele
+    // die Quote beim Speichern still auf aus.
+    lokaleHelferQuote:
+      neu.lokaleHelferQuote == null ? STANDARD.lokaleHelferQuote : Boolean(neu.lokaleHelferQuote),
     lokaleHelferModell:
       String(neu.lokaleHelferModell ?? '').trim() || STANDARD.lokaleHelferModell,
     lokaleHelferAdresse: (() => {

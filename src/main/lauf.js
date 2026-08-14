@@ -622,7 +622,10 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     if (status.erreichbar && status.modellDa) {
       lokaleHelfer = {
         modell: einstellungen.lokaleHelferModell,
-        adresse: einstellungen.lokaleHelferAdresse
+        adresse: einstellungen.lokaleHelferAdresse,
+        // Trefferquote (BAUPLAN 23): Standard an — ohne Quote ist die
+        // Kosten-Wette der lokalen KI blind.
+        bewerten: einstellungen.lokaleHelferQuote !== false
       }
       lokaleHelferHinweis = texte.ticker.lokaleHelferBereit(einstellungen.lokaleHelferModell)
     } else {
@@ -829,6 +832,18 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           }
           // Lokale Entwürfe (BAUPLAN 21): Entwürfe und ihre Abnahme
           // (übernommen/verworfen) landen ehrlich in der Helfer-Zeile.
+          // Trefferquote (BAUPLAN 23): je Recherche-Fazit, ob der Agent es
+          // übernommen oder verworfen hat — die Quote steht im Bericht.
+          if (daten.art === 'lokale-helfer-recherche-urteil') {
+            bericht.lokaleHelfer ??= { recherchen: 0, schritte: 0, gescheitert: 0 }
+            if (daten.uebernommen)
+              bericht.lokaleHelfer.recherchenUebernommen =
+                (bericht.lokaleHelfer.recherchenUebernommen ?? 0) + 1
+            else
+              bericht.lokaleHelfer.recherchenVerworfen =
+                (bericht.lokaleHelfer.recherchenVerworfen ?? 0) + 1
+            return
+          }
           if (daten.art === 'lokale-helfer-entwurf') {
             bericht.lokaleHelfer ??= { recherchen: 0, schritte: 0, gescheitert: 0 }
             bericht.lokaleHelfer.schritte += daten.schritte ?? 0
@@ -1436,7 +1451,7 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
                   tickern(
                     name === 'ersetzen'
                       ? texte.ticker.lokaleReparaturSchritt(eingabe?.pfad)
-                      : texte.ticker.lokaleHelferSchritt(name)
+                      : texte.ticker.lokaleHelferSchritt(name, eingabe)
                   )
               })
               bericht.lokaleHelfer ??= { recherchen: 0, schritte: 0, gescheitert: 0 }
