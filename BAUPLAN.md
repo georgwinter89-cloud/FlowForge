@@ -596,6 +596,47 @@ Seitenleiste). Dann schaltet er „Chat darf reparieren" ein und lässt einen
 Kleinstfehler direkt beheben: Vorher entsteht ein Sicherungspunkt, die
 Änderung steht im Ticker, und der Chat-Verlauf steht am Ende im Laufbericht.
 
+### 28 — Karten-Vorschlag fürs nächste Paket: Das Sessionende deckt den Tisch
+(Idee Georg, 14.08.2026: Die Kartenauswahl für den nächsten Lauf kann die KI
+vorschlagen — als Aufgabe des Sessionendes des vorherigen Laufs. Der Nutzer
+entscheidet selbst: Vorschlag übernehmen, bearbeiten oder etwas Eigenes machen.)
+- **Neues Werkzeug `naechster_lauf_vorschlagen`** (nur im Sessionende-Block
+  erlaubt — dasselbe Freischalt-Muster wie karte_vorschlagen, durchgesetzt am
+  Werkzeugaufruf): Der Sessionende-Agent kennt den Lauf gerade am besten (was
+  fertig wurde, was offen blieb) und benennt die Karten-IDs, die der nächste
+  Lauf bekommen sollte, plus **einen Satz Empfehlung in Alltagssprache**, was
+  als Nächstes ansteht. Bewusst KEINE Automatik über Workflows: Der Satz darf
+  eine Vorlage nennen („als Nächstes ‚Bug jagen'"), aber FlowForge baut nichts
+  um und startet nichts — die Leinwand gehört dem Nutzer.
+- **Gespeichert als Vorschlag, nie als Auswahl:** FlowForge legt den Vorschlag
+  als eigene Verwaltungsdatei im Projektordner ab (für Agenten-Dateizugriffe
+  gesperrt wie alle Verwaltungsdateien; nur über das Werkzeug beschreibbar) —
+  er überlebt App-Neustarts. Nur existierende Karten-IDs zählen; inzwischen
+  gelöschte fallen beim Anzeigen still heraus. Die festgenagelte
+  Standard-Vorauswahl (Status-Karte + offene Aufgaben, SPEC §5) bleibt
+  unverändert der Normalfall — der Vorschlag ist eine Einladung, kein neuer
+  Standard.
+- **Anzeige an der Kartenauswahl im Schaubild-Tab** (kein blockierender
+  Dialog): eine Vorschlags-Zeile „Aus dem letzten Lauf empfohlen: …" mit der
+  Empfehlung und den vorgeschlagenen Karten als Chips, dazu zwei Knöpfe —
+  **„Übernehmen"** (die Kartenauswahl über dem Schaubild springt exakt auf den
+  Vorschlag; danach wie gewohnt per Drag & Drop und × änderbar — das IST das
+  Bearbeiten) und **„Verwerfen"**. Dritter Weg: einfach ignorieren und wie
+  bisher selbst wählen — nichts zwingt.
+- **Verfall statt Pflege:** Der Vorschlag gilt genau für den nächsten Lauf —
+  ein Lauf-Start räumt ihn ab (übernommen oder nicht), ein neues Sessionende
+  ersetzt ihn. Läufe ohne Sessionende (Ein-Block-Läufe, Audit, Karten-Prüfer)
+  erzeugen keinen Vorschlag; alles läuft wie bisher.
+- **Ehrlichkeit:** Der Vorschlag samt Empfehlung steht im Ticker und im
+  Laufbericht des erzeugenden Laufs; der Sessionende-Auftrag verlangt eine
+  kurze Begründung je Vorschlag (warum genau diese Karten).
+**Alltagstest:** Georg fährt ein Paket mit Sessionende. Danach steht im
+Schaubild-Tab die Vorschlags-Zeile mit Empfehlung und Karten-Chips. Er klickt
+„Übernehmen" — die Kartenauswahl zeigt genau die vorgeschlagenen Karten —,
+wirft eine per × raus und startet den Lauf; der Vorschlag ist danach weg. Beim
+nächsten Mal klickt er „Verwerfen" und wählt selbst — die Standard-Vorauswahl
+verhält sich exakt wie vor diesem Bauschritt.
+
 ## Reihenfolge-Begründung (kurz)
 Motor-Durchstich früh (3), weil dort das größte technische Risiko liegt — inklusive
 Rechte-Durchsetzung und Verbrauchs-Messung, den zwei größten Adapter-Risiken.
