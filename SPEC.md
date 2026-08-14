@@ -251,8 +251,11 @@ freigeschaltet. Die vollständige Befundliste steht im Abschlusstext.
 Projektkarten noch wahr sind — oder schon veraltet. Manueller Ein-Block-Lauf;
 liefert „Kartenbericht". Der Block ist strikt nur-lesend und ändert Karten
 **nie selbst**: Jede Korrektur ist ein Vorschlag über das Werkzeug
-`karte_vorschlagen` (nur in diesem Block erlaubt, durchgesetzt am
-Werkzeugaufruf) — aktualisieren, abhaken, wieder öffnen, löschen oder, bei
+`karte_vorschlagen` (rückfragefrei nur in diesem Block, durchgesetzt am
+Werkzeugaufruf; will ein anderer Block — etwa der Bauer — einen Vorschlag
+machen, löst das die übliche Rechte-Rückfrage aus statt eines harten Neins,
+Feedback Georg 14.08.2026 — erlaubt der Nutzer sie, folgt ohnehin der
+Abnahme-Dialog je Karte) — aktualisieren, abhaken, wieder öffnen, löschen oder, bei
 Widerspruch zwischen Code und Entscheidungs-Karte, eine neue Aufgaben-Karte.
 Der Lauf pausiert wie beim Gespräch (§6), und der Nutzer entscheidet **jede
 Karte einzeln** im Abnahme-Dialog des Lauf-Tabs: „Übernehmen" (Vorschlag

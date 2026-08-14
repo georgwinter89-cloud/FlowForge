@@ -916,6 +916,10 @@ export const texte = {
     internet: (ziel) => `Der Agent möchte aufs Internet zugreifen:\n${ziel}`,
     unbekanntesWerkzeug: (name) =>
       `Der Agent möchte ein Werkzeug nutzen, das FlowForge nicht kennt: ${name}`,
+    // Karten-Vorschläge (BAUPLAN 26, gelockert 14.08.2026): rückfragefrei nur
+    // im Karten-Prüfer — andere Blöcke fragen nach dem üblichen Verfahren.
+    vorschlag:
+      'Der Agent möchte dir einen Karten-Vorschlag machen — üblich ist das nur im Karten-Prüfer-Block. Erlaubst du es, entscheidest du den Vorschlag danach trotzdem Karte für Karte.',
     abgelehntFuerAgent:
       'Der Nutzer hat das nicht erlaubt. Suche einen anderen Weg innerhalb des Projektordners — oder beende den Auftrag mit einer kurzen Erklärung.',
     gitGesperrtFuerAgent:
@@ -937,10 +941,7 @@ export const texte = {
       'Diese Datei verwaltet FlowForge selbst — sie ist für direkte Änderungen gesperrt. Karten liest und schreibst du über die karten-Werkzeuge.',
     // Häkchen je Block (BAUPLAN 20): abgewählt = echte Sperre, kein Hinweis.
     lokaleKiGesperrtFuerAgent:
-      'Die lokale Helfer-KI ist für diesen Block abgeschaltet (Häkchen an der Block-Karte). Nutze für Unteraufgaben das Agent-Werkzeug.',
-    // Karten-Vorschläge (BAUPLAN 26): nur der Karten-Prüfer schlägt vor.
-    vorschlagGesperrtFuerAgent:
-      'karte_vorschlagen ist nur im Karten-Prüfer-Block erlaubt. Arbeite ohne Karten-Vorschläge weiter.'
+      'Die lokale Helfer-KI ist für diesen Block abgeschaltet (Häkchen an der Block-Karte). Nutze für Unteraufgaben das Agent-Werkzeug.'
   },
   ticker: {
     // Eine Motor-Session pro Lauf (BAUPLAN 19): Der Motor startet einmal,
@@ -1117,8 +1118,6 @@ export const texte = {
     kartenVorschlagBearbeitet: (titel) =>
       `Karten-Vorschlag mit deinen Änderungen übernommen: „${titel}".`,
     kartenVorschlagAbgelehnt: (titel) => `Karten-Vorschlag abgelehnt: „${titel}".`,
-    vorschlagGesperrt:
-      'Karten-Vorschlag gestoppt — Vorschläge macht nur der Karten-Prüfer.',
     // Audit (BAUPLAN 25): volle Lesetiefe, bewusst teuer — die Kosten-Folge
     // steht sichtbar am Start (Entscheidung Georg, 14.08.2026).
     auditKostenHinweis:

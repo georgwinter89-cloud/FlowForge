@@ -3,6 +3,7 @@
 // (falsche Begründung „Entscheidungs-Karten …" statt Status-Karten-Text).
 import { describe, it, expect } from 'vitest'
 import { vorschlagLeitplanken } from '../src/main/motor/vorschlagWerkzeuge.js'
+import { pruefeWerkzeug } from '../src/main/motor/claudeCodeMotor.js'
 import { texte } from '../src/shared/texte.js'
 
 const tv = texte.agentenVorschlag
@@ -33,5 +34,24 @@ describe('D-08 · Leitplanken der Karten-Vorschläge', () => {
     })
     expect(urteil.ok).toBe(true)
     expect(urteil.titel).toBe('Status')
+  })
+})
+
+// Feedback Georg, 14.08.2026: Ein Block ohne Vorschlags-Recht (z.B. der Bauer)
+// bekommt die übliche Rechte-Rückfrage statt eines harten Neins.
+// Rot-vor-Grün: Vor der Änderung kam { gesperrt } zurück — der Frage-Fall
+// schlug nachweislich fehl.
+describe('Vorschlags-Recht am Werkzeugaufruf', () => {
+  const werkzeug = 'mcp__vorschlaege__karte_vorschlagen'
+  const projekt = 'D:\\pruefungen-uebungsprojekt'
+
+  it('ohne Vorschlags-Recht: Rückfrage nach dem üblichen Verfahren, kein hartes Nein', () => {
+    const urteil = pruefeWerkzeug(werkzeug, {}, projekt, false, false)
+    expect(urteil.gesperrt).toBeUndefined()
+    expect(urteil.frage).toBe(texte.rechteFrage.vorschlag)
+  })
+  it('mit Vorschlags-Recht (Karten-Prüfer): rückfragefrei erlaubt, auch unter „darf nur lesen"', () => {
+    const urteil = pruefeWerkzeug(werkzeug, {}, projekt, true, false, true, false, false, true)
+    expect(urteil.erlaubt).toBe(true)
   })
 })

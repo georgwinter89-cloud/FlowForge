@@ -89,8 +89,9 @@ const HELFER_PRAEFIX = 'mcp__helfer__'
 
 // Karten-Vorschläge (BAUPLAN 26): Der Karten-Prüfer schlägt vor, der Nutzer
 // entscheidet, FlowForge wendet an — das Werkzeug selbst ändert nichts und
-// ist deshalb unter „darf nur lesen" erlaubt, aber nur für Blöcke mit dem
-// Kennzeichen kartenVorschlaege (sonst hartes Nein).
+// ist deshalb unter „darf nur lesen" erlaubt. Frei ist es nur für Blöcke mit
+// dem Kennzeichen kartenVorschlaege; andere Blöcke lösen die übliche
+// Rechte-Rückfrage aus (Feedback Georg, 14.08.2026 — vorher hartes Nein).
 const VORSCHLAG_PRAEFIX = 'mcp__vorschlaege__'
 
 // FlowForges eigene Verwaltungsdateien im Projektordner: direkte Änderungen
@@ -309,13 +310,15 @@ function liegtImProjekt(datei, projektPfad) {
 // Befehle, darf aber Karten anlegen — genau karte_anlegen ist dann trotz
 // „darf nur lesen" erlaubt (nicht aktualisieren, nicht erledigen).
 // Exportiert, damit sich die Einstufung ohne laufenden Motor prüfen lässt.
-// darfVorschlagen (BAUPLAN 26): karte_vorschlagen nur im Karten-Prüfer —
-// andere Blöcke sollen den Nutzer nicht mit Karten-Vorschlägen unterbrechen.
+// darfVorschlagen (BAUPLAN 26): karte_vorschlagen ist nur im Karten-Prüfer
+// rückfragefrei — andere Blöcke fragen erst nach dem üblichen Verfahren
+// (Feedback Georg, 14.08.2026), damit der Nutzer nicht ungefragt mit
+// Vorschlägen unterbrochen wird, ein Bauer mit gutem Grund aber auch nicht
+// ins Leere läuft.
 export function pruefeWerkzeug(name, eingabe, projektPfad, nurLesen, darfPruefen, lokaleKi = true, nurLesenBefehle = false, darfKartenAnlegen = false, darfVorschlagen = false) {
   if (name.startsWith(MENSCH_PRAEFIX)) return { erlaubt: true }
   if (name.startsWith(VORSCHLAG_PRAEFIX)) {
-    if (!darfVorschlagen)
-      return { gesperrt: texte.rechteFrage.vorschlagGesperrtFuerAgent, tickerText: texte.ticker.vorschlagGesperrt }
+    if (!darfVorschlagen) return { frage: texte.rechteFrage.vorschlag }
     return { erlaubt: true }
   }
   // Lokale Helfer-KI: erlaubt, außer das Häkchen „lokale KI erlaubt" ist am
