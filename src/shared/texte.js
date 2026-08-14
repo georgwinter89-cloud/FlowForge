@@ -255,7 +255,15 @@ export const texte = {
     hinweis:
       'Diese Karten bekommt der Agent zu Beginn jedes Blocks mit. Status-Karte und offene Aufgaben sind vorausgewählt — weitere Karten ziehst du aus der Seitenleiste hierher, rauswerfen per ×.',
     immerDabei: 'immer dabei',
-    entfernen: 'Aus der Auswahl nehmen'
+    entfernen: 'Aus der Auswahl nehmen',
+    // Alle Karten laden (BAUPLAN 29): ein Knopf lädt alles Wissenswerte in
+    // die Auswahl — Paket schneiden teilt dann zu, wer was bekommt.
+    alleHinzufuegen: 'Alle Karten hinzufügen',
+    alleHinzufuegenHinweis:
+      'Lädt Status-Karte, alle Entscheidungs- und Wissens-Karten und alle offenen Aufgaben in die Auswahl. Erledigte Aufgaben und Prüfkarten bleiben draußen. Paket schneiden bzw. Diagnose teilt den Folgeblöcken dann nur die Karten zu, die sie wirklich brauchen.',
+    standardAuswahl: 'Standard-Auswahl',
+    standardAuswahlHinweis:
+      'Springt zurück auf die übliche Vorauswahl: Status-Karte und offene Aufgaben.'
   },
   // Karten-Vorschlag fürs nächste Paket (BAUPLAN 28): die Vorschlags-Zeile an
   // der Kartenauswahl im Schaubild-Tab — eine Einladung, kein neuer Standard.
@@ -436,6 +444,41 @@ export const texte = {
     gespeichert: (anzahl) =>
       `Vorschlag gespeichert (${anzahl} Karte${anzahl === 1 ? '' : 'n'}). Der Nutzer sieht ` +
       'ihn an der Kartenauswahl und entscheidet selbst — ein erneuter Aufruf ersetzt ihn.'
+  },
+  // Karten-Zuteilung (BAUPLAN 29): Texte an die Auftragsquellen-Agenten
+  // (Paket schneiden, Diagnose) für karten_zuteilen.
+  agentenKartenZuteilung: {
+    werkzeugBeschreibung:
+      'Teilt den nachfolgenden Blöcken dieses Laufs die Karten zu, die sie wirklich ' +
+      'brauchen — je Eintrag ein Blockname und die Karten-IDs aus der Kartenauswahl. ' +
+      'Nicht genannte Blöcke bekommen wie bisher die volle Kartenauswahl; die ' +
+      'Status-Karte ist immer dabei.',
+    serverHinweis:
+      'Mit karten_zuteilen bekommt jeder nachfolgende Block nur die Karten in den ' +
+      'Auftrag, die er wirklich braucht — Kontext ist der teuerste Teil des Laufs. ' +
+      'Ein erneuter Aufruf ersetzt die Zuteilung der erneut genannten Blöcke.',
+    auftragZusatz: (namen) =>
+      '\nZum Schluss: Teil mit dem Werkzeug karten_zuteilen den nachfolgenden Blöcken ' +
+      'dieses Laufs die Karten aus der Kartenauswahl zu, die sie für ihre Arbeit ' +
+      'wirklich brauchen (je Eintrag: block = Blockname, kartenIds = ids aus der ' +
+      'Kartenauswahl oben). Die nachfolgenden Blöcke sind: ' +
+      namen.join(', ') +
+      '. Sei sparsam — Kontext ist der teuerste Teil des Laufs: Jeder Block bekommt ' +
+      'nur, was er wirklich braucht (die Status-Karte ist immer dabei; eine leere ' +
+      'Liste heißt „nur die Status-Karte"). Blöcke, die du nicht nennst, bekommen ' +
+      'wie bisher die volle Auswahl.',
+    leereZuteilung:
+      'Abgelehnt: zuteilung muss mindestens einen Eintrag mit Blockname enthalten.',
+    keineNachfolger:
+      'Dieser Block hat keine nachfolgenden Blöcke im Schaubild — es gibt nichts zuzuteilen.',
+    unbekannteBloecke: (namen, gueltig) =>
+      `Keine nachfolgenden Blöcke mit diesen Namen: ${namen}. ` +
+      `Zuteilen kannst du an: ${gueltig}.`,
+    fremdeKarten: (ids) =>
+      `Diese Karten gehören nicht zur Kartenauswahl dieses Laufs: ${ids} — ` +
+      'zuteilen kannst du nur Karten aus der Kartenauswahl in deinem Auftrag.',
+    gespeichert: (zeilen) =>
+      `Zuteilung gespeichert: ${zeilen}. Nicht genannte Blöcke bekommen die volle Auswahl.`
   },
   agentenKarten: {
     kontext: (liste) =>
@@ -1026,6 +1069,11 @@ export const texte = {
     // Sessionende — andere Blöcke fragen nach dem üblichen Verfahren.
     laufVorschlag:
       'Der Agent möchte eine Kartenauswahl für den nächsten Lauf vorschlagen — üblich ist das nur im Sessionende-Block. Erlaubst du es, bleibt es trotzdem nur ein Vorschlag, den du an der Kartenauswahl übernimmst oder verwirfst.',
+    // Karten-Zuteilung (BAUPLAN 29): rückfragefrei nur in Auftragsquellen-
+    // Blöcken (Paket schneiden, Diagnose) — andere fragen nach dem üblichen
+    // Verfahren.
+    kartenZuteilung:
+      'Der Agent möchte den nachfolgenden Blöcken Karten zuteilen — üblich ist das nur in Paket schneiden und Diagnose. Erlaubst du es, bekommen die genannten Blöcke nur ihre zugeteilten Karten in den Auftrag (die Status-Karte immer).',
     abgelehntFuerAgent:
       'Der Nutzer hat das nicht erlaubt. Suche einen anderen Weg innerhalb des Projektordners — oder beende den Auftrag mit einer kurzen Erklärung.',
     gitGesperrtFuerAgent:
@@ -1228,6 +1276,8 @@ export const texte = {
     // und damit auch im Laufbericht des erzeugenden Laufs.
     laufVorschlagGespeichert: (anzahl, empfehlung) =>
       `Vorschlag fürs nächste Paket: ${anzahl} Karte${anzahl === 1 ? '' : 'n'} — ${empfehlung}`,
+    // Karten-Zuteilung (BAUPLAN 29): sichtbar im Ticker und damit im Laufbericht.
+    kartenZuteilung: (zeilen) => `Karten verteilt: ${zeilen}`,
     // Audit (BAUPLAN 25): volle Lesetiefe, bewusst teuer — die Kosten-Folge
     // steht sichtbar am Start (Entscheidung Georg, 14.08.2026).
     auditKostenHinweis:
@@ -1401,6 +1451,10 @@ export const texte = {
       `Vorschlag fürs nächste Paket: ${v.empfehlung}` +
       (v.karten?.length ? ` — Karten: ${v.karten.join(', ')}` : ' — ohne Karten') +
       (v.begruendung ? ` (${v.begruendung})` : ''),
+    // Karten-Zuteilung (BAUPLAN 29): wie die Karten verteilt wurden — je
+    // Block mit Kartenzahl, wie im Ticker.
+    kartenZuteilungZeile: (eintraege) =>
+      'Karten verteilt: ' + eintraege.map((e) => `${e.block} ${e.anzahl}`).join(' · '),
     // Lokale Helfer-KI (Wunsch Georg, 13.08.2026): ihr Anteil im Bericht.
     // Seit BAUPLAN 20 zählen auch die Vorreparatur-Versuche mit — samt der
     // Frage, wie viele davon die Nachprüfung bestanden haben.

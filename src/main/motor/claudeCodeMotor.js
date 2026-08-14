@@ -19,6 +19,7 @@ import { kontextFensterFuerModell, kontextFensterMerken } from './motorWissen.js
 import { startWerkzeugServer } from './startWerkzeuge.js'
 import { vorschlagWerkzeugServer } from './vorschlagWerkzeuge.js'
 import { laufVorschlagWerkzeugServer } from './laufVorschlagWerkzeuge.js'
+import { kartenZuteilungWerkzeugServer } from './kartenZuteilungWerkzeuge.js'
 
 const laden = createRequire(import.meta.url)
 
@@ -101,6 +102,13 @@ const VORSCHLAG_PRAEFIX = 'mcp__vorschlaege__'
 // Kennzeichen laufVorschlag (Sessionende); andere Blöcke lösen die übliche
 // Rechte-Rückfrage aus (dasselbe Muster wie karte_vorschlagen).
 const LAUF_VORSCHLAG_PRAEFIX = 'mcp__naechsterlauf__'
+
+// Karten-Zuteilung (BAUPLAN 29): karten_zuteilen teilt den nachfolgenden
+// Blöcken ihre Karten zu — nur eine Meldung an FlowForge, keine Datei-Änderung,
+// deshalb auch unter „darf nur lesen" unbedenklich. Frei nur für Blöcke mit
+// dem Kennzeichen kartenZuteilung (Paket schneiden, Diagnose); andere Blöcke
+// lösen die übliche Rechte-Rückfrage aus (dasselbe Muster wie laufVorschlag).
+const ZUTEILUNG_PRAEFIX = 'mcp__zuteilung__'
 
 // FlowForges eigene Verwaltungsdateien im Projektordner: direkte Änderungen
 // würden die harten Regeln umgehen (z.B. die Karten-Längengrenze oder die
@@ -324,7 +332,7 @@ function liegtImProjekt(datei, projektPfad) {
 // (Feedback Georg, 14.08.2026), damit der Nutzer nicht ungefragt mit
 // Vorschlägen unterbrochen wird, ein Bauer mit gutem Grund aber auch nicht
 // ins Leere läuft.
-export function pruefeWerkzeug(name, eingabe, projektPfad, nurLesen, darfPruefen, lokaleKi = true, nurLesenBefehle = false, darfKartenAnlegen = false, darfVorschlagen = false, darfLaufVorschlag = false) {
+export function pruefeWerkzeug(name, eingabe, projektPfad, nurLesen, darfPruefen, lokaleKi = true, nurLesenBefehle = false, darfKartenAnlegen = false, darfVorschlagen = false, darfLaufVorschlag = false, darfZuteilen = false) {
   if (name.startsWith(MENSCH_PRAEFIX)) return { erlaubt: true }
   if (name.startsWith(VORSCHLAG_PRAEFIX)) {
     if (!darfVorschlagen) return { frage: texte.rechteFrage.vorschlag }
@@ -334,6 +342,12 @@ export function pruefeWerkzeug(name, eingabe, projektPfad, nurLesen, darfPruefen
   // eine Änderung — rückfragefrei nur im Sessionende (Kennzeichen laufVorschlag).
   if (name.startsWith(LAUF_VORSCHLAG_PRAEFIX)) {
     if (!darfLaufVorschlag) return { frage: texte.rechteFrage.laufVorschlag }
+    return { erlaubt: true }
+  }
+  // Karten-Zuteilung (BAUPLAN 29): nur eine Meldung an FlowForge — rückfragefrei
+  // nur in Auftragsquellen-Blöcken (Kennzeichen kartenZuteilung).
+  if (name.startsWith(ZUTEILUNG_PRAEFIX)) {
+    if (!darfZuteilen) return { frage: texte.rechteFrage.kartenZuteilung }
     return { erlaubt: true }
   }
   // Lokale Helfer-KI: erlaubt, außer das Häkchen „lokale KI erlaubt" ist am
@@ -669,7 +683,10 @@ export function starteLaufMotor(optionen) {
     aufKartenVorschlag,
     // Karten-Vorschlag fürs nächste Paket (BAUPLAN 28): speichert den
     // Vorschlag des Sessionendes — kein Warten, nur eine Meldung.
-    aufLaufVorschlag
+    aufLaufVorschlag,
+    // Karten-Zuteilung (BAUPLAN 29): merkt sich, welche Karten die
+    // nachfolgenden Blöcke bekommen — kein Warten, nur eine Meldung.
+    aufKartenZuteilung
   } = optionen
 
   let kindProzess = null
@@ -828,7 +845,8 @@ export function starteLaufMotor(optionen) {
       nurLesenBefehle,
       block?.darfKartenAnlegen ?? false,
       block?.darfVorschlagen ?? false,
-      block?.darfLaufVorschlag ?? false
+      block?.darfLaufVorschlag ?? false,
+      block?.darfZuteilen ?? false
     )
     if (urteil.gesperrt) return nein(urteil.gesperrt, urteil.tickerText)
     if (urteil.erlaubt)
@@ -858,6 +876,15 @@ export function starteLaufMotor(optionen) {
     const laufVorschlagServer = aufLaufVorschlag
       ? await laufVorschlagWerkzeugServer({ projektPfad, aufLaufVorschlag })
       : null
+    // Karten-Zuteilung (BAUPLAN 29): das Werkzeug der Auftragsquellen-Blöcke —
+    // freigeschaltet nur für Blöcke mit kartenZuteilung. Die Zuteilung braucht
+    // den rufenden Block: Der Motor reicht dessen Instanz-Kennung mit hinein.
+    const zuteilungServer = aufKartenZuteilung
+      ? await kartenZuteilungWerkzeugServer({
+          aufKartenZuteilung: (daten) =>
+            aufKartenZuteilung({ ...daten, instanzId: block?.instanzId ?? null })
+        })
+      : null
     // Lokale Helfer-KI (Experiment): nur registriert, wenn beim Laufstart
     // bestätigt war, dass Ollama läuft und das Modell da ist.
     const helferServer = lokaleHelfer
@@ -869,8 +896,12 @@ export function starteLaufMotor(optionen) {
           // Schalter an ist — sonst kein Werkzeug, kein Mehrverbrauch.
           bewerten: Boolean(lokaleHelfer.bewerten),
           // Projektwissen (BAUPLAN 25): die Kartenauswahl des Laufs wird jedem
-          // lokalen Auftrag vorangestellt — je Aufruf frisch gelesen.
-          holeProjektwissen: lokaleHelfer.projektwissen ?? null,
+          // lokalen Auftrag vorangestellt — je Aufruf frisch gelesen. Seit der
+          // Karten-Zuteilung (BAUPLAN 29) block-bezogen: Der Motor reicht die
+          // Instanz-Kennung des gerade laufenden Blocks mit hinein.
+          holeProjektwissen: lokaleHelfer.projektwissen
+            ? () => lokaleHelfer.projektwissen(block?.instanzId)
+            : null,
           aufEreignis
         })
       : null
@@ -911,6 +942,7 @@ export function starteLaufMotor(optionen) {
           start: startServer,
           ...(vorschlagServer ? { vorschlaege: vorschlagServer } : {}),
           ...(laufVorschlagServer ? { naechsterlauf: laufVorschlagServer } : {}),
+          ...(zuteilungServer ? { zuteilung: zuteilungServer } : {}),
           ...(helferServer ? { helfer: helferServer } : {})
         },
         // Der Hauptfaden ist der Koordinator: schlanker eigener Systemtext
@@ -970,7 +1002,8 @@ export function starteLaufMotor(optionen) {
             nurLesenBefehle,
             block?.darfKartenAnlegen ?? false,
             block?.darfVorschlagen ?? false,
-            block?.darfLaufVorschlag ?? false
+            block?.darfLaufVorschlag ?? false,
+            block?.darfZuteilen ?? false
           )
           if (urteil.erlaubt) return { behavior: 'allow', updatedInput: eingabeDaten }
           if (urteil.gesperrt) {
@@ -1263,7 +1296,10 @@ export function starteLaufMotor(optionen) {
     // darfKartenAnlegen (BAUPLAN 25): das Audit darf trotz „nur lesen" Karten anlegen.
     // darfVorschlagen (BAUPLAN 26): karte_vorschlagen nur für den Karten-Prüfer.
     // darfLaufVorschlag (BAUPLAN 28): naechster_lauf_vorschlagen nur fürs Sessionende.
-    blockAusfuehren({ auftrag, blockName, nurLesen = false, darfPruefen = false, lokaleKi = true, darfKartenAnlegen = false, darfVorschlagen = false, darfLaufVorschlag = false, uebertrag }) {
+    // darfZuteilen + instanzId (BAUPLAN 29): karten_zuteilen nur für
+    // Auftragsquellen-Blöcke; die Instanz-Kennung ordnet Zuteilung und
+    // Projektwissen dem gerade laufenden Block zu.
+    blockAusfuehren({ auftrag, blockName, instanzId = null, nurLesen = false, darfPruefen = false, lokaleKi = true, darfKartenAnlegen = false, darfVorschlagen = false, darfLaufVorschlag = false, darfZuteilen = false, uebertrag }) {
       if (tot)
         return Promise.resolve({
           zustand: 'fehlgeschlagen',
@@ -1277,12 +1313,14 @@ export function starteLaufMotor(optionen) {
         block = {
           auftrag,
           blockName,
+          instanzId,
           nurLesen,
           darfPruefen,
           lokaleKi,
           darfKartenAnlegen,
           darfVorschlagen,
           darfLaufVorschlag,
+          darfZuteilen,
           uebertrag: uebertrag ?? { aktiv: false, testModus: false, anweisung: '' },
           aufloesen,
           blockTaskIds: new Set(),

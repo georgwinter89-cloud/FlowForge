@@ -598,6 +598,11 @@ function Laufbericht({ bericht }) {
           {bericht.naechsterLauf && (
             <p className="feld-hinweis">{tb.naechsterLaufZeile(bericht.naechsterLauf)}</p>
           )}
+          {/* Karten-Zuteilung (BAUPLAN 29): wie Paket schneiden/Diagnose die
+              Karten auf die Folgeblöcke verteilt hat. */}
+          {(bericht.kartenZuteilung ?? []).length > 0 && (
+            <p className="feld-hinweis">{tb.kartenZuteilungZeile(bericht.kartenZuteilung)}</p>
+          )}
           {(bericht.blockErgebnisse ?? []).length > 0 && (
             <div>
               <p className="bericht-abschnitt">{tb.blockErgebnisseLabel}</p>
@@ -1451,6 +1456,25 @@ export default function Leinwand({
     await window.flowforge.naechsterLaufVerwerfen(pfad)
   }
 
+  // Alle Karten laden (BAUPLAN 29): Status + alle Entscheidungs- und
+  // Wissens-Karten + alle offenen Aufgaben. Erledigte Aufgaben und Prüfkarten
+  // bleiben draußen (Historie liefert der Laufbericht, Prüfkarten haben ihren
+  // eigenen Weg über den Prüfer). Danach wie gewohnt per × und Drag & Drop
+  // änderbar — Paket schneiden/Diagnose teilt den Folgeblöcken dann zu.
+  function alleKartenHinzufuegen() {
+    const zusatz = new Set()
+    for (const karte of karten ?? [])
+      if (karte.sorte === 'entscheidung' || karte.sorte === 'wissen') zusatz.add(karte.id)
+    setKontextZusatz(zusatz)
+    setKontextRaus(new Set())
+  }
+
+  // „Standard-Auswahl": zurück auf die festgenagelte Vorauswahl (SPEC §5).
+  function standardAuswahl() {
+    setKontextZusatz(new Set())
+    setKontextRaus(new Set())
+  }
+
   // --- Lauf ---------------------------------------------------------------
 
   async function starten() {
@@ -1689,6 +1713,22 @@ export default function Leinwand({
               )}
             </span>
           ))}
+          {/* Alle Karten laden (BAUPLAN 29): ein Knopf lädt alles Wissenswerte,
+              einer springt zurück auf die Standard-Vorauswahl. */}
+          <button
+            className="vorschlag-knopf"
+            title={ta.alleHinzufuegenHinweis}
+            onClick={alleKartenHinzufuegen}
+          >
+            {ta.alleHinzufuegen}
+          </button>
+          <button
+            className="vorschlag-knopf"
+            title={ta.standardAuswahlHinweis}
+            onClick={standardAuswahl}
+          >
+            {ta.standardAuswahl}
+          </button>
         </div>
       )}
 

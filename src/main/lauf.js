@@ -66,6 +66,7 @@ import {
 import { workflowLaden } from './workflow.js'
 import { laufstandSpeichern, laufstandLaden, laufstandLoeschen } from './laufstand.js'
 import { laufVorschlagSpeichern, laufVorschlagLoeschen } from './naechsterLauf.js'
+import { kartenZuteilungPruefen } from './motor/kartenZuteilungWerkzeuge.js'
 import { chatBeschaeftigt, chatSchliessen } from './nachlaufChat.js'
 
 const BERICHTE_ORDNER = 'laufberichte'
@@ -739,6 +740,12 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     })
   }
 
+  // Karten-Zuteilung (BAUPLAN 29): Welche Karten ein Block in den Auftrag
+  // bekommt — die volle Auswahl, oder seine Teilmenge, sobald Paket schneiden/
+  // Diagnose zugeteilt hat. Gefüllt im Ablaufplaner; hier nur der Rückfall,
+  // damit das Projektwissen der lokalen KI (unten) sie schon kennen darf.
+  let kartenFuerBlock = () => ausgewaehlt
+
   // Lokale Helfer-KI (Experiment, 13.08.2026): nur nutzen, wenn Ollama jetzt
   // wirklich läuft und das Modell da ist — sonst ehrlicher Hinweis und alles
   // läuft wie gewohnt über den Motor.
@@ -757,8 +764,12 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         // Kosten-Wette der lokalen KI blind.
         bewerten: einstellungen.lokaleHelferQuote !== false,
         // Projektwissen (BAUPLAN 25): je lokalem Auftrag frisch gelesen —
-        // die Kartenauswahl (ausgewaehlt) wächst mitten im Lauf.
-        projektwissen: () => projektwissenFuerHelfer(projektPfad, ausgewaehlt)
+        // die Kartenauswahl (ausgewaehlt) wächst mitten im Lauf. Seit der
+        // Karten-Zuteilung (BAUPLAN 29) block-bezogen: Der Motor reicht die
+        // Instanz-Kennung des laufenden Blocks herein — das 32k-Fenster
+        // kleiner Modelle verträgt keine Kartenflut.
+        projektwissen: (instanzId) =>
+          projektwissenFuerHelfer(projektPfad, kartenFuerBlock(instanzId))
       }
       lokaleHelferHinweis = texte.ticker.lokaleHelferBereit(einstellungen.lokaleHelferModell)
     } else {
@@ -818,6 +829,34 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     const vorfahrenVon = new Map(
       kettenIds.map((id) => [id, vorfahrenSortiert(workflow.bloecke, workflow.pfeile, id)])
     )
+
+    // Karten-Zuteilung (BAUPLAN 29): instanzId → Karten-IDs, gefüllt vom
+    // Werkzeug karten_zuteilen der Auftragsquellen-Blöcke. Nicht zugeteilte
+    // Blöcke bekommen die volle Auswahl (Rückfall ohne Bruch).
+    const kartenZuteilung = new Map()
+    kartenFuerBlock = (instanzId) => kartenZuteilung.get(instanzId) ?? ausgewaehlt
+    const nachfolgerVon = new Map(kettenIds.map((id) => [id, []]))
+    for (const pfeil of workflow.pfeile) nachfolgerVon.get(pfeil.von)?.push(pfeil.nach)
+    // Alle Nachfahren eines Blocks entlang der Pfeile, gruppiert nach
+    // Blockname — zugeteilt wird per Name (so kennt der Agent die Blöcke);
+    // tragen mehrere Instanzen denselben Namen, bekommen alle die Zuteilung.
+    function nachfahrenNamen(instanzId) {
+      const namen = new Map()
+      const offen = [...(nachfolgerVon.get(instanzId) ?? [])]
+      const besucht = new Set()
+      while (offen.length) {
+        const id = offen.pop()
+        if (besucht.has(id)) continue
+        besucht.add(id)
+        const name = knoten.get(id)?.def.name
+        if (name) {
+          if (!namen.has(name)) namen.set(name, [])
+          namen.get(name).push(id)
+        }
+        for (const weiter of nachfolgerVon.get(id) ?? []) offen.push(weiter)
+      }
+      return namen
+    }
 
     // Eine Motor-Session pro Lauf (BAUPLAN 19): Kennung und Füllstand der
     // Lauf-Session. Die Kennung wandert in den Laufstand — die Wiederaufnahme
@@ -884,6 +923,10 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         laufSitzung: laufSessionKennung
           ? { kennung: laufSessionKennung, tokens: laufSessionTokens }
           : null,
+        // Karten-Zuteilung (BAUPLAN 29): wandert mit in den Laufstand —
+        // nach einer Wiederaufnahme arbeiten die Folgeblöcke weiter mit
+        // ihrer Teilmenge.
+        kartenZuteilung: [...kartenZuteilung],
         rundenUebrig,
         uebertraege,
         startanleitungNachgefordert
@@ -919,6 +962,13 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       if (Number.isInteger(fortsetzung.rundenUebrig)) rundenUebrig = fortsetzung.rundenUebrig
       if (Number.isInteger(fortsetzung.uebertraege)) uebertraege = fortsetzung.uebertraege
       startanleitungNachgefordert = Boolean(fortsetzung.startanleitungNachgefordert)
+      // Karten-Zuteilung (BAUPLAN 29): tolerant gegenüber alten Laufständen —
+      // ohne Eintrag gilt schlicht die volle Auswahl.
+      for (const [id, ids] of Array.isArray(fortsetzung.kartenZuteilung)
+        ? fortsetzung.kartenZuteilung
+        : [])
+        if (knoten.has(id) && Array.isArray(ids))
+          kartenZuteilung.set(id, ids.filter((kartenId) => typeof kartenId === 'string'))
       const naechster = kette.find((eintrag) => knoten.get(eintrag.instanzId).status !== 'fertig')
       if (naechster)
         tickern(
@@ -929,6 +979,34 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           )
         )
       bericht.ticker.push({ zeit: jetztIso(), text: texte.laufberichte.fortgesetztHinweis })
+    }
+
+    // Karten-Zuteilung (BAUPLAN 29): Das Werkzeug karten_zuteilen der
+    // Auftragsquellen-Blöcke landet hier — hart validiert (nur Karten aus der
+    // Kartenauswahl, nur echte Nachfahren im Schaubild), dann gemerkt und
+    // ehrlich in Ticker und Laufbericht vermerkt. Der Rückgabewert wird das
+    // Werkzeug-Ergebnis des Agenten.
+    function kartenZuteilungAnnehmen({ instanzId, zuteilung }) {
+      const geladen = kartenLaden(projektPfad)
+      if (!geladen.ok) return { fehler: geladen.fehler }
+      const urteil = kartenZuteilungPruefen({
+        zuteilung,
+        karten: geladen.karten,
+        ausgewaehlt,
+        nachfolger: nachfahrenNamen(instanzId)
+      })
+      if (urteil.fehler) return urteil
+      for (const [id, ids] of urteil.zuteilung) kartenZuteilung.set(id, ids)
+      // Der Bericht zeigt den Gesamtstand der Zuteilung — je Block mit
+      // Kartenzahl; ein erneuter Aufruf ersetzt die erneut genannten Blöcke.
+      bericht.kartenZuteilung = [...kartenZuteilung].map(([id, ids]) => ({
+        block: knoten.get(id)?.def.name ?? '?',
+        anzahl: ids.length
+      }))
+      const zeilen = urteil.jeBlock.map((e) => `${e.block} ${e.anzahl}`).join(', ')
+      tickern(texte.ticker.kartenZuteilung(zeilen))
+      standSpeichern()
+      return { ok: true, meldung: texte.agentenKartenZuteilung.gespeichert(zeilen) }
     }
 
     // Baut einen Motor: den Lauf-Motor (mit Fortsetzung der Lauf-Session)
@@ -1029,7 +1107,8 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         aufRechteFrage: rechteFrageStellen,
         aufMenschFrage: (daten) => menschFrageStellen(daten, holeName()),
         aufKartenVorschlag: vorschlagStellen,
-        aufLaufVorschlag: laufVorschlagAnnehmen
+        aufLaufVorschlag: laufVorschlagAnnehmen,
+        aufKartenZuteilung: kartenZuteilungAnnehmen
       })
     }
 
@@ -1085,6 +1164,9 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         .blockAusfuehren({
           auftrag,
           blockName: k.def.name,
+          // Karten-Zuteilung (BAUPLAN 29): Die Instanz-Kennung ordnet
+          // Zuteilung und Projektwissen dem laufenden Block zu.
+          instanzId,
           nurLesen: k.def.nurLesen,
           // Nur Prüf-Blöcke dürfen die Prüfmappe verändern (Entscheidung Georg,
           // 12.08.2026) — der Bauer weicht sonst Prüfungen auf, statt zu reparieren.
@@ -1098,6 +1180,9 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           // Sessionende (BAUPLAN 28): darf die Kartenauswahl für den
           // nächsten Lauf vorschlagen — nur ein Vorschlag, nie eine Automatik.
           darfLaufVorschlag: Boolean(k.def.laufVorschlag),
+          // Auftragsquellen (BAUPLAN 29): dürfen den Nachfolgern Karten
+          // zuteilen — nicht Genannte bekommen die volle Auswahl.
+          darfZuteilen: Boolean(k.def.kartenZuteilung),
           // Häkchen je Block (BAUPLAN 20): abgewählt = lokal_recherchieren
           // wird für die Agenten dieses Blocks hart abgelehnt.
           lokaleKi: k.eintrag.lokaleKi !== false,
@@ -1152,11 +1237,21 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         // Auch Reparatur-Runden bekommen den vollen Auftrag samt Zusatz —
         // Rückmeldung, Nachforderung und Übergabe bleiben am Knoten, bis der
         // Block wirklich fertig ist.
+        // Karten-Zuteilung (BAUPLAN 29): Ein zugeteilter Block bekommt nur
+        // seine Teilmenge in den Auftrag (die Status-Karte immer) — sonst
+        // wie bisher die volle Auswahl.
         let auftrag =
-          kartenKontext(projektPfad, ausgewaehlt) +
+          kartenKontext(projektPfad, kartenFuerBlock(k.eintrag.instanzId)) +
           uebergabenText(k) +
           texte.agentenUebergabe.auftragEinleitung +
           auftragMitFeldern(k.def, k.eintrag.feldWerte)
+        // Auftragsquellen-Blöcke (Kennzeichen kartenZuteilung) bekommen das
+        // Werkzeug samt der Namen ihrer Nachfahren erklärt — ohne Nachfahren
+        // (Ein-Block-Lauf) gibt es nichts zuzuteilen, der Zusatz entfällt.
+        if (k.def.kartenZuteilung) {
+          const namen = [...nachfahrenNamen(k.eintrag.instanzId).keys()]
+          if (namen.length) auftrag += texte.agentenKartenZuteilung.auftragZusatz(namen)
+        }
         // Prüfkarten (BAUPLAN 18): gezogene alte Prüfungen werden zusätzlich
         // zur Paket-Prüfung ausgeführt — der Zusatz gehört in jeden
         // Anlauf dieses Blocks (auch nach einem Übertrag).
@@ -1600,7 +1695,7 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
                 // Projektwissen (BAUPLAN 25) auch für die Vorreparatur — sie
                 // läuft an den Helfer-Werkzeugen vorbei direkt über lauf.js.
                 auftrag:
-                  (lokaleHelfer.projektwissen?.() ?? '') +
+                  (lokaleHelfer.projektwissen?.(k.eintrag.instanzId) ?? '') +
                   texte.agentenLokaleHelfer.reparaturAuftrag(k.lokaleKritik),
                 modell: lokaleHelfer.modell,
                 adresse: lokaleHelfer.adresse,

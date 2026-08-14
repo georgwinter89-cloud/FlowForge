@@ -136,6 +136,11 @@ export const BLOCK_KATALOG = [
     nurLesen: true,
     prueft: false,
     uebung: false,
+    // Karten-Zuteilung (BAUPLAN 29): nur Auftragsquellen-Blöcke dürfen
+    // karten_zuteilen rückfragefrei nutzen — durchgesetzt am Werkzeugaufruf
+    // (dasselbe Freischalt-Muster wie laufVorschlag). Den Werkzeug-Zusatz
+    // samt Nachfolger-Liste hängt lauf.js dynamisch an den Auftrag.
+    kartenZuteilung: true,
     felder: [
       {
         id: 'wunsch',
@@ -222,6 +227,9 @@ export const BLOCK_KATALOG = [
     nurLesen: true,
     prueft: false,
     uebung: false,
+    // Karten-Zuteilung (BAUPLAN 29): wie Paket schneiden — die Diagnose ist
+    // die Auftragsquelle von „Bug jagen".
+    kartenZuteilung: true,
     felder: [
       {
         id: 'fehlerbild',

@@ -556,7 +556,28 @@ Angreifer durch die Diagnose.
 - **Kontext-Zuführung:** Beim Start wählt die App Karten automatisch vor — festgenagelt auf
   **Status-Karte (immer) + offene Aufgaben-Karten**; der Nutzer kann weitere Karten per
   Drag & Drop in die Auswahl ziehen und vorausgewählte per Klick rauswerfen, dann Start.
-  Die gewählten Karten bekommt der Agent zu Beginn **jedes Blocks** frisch mit.
+  Die gewählten Karten bekommt der Agent zu Beginn **jedes Blocks** frisch mit. Seit
+  Bauschritt 29 sitzen an der Kartenauswahl zwei Knöpfe: **„Alle Karten hinzufügen"**
+  (lädt Status-Karte, alle Entscheidungs- und Wissens-Karten und alle offenen Aufgaben —
+  erledigte Aufgaben und Prüfkarten bleiben draußen: Historie liefert der Laufbericht,
+  Prüfkarten haben ihren eigenen Weg über den Prüfer) und **„Standard-Auswahl"** (springt
+  auf die festgenagelte Vorauswahl zurück); einzelne Chips bleiben wie gewohnt änderbar.
+- **Karten-Zuteilung** (seit Bauschritt 29): Damit „alle Karten" nicht jeden Agenten
+  flutet, teilen die Auftragsquellen-Blöcke (Paket schneiden, Diagnose) über das
+  Werkzeug `karten_zuteilen` je nachfolgendem Block die Karten zu, die er wirklich
+  braucht (nur dort rückfragefrei — dasselbe Freischalt-Muster wie
+  `naechster_lauf_vorschlagen`, durchgesetzt am Werkzeugaufruf; andere Blöcke lösen
+  eine Rückfrage aus). Ihr Auftrag nennt die Namen der Nachfahren im Schaubild und
+  verlangt sparsame Zuteilung — Kontext ist der teuerste Teil des Laufs. FlowForge
+  validiert hart: nur Karten-IDs aus der Kartenauswahl des Laufs, nur echte Nachfahren
+  im Schaubild — Fantasie-IDs und fremde Blöcke werden mit klarer Meldung abgewiesen,
+  die Status-Karte fällt still heraus (sie ist immer dabei). Ab der Zuteilung bekommt
+  jeder genannte Block nur noch seine Teilmenge in den Auftrag; dasselbe gilt fürs
+  Projektwissen der lokalen Helfer-KI (das 32k-Fenster kleiner Modelle verträgt keine
+  Kartenflut). **Rückfall ohne Bruch:** Wird das Werkzeug nicht benutzt oder ein Block
+  nicht genannt, bekommt er wie bisher die volle Auswahl. Die Zuteilung wandert in den
+  Laufstand (Wiederaufnahme nach Neustart) und steht mit Kartenzahl je Block im Ticker
+  und im Laufbericht („Karten verteilt: Bauer 4, Prüfer 2 …").
 - **Karten-Vorschlag fürs nächste Paket** (seit Bauschritt 28): Das Sessionende benennt
   über das Werkzeug `naechster_lauf_vorschlagen` (nur dort rückfragefrei — dasselbe
   Freischalt-Muster wie `karte_vorschlagen`, durchgesetzt am Werkzeugaufruf; andere
