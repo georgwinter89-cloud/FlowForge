@@ -502,7 +502,16 @@ Angreifer durch die Diagnose.
 
 - **Klartext-Liveticker** + hervorgehobene laufende Blöcke auf der Leinwand (bei
   parallelen Zweigen mehrere gleichzeitig; Ticker-Zeilen tragen dann den Blocknamen).
-- **Rohprotokoll** einklappbar für den Blick hinter die Kulissen.
+- **Denk-Bereich** einklappbar (seit Bauschritt 24, ersetzt das frühere
+  Rohprotokoll aus JSON-Zeilen — Diagnose-Verlust bewusst akzeptiert): zeigt
+  live die Denk-Texte der gerade arbeitenden KI, je Absatz mit Absender
+  (Blockname, „Unteraufgabe", „lokale KI" oder der Koordinator), in gedämpfter
+  Mono-Schrift. Beim Motor kommen die Denk-Blöcke aus dem SDK-Strom (die
+  Weiterleitung aus den Block-Agenten ist nur Sichtbarkeit — Denk-Budget und
+  Verbrauch bleiben unverändert); bei der lokalen KI das Denkfeld der
+  Ollama-Antwort, bei Modellen ohne Denkfeld ihr Antworttext vor den
+  Werkzeugaufrufen (das „laute Denken" kleiner Modelle). Nur live, nicht im
+  Laufbericht.
 - **Stopp in zwei Stufen:** „Sanft anhalten" (laufender Block macht fertig, Halt am
   Sicherungspunkt) und „Sofort abbrechen" (Block gilt als nicht gelaufen; der Projektordner
   springt automatisch auf den letzten Sicherungspunkt zurück).
@@ -604,7 +613,7 @@ und auf der Hero-Kachel.
   **Leinwand**, rechts **Blockbibliothek** (Vorlagen + eigene Blöcke).
 - Die Mittelspalte hat **Tabs** (Feedback Georg, 07.08.2026 — vorher stapelte sich
   alles mit Scrollleisten): **Schaubild** (Workflow bearbeiten, Start,
-  Kartenauswahl) · **Lauf** (Verbrauch, Stopp, Gespräch, Liveticker, Rohprotokoll,
+  Kartenauswahl) · **Lauf** (Verbrauch, Stopp, Gespräch, Liveticker, Denk-Bereich,
   Ergebnis) · **Laufberichte** (seit Bauschritt 15 filterbar nach Ausgang; Details je
   Bericht mit Dauer und den Ergebnissen jedes Blocks) · **Sicherungspunkte**. Beim Lauf-Start wechselt
   die Ansicht automatisch zum Lauf-Tab; wartet dort eine Frage, zeigt der Tab

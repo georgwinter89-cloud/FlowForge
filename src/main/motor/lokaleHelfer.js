@@ -451,7 +451,11 @@ function werkzeugAusfuehren(projektPfad, name, eingabe, zaehler) {
 
 // Der Recherche-Kreislauf: Auftrag rein, kompaktes Fazit raus.
 // aufSchritt (optional) meldet jede Werkzeug-Nutzung für den Liveticker.
-export function lokalRecherchieren({ projektPfad, auftrag, modell, adresse = STANDARD_ADRESSE, aufSchritt }) {
+// aufDenken (optional, BAUPLAN 24) meldet das Denken der lokalen KI für den
+// Denk-Bereich: das thinking-Feld der Ollama-Antwort (Denk-Modelle wie
+// gpt-oss) — oder, bei Modellen ohne Denkfeld, ihren Antworttext vor den
+// Werkzeugaufrufen (das „laute Denken" kleiner Modelle).
+export function lokalRecherchieren({ projektPfad, auftrag, modell, adresse = STANDARD_ADRESSE, aufSchritt, aufDenken }) {
   const nachrichten = [
     {
       role: 'system',
@@ -470,7 +474,7 @@ export function lokalRecherchieren({ projektPfad, auftrag, modell, adresse = STA
     },
     { role: 'user', content: String(auftrag ?? '') }
   ]
-  return kreislauf({ projektPfad, nachrichten, werkzeuge: WERKZEUGE, modell, adresse, aufSchritt })
+  return kreislauf({ projektPfad, nachrichten, werkzeuge: WERKZEUGE, modell, adresse, aufSchritt, aufDenken })
 }
 
 // Der Reparatur-Kreislauf (BAUPLAN 20): Beanstandungen des Prüfers rein,
@@ -478,7 +482,7 @@ export function lokalRecherchieren({ projektPfad, auftrag, modell, adresse = STA
 // Lese-Werkzeugen gibt es genau das Ersetzen-Werkzeug — an kurzer Leine.
 // ergebnis.ersetzungen zählt die echten Änderungen: 0 heißt „nichts passiert"
 // — dann spart sich FlowForge die Nachprüfung.
-export async function lokalReparieren({ projektPfad, auftrag, modell, adresse = STANDARD_ADRESSE, aufSchritt }) {
+export async function lokalReparieren({ projektPfad, auftrag, modell, adresse = STANDARD_ADRESSE, aufSchritt, aufDenken }) {
   const nachrichten = [
     {
       role: 'system',
@@ -505,6 +509,7 @@ export async function lokalReparieren({ projektPfad, auftrag, modell, adresse = 
     modell,
     adresse,
     aufSchritt,
+    aufDenken,
     zaehler
   })
   return { ...ergebnis, ersetzungen: zaehler.ersetzungen }
@@ -515,7 +520,7 @@ export async function lokalReparieren({ projektPfad, auftrag, modell, adresse = 
 // Lese-Werkzeugen gibt es genau das Entwurf-Schreibwerkzeug (nur
 // arbeitsablage/). ergebnis.dateien nennt die geschriebenen Entwürfe —
 // leer heißt „kein Entwurf entstanden".
-export async function lokalEntwerfen({ projektPfad, auftrag, modell, adresse = STANDARD_ADRESSE, aufSchritt }) {
+export async function lokalEntwerfen({ projektPfad, auftrag, modell, adresse = STANDARD_ADRESSE, aufSchritt, aufDenken }) {
   const nachrichten = [
     {
       role: 'system',
@@ -546,6 +551,7 @@ export async function lokalEntwerfen({ projektPfad, auftrag, modell, adresse = S
     modell,
     adresse,
     aufSchritt,
+    aufDenken,
     zaehler
   })
   return { ...ergebnis, dateien: zaehler.dateien }
@@ -557,7 +563,7 @@ export async function lokalEntwerfen({ projektPfad, auftrag, modell, adresse = S
 // unter den unveränderten Tabu-Zonen. ergebnis.ersetzungen und
 // ergebnis.dateien zählen die echten Änderungen: beides leer heißt „nichts
 // gebaut" — dann gibt es auch nichts abzunehmen oder zurückzurollen.
-export async function lokalBauen({ projektPfad, auftrag, modell, adresse = STANDARD_ADRESSE, aufSchritt }) {
+export async function lokalBauen({ projektPfad, auftrag, modell, adresse = STANDARD_ADRESSE, aufSchritt, aufDenken }) {
   const nachrichten = [
     {
       role: 'system',
@@ -587,6 +593,7 @@ export async function lokalBauen({ projektPfad, auftrag, modell, adresse = STAND
     modell,
     adresse,
     aufSchritt,
+    aufDenken,
     zaehler
   })
   return { ...ergebnis, ersetzungen: zaehler.ersetzungen, dateien: zaehler.geschrieben }
@@ -658,7 +665,7 @@ function getarnteAufrufe(text, werkzeuge) {
 
 // Gemeinsamer Kern der Kreisläufe: Ollama-Runden mit Werkzeugaufrufen,
 // bis ein Fazit kommt oder die Runden ausgehen.
-async function kreislauf({ projektPfad, nachrichten, werkzeuge, modell, adresse, aufSchritt, zaehler = null }) {
+async function kreislauf({ projektPfad, nachrichten, werkzeuge, modell, adresse, aufSchritt, aufDenken, zaehler = null }) {
   let schritte = 0
   // Denk-Modelle (z.B. gpt-oss) schreiben manchmal alles ins Denkfeld und
   // lassen die eigentliche Antwort leer (real beobachtet am 13.08.2026:
@@ -693,6 +700,15 @@ async function kreislauf({ projektPfad, nachrichten, werkzeuge, modell, adresse,
 
     const nachricht = antwort.message ?? {}
     const aufrufe = Array.isArray(nachricht.tool_calls) ? nachricht.tool_calls : []
+    // Denk-Ansicht (BAUPLAN 24): das thinking-Feld der Denk-Modelle — oder,
+    // wenn es fehlt, der Antworttext VOR Werkzeugaufrufen (das „laute Denken"
+    // kleiner Modelle; ohne Aufrufe ist der Text das Fazit, kein Denken).
+    const denkText = String(nachricht.thinking ?? '').trim()
+    if (denkText) aufDenken?.(denkText)
+    else if (aufrufe.length) {
+      const lautesDenken = String(nachricht.content ?? '').trim()
+      if (lautesDenken) aufDenken?.(lautesDenken)
+    }
     if (!aufrufe.length) {
       const fazit = String(nachricht.content ?? '').trim()
       // Getarnte Aufrufe (s.o.): als Text gelieferte Werkzeugaufrufe auspacken

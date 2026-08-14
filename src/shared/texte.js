@@ -752,8 +752,14 @@ export const texte = {
       'Sofort abbrechen? Der Block gilt dann als nicht gelaufen — angefangene Änderungen werden auf den letzten Sicherungspunkt zurückgesetzt.',
     // Lauf-Tab zeigt, welcher Block gerade arbeitet (Wunsch Georg, 13.08.2026).
     geradeArbeitet: (n) => (n === 1 ? 'Gerade arbeitet:' : 'Gerade arbeiten:'),
-    rohProtokollZeigen: 'Rohprotokoll einblenden',
-    rohProtokollVerbergen: 'Rohprotokoll ausblenden',
+    // Denk-Ansicht statt Rohprotokoll (BAUPLAN 24): sichtbares Denken der
+    // gerade arbeitenden KI — JSON-Zeilen sieht kein Mensch durch.
+    denkenZeigen: 'Denken einblenden',
+    denkenVerbergen: 'Denken ausblenden',
+    denkenLeer: 'Noch kein Denken zu sehen — sobald die KI nachdenkt, steht es hier.',
+    denkenKoordinator: 'Koordinator',
+    denkenUnteraufgabe: 'Unteraufgabe',
+    denkenLokaleKi: 'lokale KI',
     tickerUeberschrift: 'Liveticker',
     verbrauchKontext: (von, bis) => `Kontext: etwa ${von}–${bis} % gefüllt`,
     verbrauchTokens: (tokens) => `${tokens.toLocaleString('de-DE')} Tokens`,

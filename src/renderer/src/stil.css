@@ -1081,18 +1081,48 @@ body {
   animation: ff-pulse 2s infinite;
 }
 
-.roh-protokoll {
-  max-height: 200px;
+/* Denk-Ansicht (BAUPLAN 24): das sichtbare Denken der arbeitenden KI —
+   gedämpfte Mono-Schrift, je Absatz mit Absender. */
+.denk-bereich {
+  max-height: 260px;
   overflow: auto;
   padding: 10px;
   border: 1px solid var(--rand-panel);
   border-radius: var(--radius-karte);
   background: var(--flaeche-tief);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.denk-leer {
+  margin: 0;
+  color: var(--text-gedimmt);
+  font-size: 12px;
+}
+
+.denk-absatz {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.denk-absender {
+  color: var(--akzent-text);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.denk-text {
+  margin: 0;
   color: var(--text-gedimmt);
   font-family: var(--schrift-mono);
-  font-size: 10.5px;
+  font-size: 11px;
+  line-height: 1.5;
   white-space: pre-wrap;
-  word-break: break-all;
+  word-break: break-word;
 }
 
 .lauf-ergebnis {

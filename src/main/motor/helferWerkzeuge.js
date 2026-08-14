@@ -51,7 +51,10 @@ export async function helferWerkzeugServer({ projektPfad, modell, adresse, bewer
         // Detail-Zeilen (BAUPLAN 23): Werkzeug UND Eingabe wandern in den
         // Ticker — Georg liest mit, welche Datei die lokale KI gerade liest.
         aufSchritt: (name, eingabe) =>
-          aufEreignis({ art: 'ticker', text: texte.ticker.lokaleHelferSchritt(name, eingabe) })
+          aufEreignis({ art: 'ticker', text: texte.ticker.lokaleHelferSchritt(name, eingabe) }),
+        // Denk-Ansicht (BAUPLAN 24): das Denken der lokalen KI im Denk-Bereich.
+        aufDenken: (text) =>
+          aufEreignis({ art: 'denken', absender: texte.lauf.denkenLokaleKi, text })
       })
       // Zähl-Ereignis für den Laufbericht (Wunsch Georg, 13.08.2026): So steht
       // der Anteil der lokalen KI schwarz auf weiß im Bericht.
@@ -136,7 +139,9 @@ export async function helferWerkzeugServer({ projektPfad, modell, adresse, bewer
               name === 'entwurf_schreiben'
                 ? texte.ticker.lokaleEntwurfSchritt(eingabe?.pfad)
                 : texte.ticker.lokaleHelferSchritt(name, eingabe)
-          })
+          }),
+        aufDenken: (text) =>
+          aufEreignis({ art: 'denken', absender: texte.lauf.denkenLokaleKi, text })
       })
       const dateien = ergebnis.dateien ?? []
       // Zähl-Ereignis für die Lokale-Helfer-Zeile des Laufberichts (BAUPLAN 21):
@@ -254,7 +259,9 @@ export async function helferWerkzeugServer({ projektPfad, modell, adresse, bewer
                 : name === 'ersetzen'
                   ? texte.ticker.lokaleReparaturSchritt(eingabe?.pfad)
                   : texte.ticker.lokaleHelferSchritt(name, eingabe)
-          })
+          }),
+        aufDenken: (text) =>
+          aufEreignis({ art: 'denken', absender: texte.lauf.denkenLokaleKi, text })
       })
       const aenderungen = (ergebnis.ersetzungen ?? 0) + (ergebnis.dateien?.length ?? 0)
       // Zähl-Ereignis für die Lokale-Helfer-Zeile des Laufberichts (BAUPLAN 22).

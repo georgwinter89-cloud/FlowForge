@@ -22,7 +22,7 @@
 //                            (der Motor meldet die echte Größe erst am Turn-Ende —
 //                            so stimmt die Übertrags-Schwelle von Anfang an)
 //     aufEreignis(e)         e = { art: 'ticker', text }
-//                              | { art: 'roh', zeile }
+//                              | { art: 'denken', absender, text }
 //                              | { art: 'verbrauch', verbrauch }
 //     aufRechteFrage(frage)  frage = { beschreibung }; Promise<boolean> — erlaubt?
 //     aufMenschFrage(daten)  Frage-an-den-Menschen-Werkzeug (SPEC §6)

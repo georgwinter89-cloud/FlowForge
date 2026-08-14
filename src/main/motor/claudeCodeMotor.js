@@ -760,6 +760,11 @@ export function starteLaufMotor(optionen) {
         // Wiederaufnahme: dieselbe Lauf-Session weiterführen — der
         // Koordinator kennt die bisherigen Blöcke und Fazite noch.
         ...(fortsetzen ? { resume: fortsetzen } : {}),
+        // Denk-Ansicht (BAUPLAN 24): Ohne diese Option kämen von den
+        // Block-Agenten nur Werkzeug-Blöcke an — ihr Denken bliebe unsichtbar.
+        // Die Option leitet nur weiter, was ohnehin entsteht: kein Denk-Budget,
+        // kein Mehrverbrauch, das Denkverhalten des Motors bleibt Standard.
+        forwardSubagentText: true,
         mcpServers: {
           karten: kartenServer,
           mensch: menschServer,
@@ -885,9 +890,24 @@ export function starteLaufMotor(optionen) {
         nachrichtEmpfangen = true
         if (typeof nachricht.session_id === 'string' && nachricht.session_id)
           sessionKennung = nachricht.session_id
-        aufEreignis({ art: 'roh', zeile: JSON.stringify(nachricht) })
         for (const zeile of tickerZeilen(nachricht, projektPfad, block?.blockTaskIds))
           aufEreignis({ art: 'ticker', text: zeile })
+
+        // Denk-Ansicht (BAUPLAN 24): die Denk-Blöcke der Assistent-Nachrichten
+        // wandern als Absätze in den Denk-Bereich des Lauf-Tabs — je Absatz mit
+        // Absender (Blockname, Unteraufgabe oder Koordinator). Nur live, nie im
+        // Laufbericht. redacted_thinking ist verschlüsselt und bleibt draußen.
+        if (nachricht.type === 'assistant') {
+          for (const teil of nachricht.message?.content ?? []) {
+            if (teil?.type !== 'thinking' || !String(teil.thinking ?? '').trim()) continue
+            const absender = !nachricht.parent_tool_use_id
+              ? texte.lauf.denkenKoordinator
+              : block?.blockTaskIds.has(nachricht.parent_tool_use_id)
+                ? block.blockName
+                : texte.lauf.denkenUnteraufgabe
+            aufEreignis({ art: 'denken', absender, text: String(teil.thinking).trim() })
+          }
+        }
 
         if (nachricht.type === 'system' && nachricht.subtype === 'init') {
           // Der Motor startet einmal pro Lauf — sichtbar im Ticker (BAUPLAN 19).

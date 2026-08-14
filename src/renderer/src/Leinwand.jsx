@@ -566,8 +566,10 @@ export default function Leinwand({
   // Bei parallelen Zweigen laufen mehrere Karten gleichzeitig (BAUPLAN 13).
   const [aktiveInstanzen, setAktiveInstanzen] = useState(() => new Set())
   const [ticker, setTicker] = useState([])
-  const [roh, setRoh] = useState([])
-  const [rohOffen, setRohOffen] = useState(false)
+  // Denk-Ansicht statt Rohprotokoll (BAUPLAN 24): die Denk-Texte der gerade
+  // arbeitenden KI, je Absatz mit Absender — nur live, nie im Laufbericht.
+  const [denken, setDenken] = useState([])
+  const [denkenOffen, setDenkenOffen] = useState(false)
   // Verbrauch je Block (instanzId → Verbrauch) — parallele Blöcke melden
   // gleichzeitig; angezeigt wird eine Zeile pro laufendem Block.
   const [verbraeuche, setVerbraeuche] = useState({})
@@ -610,6 +612,7 @@ export default function Leinwand({
   const [ziehen, setZiehen] = useState(null) // { instanzId, dx, dy }
   const [pfeilZug, setPfeilZug] = useState(null) // { von, x, y }
   const tickerEnde = useRef(null)
+  const denkEnde = useRef(null)
   const flaecheRef = useRef(null)
   const kartenRefs = useRef(new Map())
   // Aktuelle Werte für die Fenster-Listener (sonst arbeiten sie mit altem Stand).
@@ -678,7 +681,7 @@ export default function Leinwand({
         // Ein frischer Lauf beginnt — auch von allein aus der Warteschlange.
         // Die Anzeige des vorigen Laufs wird geleert wie bei einem Handstart.
         setTicker([])
-        setRoh([])
+        setDenken([])
         setVerbraeuche({})
         setLetzterVerbrauch(null)
         setErgebnis(null)
@@ -713,7 +716,8 @@ export default function Leinwand({
           ...alt,
           { zeit: new Date(), text: ereignis.text, instanzId: ereignis.instanzId ?? null }
         ])
-      if (ereignis.art === 'roh') setRoh((alt) => [...alt, ereignis.zeile])
+      if (ereignis.art === 'denken')
+        setDenken((alt) => [...alt, { absender: ereignis.absender, text: ereignis.text }])
       if (ereignis.art === 'verbrauch') {
         setLetzterVerbrauch(ereignis.verbrauch)
         if (ereignis.instanzId)
@@ -761,6 +765,10 @@ export default function Leinwand({
   useEffect(() => {
     tickerEnde.current?.scrollIntoView({ block: 'nearest' })
   }, [ticker])
+
+  useEffect(() => {
+    denkEnde.current?.scrollIntoView({ block: 'nearest' })
+  }, [denken, denkenOffen])
 
   // Kartengrößen nach jedem Rendern messen — die Pfeile setzen am Kartenrand an.
   // Im versteckten Schaubild (anderer Tab aktiv) misst der Browser 0 — dann die
@@ -1001,7 +1009,7 @@ export default function Leinwand({
     setWiederaufnahme(null)
     setFehler('')
     setTicker([])
-    setRoh([])
+    setDenken([])
     setVerbraeuche({})
     setLetzterVerbrauch(null)
     setErgebnis(null)
@@ -1531,10 +1539,21 @@ export default function Leinwand({
             <div ref={tickerEnde} />
           </div>
 
-          <button className="knopf-klein" onClick={() => setRohOffen(!rohOffen)}>
-            {rohOffen ? t.rohProtokollVerbergen : t.rohProtokollZeigen}
+          <button className="knopf-klein" onClick={() => setDenkenOffen(!denkenOffen)}>
+            {denkenOffen ? t.denkenVerbergen : t.denkenZeigen}
           </button>
-          {rohOffen && <pre className="roh-protokoll">{roh.join('\n')}</pre>}
+          {denkenOffen && (
+            <div className="denk-bereich">
+              {denken.length === 0 && <p className="denk-leer">{t.denkenLeer}</p>}
+              {denken.map((absatz, i) => (
+                <div className="denk-absatz" key={i}>
+                  <span className="denk-absender">{absatz.absender}</span>
+                  <p className="denk-text">{absatz.text}</p>
+                </div>
+              ))}
+              <div ref={denkEnde} />
+            </div>
+          )}
 
           {zustand === 'fertig' && ergebnis && (
             <div className={'lauf-ergebnis ergebnis-' + ergebnis.zustand}>

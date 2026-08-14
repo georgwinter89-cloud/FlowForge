@@ -1452,7 +1452,11 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
                     name === 'ersetzen'
                       ? texte.ticker.lokaleReparaturSchritt(eingabe?.pfad)
                       : texte.ticker.lokaleHelferSchritt(name, eingabe)
-                  )
+                  ),
+                // Denk-Ansicht (BAUPLAN 24): nur live, nie im Laufbericht —
+                // deshalb senden() statt tickern().
+                aufDenken: (text) =>
+                  senden({ art: 'denken', absender: texte.lauf.denkenLokaleKi, text })
               })
               bericht.lokaleHelfer ??= { recherchen: 0, schritte: 0, gescheitert: 0 }
               bericht.lokaleHelfer.reparaturen = (bericht.lokaleHelfer.reparaturen ?? 0) + 1
