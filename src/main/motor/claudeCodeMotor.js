@@ -17,6 +17,7 @@ import { helferWerkzeugServer } from './helferWerkzeuge.js'
 import { menschWerkzeugServer } from './menschWerkzeuge.js'
 import { kontextFensterFuerModell, kontextFensterMerken } from './motorWissen.js'
 import { startWerkzeugServer } from './startWerkzeuge.js'
+import { vorschlagWerkzeugServer } from './vorschlagWerkzeuge.js'
 
 const laden = createRequire(import.meta.url)
 
@@ -85,6 +86,12 @@ const START_PRAEFIX = 'mcp__start__'
 // Ollama — im Code auf Auflisten/Lesen/Suchen im Projektordner begrenzt,
 // deshalb ohne Rückfrage und auch unter „darf nur lesen" erlaubt.
 const HELFER_PRAEFIX = 'mcp__helfer__'
+
+// Karten-Vorschläge (BAUPLAN 26): Der Karten-Prüfer schlägt vor, der Nutzer
+// entscheidet, FlowForge wendet an — das Werkzeug selbst ändert nichts und
+// ist deshalb unter „darf nur lesen" erlaubt, aber nur für Blöcke mit dem
+// Kennzeichen kartenVorschlaege (sonst hartes Nein).
+const VORSCHLAG_PRAEFIX = 'mcp__vorschlaege__'
 
 // FlowForges eigene Verwaltungsdateien im Projektordner: direkte Änderungen
 // würden die harten Regeln umgehen (z.B. die Karten-Längengrenze oder die
@@ -258,8 +265,15 @@ function liegtImProjekt(datei, projektPfad) {
 // Befehle, darf aber Karten anlegen — genau karte_anlegen ist dann trotz
 // „darf nur lesen" erlaubt (nicht aktualisieren, nicht erledigen).
 // Exportiert, damit sich die Einstufung ohne laufenden Motor prüfen lässt.
-export function pruefeWerkzeug(name, eingabe, projektPfad, nurLesen, darfPruefen, lokaleKi = true, nurLesenBefehle = false, darfKartenAnlegen = false) {
+// darfVorschlagen (BAUPLAN 26): karte_vorschlagen nur im Karten-Prüfer —
+// andere Blöcke sollen den Nutzer nicht mit Karten-Vorschlägen unterbrechen.
+export function pruefeWerkzeug(name, eingabe, projektPfad, nurLesen, darfPruefen, lokaleKi = true, nurLesenBefehle = false, darfKartenAnlegen = false, darfVorschlagen = false) {
   if (name.startsWith(MENSCH_PRAEFIX)) return { erlaubt: true }
+  if (name.startsWith(VORSCHLAG_PRAEFIX)) {
+    if (!darfVorschlagen)
+      return { gesperrt: texte.rechteFrage.vorschlagGesperrtFuerAgent, tickerText: texte.ticker.vorschlagGesperrt }
+    return { erlaubt: true }
+  }
   // Lokale Helfer-KI: erlaubt, außer das Häkchen „lokale KI erlaubt" ist am
   // laufenden Block abgewählt (BAUPLAN 20): dann ist das eine echte Sperre,
   // kein bloßer Hinweis. Rein lesend (im Code erzwungen) ist nur die
@@ -387,6 +401,9 @@ function tickerZeilen(nachricht, projektPfad, blockTaskIds) {
     // Werkzeug meldet sein Ergebnis ebenfalls selbst (festgelegt/abgelehnt).
     if (block.name.startsWith(MENSCH_PRAEFIX)) continue
     if (block.name.startsWith(START_PRAEFIX)) continue
+    // Karten-Vorschläge melden sich aus der Lauf-Verwaltung heraus
+    // (Vorschlag + Entscheidung stehen im Ticker) — keine doppelte Zeile.
+    if (block.name.startsWith(VORSCHLAG_PRAEFIX)) continue
     // Die lokale Helfer-KI meldet Start, Schritte und Fazit selbst.
     if (block.name.startsWith(HELFER_PRAEFIX)) continue
     switch (block.name) {
@@ -549,7 +566,10 @@ export function starteLaufMotor(optionen) {
     nurLesenBefehle = false,
     aufEreignis,
     aufRechteFrage,
-    aufMenschFrage
+    aufMenschFrage,
+    // Karten-Vorschläge (BAUPLAN 26): löst mit der Entscheidung des Nutzers
+    // auf — oder mit null, wenn der Lauf angehalten wurde.
+    aufKartenVorschlag
   } = optionen
 
   let kindProzess = null
@@ -716,7 +736,8 @@ export function starteLaufMotor(optionen) {
       block?.darfPruefen ?? false,
       block?.lokaleKi ?? true,
       nurLesenBefehle,
-      block?.darfKartenAnlegen ?? false
+      block?.darfKartenAnlegen ?? false,
+      block?.darfVorschlagen ?? false
     )
     if (urteil.gesperrt) return nein(urteil.gesperrt, urteil.tickerText)
     if (urteil.erlaubt)
@@ -736,6 +757,11 @@ export function starteLaufMotor(optionen) {
     // Startanleitung (BAUPLAN 10): das Pflicht-Artefakt der Bau-Blöcke wird
     // ausschließlich über dieses validierende Werkzeug geschrieben.
     const startServer = await startWerkzeugServer({ projektPfad, aufEreignis })
+    // Karten-Vorschläge (BAUPLAN 26): der Abnahme-Dialog des Karten-Prüfers —
+    // freigeschaltet nur für Blöcke mit kartenVorschlaege (pruefeWerkzeug).
+    const vorschlagServer = aufKartenVorschlag
+      ? await vorschlagWerkzeugServer({ projektPfad, aufKartenVorschlag })
+      : null
     // Lokale Helfer-KI (Experiment): nur registriert, wenn beim Laufstart
     // bestätigt war, dass Ollama läuft und das Modell da ist.
     const helferServer = lokaleHelfer
@@ -787,6 +813,7 @@ export function starteLaufMotor(optionen) {
           karten: kartenServer,
           mensch: menschServer,
           start: startServer,
+          ...(vorschlagServer ? { vorschlaege: vorschlagServer } : {}),
           ...(helferServer ? { helfer: helferServer } : {})
         },
         // Der Hauptfaden ist der Koordinator: schlanker eigener Systemtext
@@ -844,7 +871,8 @@ export function starteLaufMotor(optionen) {
             block?.darfPruefen ?? false,
             block?.lokaleKi ?? true,
             nurLesenBefehle,
-            block?.darfKartenAnlegen ?? false
+            block?.darfKartenAnlegen ?? false,
+            block?.darfVorschlagen ?? false
           )
           if (urteil.erlaubt) return { behavior: 'allow', updatedInput: eingabeDaten }
           if (urteil.gesperrt) {
@@ -1135,7 +1163,8 @@ export function starteLaufMotor(optionen) {
     // lokaleKi (BAUPLAN 20): false = Häkchen „lokale KI erlaubt" ist an diesem
     // Block abgewählt — lokal_recherchieren wird für seine Agenten hart abgelehnt.
     // darfKartenAnlegen (BAUPLAN 25): das Audit darf trotz „nur lesen" Karten anlegen.
-    blockAusfuehren({ auftrag, blockName, nurLesen = false, darfPruefen = false, lokaleKi = true, darfKartenAnlegen = false, uebertrag }) {
+    // darfVorschlagen (BAUPLAN 26): karte_vorschlagen nur für den Karten-Prüfer.
+    blockAusfuehren({ auftrag, blockName, nurLesen = false, darfPruefen = false, lokaleKi = true, darfKartenAnlegen = false, darfVorschlagen = false, uebertrag }) {
       if (tot)
         return Promise.resolve({
           zustand: 'fehlgeschlagen',
@@ -1153,6 +1182,7 @@ export function starteLaufMotor(optionen) {
           darfPruefen,
           lokaleKi,
           darfKartenAnlegen,
+          darfVorschlagen,
           uebertrag: uebertrag ?? { aktiv: false, testModus: false, anweisung: '' },
           aufloesen,
           blockTaskIds: new Set(),

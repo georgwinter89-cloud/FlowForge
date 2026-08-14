@@ -529,6 +529,37 @@ lokaler Recherche in einem Projekt mit Entscheidungs-Karten und sieht am
 Fazit (oder im Denk-Bereich), dass die lokale KI die Festlegungen aus den
 Karten kennt.
 
+### 26 — Karten-Prüfer: Projektgedächtnis am Code nachmessen
+(Wunsch Georg, 14.08.2026 — direkt nach Schritt 25. Entscheidung Georg: Der
+Block stellt keine Karte selbst richtig — jede Korrektur ist ein VORSCHLAG,
+den der Nutzer je Karte einzeln entscheidet: „Übernehmen", „Vorschlag
+bearbeiten", „Ablehnen".)
+- **Neuer Arbeitsblock „Karten-Prüfer"** (nur lesend): liest alle Karten und
+  misst jede am Code nach (Delegation wie üblich, lokale KI bevorzugt) — jedes
+  Urteil braucht einen Beleg aus dem Code. Je veralteter Karte ein Vorschlag
+  über das neue Werkzeug `karte_vorschlagen`: aktualisieren, abhaken, wieder
+  öffnen, löschen — oder, bei Widerspruch zwischen Code und
+  Entscheidungs-Karte, eine neue Aufgaben-Karte. Entscheidungs-Karten
+  formuliert er nie um (Festlegungen trifft der Nutzer); Prüfkarten pflegt
+  FlowForge — dazu gibt es keine Vorschläge (im Code abgewiesen).
+- **Abnahme-Dialog im Lauf-Tab** (dasselbe Warte-Muster wie das Gespräch, samt
+  Windows-Benachrichtigung und „wartet auf deine Antwort"): alter Kartentext,
+  Vorschlag und Begründung nebeneinander; drei Knöpfe. „Vorschlag bearbeiten"
+  öffnet die Felder zum Ändern (harte Längengrenzen), erst „So übernehmen"
+  wendet an. Angewendet wird ausschließlich von FlowForge über die normalen
+  Kartenfunktionen — der Agent ändert nie selbst; das Vorschlags-Werkzeug ist
+  nur im Karten-Prüfer erlaubt (durchgesetzt am Werkzeugaufruf, Mechanik aus
+  Schritt 19).
+- **Ehrlichkeit:** Jeder Vorschlag samt Ausgang steht im Ticker; der
+  Laufbericht zählt übernommen/bearbeitet/abgelehnt. Der Abschlusstext ist der
+  Kartenbericht (liefert „Kartenbericht") — je Karte Urteil und Beleg.
+**Alltagstest:** Georg macht in einem Übungsprojekt eine Wissens-Karte
+absichtlich falsch, hakt eine erledigte Aufgabe ab, die es nie gab, und lässt
+den Karten-Prüfer laufen: Für jede unwahre Karte erscheint ein Vorschlag mit
+Beleg. Er übernimmt einen, bearbeitet einen vor dem Übernehmen und lehnt einen
+ab — die Karten in der Seitenleiste ändern sich genau entsprechend, und der
+Laufbericht zählt alle drei Ausgänge.
+
 ## Reihenfolge-Begründung (kurz)
 Motor-Durchstich früh (3), weil dort das größte technische Risiko liegt — inklusive
 Rechte-Durchsetzung und Verbrauchs-Messung, den zwei größten Adapter-Risiken.

@@ -269,8 +269,34 @@ export const texte = {
     freitextHinweis: 'Du kannst eine Option anklicken — oder frei antworten.',
     empfohlen: 'Empfohlen'
   },
+  // Karten-Vorschläge (BAUPLAN 26): der Abnahme-Dialog des Karten-Prüfers —
+  // du entscheidest je Karte: übernehmen, Vorschlag bearbeiten, ablehnen.
+  vorschlag: {
+    ueberschrift: 'Der Karten-Prüfer schlägt eine Änderung vor',
+    artLabels: {
+      aktualisieren: 'Karte aktualisieren',
+      erledigen: 'Aufgabe abhaken',
+      oeffnen: 'Aufgabe wieder öffnen',
+      anlegen: 'Neue Aufgaben-Karte anlegen',
+      loeschen: 'Karte löschen'
+    },
+    bisher: 'So steht es auf der Karte:',
+    neu: 'Vorschlag:',
+    begruendungLabel: 'Begründung:',
+    loeschenHinweis: 'Die Karte würde ersatzlos gelöscht.',
+    erledigenHinweis: 'Die Aufgabe würde als erledigt abgehakt.',
+    oeffnenHinweis: 'Die Aufgabe würde wieder als offen markiert.',
+    uebernehmen: 'Übernehmen',
+    bearbeiten: 'Vorschlag bearbeiten',
+    ablehnen: 'Ablehnen',
+    soUebernehmen: 'So übernehmen',
+    zurueck: 'Zurück',
+    titelFeld: 'Titel',
+    textFeld: 'Inhalt'
+  },
   benachrichtigung: {
     frageTitel: 'FlowForge — der Agent hat eine Frage',
+    vorschlagTitel: 'FlowForge — ein Karten-Vorschlag wartet auf dich',
     fertigTitel: 'FlowForge — der Lauf ist beendet',
     pauseTitel: 'FlowForge — Kontingent erschöpft',
     pauseText:
@@ -302,6 +328,45 @@ export const texte = {
     keineAntwort:
       'Der Lauf wurde angehalten — auf diese Frage kommt keine Antwort mehr. ' +
       'Beende deinen Auftrag ohne weitere Fragen.'
+  },
+  // Karten-Vorschläge (BAUPLAN 26): Texte an den Karten-Prüfer-Agenten.
+  agentenVorschlag: {
+    werkzeugBeschreibung:
+      'Schlägt dem Nutzer eine Karten-Korrektur vor und wartet auf seine Entscheidung ' +
+      '(übernehmen, bearbeiten, ablehnen) — FlowForge wendet sie an, du änderst nie ' +
+      'selbst. Ein Vorschlag pro Aufruf, jeder mit Begründung und Beleg aus dem Code.',
+    serverHinweis:
+      'Mit karte_vorschlagen schlägst du dem Nutzer Karten-Korrekturen vor — er ' +
+      'entscheidet jede einzeln, FlowForge wendet sie an. Karten änderst du nie direkt.',
+    unbekannteId: (id) =>
+      `Keine Karte mit der id ${id} — hol dir die ids mit karten_uebersicht.`,
+    pruefkarteTabu:
+      'Prüfkarten pflegt FlowForge selbst — zu ihnen gibt es keine Vorschläge. Erwähne ' +
+      'Auffälliges stattdessen in deinem Kartenbericht.',
+    entscheidungTabu:
+      'Entscheidungs-Karten sind Festlegungen des Nutzers — sie werden nie umformuliert ' +
+      'oder gelöscht. Widerspricht der Code der Festlegung, schlage stattdessen mit ' +
+      'art "anlegen" eine Aufgaben-Karte vor, die den Widerspruch benennt.',
+    felderUngueltig: (titelMax, textMax) =>
+      `Abgelehnt: titel (höchstens ${titelMax} Zeichen) und text (höchstens ${textMax} ` +
+      'Zeichen) müssen beide gefüllt sein. Bei der Status-Karte zählt nur der text — ' +
+      'ihr Titel bleibt fest.',
+    nichtsGeaendert:
+      'Abgelehnt: Der Vorschlag ist wortgleich mit der Karte — nichts zu korrigieren.',
+    nurAufgaben: 'Abhaken und Wiederöffnen gibt es nur bei Aufgaben-Karten.',
+    schonErledigt: 'Diese Aufgabe ist schon abgehakt.',
+    schonOffen: 'Diese Aufgabe ist schon offen.',
+    keineAntwort:
+      'Der Lauf wurde angehalten — dieser Vorschlag wird nicht mehr entschieden. ' +
+      'Beende deinen Auftrag ohne weitere Vorschläge.',
+    abgelehnt:
+      'Der Nutzer hat den Vorschlag ABGELEHNT — die Karte bleibt unverändert. Vermerke ' +
+      'das in deinem Kartenbericht und mach mit der nächsten Karte weiter.',
+    uebernommen: 'Der Nutzer hat den Vorschlag übernommen — FlowForge hat ihn angewendet.',
+    bearbeitetUebernommen: (titel, text) =>
+      'Der Nutzer hat den Vorschlag BEARBEITET übernommen. Angewendet wurde seine ' +
+      `Fassung — Titel: „${titel ?? ''}", Inhalt: „${text ?? ''}". Diese Fassung gilt; ` +
+      'vermerke sie in deinem Kartenbericht.'
   },
   agentenKarten: {
     kontext: (liste) =>
@@ -861,7 +926,10 @@ export const texte = {
       'Diese Datei verwaltet FlowForge selbst — sie ist für direkte Änderungen gesperrt. Karten liest und schreibst du über die karten-Werkzeuge.',
     // Häkchen je Block (BAUPLAN 20): abgewählt = echte Sperre, kein Hinweis.
     lokaleKiGesperrtFuerAgent:
-      'Die lokale Helfer-KI ist für diesen Block abgeschaltet (Häkchen an der Block-Karte). Nutze für Unteraufgaben das Agent-Werkzeug.'
+      'Die lokale Helfer-KI ist für diesen Block abgeschaltet (Häkchen an der Block-Karte). Nutze für Unteraufgaben das Agent-Werkzeug.',
+    // Karten-Vorschläge (BAUPLAN 26): nur der Karten-Prüfer schlägt vor.
+    vorschlagGesperrtFuerAgent:
+      'karte_vorschlagen ist nur im Karten-Prüfer-Block erlaubt. Arbeite ohne Karten-Vorschläge weiter.'
   },
   ticker: {
     // Eine Motor-Session pro Lauf (BAUPLAN 19): Der Motor startet einmal,
@@ -1031,6 +1099,15 @@ export const texte = {
     zurueckgesetzt: 'Projektordner auf den letzten Sicherungspunkt zurückgesetzt.',
     fertigIn: (sekunden) => `Fertig nach ${sekunden} Sekunden.`,
     blockStartet: (nr, gesamt, name) => `Block ${nr} von ${gesamt}: „${name}" startet.`,
+    // Karten-Vorschläge (BAUPLAN 26): Vorschlag und Ausgang sichtbar im Ticker.
+    kartenVorschlagGestellt: (artLabel, titel) =>
+      `Karten-Vorschlag wartet auf dich: ${artLabel} — „${titel}".`,
+    kartenVorschlagUebernommen: (titel) => `Karten-Vorschlag übernommen: „${titel}".`,
+    kartenVorschlagBearbeitet: (titel) =>
+      `Karten-Vorschlag mit deinen Änderungen übernommen: „${titel}".`,
+    kartenVorschlagAbgelehnt: (titel) => `Karten-Vorschlag abgelehnt: „${titel}".`,
+    vorschlagGesperrt:
+      'Karten-Vorschlag gestoppt — Vorschläge macht nur der Karten-Prüfer.',
     // Audit (BAUPLAN 25): volle Lesetiefe, bewusst teuer — die Kosten-Folge
     // steht sichtbar am Start (Entscheidung Georg, 14.08.2026).
     auditKostenHinweis:

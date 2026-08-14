@@ -28,7 +28,15 @@ import {
   zwischenBloecke
 } from '../shared/kettenRegeln.js'
 import { einstellungenLaden, ABO_MODUS_ERLAUBT } from './einstellungen.js'
-import { kartenLaden, kontingentVerhaltenLaden, pruefkarteAnlegen } from './projekte.js'
+import {
+  kartenLaden,
+  kontingentVerhaltenLaden,
+  pruefkarteAnlegen,
+  karteAnlegen,
+  karteAendern,
+  karteErledigtSetzen,
+  karteLoeschen
+} from './projekte.js'
 import {
   pruefkartenOrdner,
   pruefkarteEinlegen,
@@ -204,6 +212,7 @@ export function projektZustaende(pfade) {
         lauf &&
           (lauf.offeneFragen.length > 0 ||
             lauf.offeneMenschFragen.length > 0 ||
+            lauf.offeneVorschlaege.length > 0 ||
             lauf.offeneEntscheidung)
       ),
       wartet: warteschlange.some((eintrag) => eintrag.projektPfad === pfad),
@@ -396,12 +405,15 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     fragen: new Map(),
     entscheidungen: new Map(),
     menschFragen: new Map(),
+    // Karten-Vorschläge (BAUPLAN 26): der Abnahme-Dialog des Karten-Prüfers.
+    vorschlaege: new Map(),
     sanft: false,
     hart: false,
     // Offene Dialoge als Warteschlangen: Zwei parallele Blöcke können
     // gleichzeitig fragen — die Ansicht zeigt eine Frage nach der anderen.
     offeneFragen: [],
     offeneMenschFragen: [],
+    offeneVorschlaege: [],
     offeneEntscheidung: null,
     // Gesprächsverlauf dieses Laufs (Fragen des Agenten + Antworten) — die
     // Ansicht stellt ihn nach einem Wechsel daraus wieder her.
@@ -605,6 +617,80 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       lauf.offeneMenschFragen.push({ frageId, frage, optionen })
       if (lauf.offeneMenschFragen.length === 1)
         senden({ art: 'mensch-frage', frageId, frage, optionen })
+    })
+  }
+
+  // Karten-Vorschläge (BAUPLAN 26): Der Karten-Prüfer schlägt vor, der Nutzer
+  // entscheidet je Karte — übernehmen, mit Änderungen übernehmen, ablehnen.
+  // Angewendet wird hier, von FlowForge selbst, über die normalen
+  // Kartenfunktionen; der Agent wartet derweil auf sein Werkzeug-Ergebnis.
+  // Löst mit der Entscheidung auf — oder mit null, wenn der Lauf endet.
+  function vorschlagStellen(vorschlag) {
+    return new Promise((aufloesen) => {
+      if (fenster.isDestroyed()) return aufloesen(null)
+      const artLabel = texte.vorschlag.artLabels[vorschlag.art] ?? vorschlag.art
+      const kartenTitel = vorschlag.alteKarte?.titel ?? vorschlag.titel ?? ''
+      tickern(texte.ticker.kartenVorschlagGestellt(artLabel, kartenTitel))
+      if (!fenster.isFocused() && Notification.isSupported())
+        new Notification({
+          title: texte.benachrichtigung.vorschlagTitel,
+          body: `${artLabel}: ${kartenTitel}`
+        }).show()
+      const frageId = crypto.randomUUID()
+      lauf.vorschlaege.set(frageId, (wahl, felder) => {
+        function abschliessen(ergebnisFuerAgent) {
+          lauf.vorschlaege.delete(frageId)
+          lauf.offeneVorschlaege = lauf.offeneVorschlaege.filter((v) => v.frageId !== frageId)
+          senden({ art: 'vorschlag-erledigt', frageId })
+          const naechster = lauf.offeneVorschlaege[0]
+          if (naechster) senden({ art: 'vorschlag', ...naechster })
+          aufloesen(ergebnisFuerAgent)
+        }
+        // wahl null = der Lauf endet, ohne dass entschieden wurde.
+        if (wahl == null) {
+          abschliessen(null)
+          return { ok: true }
+        }
+        if (wahl === 'ablehnen') {
+          bericht.kartenVorschlaege ??= { uebernommen: 0, bearbeitet: 0, abgelehnt: 0 }
+          bericht.kartenVorschlaege.abgelehnt++
+          tickern(texte.ticker.kartenVorschlagAbgelehnt(kartenTitel))
+          abschliessen({ wahl: 'abgelehnt' })
+          return { ok: true }
+        }
+        // Übernehmen — mit den Feldern des Vorschlags oder Georgs Bearbeitung.
+        const bearbeitet = felder != null
+        const titel = bearbeitet ? String(felder.titel ?? vorschlag.titel ?? '') : vorschlag.titel
+        const text = bearbeitet ? String(felder.text ?? vorschlag.text ?? '') : vorschlag.text
+        let ergebnis
+        if (vorschlag.art === 'aktualisieren')
+          ergebnis = karteAendern(projektPfad, vorschlag.kartenId, { titel, text })
+        else if (vorschlag.art === 'erledigen')
+          ergebnis = karteErledigtSetzen(projektPfad, vorschlag.kartenId, true)
+        else if (vorschlag.art === 'oeffnen')
+          ergebnis = karteErledigtSetzen(projektPfad, vorschlag.kartenId, false)
+        else if (vorschlag.art === 'anlegen')
+          ergebnis = karteAnlegen(projektPfad, { sorte: 'aufgabe', titel, text })
+        else if (vorschlag.art === 'loeschen')
+          ergebnis = karteLoeschen(projektPfad, vorschlag.kartenId)
+        else ergebnis = { ok: false, fehler: texte.fehler.unbekannt }
+        // Scheitert das Anwenden (z.B. Längengrenze nach dem Bearbeiten),
+        // bleibt der Vorschlag offen — die Ansicht zeigt den Fehler an.
+        if (!ergebnis.ok) return ergebnis
+        if (ergebnis.karten) senden({ art: 'karten', karten: ergebnis.karten })
+        bericht.kartenVorschlaege ??= { uebernommen: 0, bearbeitet: 0, abgelehnt: 0 }
+        if (bearbeitet) bericht.kartenVorschlaege.bearbeitet++
+        else bericht.kartenVorschlaege.uebernommen++
+        tickern(
+          bearbeitet
+            ? texte.ticker.kartenVorschlagBearbeitet(kartenTitel)
+            : texte.ticker.kartenVorschlagUebernommen(kartenTitel)
+        )
+        abschliessen(bearbeitet ? { wahl: 'bearbeitet', titel, text } : { wahl: 'uebernommen' })
+        return { ok: true }
+      })
+      lauf.offeneVorschlaege.push({ frageId, vorschlag })
+      if (lauf.offeneVorschlaege.length === 1) senden({ art: 'vorschlag', frageId, vorschlag })
     })
   }
 
@@ -915,7 +1001,8 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           senden({ instanzId: holeInstanz(), ...daten })
         },
         aufRechteFrage: rechteFrageStellen,
-        aufMenschFrage: (daten) => menschFrageStellen(daten, holeName())
+        aufMenschFrage: (daten) => menschFrageStellen(daten, holeName()),
+        aufKartenVorschlag: vorschlagStellen
       })
     }
 
@@ -978,6 +1065,9 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           // Audit (BAUPLAN 25): nur-lesend für Dateien und Befehle, darf aber
           // Karten anlegen — Befunde werden Aufgaben-Karten.
           darfKartenAnlegen: Boolean(k.def.darfKartenAnlegen),
+          // Karten-Prüfer (BAUPLAN 26): darf Karten-Vorschläge machen —
+          // entschieden wird jeder vom Nutzer, angewendet von FlowForge.
+          darfVorschlagen: Boolean(k.def.kartenVorschlaege),
           // Häkchen je Block (BAUPLAN 20): abgewählt = lokal_recherchieren
           // wird für die Agenten dieses Blocks hart abgelehnt.
           lokaleKi: k.eintrag.lokaleKi !== false,
@@ -1602,6 +1692,7 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     for (const antworten of [...lauf.fragen.values()]) antworten(false)
     for (const aufloesen of [...lauf.entscheidungen.values()]) aufloesen('zurueckstellen')
     for (const antworten of [...lauf.menschFragen.values()]) antworten(null)
+    for (const antworten of [...lauf.vorschlaege.values()]) antworten(null)
 
     // Arbeitsablage leeren (Entscheidung Georg, 12.08.2026): Der Ordner
     // arbeitsablage/ ist die Wegwerf-Fläche der Agenten für Hilfsskripte und
@@ -1662,9 +1753,10 @@ export function laufHartStoppen(projektPfad) {
   const lauf = aktiveLaeufe.get(projektPfad)
   if (!lauf) return { ok: false, fehler: texte.fehler.unbekannt }
   lauf.hart = true
-  // Eine offene Mensch-Frage würde den Werkzeug-Aufruf im FlowForge-Prozess
-  // ewig hängen lassen — sofort auflösen.
+  // Eine offene Mensch-Frage oder ein offener Karten-Vorschlag würde den
+  // Werkzeug-Aufruf im FlowForge-Prozess ewig hängen lassen — sofort auflösen.
   for (const antworten of [...lauf.menschFragen.values()]) antworten(null)
+  for (const antworten of [...lauf.vorschlaege.values()]) antworten(null)
   // Bei parallelen Zweigen laufen mehrere Motoren — alle sofort töten. Auch
   // eine gerade unbeschäftigte Lauf-Session stirbt mit (BAUPLAN 19); doppelte
   // Aufrufe auf denselben Motor sind unschädlich.
@@ -1689,6 +1781,18 @@ export function laufFrageAntworten(frageId, erlaubt) {
   if (!antworten) return { ok: false, fehler: texte.fehler.unbekannt }
   antworten(Boolean(erlaubt))
   return { ok: true }
+}
+
+// Karten-Vorschläge (BAUPLAN 26): Georgs Entscheidung aus dem Abnahme-Dialog.
+// wahl 'uebernehmen' (felder = bearbeitete Fassung oder null für „laut KI")
+// oder 'ablehnen'. Scheitert das Anwenden (z.B. Längengrenze), bleibt der
+// Vorschlag offen und der Fehler geht an die Ansicht zurück.
+export function laufVorschlagAntworten(frageId, wahl, felder) {
+  const antworten = antwortSuchen('vorschlaege', frageId)
+  if (!antworten) return { ok: false, fehler: texte.fehler.unbekannt }
+  if (!['uebernehmen', 'ablehnen'].includes(wahl))
+    return { ok: false, fehler: texte.fehler.unbekannt }
+  return antworten(wahl, felder && typeof felder === 'object' ? felder : null)
 }
 
 export function laufMenschAntworten(frageId, antwortText) {
@@ -1790,6 +1894,7 @@ export function laufZustand(projektPfad) {
     frage: lauf.offeneFragen[0] ?? null,
     entscheidung: lauf.offeneEntscheidung,
     menschFrage: lauf.offeneMenschFragen[0] ?? null,
+    vorschlag: lauf.offeneVorschlaege[0] ?? null,
     gespraech: lauf.gespraech
   }
 }

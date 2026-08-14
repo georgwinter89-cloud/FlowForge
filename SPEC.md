@@ -150,8 +150,9 @@ blockieren den Weiterlauf, Regeln stehen nicht nur als Text im Prompt.
 
 **Arbeitsblöcke** (echte Arbeitsaufträge, seit Bauschritt 8/9): Kontext laden ·
 Spec-Interview · Paket schneiden · Angreifer (nur lesend) · Diagnose (nur
-lesend) · Bauer · Prüfer · Audit (nur lesend, legt Karten an) · Frage an den
-Menschen (nur lesend) · Sessionende (bringt die Karten auf Stand).
+lesend) · Bauer · Prüfer · Audit (nur lesend, legt Karten an) · Karten-Prüfer
+(nur lesend, macht Vorschläge) · Frage an den Menschen (nur lesend) ·
+Sessionende (bringt die Karten auf Stand).
 Auftragsquelle von Paket schneiden und Diagnose (Entscheidung Georg,
 07.08.2026): das Wunsch- bzw. Fehlerbild-Feld am Block **oder**, wenn es leer
 ist, die offenen Aufgaben-Karten der Kartenauswahl — sind beide leer, startet
@@ -237,6 +238,25 @@ nimmt sie als Auftragsquelle. Mechanik: Das Audit ist nur-lesend für Dateien un
 Befehle, darf aber Karten anlegen — ein eigenes Kennzeichen am Block (analog
 „darfPruefen"), durchgesetzt am Werkzeugaufruf; genau karte_anlegen ist
 freigeschaltet. Die vollständige Befundliste steht im Abschlusstext.
+
+**Karten-Prüfer** (seit Bauschritt 26): misst am Code nach, ob die
+Projektkarten noch wahr sind — oder schon veraltet. Manueller Ein-Block-Lauf;
+liefert „Kartenbericht". Der Block ist strikt nur-lesend und ändert Karten
+**nie selbst**: Jede Korrektur ist ein Vorschlag über das Werkzeug
+`karte_vorschlagen` (nur in diesem Block erlaubt, durchgesetzt am
+Werkzeugaufruf) — aktualisieren, abhaken, wieder öffnen, löschen oder, bei
+Widerspruch zwischen Code und Entscheidungs-Karte, eine neue Aufgaben-Karte.
+Der Lauf pausiert wie beim Gespräch (§6), und der Nutzer entscheidet **jede
+Karte einzeln** im Abnahme-Dialog des Lauf-Tabs: „Übernehmen" (Vorschlag
+unverändert), „Vorschlag bearbeiten" (Felder ändern, harte Längengrenzen)
+oder „Ablehnen". Angewendet wird ausschließlich von FlowForge über die
+normalen Kartenfunktionen; der Ausgang geht als Werkzeug-Ergebnis an den
+Agenten zurück, damit sein Kartenbericht stimmt. Harte Leitplanken im Code:
+Entscheidungs-Karten werden nie umformuliert oder gelöscht (Festlegungen
+trifft der Nutzer), Prüfkarten pflegt FlowForge (keine Vorschläge), die
+Status-Karte ist nur aktualisierbar, neue Karten sind immer Aufgaben. Jeder
+Vorschlag trägt eine Begründung mit Beleg; Ticker und Laufbericht zählen
+übernommen/bearbeitet/abgelehnt.
 
 **Kontext-Sparsamkeit** (Entscheidung Georg, 13.08.2026): Erkundungslastige Blöcke
 (Angreifer, Diagnose, Prüfer, Bauer) delegieren Suchen und Einlesen per Auftrag an
@@ -553,6 +573,11 @@ Angreifer durch die Diagnose.
   trägt sie ein grünes Empfohlen-Abzeichen. Ist das Fenster nicht im Vordergrund,
   kommt eine Windows-Benachrichtigung. Das Gespräch steht auch im Laufbericht.
   Fragen stellen ist auch unter der Sperre „darf nur lesen" erlaubt.
+- **Karten-Vorschläge** (seit Bauschritt 26): Schlägt der Karten-Prüfer eine
+  Karten-Korrektur vor, pausiert der Lauf genauso — der Lauf-Tab zeigt den
+  Abnahme-Dialog (alter Kartentext, Vorschlag, Begründung) mit „Übernehmen",
+  „Vorschlag bearbeiten" und „Ablehnen" (§4.3). Ist das Fenster nicht im
+  Vordergrund, kommt eine Windows-Benachrichtigung.
 
 ## 7. Rechte des Agenten (Standard, später pro Projekt verstellbar)
 

@@ -26,6 +26,7 @@ import {
   laufFrageAntworten,
   laufEntscheidungAntworten,
   laufMenschAntworten,
+  laufVorschlagAntworten,
   laufZustand,
   laufberichteLaden,
   projektZustaende
@@ -144,6 +145,10 @@ function registriereIpc() {
   )
   ipcMain.handle('lauf-mensch-antworten', (_e, { frageId, antwort }) =>
     laufMenschAntworten(frageId, antwort)
+  )
+  // Karten-Vorschläge (BAUPLAN 26): die Entscheidung aus dem Abnahme-Dialog.
+  ipcMain.handle('lauf-vorschlag-antworten', (_e, { frageId, wahl, felder }) =>
+    laufVorschlagAntworten(frageId, wahl, felder)
   )
   ipcMain.handle('lauf-zustand', (_e, pfad) => laufZustand(pfad))
   ipcMain.handle('laufberichte-laden', (_e, pfad) => laufberichteLaden(pfad))

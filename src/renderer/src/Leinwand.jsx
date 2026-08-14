@@ -228,6 +228,117 @@ function Gespraech({ verlauf, frage, onAntwort }) {
   )
 }
 
+// Karten-Vorschlag des Karten-Prüfers (BAUPLAN 26): alter Kartentext,
+// Vorschlag und Begründung — du entscheidest je Karte: „Übernehmen" wendet
+// den Vorschlag unverändert an, „Vorschlag bearbeiten" öffnet die Felder
+// (harte Längengrenzen, geprüft im Hauptprozess), „Ablehnen" lässt die Karte
+// in Ruhe. Angewendet wird immer von FlowForge, nie vom Agenten.
+function KartenVorschlag({ eintrag, onAntwort }) {
+  const tv = texte.vorschlag
+  const v = eintrag.vorschlag
+  const [bearbeiten, setBearbeiten] = useState(false)
+  const [titel, setTitel] = useState('')
+  const [text, setText] = useState('')
+  const [fehler, setFehler] = useState('')
+  // Frischer Vorschlag → Bearbeitungszustand zurücksetzen.
+  useEffect(() => {
+    setBearbeiten(false)
+    setTitel(v?.titel ?? '')
+    setText(v?.text ?? '')
+    setFehler('')
+  }, [eintrag.frageId])
+  if (!v) return null
+
+  const mitFeldern = v.art === 'aktualisieren' || v.art === 'anlegen'
+  const titelFest = v.art === 'aktualisieren' && v.alteKarte?.sorte === 'status'
+  const sorteLabel = v.alteKarte ? (texte.karten.sorten[v.alteKarte.sorte] ?? v.alteKarte.sorte) : null
+
+  async function antworten(wahl, felder) {
+    const ergebnis = await onAntwort(eintrag.frageId, wahl, felder ?? null)
+    // Scheitert das Anwenden (z.B. Längengrenze), bleibt der Vorschlag offen.
+    if (ergebnis && !ergebnis.ok) setFehler(ergebnis.fehler)
+  }
+
+  return (
+    <div className="gespraech">
+      <p className="gespraech-titel">{tv.ueberschrift}</p>
+      <div className="gespraech-verlauf">
+        <div className="gespraech-blase blase-agent blase-offen">
+          <p className="bericht-abschnitt">
+            {tv.artLabels[v.art] ?? v.art}
+            {v.alteKarte ? ` — [${sorteLabel}] „${v.alteKarte.titel}"` : ''}
+          </p>
+          {v.alteKarte && (
+            <>
+              <p className="bericht-abschnitt">{tv.bisher}</p>
+              <p className="bericht-zeile">{v.alteKarte.text}</p>
+            </>
+          )}
+          {v.art === 'loeschen' && <p className="bericht-zeile">{tv.loeschenHinweis}</p>}
+          {v.art === 'erledigen' && <p className="bericht-zeile">{tv.erledigenHinweis}</p>}
+          {v.art === 'oeffnen' && <p className="bericht-zeile">{tv.oeffnenHinweis}</p>}
+          {mitFeldern && !bearbeiten && (
+            <>
+              <p className="bericht-abschnitt">{tv.neu}</p>
+              {!titelFest && v.titel !== v.alteKarte?.titel && (
+                <p className="bericht-zeile">„{v.titel}"</p>
+              )}
+              <p className="bericht-zeile">{v.text}</p>
+            </>
+          )}
+          <p className="bericht-abschnitt">{tv.begruendungLabel}</p>
+          <p className="bericht-zeile">{v.begruendung}</p>
+        </div>
+      </div>
+      {bearbeiten ? (
+        <div className="gespraech-eingabe">
+          {!titelFest && (
+            <label className="feld">
+              <span>{tv.titelFeld}</span>
+              <input value={titel} onChange={(e) => setTitel(e.target.value)} />
+            </label>
+          )}
+          <label className="feld">
+            <span>{tv.textFeld}</span>
+            <textarea rows={4} value={text} onChange={(e) => setText(e.target.value)} />
+          </label>
+          {fehler && <p className="fehlermeldung">{fehler}</p>}
+          <div className="gespraech-optionen">
+            <button
+              className="knopf-primaer knopf-klein"
+              disabled={!text.trim() || (!titelFest && !titel.trim())}
+              onClick={() => antworten('uebernehmen', { titel, text })}
+            >
+              {tv.soUebernehmen}
+            </button>
+            <button className="knopf-sekundaer knopf-klein" onClick={() => setBearbeiten(false)}>
+              {tv.zurueck}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="gespraech-eingabe">
+          {fehler && <p className="fehlermeldung">{fehler}</p>}
+          <div className="gespraech-optionen">
+            <button className="gespraech-option" onClick={() => antworten('uebernehmen')}>
+              <span className="option-empfohlen">{texte.gespraech.empfohlen}</span>
+              {tv.uebernehmen}
+            </button>
+            {mitFeldern && (
+              <button className="gespraech-option" onClick={() => setBearbeiten(true)}>
+                {tv.bearbeiten}
+              </button>
+            )}
+            <button className="gespraech-option" onClick={() => antworten('ablehnen')}>
+              {tv.ablehnen}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // Ein Block-Ergebnis in den Bericht-Details (BAUPLAN 15): Zeile mit Ausgang,
 // der Abschlusstext klappt auf Klick auf.
 function BlockErgebnisZeile({ eintrag }) {
@@ -578,6 +689,8 @@ export default function Leinwand({
   const [entscheidung, setEntscheidung] = useState(null)
   // Gespräch mit dem Agenten: offene Frage + bisheriger Verlauf dieses Laufs.
   const [menschFrage, setMenschFrage] = useState(null)
+  // Karten-Vorschläge (BAUPLAN 26): der offene Abnahme-Dialog des Karten-Prüfers.
+  const [vorschlag, setVorschlag] = useState(null)
   const [gespraech, setGespraech] = useState([])
   const [ergebnis, setErgebnis] = useState(null)
   const [fehler, setFehler] = useState('')
@@ -663,6 +776,7 @@ export default function Leinwand({
       if (e.frage) setFrage(e.frage)
       if (e.entscheidung) setEntscheidung(e.entscheidung)
       if (e.menschFrage) setMenschFrage(e.menschFrage)
+      if (e.vorschlag) setVorschlag(e.vorschlag)
       if (e.gespraech) setGespraech(e.gespraech)
     })
     const abmelden = window.flowforge.aufLaufEreignis((ereignis) => {
@@ -687,6 +801,7 @@ export default function Leinwand({
         setErgebnis(null)
         setGespraech([])
         setMenschFrage(null)
+        setVorschlag(null)
         setFrage(null)
         setEntscheidung(null)
         setAktiveInstanzen(new Set())
@@ -744,6 +859,10 @@ export default function Leinwand({
         if (ereignis.antwort != null)
           setGespraech((alt) => [...alt, { frage: ereignis.frage, antwort: ereignis.antwort }])
       }
+      // Karten-Vorschläge (BAUPLAN 26): der Abnahme-Dialog des Karten-Prüfers.
+      if (ereignis.art === 'vorschlag')
+        setVorschlag({ frageId: ereignis.frageId, vorschlag: ereignis.vorschlag })
+      if (ereignis.art === 'vorschlag-erledigt') setVorschlag(null)
       if (ereignis.art === 'fertig') {
         setZustand('fertig')
         setErgebnis({ zustand: ereignis.zustand, fehlertext: ereignis.fehlertext })
@@ -751,6 +870,7 @@ export default function Leinwand({
         setFrage(null)
         setEntscheidung(null)
         setMenschFrage(null)
+        setVorschlag(null)
         berichteLaden()
         punkteLaden()
         // Nach hartem Abbruch oder Wiederherstellung wurde der Projektordner
@@ -1187,7 +1307,7 @@ export default function Leinwand({
 
   // Offene Fragen ziehen den Blick auf den Lauf-Tab, auch wenn Georg gerade
   // woanders ist.
-  const laufBrauchtDich = Boolean(frage || entscheidung || menschFrage)
+  const laufBrauchtDich = Boolean(frage || entscheidung || menschFrage || vorschlag)
   // Läufe in anderen Projekten — der laufende dieses Projekts zählt nicht mit.
   const andereLaeufe = laufAnzahl - (zustand === 'laeuft' ? 1 : 0)
   const tabs = [
@@ -1493,6 +1613,17 @@ export default function Leinwand({
             frage={menschFrage}
             onAntwort={(frageId, antwort) => window.flowforge.laufMenschAntworten(frageId, antwort)}
           />
+
+          {/* Karten-Vorschläge (BAUPLAN 26): der Abnahme-Dialog des
+              Karten-Prüfers — übernehmen, bearbeiten oder ablehnen. */}
+          {vorschlag && (
+            <KartenVorschlag
+              eintrag={vorschlag}
+              onAntwort={(frageId, wahl, felder) =>
+                window.flowforge.laufVorschlagAntworten(frageId, wahl, felder)
+              }
+            />
+          )}
 
           {/* Welcher Block arbeitet gerade? (Wunsch Georg, 13.08.2026) —
               Chips in der Kategorie-Farbe der Leinwand, bei parallelen
