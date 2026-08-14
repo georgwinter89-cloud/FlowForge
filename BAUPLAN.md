@@ -478,6 +478,42 @@ wie in Claude Code. Der Diagnose-Verlust der Rohdaten ist bewusst akzeptiert.)
 Opus über den nächsten Schritt nachdenkt und was die lokale KI überlegt —
 JSON-Zeilen gibt es nirgends mehr.
 
+### 25 — Audit-Block: Rundum-Blick mit parallelen Prüfern
+(Entscheidung Georg, 14.08.2026 — Planungs-Runde nach Abschluss von Schritt 24.
+Der Audit-Block ist der letzte noch ausstehende Arbeitsblock aus SPEC §4.3 und
+schließt die Lücke „Parallelität innerhalb von Blöcken" aus SPEC §4.1.)
+- **Rundum-Blick übers ganze Projekt:** Das Audit ist ein manueller
+  Ein-Block-Lauf zwischendurch (wie die Gesamtprüfung) — es beurteilt das
+  Projekt als Ganzes, nicht das aktuelle Paket (dafür gibt es den Prüfer).
+  Nicht Teil der Bau-Vorlagen; liefert „Befundliste", falls es doch in eine
+  Kette gesteckt wird.
+- **Drei feste Blickwinkel, intern parallel:** Der Audit-Agent startet drei
+  Blickwinkel-Prüfer als Unteraufgaben — Fehler & Randfälle · Verständlichkeit
+  & Wildwuchs · Sicherheit & Datenverlust — und bündelt ihre Funde. Dasselbe
+  Muster wie alle Unteraufgaben (Sperren am Werkzeugaufruf, Schritt 19); die
+  Angriffsliste der Bausession klärt, ob der Motor parallele Unteraufgaben
+  eines Agenten wirklich gleichzeitig ausführt — falls nicht, laufen die drei
+  nacheinander (ehrlich im Ticker), das Ergebnis ist dasselbe.
+- **Volle Lesetiefe, bewusst teuer** (Entscheidung Georg, 14.08.2026 — gegen
+  die Zügel-Empfehlung): Jeder Blickwinkel-Prüfer darf alles lesen, keine
+  Stichproben-Zügel wie beim Angreifer. Dafür steht die Kosten-Folge sichtbar
+  am Start im Ticker (ein Audit-Lauf kann mehrere hunderttausend Tokens
+  kosten). Die lokale Helfer-KI bleibt als Recherche-Entlastung erlaubt
+  (Häkchen je Block gilt wie überall).
+- **Befunde werden Aufgaben-Karten:** Je wesentlichem Befund legt das Audit
+  eine offene Aufgaben-Karte an (übliche Längengrenzen; Kleinkram bleibt im
+  Abschlussbericht) — die Befunde rutschen damit automatisch in die
+  Kartenauswahl der nächsten Bau-Läufe, Paket schneiden nimmt sie als
+  Auftragsquelle. Mechanik: Das Audit ist nur-lesend für Dateien und Befehle,
+  darf aber Karten anlegen — ein eigenes Kennzeichen am Block (analog
+  „darfPruefen"), durchgesetzt am Werkzeugaufruf; die vollständige Befundliste
+  steht im Abschlusstext.
+**Alltagstest:** Georg fährt ein Audit am Zugsimulator: Im Ticker sind die
+drei Blickwinkel-Prüfer und der Kosten-Hinweis sichtbar; danach liegen neue
+Aufgaben-Karten mit den wesentlichen Befunden in der Seitenleiste, und der
+Laufbericht enthält die volle Befundliste. Ein Versuch des Audits, eine Datei
+zu ändern, wird sichtbar abgelehnt.
+
 ## Reihenfolge-Begründung (kurz)
 Motor-Durchstich früh (3), weil dort das größte technische Risiko liegt — inklusive
 Rechte-Durchsetzung und Verbrauchs-Messung, den zwei größten Adapter-Risiken.
