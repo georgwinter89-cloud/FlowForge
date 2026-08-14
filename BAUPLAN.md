@@ -508,11 +508,26 @@ schließt die Lücke „Parallelität innerhalb von Blöcken" aus SPEC §4.1.)
   darf aber Karten anlegen — ein eigenes Kennzeichen am Block (analog
   „darfPruefen"), durchgesetzt am Werkzeugaufruf; die vollständige Befundliste
   steht im Abschlusstext.
+- **Projektwissen für die lokale KI** (Idee Georg, 14.08.2026): FlowForge
+  stellt jedem lokalen Auftrag (Recherche, Entwurf, Reparatur, Bauen)
+  automatisch die Kartenauswahl des Laufs voran — Status-Karte, offene
+  Aufgaben, manuell Gewählte — als Abschnitt „Projektwissen" im Auftragstext.
+  Grund: Die lokale KI kann keine Rückfragen stellen (Einweg-Kreisläufe seit
+  14.08.2026); was der Block-Agent nicht in den Auftrag schreibt, existiert
+  für sie sonst nicht — Festlegungen aus Entscheidungs-Karten könnten
+  übergangen werden. Kostet kein Kontingent, nur lokale Tokens (Karten sind
+  auf 400 Zeichen gedeckelt — auch zehn Karten passen locker ins
+  32k-Fenster). Bewusst KEIN direkter Blick in karten.json
+  (Maschinenformat, Verwaltungsdatei-Tabu, Halluzinationsgefahr kleiner
+  Modelle).
 **Alltagstest:** Georg fährt ein Audit am Zugsimulator: Im Ticker sind die
 drei Blickwinkel-Prüfer und der Kosten-Hinweis sichtbar; danach liegen neue
 Aufgaben-Karten mit den wesentlichen Befunden in der Seitenleiste, und der
 Laufbericht enthält die volle Befundliste. Ein Versuch des Audits, eine Datei
-zu ändern, wird sichtbar abgelehnt.
+zu ändern, wird sichtbar abgelehnt. Zusätzlich startet Georg einen Lauf mit
+lokaler Recherche in einem Projekt mit Entscheidungs-Karten und sieht am
+Fazit (oder im Denk-Bereich), dass die lokale KI die Festlegungen aus den
+Karten kennt.
 
 ## Reihenfolge-Begründung (kurz)
 Motor-Durchstich früh (3), weil dort das größte technische Risiko liegt — inklusive
