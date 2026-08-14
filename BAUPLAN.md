@@ -637,6 +637,45 @@ wirft eine per × raus und startet den Lauf; der Vorschlag ist danach weg. Beim
 nächsten Mal klickt er „Verwerfen" und wählt selbst — die Standard-Vorauswahl
 verhält sich exakt wie vor diesem Bauschritt.
 
+### 29 — Alle Karten laden, Paket schneiden teilt zu
+(Idee Georg, 14.08.2026: Ein Knopf lädt alle verfügbaren Karten in die
+Kartenauswahl — und der Paket-Schneider entscheidet dann, welcher Agent
+welche Karten bekommt. Heute bekommt jeder Block die komplette Auswahl in
+den Auftrag; bei „alle Karten" würde das jeden Agenten und jeden lokalen
+Helfer fluten. Beides gehört deshalb zusammen in einen Schritt.)
+- **Knopf „Alle Karten hinzufügen"** an der Kartenauswahl im Schaubild-Tab:
+  lädt Status-Karte, alle Entscheidungs- und Wissens-Karten und alle offenen
+  Aufgaben in die Auswahl (erledigte Aufgaben und Prüfkarten bleiben draußen —
+  Historie liefert der Laufbericht, Prüfkarten haben ihren eigenen Weg über
+  den Prüfer). Daneben ein kleiner Knopf **„Standard-Auswahl"**, der auf die
+  festgenagelte Vorauswahl zurückspringt; einzelne Chips bleiben wie gewohnt
+  per × und Drag & Drop änderbar.
+- **Neues Werkzeug `karten_zuteilen`** (nur in Auftragsquellen-Blöcken erlaubt
+  — Paket schneiden und Diagnose; eigenes Kennzeichen am Block, durchgesetzt
+  am Werkzeugaufruf wie immer): Der Agent teilt je nachfolgendem Block die
+  Karten zu, die dieser wirklich braucht (Kartenliste je Blockname). FlowForge
+  validiert hart: nur Karten-IDs aus der Kartenauswahl des Laufs, nur echte
+  Nachfolger im Schaubild — Fantasie-IDs und fremde Blöcke werden mit klarer
+  Meldung abgewiesen.
+- **Wirkung ab der Zuteilung:** Jeder nachfolgende Block bekommt nur noch
+  seine zugeteilten Karten in den Auftrag (die Status-Karte immer). Dasselbe
+  gilt für das Projektwissen der lokalen Helfer-KI — das 32k-Fenster kleiner
+  Modelle verträgt keine Kartenflut. **Rückfall ohne Bruch:** Wird das
+  Werkzeug nicht benutzt oder ein Block nicht genannt, bekommt er wie bisher
+  die volle Auswahl — kein Block steht plötzlich ohne Wissen da. Die
+  Zuteilung wandert in den Laufstand (Wiederaufnahme nach Neustart).
+- **Ehrlichkeit:** Die Zuteilung steht im Ticker und im Laufbericht
+  („Karten verteilt: Bauer 4, Prüfer 2, Sessionende 3"), je Block mit
+  Kartenzahl; der Auftrag von Paket schneiden/Diagnose erklärt das Werkzeug
+  und verlangt sparsame Zuteilung (nur, was der Block wirklich braucht —
+  Kontext ist der teuerste Teil des Laufs, Lehre aus Schritt 17).
+**Alltagstest:** Georg klickt „Alle Karten hinzufügen" — die Auswahl über dem
+Schaubild zeigt alle Karten — und startet „Feature hinzufügen". Im Ticker und
+im Laufbericht steht sichtbar, wie Paket schneiden die Karten verteilt hat,
+und die Folgeblöcke arbeiten mit ihrer Teilmenge. Ein Gegenlauf ohne den
+Knopf verhält sich exakt wie vor diesem Bauschritt; „Standard-Auswahl"
+springt jederzeit auf die alte Vorauswahl zurück.
+
 ## Reihenfolge-Begründung (kurz)
 Motor-Durchstich früh (3), weil dort das größte technische Risiko liegt — inklusive
 Rechte-Durchsetzung und Verbrauchs-Messung, den zwei größten Adapter-Risiken.
