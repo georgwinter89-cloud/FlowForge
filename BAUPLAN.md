@@ -409,6 +409,57 @@ Opus zerlegt und die lokale KI Teilstück für Teilstück baut; der Laufbericht
 zeigt, wie viele Teilstücke lokal gehalten haben — und an den theoretischen
 Kosten, was der Lauf gegenüber reiner Opus-Arbeit gespart hat.
 
+### 23 — Gläserner Helfer: lokale KI im Ticker nachvollziehbar
+(Wunsch Georg, 14.08.2026: Im Liveticker sehen, was die lokale KI gerade
+liest und tut — und ob Opus ihr Fazit wirklich berücksichtigt hat.)
+- **Detail-Zeilen je Schritt:** Die Schritt-Meldungen der Helfer-Kreisläufe
+  tragen Werkzeug UND Eingabe (lokaleHelfer.js reicht beides schon an
+  aufSchritt durch) — der Ticker nennt künftig das Ziel: „Lokale KI · liest
+  js/render.js ab Zeile 1200", „… durchsucht nach ‚tunnelDunkel'", „… sieht
+  sich js/ an" (Pfade und Muster gekürzt). Gilt für Recherche, Entwurf,
+  Reparatur und Bauen gleichermaßen; nur texte.js und die vier
+  aufSchritt-Aufrufer werden angefasst.
+- **Fazit-Annahme sichtbar — dasselbe Abnahme-Muster wie bei Entwürfen und
+  Teilstücken:** Neues Pflicht-Werkzeug `recherche_bewerten` nach jedem
+  lokal_recherchieren: Der Block-Agent meldet übernommen (Fazit fließt in
+  seine Arbeit ein) oder verworfen (selbst nachrecherchiert), mit einem Satz
+  Begründung. Ticker („Agent übernimmt das Fazit: …" / „Agent verwirft das
+  Fazit: …") und Laufbericht (Lokale-Helfer-Zeile: Recherchen
+  übernommen/verworfen) zählen mit — erst damit ist die Kosten-Wette der
+  lokalen KI über alle drei Helfer-Arten ehrlich messbar (wichtig für die
+  Hardware-Entscheidung 2× RTX 5070 Ti). Bewusster Preis: ein kleiner
+  zusätzlicher Werkzeugaufruf je Recherche.
+**Alltagstest:** Georg startet einen Lauf mit lokaler Recherche und liest im
+Ticker Datei für Datei mit, was die lokale KI tut; danach steht sichtbar, ob
+der Agent das Fazit übernommen hat, und der Laufbericht zählt beides.
+
+### 24 — Denk-Ansicht statt Rohprotokoll
+(Wunsch Georg, 14.08.2026: Das Rohprotokoll aus JSON-Zeilen sieht kein Mensch
+durch — an seine Stelle tritt das sichtbare Denken der gerade arbeitenden KI,
+wie in Claude Code. Der Diagnose-Verlust der Rohdaten ist bewusst akzeptiert.)
+- **Rohprotokoll entfällt:** das Ereignis art:'roh' (claudeCodeMotor.js),
+  die Anzeige in Leinwand.jsx und die Knöpfe in texte.js; SPEC §6 wird
+  nachgezogen.
+- **Denk-Bereich im Lauf-Tab** (einklappbar wie bisher das Rohprotokoll):
+  zeigt live die Denk-Texte der gerade arbeitenden KI, je Absatz mit
+  Absender (Blockname, „Unteraufgabe" oder „lokale KI"), in gedämpfter
+  Mono-Schrift. Neues Ereignis art:'denken' statt art:'roh'.
+  - **Motor:** Denk-Blöcke der Assistent-Nachrichten aus dem SDK-Strom; das
+    SDK kann Denk-Blöcke auch der Block-Agenten/Unteraufgaben weiterreichen
+    (Option im Agent-SDK vorhanden, sdk.d.ts „Forward subagent text and
+    thinking blocks"). Die Angriffsliste des Schritts klärt, ob dafür eine
+    Option gesetzt werden muss und was sie kostet (Denk-Budget/Verbrauch —
+    Denken ist Ausgabe-Tokens; im Zweifel Standardverhalten belassen und
+    nur zeigen, was ohnehin im Strom liegt).
+  - **Lokale KI:** das thinking-Feld der Ollama-Antworten (Denk-Modelle wie
+    gpt-oss); Modelle ohne Denkfeld zeigen stattdessen ihren Antworttext,
+    bevor die Werkzeuge ausgeführt werden — das „laute Denken" kleiner
+    Modelle.
+  - Nur live, nicht im Laufbericht (wie heute das Rohprotokoll).
+**Alltagstest:** Georg klappt im Lauf den Denk-Bereich auf und liest mit, wie
+Opus über den nächsten Schritt nachdenkt und was die lokale KI überlegt —
+JSON-Zeilen gibt es nirgends mehr.
+
 ## Reihenfolge-Begründung (kurz)
 Motor-Durchstich früh (3), weil dort das größte technische Risiko liegt — inklusive
 Rechte-Durchsetzung und Verbrauchs-Messung, den zwei größten Adapter-Risiken.
