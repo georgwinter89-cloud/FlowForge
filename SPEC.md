@@ -243,6 +243,11 @@ nicht, deshalb ist das Werkzeug auch unter „darf nur lesen" erlaubt. Steht die
 Blockaufträge sie als **erste Wahl** fürs Delegieren aus (das Agent-Werkzeug ist der
 Rückfall). Denk-Modelle (z.B. gpt-oss), die ihre Antwort leer lassen und alles ins
 Denkfeld schreiben, werden einmal nachgehakt, bevor ein Fehlschlag gemeldet wird.
+Modelle, die Werkzeugaufrufe als bloßen JSON-Text in die Antwort schreiben statt
+ins Werkzeug-Format (Befund 14.08.2026: qwen2.5-coder), fängt FlowForge selbst
+ab: Der Kreislauf erkennt solche getarnten Aufrufe (nur exakt passende
+Werkzeugnamen, dieselben harten Sperren) und führt sie normal aus — ehrlich im
+Ticker vermerkt („Werkzeugaufruf kam als Text getarnt — übersetzt").
 Ehrlichkeits-Vorkehrungen: Jedes Fazit
 trägt den Warnhinweis „kleines Modell — Fundorte selbst nachprüfen" (in der Erprobung
 erfand das 7B-Modell abgelehnte Dateiinhalte), Start/Schritte/Fazit stehen im Ticker,

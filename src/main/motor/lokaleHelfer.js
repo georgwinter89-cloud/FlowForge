@@ -583,6 +583,70 @@ export async function lokalBauen({ projektPfad, auftrag, modell, adresse = STAND
   return { ...ergebnis, ersetzungen: zaehler.ersetzungen, dateien: zaehler.geschrieben }
 }
 
+// Getarnte Werkzeugaufrufe auspacken (Befund 14.08.2026): Manche Modelle —
+// allen voran qwen2.5-coder — schreiben Werkzeugaufrufe als JSON-Text in die
+// Antwort (oft in ```json-Zäunen) statt im Werkzeug-Format der Ollama-Vorlage.
+// Ollama reicht das als normalen Text durch, und der Aufruf würde nie
+// ausgeführt. FlowForge erkennt solche Aufrufe selbst: Akzeptiert wird nur,
+// was sauber als JSON parst UND dessen name exakt ein angebotenes Werkzeug
+// ist — Fazite, die zufällig JSON zitieren, bleiben Fazite.
+
+// Findet das Ende des JSON-Objekts, das bei start beginnt (Klammer-Tiefe,
+// String- und Escape-fest) — oder -1, wenn es nie schließt.
+function jsonEnde(text, start) {
+  let tiefe = 0
+  let inText = false
+  let maskiert = false
+  for (let i = start; i < text.length; i++) {
+    const zeichen = text[i]
+    if (inText) {
+      if (maskiert) maskiert = false
+      else if (zeichen === '\\') maskiert = true
+      else if (zeichen === '"') inText = false
+      continue
+    }
+    if (zeichen === '"') inText = true
+    else if (zeichen === '{') tiefe++
+    else if (zeichen === '}') {
+      tiefe--
+      if (tiefe === 0) return i
+    }
+  }
+  return -1
+}
+
+function getarnteAufrufe(text, werkzeuge) {
+  const namen = new Set(werkzeuge.map((w) => w.function?.name))
+  const funde = []
+  let i = 0
+  while ((i = text.indexOf('{', i)) !== -1) {
+    const ende = jsonEnde(text, i)
+    if (ende === -1) {
+      i++
+      continue
+    }
+    let roh = null
+    try {
+      roh = JSON.parse(text.slice(i, ende + 1))
+    } catch {
+      // kein gültiges JSON — weiter ab dem nächsten Zeichen
+    }
+    if (roh && typeof roh.name === 'string' && namen.has(roh.name)) {
+      let eingabe = roh.arguments
+      if (typeof eingabe === 'string') {
+        try {
+          eingabe = JSON.parse(eingabe)
+        } catch {
+          eingabe = {}
+        }
+      }
+      funde.push({ name: roh.name, eingabe: eingabe && typeof eingabe === 'object' ? eingabe : {} })
+      i = ende + 1
+    } else i++
+  }
+  return funde
+}
+
 // Gemeinsamer Kern der Kreisläufe: Ollama-Runden mit Werkzeugaufrufen,
 // bis ein Fazit kommt oder die Runden ausgehen.
 async function kreislauf({ projektPfad, nachrichten, werkzeuge, modell, adresse, aufSchritt, zaehler = null }) {
@@ -622,6 +686,21 @@ async function kreislauf({ projektPfad, nachrichten, werkzeuge, modell, adresse,
     const aufrufe = Array.isArray(nachricht.tool_calls) ? nachricht.tool_calls : []
     if (!aufrufe.length) {
       const fazit = String(nachricht.content ?? '').trim()
+      // Getarnte Aufrufe (s.o.): als Text gelieferte Werkzeugaufrufe auspacken
+      // und normal ausführen — ehrlich im Ticker vermerkt. Das Modell spricht
+      // den falschen Dialekt, aber die Arbeit läuft trotzdem.
+      const getarnt = fazit ? getarnteAufrufe(fazit, werkzeuge) : []
+      if (getarnt.length) {
+        nachrichten.push(nachricht)
+        aufSchritt?.('aufruf_uebersetzt', {})
+        for (const { name, eingabe } of getarnt) {
+          schritte++
+          aufSchritt?.(name, eingabe)
+          const ergebnis = werkzeugAusfuehren(projektPfad, name, eingabe, zaehler)
+          nachrichten.push({ role: 'tool', tool_name: name, content: String(ergebnis) })
+        }
+        continue
+      }
       if (fazit) return { ok: true, fazit, schritte }
       if (!nachgehakt) {
         nachgehakt = true

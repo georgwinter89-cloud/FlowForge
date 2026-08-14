@@ -825,11 +825,13 @@ export const texte = {
       'Lokale Helfer-KI ist eingeschaltet, aber Ollama ist nicht erreichbar (oder das Modell fehlt) — Unteraufgaben laufen normal über den Motor.',
     lokaleHelferStart: (modell) => `Lokale KI recherchiert (${modell}) …`,
     lokaleHelferSchritt: (werkzeug) =>
-      werkzeug === 'datei_lesen'
-        ? 'Lokale KI · liest eine Datei.'
-        : werkzeug === 'suchen'
-          ? 'Lokale KI · durchsucht das Projekt.'
-          : 'Lokale KI · sieht sich einen Ordner an.',
+      werkzeug === 'aufruf_uebersetzt'
+        ? 'Lokale KI · Werkzeugaufruf kam als Text getarnt — FlowForge hat ihn übersetzt und führt ihn aus.'
+        : werkzeug === 'datei_lesen'
+          ? 'Lokale KI · liest eine Datei.'
+          : werkzeug === 'suchen'
+            ? 'Lokale KI · durchsucht das Projekt.'
+            : 'Lokale KI · sieht sich einen Ordner an.',
     lokaleHelferFertig: (schritte) =>
       `Lokale KI fertig — Fazit nach ${schritte} ${schritte === 1 ? 'Schritt' : 'Schritten'}.`,
     lokaleHelferGescheitert: (fehler) => `Lokale KI gescheitert: ${fehler}`,
