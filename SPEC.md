@@ -530,7 +530,15 @@ lesende Befehle laufen auch unter der Sperre durch** (seit 12.08.2026 — vorher
 jeder Befehl gesperrt und die Abweisung hieß irreführend „Schreib-Versuch"); auch
 Lese-Schleifen („für jede Datei: zeig den Anfang") gelten als lesend, solange jeder
 Befehl darin ein Lese-Werkzeug ist. Programme oder Tests auszuführen zählt nicht
-als Lesen und bleibt gesperrt.
+als Lesen und bleibt gesperrt — **außer** die Einstellung **„Nur-lesende Blöcke
+dürfen Befehle ausführen (auf eigene Gefahr)"** ist an (Entscheidung Georg,
+14.08.2026; Standard: aus): Dann durchlaufen Befehle nur-lesender Blöcke die
+normale Befehls-Einstufung wie beim Bauer (Git und Prüfmappe bleiben gesperrt,
+Unbekanntes fragt) — Angreifer und Diagnose können so z.B. Prüfskripte laufen
+lassen, um ihre Funde zu belegen. Die Schreib-Werkzeuge (Dateien, Karten,
+Startanleitung) bleiben für diese Blöcke gesperrt; ein ausgeführtes Skript kann
+aber Dateien verändern — deshalb steht die aktive Einstellung sichtbar am
+Laufstart im Ticker.
 
 ## 8. Ergebnis erleben
 

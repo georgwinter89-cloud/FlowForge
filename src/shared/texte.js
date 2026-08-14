@@ -694,6 +694,15 @@ export const texte = {
     rechteFragen: 'Jedes Mal fragen (Standard)',
     rechteFragenHinweis:
       'Bei allem außerhalb des Projektordners, Internet und unbekannten Befehlen wirst du gefragt.',
+    // Befehle trotz „darf nur lesen" (Entscheidung Georg, 14.08.2026):
+    // Auf-eigene-Gefahr-Schalter, Standard aus.
+    nurLesenBefehle: 'Nur-lesende Blöcke dürfen Befehle ausführen (auf eigene Gefahr)',
+    nurLesenBefehleHinweis:
+      'Angreifer und Diagnose dürfen dann z.B. Prüfskripte laufen lassen, um ihre Funde zu ' +
+      'belegen — mit denselben Regeln wie beim Bauer (Git bleibt gesperrt, Unbekanntes ' +
+      'fragt). Achtung: Ein ausgeführtes Skript kann Dateien verändern — die Garantie ' +
+      '„nur-lesende Blöcke fassen nichts an" gilt dann nicht mehr. Schreib-Werkzeuge ' +
+      'bleiben für diese Blöcke gesperrt.',
     rechteAutomatisch: 'Automodus: automatisch erlauben',
     rechteAutomatischHinweis:
       'Rückfragen werden ohne Nachfrage erlaubt und im Laufbericht vermerkt. Die harten Sperren ' +
@@ -912,6 +921,8 @@ export const texte = {
     nurLesenGesperrt: 'Schreib-Versuch gestoppt — dieser Block darf nur lesen.',
     nurLesenBefehlGesperrt:
       'Befehl gestoppt — dieser Block darf nur lesen (rein lesende Befehle laufen durch).',
+    nurLesenBefehleAktiv:
+      'Einstellung aktiv: Nur-lesende Blöcke dürfen Befehle ausführen (auf eigene Gefahr).',
     pruefmappeGesperrt:
       'Änderung an der Prüfmappe gestoppt — die Prüfdateien gehören dem Prüfer.',
     pruefmappeBildGesperrt:

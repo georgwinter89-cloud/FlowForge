@@ -9,6 +9,7 @@ export default function Einstellungen({ onSchliessen }) {
   const [apiSchluessel, setApiSchluessel] = useState('')
   const [obergrenze, setObergrenze] = useState(5)
   const [rechteAutomatisch, setRechteAutomatisch] = useState(false)
+  const [nurLesenBefehle, setNurLesenBefehle] = useState(false)
   const [uebertragTest, setUebertragTest] = useState(false)
   const [lokaleHelferAktiv, setLokaleHelferAktiv] = useState(false)
   const [lokaleHelferModell, setLokaleHelferModell] = useState('')
@@ -25,6 +26,7 @@ export default function Einstellungen({ onSchliessen }) {
       setApiSchluessel(e.einstellungen.apiSchluessel)
       setObergrenze(e.einstellungen.ausgabenObergrenzeUsd)
       setRechteAutomatisch(Boolean(e.einstellungen.rechteAutomatisch))
+      setNurLesenBefehle(Boolean(e.einstellungen.nurLesenBefehle))
       setUebertragTest(Boolean(e.einstellungen.uebertragTest))
       setLokaleHelferAktiv(Boolean(e.einstellungen.lokaleHelferAktiv))
       setLokaleHelferModell(e.einstellungen.lokaleHelferModell ?? '')
@@ -55,6 +57,7 @@ export default function Einstellungen({ onSchliessen }) {
       apiSchluessel,
       ausgabenObergrenzeUsd: Number(obergrenze),
       rechteAutomatisch,
+      nurLesenBefehle,
       uebertragTest,
       lokaleHelferAktiv,
       lokaleHelferModell,
@@ -148,6 +151,17 @@ export default function Einstellungen({ onSchliessen }) {
             <span>
               {t.rechteAutomatisch}
               <span className="feld-hinweis"> — {t.rechteAutomatischHinweis}</span>
+            </span>
+          </label>
+          <label className="wahl-zeile">
+            <input
+              type="checkbox"
+              checked={nurLesenBefehle}
+              onChange={(e) => setNurLesenBefehle(e.target.checked)}
+            />
+            <span>
+              {t.nurLesenBefehle}
+              <span className="feld-hinweis"> — {t.nurLesenBefehleHinweis}</span>
             </span>
           </label>
         </div>

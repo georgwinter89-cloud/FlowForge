@@ -633,6 +633,10 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
   // Lauf-Start sofort melden — noch vor der ersten Ticker-Zeile, damit die
   // Ansicht die Anzeige des vorigen Laufs sauber leeren kann.
   senden({ art: 'zustand', zustand: 'laeuft' })
+  // Ehrlichkeit (Entscheidung Georg, 14.08.2026): Ist die Auf-eigene-Gefahr-
+  // Einstellung aktiv, steht das sichtbar am Laufstart — im Ticker und damit
+  // auch im Laufbericht.
+  if (einstellungen.nurLesenBefehle) tickern(texte.ticker.nurLesenBefehleAktiv)
   if (lokaleHelferHinweis) tickern(lokaleHelferHinweis)
   if (pruefmappeGeleert) tickern(texte.ticker.pruefmappeGeleert)
   if (pruefkartenEingelegt > 0) tickern(texte.ticker.pruefkartenEingelegt(pruefkartenEingelegt))
@@ -803,6 +807,7 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         ausgabenObergrenzeUsd: einstellungen.ausgabenObergrenzeUsd,
         fortsetzen,
         lokaleHelfer,
+        nurLesenBefehle: Boolean(einstellungen.nurLesenBefehle),
         ...(bekanntesKontextFenster > 0 ? { kontextFenster: bekanntesKontextFenster } : {}),
         aufEreignis(e) {
           // Ticker-Zeilen bekommen den Blocknamen vorangestellt, sobald

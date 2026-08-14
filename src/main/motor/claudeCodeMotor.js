@@ -247,8 +247,12 @@ function liegtImProjekt(datei, projektPfad) {
 // Rückfrage laufen darf oder Georg gefragt werden muss. Alles Unbekannte fragt.
 // Mit Sperre „darf nur lesen": hartes Nein für alles außer Lese-Werkzeugen und
 // rein lesenden Befehlen. Die Prüfmappe dürfen nur Prüf-Blöcke verändern.
+// nurLesenBefehle (Entscheidung Georg, 14.08.2026): Einstellung „auf eigene
+// Gefahr" — nur-lesende Blöcke dürfen dann Befehle ausführen wie der Bauer
+// (normale Befehls-Einstufung samt Git-Sperre und Rückfragen); die
+// Schreib-Werkzeuge bleiben unter der Sperre.
 // Exportiert, damit sich die Einstufung ohne laufenden Motor prüfen lässt.
-export function pruefeWerkzeug(name, eingabe, projektPfad, nurLesen, darfPruefen, lokaleKi = true) {
+export function pruefeWerkzeug(name, eingabe, projektPfad, nurLesen, darfPruefen, lokaleKi = true, nurLesenBefehle = false) {
   if (name.startsWith(MENSCH_PRAEFIX)) return { erlaubt: true }
   // Lokale Helfer-KI: erlaubt, außer das Häkchen „lokale KI erlaubt" ist am
   // laufenden Block abgewählt (BAUPLAN 20): dann ist das eine echte Sperre,
@@ -278,15 +282,17 @@ export function pruefeWerkzeug(name, eingabe, projektPfad, nurLesen, darfPruefen
   }
   // Unter „darf nur lesen" sind rein lesende Befehle erlaubt (Feedback Georg,
   // 12.08.2026) — alles andere an Befehlen wird ehrlich als Befehl gestoppt,
-  // nicht fälschlich als „Schreib-Versuch" gemeldet.
-  if (nurLesen && (name === 'Bash' || name === 'PowerShell')) {
+  // nicht fälschlich als „Schreib-Versuch" gemeldet. Mit der Einstellung
+  // nurLesenBefehle (s.o.) fällt der Stopp weg: Der Befehl läuft weiter unten
+  // durch die normale Einstufung (Git gesperrt, Unbekanntes fragt).
+  if (nurLesen && (name === 'Bash' || name === 'PowerShell') && !nurLesenBefehle) {
     if (befehlNurLesend(String(eingabe.command ?? ''))) return { erlaubt: true }
     return {
       gesperrt: texte.rechteFrage.nurLesenBefehlFuerAgent,
       tickerText: texte.ticker.nurLesenBefehlGesperrt
     }
   }
-  if (nurLesen && !NUR_LESEN_ERLAUBT.has(name))
+  if (nurLesen && name !== 'Bash' && name !== 'PowerShell' && !NUR_LESEN_ERLAUBT.has(name))
     return { gesperrt: texte.rechteFrage.nurLesenGesperrtFuerAgent, tickerText: texte.ticker.nurLesenGesperrt }
   if (OHNE_RUECKFRAGE.has(name)) return { erlaubt: true }
   if (SCHREIB_WERKZEUGE.has(name)) {
@@ -519,6 +525,8 @@ export function starteLaufMotor(optionen) {
     // Lokale Helfer-KI (Experiment): { modell } — nur gesetzt, wenn der
     // Schalter an ist UND Ollama beim Laufstart erreichbar war.
     lokaleHelfer = null,
+    // Einstellung „Befehle trotz nur-lesen" (Entscheidung Georg, 14.08.2026).
+    nurLesenBefehle = false,
     aufEreignis,
     aufRechteFrage,
     aufMenschFrage
@@ -686,7 +694,8 @@ export function starteLaufMotor(optionen) {
       projektPfad,
       block?.nurLesen ?? true,
       block?.darfPruefen ?? false,
-      block?.lokaleKi ?? true
+      block?.lokaleKi ?? true,
+      nurLesenBefehle
     )
     if (urteil.gesperrt) return nein(urteil.gesperrt, urteil.tickerText)
     if (urteil.erlaubt)
@@ -797,7 +806,8 @@ export function starteLaufMotor(optionen) {
             projektPfad,
             block?.nurLesen ?? true,
             block?.darfPruefen ?? false,
-            block?.lokaleKi ?? true
+            block?.lokaleKi ?? true,
+            nurLesenBefehle
           )
           if (urteil.erlaubt) return { behavior: 'allow', updatedInput: eingabeDaten }
           if (urteil.gesperrt) {

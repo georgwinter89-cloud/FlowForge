@@ -16,6 +16,12 @@ const STANDARD = {
   // Automodus (Feedback Georg, 07.08.2026): Rechte-Rückfragen automatisch
   // erlauben statt jedes Mal zu fragen. Harte Sperren bleiben unberührt.
   rechteAutomatisch: false,
+  // Befehle trotz „darf nur lesen" (Entscheidung Georg, 14.08.2026): Auf
+  // eigene Gefahr dürfen nur-lesende Blöcke (Angreifer, Diagnose) Befehle
+  // ausführen wie der Bauer — z.B. Prüfskripte, um Annahmen zu messen. Die
+  // Garantie „ein Skriptlauf kann nichts verändern" fällt damit; deshalb
+  // Standard aus. Schreib-Werkzeuge bleiben unter der Sperre.
+  nurLesenBefehle: false,
   // Test-Schalter (BAUPLAN 11): Übertrag schon nach ~10 Prozentpunkten
   // Kontext-Verbrauch statt erst bei 85 % — nur zum Ausprobieren.
   uebertragTest: false,
@@ -59,6 +65,7 @@ export function einstellungenSpeichern(neu) {
     apiSchluessel: schluessel,
     ausgabenObergrenzeUsd: Number.isFinite(obergrenze) && obergrenze > 0 ? obergrenze : STANDARD.ausgabenObergrenzeUsd,
     rechteAutomatisch: Boolean(neu.rechteAutomatisch),
+    nurLesenBefehle: Boolean(neu.nurLesenBefehle),
     uebertragTest: Boolean(neu.uebertragTest),
     lokaleHelferAktiv: Boolean(neu.lokaleHelferAktiv),
     lokaleHelferModell:
