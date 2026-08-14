@@ -436,9 +436,20 @@ liest und tut — und ob Opus ihr Fazit wirklich berücksichtigt hat.)
   sind also Mechanik, keine Messung). Vorschlag Standard: an, solange die
   lokale KI ein Experiment ist — ohne Quote ist die Wette blind; Georg kann
   ihn jederzeit abwählen.
+- **Bauer-Zusatz nachschärfen: ein Fehlschlag ist kein Urteil über alle**
+  (Befund 14.08.2026, erster echter Lauf mit lokalem Bauer: Opus zerlegte in
+  6 Teilstücke, gab genau eines lokal — Abnahme scheiterte am unmechanischsten
+  Teilstück (Farbdesign) — und versuchte die übrigen 5 gar nicht mehr lokal.
+  Quote damit unmessbar.) In den bauenAuftragZusatz: „Ein verworfenes
+  Teilstück ist kein Urteil über die übrigen — versuche jedes Teilstück
+  zuerst lokal; erst wenn mehrere hintereinander nicht halten, bau den Rest
+  selbst." Erst damit entstehen echte Teilstück-Quoten für die
+  Hardware-Entscheidung.
 **Alltagstest:** Georg startet einen Lauf mit lokaler Recherche und liest im
 Ticker Datei für Datei mit, was die lokale KI tut; danach steht sichtbar, ob
-der Agent das Fazit übernommen hat, und der Laufbericht zählt beides.
+der Agent das Fazit übernommen hat, und der Laufbericht zählt beides. Im
+Bauer-Lauf ist sichtbar, dass nach einem verworfenen Teilstück das nächste
+trotzdem lokal versucht wird.
 
 ### 24 — Denk-Ansicht statt Rohprotokoll
 (Wunsch Georg, 14.08.2026: Das Rohprotokoll aus JSON-Zeilen sieht kein Mensch
