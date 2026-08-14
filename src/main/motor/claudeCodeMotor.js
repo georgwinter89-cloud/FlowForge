@@ -410,6 +410,19 @@ export function pruefeWerkzeug(name, eingabe, projektPfad, nurLesen, darfPruefen
   return { frage: texte.rechteFrage.unbekanntesWerkzeug(name) }
 }
 
+// Nachlauf-Chat (BAUPLAN 27): Verändert dieser Werkzeugaufruf den Projektordner?
+// Vor der ersten Änderung des Chats legt FlowForge einen Sicherungspunkt an —
+// Karten-Werkzeuge zählen nicht (sie sind der Normalweg des nur-lesenden Chats
+// und laufen über FlowForges eigene, harte Kartenregeln).
+// Exportiert, damit sich die Einstufung ohne laufenden Motor prüfen lässt.
+export function chatAenderung(name, eingabe) {
+  if (SCHREIB_WERKZEUGE.has(name)) return true
+  if (name.startsWith(START_PRAEFIX)) return true
+  if (name === 'Bash' || name === 'PowerShell')
+    return !befehlNurLesend(String(eingabe?.command ?? ''))
+  return false
+}
+
 function kurzerPfad(datei, projektPfad) {
   if (!datei) return '?'
   const voll = path.resolve(projektPfad, String(datei))
@@ -440,7 +453,10 @@ export function fazitStutzen(text) {
 // Zeilen seiner tieferen Wegwerf-Helfer tragen den Unteraufgaben-Vorsatz.
 // Der Hauptfaden ist der Koordinator — sein Geplauder („OK") bleibt draußen,
 // sein Agent-Aufruf wird vom Hook gemeldet.
-function tickerZeilen(nachricht, projektPfad, blockTaskIds) {
+// mitHauptfaden (BAUPLAN 27): Im Nachlauf-Chat arbeitet der Hauptfaden selbst —
+// seine Werkzeug-Zeilen gehören in den Ticker; sein Antworttext ist die
+// Chat-Antwort und bleibt draußen.
+function tickerZeilen(nachricht, projektPfad, blockTaskIds, mitHauptfaden = false) {
   const t = texte.ticker
   // Überlastete KI-Server: die CLI wiederholt selbst — ohne diese Zeile sähe
   // Georg nur eine stumme App.
@@ -450,8 +466,9 @@ function tickerZeilen(nachricht, projektPfad, blockTaskIds) {
   const hauptfaden = !nachricht.parent_tool_use_id
   const zeilen = []
   for (const block of nachricht.message?.content ?? []) {
-    if (hauptfaden) continue
-    if (block.type === 'text' && block.text?.trim()) zeilen.push(block.text.trim())
+    if (hauptfaden && !mitHauptfaden) continue
+    if (block.type === 'text' && block.text?.trim() && !hauptfaden)
+      zeilen.push(block.text.trim())
     if (block.type !== 'tool_use') continue
     if (block.name === 'ToolSearch') continue
     const e = block.input ?? {}
@@ -1282,6 +1299,404 @@ export function starteLaufMotor(optionen) {
       hartAngefordert = true
       aufEreignis({ art: 'ticker', text: texte.ticker.hartAbgebrochen })
       // BAUPLAN Schritt 3: harter Stopp = kompletter Prozessbaum, sofort.
+      if (kindProzess?.pid)
+        spawn('taskkill', ['/PID', String(kindProzess.pid), '/T', '/F'], { windowsHide: true })
+      setTimeout(() => abbruch.abort(), 1500)
+      eingabeSchliessen()
+    }
+  }
+}
+
+// Nachlauf-Chat (BAUPLAN 27): ein Chat-Motor über die fortgesetzte Lauf-Session
+// (fortsetzen = Session-Kennung) oder als frische Session mit dem Laufbericht
+// als Kontext (laufKontext). Anders als beim Lauf-Motor arbeitet der Hauptfaden
+// hier selbst — es gibt keinen Koordinator und keinen Übertrag. Die Rechte
+// entscheidet der Schalter „Chat darf reparieren": nur-lesend (Karten anlegen
+// erlaubt, wie beim Audit) oder Schreibrechte wie ein Bauer — Git, Prüfmappe
+// und Verwaltungsdateien bleiben in beiden Betriebsarten tabu (pruefeWerkzeug).
+// Vor der ersten Änderung ruft der Motor vorErsterAenderung() auf — dort legt
+// FlowForge den Sicherungspunkt an.
+export function starteChatMotor(optionen) {
+  const {
+    projektPfad,
+    modus,
+    apiSchluessel,
+    ausgabenObergrenzeUsd,
+    fortsetzen = null,
+    kontextFenster = KONTEXT_FENSTER_STANDARD,
+    laufKontext = '',
+    nurLesenBefehle = false,
+    // Schalter „Chat darf reparieren" — je Werkzeugaufruf frisch gelesen,
+    // damit das Umschalten mitten im Chat sofort gilt.
+    holeReparieren,
+    vorErsterAenderung,
+    aufEreignis,
+    aufRechteFrage
+  } = optionen
+
+  let kindProzess = null
+  let hartAngefordert = false
+  let abbrechenAngefordert = false
+  let tot = false
+  let stderrPuffer = ''
+  let abfrage = null
+  const abbruch = new AbortController()
+  let sessionKennung = null
+  let nachrichtEmpfangen = false
+
+  // Eingabe-Warteschlange wie beim Lauf-Motor — nur dass hier ganze
+  // Nachrichten-Inhalte (Text oder Blöcke mit Bildern) nachgeschoben werden.
+  const eingabeSchlange = []
+  let eingabeEnde = false
+  let eingabeWecker = null
+  function eingabeNachschieben(inhalt) {
+    eingabeSchlange.push(inhalt)
+    eingabeWecker?.()
+  }
+  function eingabeSchliessen() {
+    eingabeEnde = true
+    eingabeWecker?.()
+  }
+  async function* eingabe() {
+    while (true) {
+      if (eingabeSchlange.length) {
+        const inhalt = eingabeSchlange.shift()
+        yield { type: 'user', message: { role: 'user', content: inhalt }, parent_tool_use_id: null }
+        continue
+      }
+      if (eingabeEnde) return
+      await new Promise((wecken) => (eingabeWecker = wecken))
+    }
+  }
+
+  // Verbrauch des Chats: Füllstand des Hauptfadens plus der Verbrauch seiner
+  // Unteraufgaben; Kosten und Aufschlüsselung kumuliert über diesen Motor.
+  let hauptTokens = 0
+  let bekanntesFenster = kontextFenster > 0 ? kontextFenster : KONTEXT_FENSTER_STANDARD
+  let kosten = null
+  let kostenStand = null
+  const aufschl = { eingabe: 0, ausgabe: 0, cacheLesen: 0, cacheSchreiben: 0 }
+  let hatAufschl = false
+  const aufschlStand = { eingabe: 0, ausgabe: 0, cacheLesen: 0, cacheSchreiben: 0 }
+  const unterVerbrauch = new Map()
+
+  function chatVerbrauch() {
+    const band = kontextBand(hauptTokens, bekanntesFenster)
+    return {
+      tokens: hauptTokens,
+      unterTokens: [...unterVerbrauch.values()].reduce((a, b) => a + b, 0),
+      kontextProzentVon: band.von,
+      kontextProzentBis: band.bis,
+      kostenUsd: kosten,
+      aufschluesselung: hatAufschl ? { ...aufschl } : null,
+      kontextFenster: bekanntesFenster
+    }
+  }
+
+  // Die gerade laufende Chat-Nachricht — es läuft höchstens eine zugleich.
+  let offen = null
+  function aufloesen(zustand, extra = {}) {
+    if (!offen) return
+    const o = offen
+    offen = null
+    o({
+      zustand,
+      text: '',
+      fehlertext: '',
+      fehlerArt: null,
+      verbrauch: chatVerbrauch(),
+      sessionKennung,
+      ...extra
+    })
+  }
+
+  // Sicherungspunkt vor der ersten Änderung (SPEC/BAUPLAN 27): einmalig,
+  // BEVOR der erste verändernde Werkzeugaufruf durchgelassen wird.
+  async function aenderungAnkuendigen(name, eingabeDaten) {
+    if (!chatAenderung(name, eingabeDaten)) return
+    await vorErsterAenderung?.()
+  }
+
+  function urteilFuer(name, eingabeDaten) {
+    const reparieren = Boolean(holeReparieren?.())
+    return pruefeWerkzeug(
+      name,
+      eingabeDaten,
+      projektPfad,
+      !reparieren, // nur-lesend, solange „Chat darf reparieren" aus ist
+      false, // die Prüfmappe gehört dem Prüfer — auch im Reparatur-Modus tabu
+      true,
+      nurLesenBefehle,
+      true, // Karten anlegen ist der Normalweg des nur-lesenden Chats
+      false
+    )
+  }
+
+  // Harte Sperren vor jedem Werkzeugaufruf — der Hauptfaden arbeitet hier
+  // selbst, es gibt keinen Koordinator-Sonderweg.
+  async function vorWerkzeug(hookDaten) {
+    const name = hookDaten.tool_name
+    const eingabeDaten =
+      hookDaten.tool_input && typeof hookDaten.tool_input === 'object' ? hookDaten.tool_input : {}
+    const urteil = urteilFuer(name, eingabeDaten)
+    if (urteil.gesperrt) {
+      if (urteil.tickerText) aufEreignis({ art: 'ticker', text: urteil.tickerText })
+      return {
+        hookSpecificOutput: {
+          hookEventName: 'PreToolUse',
+          permissionDecision: 'deny',
+          permissionDecisionReason: urteil.gesperrt
+        }
+      }
+    }
+    if (urteil.erlaubt) {
+      await aenderungAnkuendigen(name, eingabeDaten)
+      return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'allow' } }
+    }
+    return {}
+  }
+
+  const schleife = (async () => {
+    const { query } = await import('@anthropic-ai/claude-agent-sdk')
+
+    // Karten-Werkzeuge wie im Lauf: „leg das als Aufgabe an" ist der Normalweg.
+    const kartenServer = await kartenWerkzeugServer({ projektPfad, aufEreignis })
+    // Startanleitung: im Reparatur-Modus erlaubt, sonst von der Sperre gestoppt.
+    const startServer = await startWerkzeugServer({ projektPfad, aufEreignis })
+
+    const umgebung = {}
+    for (const [name, wert] of Object.entries(process.env)) {
+      if (name.toUpperCase().startsWith('ANTHROPIC') || name.toUpperCase().startsWith('CLAUDE'))
+        continue
+      umgebung[name] = wert
+    }
+    if (modus === 'api') umgebung.ANTHROPIC_API_KEY = apiSchluessel
+
+    abfrage = query({
+      prompt: eingabe(),
+      options: {
+        cwd: projektPfad,
+        env: umgebung,
+        abortController: abbruch,
+        pathToClaudeCodeExecutable: claudeExePfad(),
+        settingSources: [],
+        // Fortsetzung der Lauf-Session (Mechanik aus BAUPLAN 16/19): der Chat
+        // kennt Blöcke, Fazite und Verlauf, ohne dass etwas nacherzählt wird.
+        ...(fortsetzen ? { resume: fortsetzen } : {}),
+        forwardSubagentText: true,
+        mcpServers: { karten: kartenServer, start: startServer },
+        // Der Chat-Systemtext hebt die Koordinator-Regeln der Lauf-Session
+        // ausdrücklich auf; bei einer frischen Session hängt der Laufbericht
+        // als Kontext dahinter.
+        systemPrompt:
+          texte.agentenChat.system(projektPfad, TITEL_MAX, TEXT_MAX) +
+          (laufKontext ? texte.agentenChat.laufKontext(laufKontext) : ''),
+        maxTurns: 1000,
+        ...(modus === 'api' && ausgabenObergrenzeUsd > 0
+          ? { maxBudgetUsd: ausgabenObergrenzeUsd }
+          : {}),
+        stderr: (text) => {
+          stderrPuffer = (stderrPuffer + text).slice(-4000)
+        },
+        spawnClaudeCodeProcess: (w) => {
+          kindProzess = spawn(w.command, w.args, {
+            cwd: w.cwd,
+            env: w.env,
+            signal: w.signal,
+            stdio: ['pipe', 'pipe', 'pipe'],
+            windowsHide: true
+          })
+          return kindProzess
+        },
+        hooks: { PreToolUse: [{ hooks: [vorWerkzeug] }] },
+        canUseTool: async (name, eingabeDaten, _kontext) => {
+          const urteil = urteilFuer(name, eingabeDaten ?? {})
+          if (urteil.erlaubt) {
+            await aenderungAnkuendigen(name, eingabeDaten ?? {})
+            return { behavior: 'allow', updatedInput: eingabeDaten }
+          }
+          if (urteil.gesperrt) {
+            aufEreignis({ art: 'ticker', text: urteil.tickerText })
+            return { behavior: 'deny', message: urteil.gesperrt }
+          }
+          aufEreignis({ art: 'ticker', text: texte.ticker.rechteFrageGestellt })
+          const erlaubt = await aufRechteFrage({ beschreibung: urteil.frage })
+          aufEreignis({
+            art: 'ticker',
+            text: erlaubt ? texte.ticker.rechteFrageErlaubt : texte.ticker.rechteFrageAbgelehnt
+          })
+          if (erlaubt) {
+            await aenderungAnkuendigen(name, eingabeDaten ?? {})
+            return { behavior: 'allow', updatedInput: eingabeDaten }
+          }
+          return { behavior: 'deny', message: texte.rechteFrage.abgelehntFuerAgent }
+        }
+      }
+    })
+
+    try {
+      for await (const nachricht of abfrage) {
+        nachrichtEmpfangen = true
+        if (typeof nachricht.session_id === 'string' && nachricht.session_id)
+          sessionKennung = nachricht.session_id
+        for (const zeile of tickerZeilen(nachricht, projektPfad, null, true))
+          aufEreignis({ art: 'ticker', text: zeile })
+
+        // Denk-Bereich (BAUPLAN 24): auch das Denken des Chats ist sichtbar.
+        if (nachricht.type === 'assistant') {
+          for (const teil of nachricht.message?.content ?? []) {
+            if (teil?.type !== 'thinking' || !String(teil.thinking ?? '').trim()) continue
+            aufEreignis({ art: 'denken', text: String(teil.thinking).trim() })
+          }
+        }
+
+        if (nachricht.type === 'system' && nachricht.subtype === 'init') {
+          const bekannt = kontextFensterFuerModell(nachricht.model)
+          if (bekannt > 0) bekanntesFenster = bekannt
+        }
+
+        if (nachricht.type === 'assistant' && nachricht.message?.usage) {
+          const u = nachricht.message.usage
+          const kumuliert =
+            (u.input_tokens ?? 0) +
+            (u.cache_creation_input_tokens ?? 0) +
+            (u.cache_read_input_tokens ?? 0) +
+            (u.output_tokens ?? 0)
+          if (nachricht.parent_tool_use_id)
+            unterVerbrauch.set(nachricht.parent_tool_use_id, kumuliert)
+          else hauptTokens = kumuliert
+          aufEreignis({ art: 'chat-verbrauch', verbrauch: chatVerbrauch() })
+        }
+
+        if (nachricht.type === 'result') {
+          if (typeof nachricht.total_cost_usd === 'number') {
+            const delta =
+              kostenStand === null
+                ? nachricht.total_cost_usd
+                : Math.max(0, nachricht.total_cost_usd - kostenStand)
+            kostenStand = nachricht.total_cost_usd
+            if (delta > 0) kosten = (kosten ?? 0) + delta
+          }
+          const summe = { eingabe: 0, ausgabe: 0, cacheLesen: 0, cacheSchreiben: 0 }
+          let hatModelUsage = false
+          for (const [modell, m] of Object.entries(nachricht.modelUsage ?? {})) {
+            hatModelUsage = true
+            if (m.contextWindow > 0) {
+              bekanntesFenster = m.contextWindow
+              kontextFensterMerken(modell, m.contextWindow)
+            }
+            summe.eingabe += m.inputTokens ?? 0
+            summe.ausgabe += m.outputTokens ?? 0
+            summe.cacheLesen += m.cacheReadInputTokens ?? 0
+            summe.cacheSchreiben += m.cacheCreationInputTokens ?? 0
+          }
+          if (hatModelUsage) {
+            hatAufschl = true
+            for (const feld of ['eingabe', 'ausgabe', 'cacheLesen', 'cacheSchreiben']) {
+              aufschl[feld] += Math.max(0, summe[feld] - aufschlStand[feld])
+              aufschlStand[feld] = summe[feld]
+            }
+          }
+          aufEreignis({ art: 'chat-verbrauch', verbrauch: chatVerbrauch() })
+
+          if (!offen) continue
+          if (hartAngefordert) {
+            aufloesen('hart-abgebrochen')
+            continue
+          }
+          if (abbrechenAngefordert) {
+            abbrechenAngefordert = false
+            aufloesen('abgebrochen')
+            continue
+          }
+          if (nachricht.subtype === 'success' && !nachricht.is_error) {
+            aufloesen('erfolgreich', {
+              text: typeof nachricht.result === 'string' ? nachricht.result : ''
+            })
+            continue
+          }
+          const { fehlertext, fehlerArt } = fehlerAusErgebnis(nachricht, stderrPuffer)
+          // Fortsetzen-Versuch, den die CLI ablehnt (Session weg): kein echter
+          // Fehler — die Chat-Verwaltung startet ehrlich vermerkt frisch.
+          if (
+            fortsetzen &&
+            fehlerArt === null &&
+            /no conversation|session id|session.*not found|(could not|cannot|unable to) resume/i.test(
+              fehlertext
+            )
+          ) {
+            tot = true
+            eingabeSchliessen()
+            aufloesen('fortsetzung-gescheitert', { sessionKennung: null })
+            continue
+          }
+          aufloesen('fehlgeschlagen', { fehlertext, fehlerArt })
+        }
+      }
+    } catch (fehler) {
+      if (offen) {
+        if (hartAngefordert) aufloesen('hart-abgebrochen')
+        else if (abbrechenAngefordert) aufloesen('abgebrochen')
+        else if (fortsetzen && !nachrichtEmpfangen)
+          aufloesen('fortsetzung-gescheitert', { sessionKennung: null })
+        else {
+          const { fehlertext, fehlerArt } = fehlerAusErgebnis(
+            null,
+            stderrPuffer || String(fehler?.message ?? '')
+          )
+          aufloesen('fehlgeschlagen', { fehlertext, fehlerArt })
+        }
+      }
+    } finally {
+      tot = true
+      eingabeSchliessen()
+      if (offen) {
+        if (hartAngefordert) aufloesen('hart-abgebrochen')
+        else aufloesen('fehlgeschlagen', { fehlertext: texte.fehler.unbekannt })
+      }
+    }
+  })()
+  schleife.catch(() => {})
+
+  return {
+    // Schickt eine Chat-Nachricht (Text oder Inhalts-Blöcke mit Bildern) und
+    // löst mit der Antwort auf. Es läuft höchstens eine Nachricht zugleich.
+    senden(inhalt) {
+      if (tot)
+        return Promise.resolve({
+          zustand: 'fehlgeschlagen',
+          text: '',
+          fehlertext: texte.fehler.unbekannt,
+          fehlerArt: null,
+          verbrauch: chatVerbrauch(),
+          sessionKennung
+        })
+      return new Promise((antworten) => {
+        offen = antworten
+        eingabeNachschieben(inhalt)
+      })
+    },
+    // Bricht die laufende Antwort ab — die Session bleibt nutzbar.
+    abbrechen() {
+      if (!offen || abbrechenAngefordert || hartAngefordert) return
+      abbrechenAngefordert = true
+      abfrage?.interrupt().catch(() => {})
+    },
+    istTot: () => tot,
+    get sessionKennung() {
+      return sessionKennung
+    },
+    get tokens() {
+      return hauptTokens
+    },
+    verbrauch: () => chatVerbrauch(),
+    beenden() {
+      tot = true
+      eingabeSchliessen()
+    },
+    hartStoppen() {
+      if (hartAngefordert) return
+      hartAngefordert = true
       if (kindProzess?.pid)
         spawn('taskkill', ['/PID', String(kindProzess.pid), '/T', '/F'], { windowsHide: true })
       setTimeout(() => abbruch.abort(), 1500)

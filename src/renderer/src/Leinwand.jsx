@@ -228,6 +228,171 @@ function Gespraech({ verlauf, frage, onAntwort }) {
   )
 }
 
+// Nachlauf-Chat (BAUPLAN 27): Gespräch mit der Lauf-Session nach dem Lauf.
+// Mehrzeilige Eingabe, Screenshots per Strg+V oder Datei-Knopf; der Schalter
+// „Chat darf reparieren" steht sichtbar über dem Eingabefeld.
+function NachlaufChat({ chat, verlauf, modus, onSenden, onReparieren, onAbbrechen }) {
+  const tc = texte.chat
+  const [text, setText] = useState('')
+  const [bilder, setBilder] = useState([])
+  const [fehler, setFehler] = useState('')
+  const ende = useRef(null)
+  const dateiRef = useRef(null)
+  useEffect(() => {
+    ende.current?.scrollIntoView({ block: 'nearest' })
+  }, [verlauf.length, chat.beschaeftigt])
+
+  function bildAufnehmen(datei) {
+    if (!datei || !datei.type?.startsWith('image/')) return
+    const leser = new FileReader()
+    leser.onload = () =>
+      setBilder((alt) => (alt.length >= 4 ? alt : [...alt, String(leser.result)]))
+    leser.readAsDataURL(datei)
+  }
+
+  // Strg+V aus der Zwischenablage (PowerShell-Screenshot, App-Fenster …):
+  // Bilder werden angehängt, reiner Text fällt normal ins Eingabefeld.
+  function einfuegen(e) {
+    const eintraege = [...(e.clipboardData?.items ?? [])].filter(
+      (eintrag) => eintrag.kind === 'file' && eintrag.type.startsWith('image/')
+    )
+    if (eintraege.length === 0) return
+    e.preventDefault()
+    for (const eintrag of eintraege) bildAufnehmen(eintrag.getAsFile())
+  }
+
+  async function senden() {
+    const sauber = text.trim()
+    if ((!sauber && bilder.length === 0) || chat.beschaeftigt) return
+    setFehler('')
+    const antwort = await onSenden(sauber, bilder)
+    if (antwort && !antwort.ok) return setFehler(antwort.fehler)
+    setText('')
+    setBilder([])
+  }
+
+  return (
+    <div className="gespraech chat-bereich">
+      <p className="gespraech-titel">{tc.titel}</p>
+      {verlauf.length === 0 && (
+        <>
+          <p className="feld-hinweis">{tc.einleitung}</p>
+          <p className="feld-hinweis">{chat.hinweis}</p>
+        </>
+      )}
+      {verlauf.length > 0 && (
+        <div className="gespraech-verlauf chat-verlauf">
+          {verlauf.map((eintrag, i) => {
+            if (eintrag.rolle === 'hinweis')
+              return (
+                <p key={i} className="feld-hinweis chat-hinweis">
+                  {eintrag.text}
+                </p>
+              )
+            return (
+              <div
+                key={i}
+                className={
+                  'gespraech-blase chat-blase ' +
+                  (eintrag.rolle === 'mensch' ? 'blase-mensch' : 'blase-agent')
+                }
+              >
+                {eintrag.text}
+                {(eintrag.bilder ?? 0) > 0 && (
+                  <span className="chat-bild-marker"> {tc.bildMarker(eintrag.bilder)}</span>
+                )}
+              </div>
+            )
+          })}
+          {chat.beschaeftigt && <p className="feld-hinweis chat-hinweis">{tc.beschaeftigt}</p>}
+          <div ref={ende} />
+        </div>
+      )}
+      {/* Verbrauch sichtbar am Chat (dasselbe Muster wie im Lauf) —
+          Chat-Nachrichten kosten Kontingent. */}
+      {chat.verbrauch && (
+        <>
+          <VerbrauchZeile verbrauch={chat.verbrauch} modus={modus} mitBalken />
+          <p className="feld-hinweis">{tc.verbrauchHinweis}</p>
+        </>
+      )}
+      <div className="gespraech-eingabe">
+        <label className="feld-kompakt chat-schalter" title={tc.reparierenHinweis}>
+          <input
+            type="checkbox"
+            checked={chat.reparieren}
+            onChange={(e) => onReparieren(e.target.checked)}
+          />
+          {tc.reparierenLabel}
+        </label>
+        {bilder.length > 0 && (
+          <div className="chat-bilder">
+            {bilder.map((bild, i) => (
+              <span key={i} className="chat-bild">
+                <img src={bild} alt="" />
+                <button
+                  className="chip-entfernen"
+                  title={tc.bildEntfernen}
+                  onClick={() => setBilder((alt) => alt.filter((_, idx) => idx !== i))}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+        {fehler && <p className="fehlermeldung">{fehler}</p>}
+        <div className="gespraech-zeile">
+          <textarea
+            rows={3}
+            value={text}
+            placeholder={tc.eingabePlatzhalter}
+            onChange={(e) => setText(e.target.value)}
+            onPaste={einfuegen}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault()
+                senden()
+              }
+            }}
+          />
+          <div className="chat-knoepfe">
+            <button
+              className="knopf-primaer knopf-klein"
+              disabled={chat.beschaeftigt || (!text.trim() && bilder.length === 0)}
+              onClick={senden}
+            >
+              {tc.senden}
+            </button>
+            <button
+              className="knopf-sekundaer knopf-klein"
+              onClick={() => dateiRef.current?.click()}
+            >
+              {tc.bildKnopf}
+            </button>
+            {chat.beschaeftigt && (
+              <button className="knopf-sekundaer knopf-klein" onClick={onAbbrechen}>
+                {tc.stoppen}
+              </button>
+            )}
+          </div>
+          <input
+            ref={dateiRef}
+            type="file"
+            accept="image/png,image/jpeg,image/gif,image/webp"
+            multiple
+            style={{ display: 'none' }}
+            onChange={(e) => {
+              for (const datei of e.target.files ?? []) bildAufnehmen(datei)
+              e.target.value = ''
+            }}
+          />
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // Karten-Vorschlag des Karten-Prüfers (BAUPLAN 26): alter Kartentext,
 // Vorschlag und Begründung — du entscheidest je Karte: „Übernehmen" wendet
 // den Vorschlag unverändert an, „Vorschlag bearbeiten" öffnet die Felder
@@ -459,6 +624,21 @@ function Laufbericht({ bericht }) {
               {bericht.gespraech.map((runde, i) => (
                 <p key={i} className="bericht-zeile">
                   {runde.frage} — <strong>{runde.antwort}</strong>
+                </p>
+              ))}
+            </div>
+          )}
+          {/* Nachlauf-Chat (BAUPLAN 27): der Chat-Verlauf als eigener
+              Abschnitt im Laufbericht — Bilder als Marker, nicht als Daten. */}
+          {(bericht.nachlaufChat?.verlauf ?? []).length > 0 && (
+            <div>
+              <p className="bericht-abschnitt">{tb.chatLabel}</p>
+              {bericht.nachlaufChat.verlauf.map((eintrag, i) => (
+                <p key={i} className="bericht-zeile">
+                  {eintrag.rolle === 'mensch' && <strong>{tb.chatRolleDu}: </strong>}
+                  {eintrag.rolle === 'ki' && <strong>{tb.chatRolleKi}: </strong>}
+                  {eintrag.text}
+                  {(eintrag.bilder ?? 0) > 0 && ' ' + texte.chat.bildMarker(eintrag.bilder)}
                 </p>
               ))}
             </div>
@@ -697,6 +877,9 @@ export default function Leinwand({
   // Karten-Vorschläge (BAUPLAN 26): der offene Abnahme-Dialog des Karten-Prüfers.
   const [vorschlag, setVorschlag] = useState(null)
   const [gespraech, setGespraech] = useState([])
+  // Nachlauf-Chat (BAUPLAN 27): Gespräch mit der Lauf-Session nach dem Lauf.
+  const [chat, setChat] = useState(null)
+  const [chatVerlauf, setChatVerlauf] = useState([])
   const [ergebnis, setErgebnis] = useState(null)
   const [fehler, setFehler] = useState('')
   const [berichte, setBerichte] = useState([])
@@ -749,9 +932,22 @@ export default function Leinwand({
     window.flowforge.sicherungspunkteLaden(pfad).then((e) => e.ok && setPunkte(e.punkte))
   }
 
+  // Nachlauf-Chat (BAUPLAN 27): Zustand und Verlauf aus dem Hauptprozess —
+  // auch nach einem Ansichtswechsel oder App-Neustart wieder da.
+  function chatLaden() {
+    window.flowforge.chatZustand(pfad).then((e) => {
+      if (!e.ok) return
+      setChat(e.verfuegbar ? e : null)
+      setChatVerlauf(e.verfuegbar ? (e.verlauf ?? []) : [])
+      // Eine offene Rechte-Frage des Chats muss wiederkommen.
+      if (e.verfuegbar && e.frage) setFrage(e.frage)
+    })
+  }
+
   useEffect(() => {
     berichteLaden()
     punkteLaden()
+    chatLaden()
     window.flowforge.workflowLaden(pfad).then((e) => e.ok && setWorkflow(e.workflow))
     window.flowforge.einstellungenLaden().then((e) => e.ok && setModus(e.einstellungen.motorModus))
     // Läuft schon etwas? Dann Anzeige und offene Fragen wiederherstellen —
@@ -810,6 +1006,10 @@ export default function Leinwand({
         setFrage(null)
         setEntscheidung(null)
         setAktiveInstanzen(new Set())
+        // Der Chat gehörte zum vorigen Lauf — der Hauptprozess hat ihn beim
+        // Start geschlossen; ein neuer entsteht nach diesem Lauf.
+        setChat(null)
+        setChatVerlauf([])
         setZustand('laeuft')
         setTab('lauf')
       }
@@ -868,6 +1068,15 @@ export default function Leinwand({
       if (ereignis.art === 'vorschlag')
         setVorschlag({ frageId: ereignis.frageId, vorschlag: ereignis.vorschlag })
       if (ereignis.art === 'vorschlag-erledigt') setVorschlag(null)
+      // Nachlauf-Chat (BAUPLAN 27): Verlauf, Arbeitszustand und Verbrauch.
+      if (ereignis.art === 'chat-eintrag')
+        setChatVerlauf((alt) => [...alt, ereignis.eintrag])
+      if (ereignis.art === 'chat-beschaeftigt')
+        setChat((c) => c && { ...c, beschaeftigt: ereignis.beschaeftigt })
+      if (ereignis.art === 'chat-verbrauch')
+        setChat((c) => c && { ...c, verbrauch: ereignis.verbrauch })
+      // Chat-Reparatur: der Sicherungspunkt erscheint sofort in der Liste.
+      if (ereignis.art === 'chat-sicherungspunkt') punkteLaden()
       if (ereignis.art === 'fertig') {
         setZustand('fertig')
         setErgebnis({ zustand: ereignis.zustand, fehlertext: ereignis.fehlertext })
@@ -878,6 +1087,8 @@ export default function Leinwand({
         setVorschlag(null)
         berichteLaden()
         punkteLaden()
+        // Nach dem Lauf öffnet sich der Chat zur frischen Lauf-Session.
+        chatLaden()
         // Nach hartem Abbruch oder Wiederherstellung wurde der Projektordner
         // zurückgesetzt — Karten neu laden.
         if (ereignis.zustand === 'hart-abgebrochen' || ereignis.zustand === 'wiederhergestellt')
@@ -1707,6 +1918,22 @@ export default function Leinwand({
             </div>
           )}
         </div>
+      )}
+
+      {/* Nachlauf-Chat (BAUPLAN 27): das Chat-Fenster nach dem Lauf — auch
+          nach einem App-Neustart erreichbar, solange kein neuer Lauf läuft. */}
+      {tab === 'lauf' && (zustand === 'fertig' || zustand === 'bereit') && chat && (
+        <NachlaufChat
+          chat={chat}
+          verlauf={chatVerlauf}
+          modus={modus}
+          onSenden={(text, bilder) => window.flowforge.chatSenden(pfad, text, bilder)}
+          onReparieren={(an) => {
+            setChat((c) => c && { ...c, reparieren: an })
+            window.flowforge.chatReparierenSetzen(pfad, an)
+          }}
+          onAbbrechen={() => window.flowforge.chatAbbrechen(pfad)}
+        />
       )}
 
       {tab === 'berichte' && (

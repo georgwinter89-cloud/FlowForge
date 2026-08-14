@@ -65,6 +65,7 @@ import {
 } from './sicherungspunkte.js'
 import { workflowLaden } from './workflow.js'
 import { laufstandSpeichern, laufstandLaden, laufstandLoeschen } from './laufstand.js'
+import { chatBeschaeftigt, chatSchliessen } from './nachlaufChat.js'
 
 const BERICHTE_ORDNER = 'laufberichte'
 
@@ -391,6 +392,14 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
   }
   if (!ausWarteschlange && plaetzeBelegt() >= MAX_PARALLEL_LAEUFE)
     return inWarteschlangeStellen(fenster, projektPfad, kartenIds, Boolean(fortsetzung))
+
+  // Nachlauf-Chat (BAUPLAN 27): Arbeitet der Chat gerade in diesem Projekt,
+  // startet kein Lauf — ein Schreiber pro Projekt (SPEC §5). Ein untätiger
+  // Chat wird geschlossen: Er gehört zum vorigen Lauf, der neue bringt einen
+  // neuen Chat mit frischem Kontext.
+  if (chatBeschaeftigt(projektPfad))
+    return { ok: false, fehler: texte.chat.fehlerLaufWaehrendChat }
+  chatSchliessen(projektPfad)
 
   // Projekt sofort belegen, damit ein Doppelklick auf „Starten" während der
   // Sicherung keinen zweiten Lauf startet.
@@ -1718,6 +1727,20 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     bericht.zustand = endZustand
     bericht.fehlertext = fehlertext
     bericht.verbrauch = { ...gesamtVerbrauch }
+    // Nachlauf-Chat (BAUPLAN 27): Kennung und Füllstand der Lauf-Session
+    // wandern in den Laufbericht — der Chat setzt sie später fort. Nach hartem
+    // Abbruch oder Wiederherstellung nicht: Der Projektordner wurde
+    // zurückgesetzt, die Session „erinnert" sich an Änderungen, die es nicht
+    // mehr gibt — der Chat startet dann ehrlich frisch mit dem Laufbericht.
+    const sitzungsKennung = lauf.laufMotor?.sessionKennung ?? laufSessionKennung
+    bericht.laufSitzung =
+      sitzungsKennung && endZustand !== 'hart-abgebrochen' && endZustand !== 'wiederhergestellt'
+        ? {
+            kennung: sitzungsKennung,
+            tokens: lauf.laufMotor?.tokens ?? laufSessionTokens,
+            kontextFenster: bekanntesKontextFenster > 0 ? bekanntesKontextFenster : null
+          }
+        : null
     try {
       berichtSpeichern(projektPfad, bericht)
     } catch {

@@ -45,6 +45,10 @@ contextBridge.exposeInMainWorld('flowforge', {
   laufVorschlagAntworten: (frageId, wahl, felder) =>
     ipcRenderer.invoke('lauf-vorschlag-antworten', { frageId, wahl, felder }),
   laufZustand: (pfad) => ipcRenderer.invoke('lauf-zustand', pfad),
+  chatZustand: (pfad) => ipcRenderer.invoke('chat-zustand', pfad),
+  chatSenden: (pfad, text, bilder) => ipcRenderer.invoke('chat-senden', { pfad, text, bilder }),
+  chatReparierenSetzen: (pfad, an) => ipcRenderer.invoke('chat-reparieren', { pfad, an }),
+  chatAbbrechen: (pfad) => ipcRenderer.invoke('chat-abbrechen', pfad),
   laufberichteLaden: (pfad) => ipcRenderer.invoke('laufberichte-laden', pfad),
   pruefmappeLesen: (pfad) => ipcRenderer.invoke('pruefmappe-lesen', pfad),
   startanleitungLaden: (pfad) => ipcRenderer.invoke('startanleitung-laden', pfad),

@@ -85,7 +85,10 @@ Ergebnis des letzten Laufs direkt an jeder Block-Karte auf der Leinwand aufklapp
 Der Verbrauch steht je Block und für den ganzen Lauf im Bericht — seit 13.08.2026 mit
 **Token-Aufschlüsselung** (Eingabe, Ausgabe, Cache gelesen, Cache geschrieben) und den
 **theoretischen API-Kosten**, die der Motor aus den Preisen der genutzten Modelle berechnet
-(im Abo-Modus nur zur Einordnung ausgewiesen).
+(im Abo-Modus nur zur Einordnung ausgewiesen). Seit Bauschritt 27 vermerkt der Bericht
+außerdem die **Session-Kennung des Laufs** (über sie setzt der Nachlauf-Chat die
+Lauf-Session fort, §6) und trägt den **Chat-Verlauf** des Nachlauf-Chats als eigenen
+Abschnitt nach (Bilder als Marker, nicht als Daten).
 
 ### 3.3 Sicherungspunkte
 
@@ -589,6 +592,34 @@ Angreifer durch die Diagnose.
   Abnahme-Dialog (alter Kartentext, Vorschlag, Begründung) mit „Übernehmen",
   „Vorschlag bearbeiten" und „Ablehnen" (§4.3). Ist das Fenster nicht im
   Vordergrund, kommt eine Windows-Benachrichtigung.
+- **Nachlauf-Chat** (seit Bauschritt 27): Nach dem Lauf zeigt der Lauf-Tab ein
+  Chat-Fenster mit dem Kontext des letzten Laufs — technisch die **fortgesetzte
+  Lauf-Session** (resume über die Session-Kennung, die dafür im Laufbericht
+  vermerkt wird): Der Agent kennt Blöcke, Fazite und Verlauf, ohne dass etwas
+  nacherzählt werden muss. Ist die Session weg, ihr Kontext über der
+  Wächter-Schwelle (§5) oder wurde der Lauf hart abgebrochen bzw.
+  wiederhergestellt (der Projektordner wurde zurückgesetzt — die Session
+  „erinnert" sich an Änderungen, die es nicht mehr gibt), startet stattdessen
+  eine **frische Session mit dem Laufbericht als Kontext** — ehrlich im Chat
+  vermerkt, kein stiller Ausweichpfad. **Eingaben:** mehrzeiliger Text (z.B.
+  eine ganze Fehlermeldung) und **Screenshots** — per Strg+V aus der
+  Zwischenablage oder über den Bild-Knopf (höchstens 4 Bilder à 5 MB je
+  Nachricht); Bilder gehen als Bild an den Motor, der sie selbst liest.
+  **Zwei Betriebsarten**, Schalter sichtbar über dem Eingabefeld, je Chat und
+  jederzeit umschaltbar: Standard ist **nur-lesend** (übliche Lese-Regeln;
+  Karten anlegen erlaubt — „leg das als Aufgabe an" ist der Normalweg, der
+  nächste Bau-Lauf arbeitet sie mit Sicherungspunkt und Prüfer ab). Mit
+  **„Chat darf reparieren"** schreibt der Chat wie ein Bauer: Sicherungspunkt
+  vor der ersten Änderung, übliche Rückfragen und Befehls-Einstufung (§7);
+  Git, Prüfmappe und Verwaltungsdateien bleiben tabu. **Ehrlichkeit:**
+  Chat-Nachrichten kosten Kontingent — der Verbrauch steht sichtbar am Chat
+  (dasselbe Muster wie im Lauf). Der Chat-Verlauf wandert als eigener
+  Abschnitt in den Laufbericht (§3.2); Werkzeug-Schritte und Reparaturen
+  erscheinen als „Chat · …"-Zeilen im Ticker, Chat-Sicherungspunkte in der
+  Sicherungspunkt-Liste. Läuft oder wartet ein Lauf im Projekt, ist der Chat
+  gesperrt; arbeitet der Chat gerade an einer Antwort, startet umgekehrt kein
+  Lauf (ein Schreiber pro Projekt, §5). Ein neuer Lauf schließt den alten
+  Chat — der nächste Chat gehört zum neuen Lauf.
 
 ## 7. Rechte des Agenten (Standard, später pro Projekt verstellbar)
 

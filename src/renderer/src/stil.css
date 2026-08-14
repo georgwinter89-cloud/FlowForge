@@ -2015,6 +2015,69 @@ body {
   opacity: 0.65;
 }
 
+/* Nachlauf-Chat (BAUPLAN 27): Chat-Fenster zur Lauf-Session im Lauf-Tab. */
+.chat-bereich {
+  margin-top: 12px;
+}
+
+.chat-verlauf {
+  max-height: 420px;
+}
+
+.chat-hinweis {
+  align-self: center;
+  text-align: center;
+}
+
+.chat-schalter {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  color: var(--text-zweit);
+  cursor: pointer;
+}
+
+.chat-knoepfe {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-self: flex-end;
+}
+
+.chat-bilder {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.chat-bild {
+  position: relative;
+  display: inline-flex;
+}
+
+.chat-bild img {
+  max-height: 72px;
+  max-width: 140px;
+  border: 1px solid var(--rand-kontrolle);
+  border-radius: 8px;
+}
+
+.chat-bild .chip-entfernen {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  background: var(--flaeche-tief);
+  border: 1px solid var(--rand-kontrolle);
+  border-radius: 50%;
+}
+
+.chat-bild-marker {
+  font-size: 11px;
+  color: var(--ticker-zeit);
+  white-space: nowrap;
+}
+
 /* Tabs der Mittelspalte (Feedback Georg): Schaubild, Lauf, Berichte, Punkte.
    Pillen-Leiste (Mockup 3b/3c): dunkler Container, der aktive Tab glüht rot. */
 .tab-leiste {

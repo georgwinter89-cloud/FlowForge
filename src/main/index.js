@@ -45,6 +45,13 @@ import {
   eigenenBlockLoeschen
 } from './eigeneBloecke.js'
 import { blockVorschlagErstellen } from './blockAssistent.js'
+import {
+  chatZustand,
+  chatSenden,
+  chatReparierenSetzen,
+  chatAbbrechen,
+  chatFrageAntworten
+} from './nachlaufChat.js'
 
 function createWindow() {
   const fenster = new BrowserWindow({
@@ -137,9 +144,12 @@ function registriereIpc() {
   ipcMain.handle('lauf-hart-stoppen', (_e, pfad) => laufHartStoppen(pfad))
   // Warteschlange (BAUPLAN 12): einen vorgemerkten Start wieder herausnehmen.
   ipcMain.handle('lauf-warteschlange-verlassen', (_e, pfad) => laufWarteschlangeVerlassen(pfad))
-  ipcMain.handle('lauf-frage-antworten', (_e, { frageId, erlaubt }) =>
-    laufFrageAntworten(frageId, erlaubt)
-  )
+  ipcMain.handle('lauf-frage-antworten', (_e, { frageId, erlaubt }) => {
+    // Rechte-Rückfragen kommen aus Läufen UND aus dem Nachlauf-Chat (BAUPLAN
+    // 27) — beide nutzen denselben Dialog; die Frage-IDs sind UUIDs.
+    const ergebnis = laufFrageAntworten(frageId, erlaubt)
+    return ergebnis.ok ? ergebnis : chatFrageAntworten(frageId, erlaubt)
+  })
   ipcMain.handle('lauf-entscheidung-antworten', (_e, { frageId, wahl }) =>
     laufEntscheidungAntworten(frageId, wahl)
   )
@@ -151,6 +161,20 @@ function registriereIpc() {
     laufVorschlagAntworten(frageId, wahl, felder)
   )
   ipcMain.handle('lauf-zustand', (_e, pfad) => laufZustand(pfad))
+  // Nachlauf-Chat (BAUPLAN 27): Gespräch mit der Lauf-Session nach dem Lauf.
+  // Läuft oder wartet das Projekt, ist der Chat gesperrt (ein Schreiber pro
+  // Projekt, SPEC §5) — das Senden wird hier hart abgewiesen.
+  ipcMain.handle('chat-zustand', (ereignis, pfad) =>
+    chatZustand(BrowserWindow.fromWebContents(ereignis.sender), pfad)
+  )
+  ipcMain.handle('chat-senden', (ereignis, { pfad, text, bilder }) => {
+    const zustand = laufZustand(pfad)
+    if (zustand.aktiv || zustand.wartet)
+      return { ok: false, fehler: texte.chat.gesperrtWaehrendLauf }
+    return chatSenden(BrowserWindow.fromWebContents(ereignis.sender), pfad, text, bilder)
+  })
+  ipcMain.handle('chat-reparieren', (_e, { pfad, an }) => chatReparierenSetzen(pfad, an))
+  ipcMain.handle('chat-abbrechen', (_e, pfad) => chatAbbrechen(pfad))
   ipcMain.handle('laufberichte-laden', (_e, pfad) => laufberichteLaden(pfad))
   // Prüfmappen-Ansicht an der Prüferkarte (BAUPLAN 17) — nur zum Nachlesen.
   ipcMain.handle('pruefmappe-lesen', (_e, pfad) => pruefmappeUebersicht(pfad))

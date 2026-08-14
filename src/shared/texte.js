@@ -292,6 +292,43 @@ export const texte = {
     titelFeld: 'Titel',
     textFeld: 'Inhalt'
   },
+  // Nachlauf-Chat (BAUPLAN 27): Gespräch mit der Lauf-Session nach dem Lauf —
+  // Standard nur-lesend (Karten anlegen erlaubt), auf Zuruf „Chat darf reparieren".
+  chat: {
+    titel: 'Chat zur Lauf-Session',
+    einleitung:
+      'Frag den Agenten zum letzten Lauf — er kennt Blöcke, Fazite und Verlauf. Auf „leg das als Aufgabe an" legt er eine Karte an; der nächste Bau-Lauf arbeitet sie mit Sicherungspunkt und Prüfer ab.',
+    eingabePlatzhalter: 'Deine Frage zum letzten Lauf … (Strg+V fügt einen Screenshot ein)',
+    senden: 'Senden',
+    stoppen: 'Antwort abbrechen',
+    beschaeftigt: 'Der Chat arbeitet …',
+    reparierenLabel: 'Chat darf reparieren',
+    reparierenHinweis:
+      'Angeschaltet schreibt der Chat wie ein Bauer: Vor der ersten Änderung entsteht ein Sicherungspunkt; Git, Prüfmappe und Verwaltungsdateien bleiben tabu. Ausgeschaltet liest er nur und darf Karten anlegen.',
+    reparierenAn: 'Chat darf jetzt reparieren — vor der ersten Änderung entsteht ein Sicherungspunkt.',
+    reparierenAus: 'Chat ist wieder nur-lesend (Karten anlegen bleibt erlaubt).',
+    bildKnopf: 'Bild anhängen',
+    bildEntfernen: 'Bild entfernen',
+    bildMarker: (n) => (n === 1 ? '[1 Bild angehängt]' : `[${n} Bilder angehängt]`),
+    bildZuGross: 'Das Bild ist zu groß (höchstens 5 MB) — bitte kleiner zuschneiden.',
+    bildZuViele: 'Höchstens 4 Bilder je Nachricht.',
+    bildFormat: 'Dieses Dateiformat kann der Motor nicht lesen — nutze PNG, JPEG, GIF oder WebP.',
+    // Ehrlichkeit: Woher der Chat seinen Kontext hat, steht sichtbar im Verlauf.
+    hinweisFortgesetzt:
+      'Dieser Chat setzt die Lauf-Session fort — der Agent kennt Blöcke, Fazite und Verlauf des Laufs.',
+    hinweisFrisch:
+      'Die Lauf-Session ist nicht mehr nutzbar (weg oder Kontext zu voll) — dieser Chat ist eine frische Session mit dem Laufbericht als Kontext.',
+    hinweisFortsetzungGescheitert:
+      'Die Lauf-Session ließ sich nicht fortsetzen — der Chat läuft jetzt als frische Session mit dem Laufbericht als Kontext.',
+    gesperrtWaehrendLauf:
+      'Solange in diesem Projekt ein Lauf läuft oder wartet, ist der Chat gesperrt — pro Projekt schreibt nur ein Agent.',
+    verbrauchHinweis: 'Chat-Nachrichten kosten Kontingent.',
+    fehlerLaufWaehrendChat:
+      'Der Chat arbeitet gerade in diesem Projekt — warte, bis seine Antwort da ist (oder brich sie ab), bevor du einen Lauf startest.',
+    keinBericht: 'Noch kein Lauf — der Chat öffnet sich nach dem ersten Lauf.',
+    antwortAbgebrochen: 'Antwort abgebrochen.',
+    denkAbsender: 'Chat'
+  },
   benachrichtigung: {
     frageTitel: 'FlowForge — der Agent hat eine Frage',
     vorschlagTitel: 'FlowForge — ein Karten-Vorschlag wartet auf dich',
@@ -481,6 +518,40 @@ export const texte = {
       'kurze Übergabe für den nächsten Anlauf dieses Blocks: 1. Was in diesem Lauf bisher ' +
       'erledigt wurde (die Fazite kennst du). 2. Was der unterbrochene Block zuletzt tun ' +
       'sollte. 3. Was der nächste Anlauf wissen muss, um nahtlos weiterzumachen.'
+  },
+  // Nachlauf-Chat (BAUPLAN 27): Systemtexte des Chat-Motors. Der Chat ist die
+  // fortgesetzte Lauf-Session — der Koordinator-Drill („antworte nur mit OK")
+  // steckt noch im Verlauf und wird hier ausdrücklich aufgehoben.
+  agentenChat: {
+    system: (projektPfad, titelMax, textMax) =>
+      'Du bist jetzt der Nachlauf-Chat von FlowForge: Der Workflow-Lauf ist beendet, und der ' +
+      'Nutzer spricht direkt mit dir über diesen Lauf und das Projekt. Falls du vorher der ' +
+      'Koordinator dieses Laufs warst: Diese Rolle ist beendet — die Koordinator-Regeln ' +
+      '(nur delegieren, nur mit OK antworten) gelten NICHT mehr. Antworte frei, hilfreich ' +
+      'und auf Deutsch; deine Antwort geht direkt an den Nutzer, der kein Programmierer ist — ' +
+      'erkläre in Alltagssprache und fasse dich kompakt.\n' +
+      'Du darfst selbst Dateien lesen und suchen (auch über Unteraufgaben mit dem ' +
+      'Agent-Werkzeug). Standardmäßig bist du nur-lesend: Der Normalweg für Erkenntnisse ist ' +
+      'eine Aufgaben-Karte („leg das als Aufgabe an") — der nächste Bau-Lauf arbeitet sie mit ' +
+      'Sicherungspunkt und Prüfer ab. Nur wenn der Nutzer den Schalter „Chat darf reparieren" ' +
+      'anschaltet, darfst du Dateien ändern; FlowForge legt vor deiner ersten Änderung selbst ' +
+      'einen Sicherungspunkt an. Git, die Prüfmappe pruefung/ und FlowForges ' +
+      'Verwaltungsdateien sind immer tabu.\n' +
+      `Der Projektordner ist: ${projektPfad}\n` +
+      'Verwende bei Datei-Werkzeugen ausschließlich Pfade relativ zum Projektordner oder ' +
+      'diesen absoluten Windows-Pfad — niemals POSIX-Pfade wie /tmp/… oder /c/….\n' +
+      'Projektkarten liest und schreibst du ausschließlich über die karten-Werkzeuge ' +
+      '(karten_uebersicht, karte_anlegen, karte_aktualisieren, karte_erledigen) — niemals ' +
+      `über die Datei karten.json. Harte Regeln: Titel höchstens ${titelMax} Zeichen, Inhalt ` +
+      `höchstens ${textMax} Zeichen; wer mehr zu sagen hat, legt mehrere fokussierte Karten an.`,
+    // Frische Session statt Fortsetzung: der Laufbericht ist der Kontext.
+    laufKontext: (text) =>
+      '\nDie ursprüngliche Lauf-Session ist nicht mehr verfügbar. Hier der Laufbericht des ' +
+      'Laufs, über den der Nutzer mit dir sprechen will:\n' + text,
+    berichtKopf: (workflow, zeit, zustand) =>
+      `Workflow: ${workflow} · gestartet ${zeit} · Ausgang: ${zustand}`,
+    berichtBlock: (name, zustand, text) => `\n### Block „${name}" (${zustand}):\n${text}`,
+    berichtFehler: (text) => `\nFehler des Laufs: ${text}`
   },
   // Prüfkarten im Prüfer-Auftrag (BAUPLAN 18): Der Nutzer hat alte Prüfungen
   // auf diesen Prüf-Block gezogen — sie werden zusätzlich geprüft.
@@ -1155,7 +1226,10 @@ export const texte = {
     wiederaufnahme: (nummer, gesamt, name) =>
       `Wiederaufnahme am letzten Sicherungspunkt — weiter mit Block ${nummer} von ${gesamt}: „${name}".`,
     sessionFortsetzenGescheitert:
-      'Die Lauf-Session ließ sich nicht fortsetzen — es geht mit einer frischen Session weiter.'
+      'Die Lauf-Session ließ sich nicht fortsetzen — es geht mit einer frischen Session weiter.',
+    // Nachlauf-Chat (BAUPLAN 27): Chat-Zeilen im Ticker klar gekennzeichnet —
+    // Reparaturen des Chats sind damit sichtbar wie jede Agenten-Arbeit.
+    chatZeile: (text) => `Chat · ${text}`
   },
   sicherungen: {
     ueberschrift: 'Sicherungspunkte',
@@ -1182,6 +1256,8 @@ export const texte = {
     // Lokaler Bauer (BAUPLAN 22): auf genau diesen Punkt wird zurückgerollt,
     // wenn die Abnahme des Teilstücks scheitert.
     beschriftungVorLokalemTeilstueck: 'Stand vor lokalem Teilstück',
+    // Nachlauf-Chat (BAUPLAN 27): vor der ersten Änderung des Chats.
+    beschriftungVorChatReparatur: 'Stand vor Chat-Reparatur',
     beschriftungWiederhergestellt: (zeit) => `Zurückgeholt: Stand von ${zeit}`,
     fehlerAnlegen: 'Der Sicherungspunkt konnte nicht angelegt werden. Der Lauf wurde sicherheitshalber nicht gestartet.',
     fehlerVorschau: 'Die Vorschau konnte nicht erstellt werden.',
@@ -1320,6 +1396,10 @@ export const texte = {
     erlaubt: 'erlaubt',
     abgelehnt: 'abgelehnt',
     automatischErlaubt: 'automatisch erlaubt (Automodus)',
-    verlaufLabel: 'Verlauf'
+    verlaufLabel: 'Verlauf',
+    // Nachlauf-Chat (BAUPLAN 27): der Chat-Verlauf als eigener Abschnitt.
+    chatLabel: 'Nachlauf-Chat',
+    chatRolleDu: 'Du',
+    chatRolleKi: 'Chat'
   }
 }
