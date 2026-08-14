@@ -11,6 +11,9 @@ Produktdefinition: [SPEC.md](SPEC.md) · Bauschritte: [BAUPLAN.md](BAUPLAN.md)
 3. Vor dem Bauen eine kurze Angriffsliste erstellen (nur lesend): woran könnte genau
    dieser Schritt scheitern? Funde zuerst ausräumen.
 
+Ausnahme: Sagt Georg „Führe das Zweit-Audit aus", gilt statt alldem die Prozedur in
+[ZWEITAUDIT.md](ZWEITAUDIT.md) — nur Befundliste, kein Bauschritt, kein Build.
+
 ## Sessionende (Pflicht — einplanen, bevor der Kontext knapp wird)
 - Der Alltagstest des Schritts (siehe BAUPLAN) ist von Georg durchführbar; Anleitung
   dafür in Alltagssprache ausgeben.
