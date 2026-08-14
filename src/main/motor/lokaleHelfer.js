@@ -457,7 +457,10 @@ export function lokalRecherchieren({ projektPfad, auftrag, modell, adresse = STA
       role: 'system',
       content:
         'Du bist ein Recherche-Helfer, der in einem Projektordner liest und sucht — mehr ' +
-        'nicht. Nutze die Werkzeuge gezielt und sparsam: erst Überblick (ordner_auflisten, ' +
+        'nicht. Du arbeitest allein: Niemand liest deine Antwort im Gespräch, Rückfragen ' +
+        'werden nie beantwortet. Stelle also KEINE Fragen — recherchiere mit dem, was der ' +
+        'Auftrag nennt; bleibt etwas unklar, schreibe ins Fazit, was du gefunden hast und ' +
+        'was offen blieb. Nutze die Werkzeuge gezielt und sparsam: erst Überblick (ordner_auflisten, ' +
         'suchen), dann nur die wirklich nötigen Stellen lesen. Wenn du genug weißt, ' +
         'antworte OHNE weiteren Werkzeugaufruf mit deinem Fazit: kompakt, auf Deutsch, ' +
         'mit Fundorten (Datei und Zeile). EISERNE REGEL: In dein Fazit gehört ' +
@@ -480,7 +483,9 @@ export async function lokalReparieren({ projektPfad, auftrag, modell, adresse = 
     {
       role: 'system',
       content:
-        'Du bist ein Reparatur-Helfer in einem Projektordner. Du bekommst Beanstandungen ' +
+        'Du bist ein Reparatur-Helfer in einem Projektordner. Du arbeitest allein: ' +
+        'Rückfragen werden nie beantwortet — arbeite mit dem, was der Auftrag nennt, und ' +
+        'schreibe Unklares in deinen Bericht statt zu fragen. Du bekommst Beanstandungen ' +
         'eines Prüfers und behebst GENAU diese — nicht mehr, keine Verschönerungen, keine ' +
         'neuen Dateien. Finde die betroffenen Stellen mit suchen und datei_lesen, und ' +
         'behebe sie mit dem Werkzeug ersetzen: Der alt-Text muss ZEICHENGENAU so in der ' +
@@ -515,7 +520,9 @@ export async function lokalEntwerfen({ projektPfad, auftrag, modell, adresse = S
     {
       role: 'system',
       content:
-        'Du bist ein Schreib-Helfer in einem Projektordner. Du bekommst einen eng ' +
+        'Du bist ein Schreib-Helfer in einem Projektordner. Du arbeitest allein: ' +
+        'Rückfragen werden nie beantwortet — arbeite mit dem, was der Auftrag nennt, und ' +
+        'schreibe Unklares in deinen Bericht statt zu fragen. Du bekommst einen eng ' +
         'umrissenen, schablonenhaften Schreibauftrag mit einem Vorbild. Lies zuerst das ' +
         'Vorbild (datei_lesen) und die im Auftrag genannten Stellen — dann schreibe deinen ' +
         'Entwurf mit entwurf_schreiben in den Ordner ' +
@@ -555,7 +562,9 @@ export async function lokalBauen({ projektPfad, auftrag, modell, adresse = STAND
     {
       role: 'system',
       content:
-        'Du bist ein Bau-Helfer in einem Projektordner. Du bekommst einen eng umrissenen ' +
+        'Du bist ein Bau-Helfer in einem Projektordner. Du arbeitest allein: Rückfragen ' +
+        'werden nie beantwortet — arbeite mit dem, was der Auftrag nennt, und schreibe ' +
+        'Unklares in deinen Bericht statt zu fragen. Du bekommst einen eng umrissenen ' +
         'Teilauftrag mit Fundstellen oder Vorbild, festen Schnittstellen und einem ' +
         'Fertig-Kriterium. Lies zuerst die im Auftrag genannten Stellen (datei_lesen), ' +
         'dann setze GENAU den Teilauftrag um: Bestehende Dateien änderst du mit ersetzen ' +
