@@ -248,6 +248,24 @@ function kartenKontext(projektPfad, kartenIds) {
   return texte.agentenKarten.kontext(gewaehlt.map((k) => '- ' + kartenZeile(k)).join('\n'))
 }
 
+// Projektwissen für die lokale KI (BAUPLAN 25): Die Kartenauswahl des Laufs
+// (Status-Karte, offene Aufgaben, manuell Gewählte) wird jedem lokalen Auftrag
+// vorangestellt. Grund: Die lokale KI kann keine Rückfragen stellen — was der
+// Auftrag nicht nennt, existiert für sie nicht; Festlegungen aus
+// Entscheidungs-Karten würden sonst übergangen. Bewusst KEIN direkter Blick in
+// karten.json (Verwaltungsdatei-Tabu, Halluzinationsgefahr kleiner Modelle).
+function projektwissenFuerHelfer(projektPfad, kartenIds) {
+  const geladen = kartenLaden(projektPfad)
+  if (!geladen.ok) return ''
+  const gewaehlt = geladen.karten.filter(
+    (k) => k.sorte === 'status' || kartenIds.includes(k.id)
+  )
+  if (gewaehlt.length === 0) return ''
+  return texte.agentenLokaleHelfer.projektwissen(
+    gewaehlt.map((k) => '- ' + kartenZeile(k)).join('\n')
+  )
+}
+
 // Übergaben zwischen Blöcken (SPEC §4.3): Was ein Block „liefert", ist sein
 // Abschlusstext — Nachfahren entlang der Pfeile mit passendem „braucht"
 // bekommen ihn in den Auftrag. Gekürzt, damit ein ausufernder Abschlusstext
@@ -625,7 +643,10 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         adresse: einstellungen.lokaleHelferAdresse,
         // Trefferquote (BAUPLAN 23): Standard an — ohne Quote ist die
         // Kosten-Wette der lokalen KI blind.
-        bewerten: einstellungen.lokaleHelferQuote !== false
+        bewerten: einstellungen.lokaleHelferQuote !== false,
+        // Projektwissen (BAUPLAN 25): je lokalem Auftrag frisch gelesen —
+        // die Kartenauswahl (ausgewaehlt) wächst mitten im Lauf.
+        projektwissen: () => projektwissenFuerHelfer(projektPfad, ausgewaehlt)
       }
       lokaleHelferHinweis = texte.ticker.lokaleHelferBereit(einstellungen.lokaleHelferModell)
     } else {
@@ -954,6 +975,9 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           // Nur Prüf-Blöcke dürfen die Prüfmappe verändern (Entscheidung Georg,
           // 12.08.2026) — der Bauer weicht sonst Prüfungen auf, statt zu reparieren.
           darfPruefen: Boolean(k.def.prueft),
+          // Audit (BAUPLAN 25): nur-lesend für Dateien und Befehle, darf aber
+          // Karten anlegen — Befunde werden Aufgaben-Karten.
+          darfKartenAnlegen: Boolean(k.def.darfKartenAnlegen),
           // Häkchen je Block (BAUPLAN 20): abgewählt = lokal_recherchieren
           // wird für die Agenten dieses Blocks hart abgelehnt.
           lokaleKi: k.eintrag.lokaleKi !== false,
@@ -1207,6 +1231,9 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         tickern(
           texte.ticker.blockStartet(nummerVon.get(eintrag.instanzId), kette.length, k.def.name)
         )
+        // Audit (BAUPLAN 25): volle Lesetiefe, bewusst teuer — die
+        // Kosten-Folge steht sichtbar am Start im Ticker.
+        if (k.def.audit) tickern(texte.ticker.auditKostenHinweis)
         // Zusammenführung sichtbar machen (BAUPLAN 13): dieser Block hat auf
         // mehrere Zweige gewartet.
         if (vorgaenger.length > 1)
@@ -1444,7 +1471,11 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
               )
               const reparatur = await lokalReparieren({
                 projektPfad,
-                auftrag: texte.agentenLokaleHelfer.reparaturAuftrag(k.lokaleKritik),
+                // Projektwissen (BAUPLAN 25) auch für die Vorreparatur — sie
+                // läuft an den Helfer-Werkzeugen vorbei direkt über lauf.js.
+                auftrag:
+                  (lokaleHelfer.projektwissen?.() ?? '') +
+                  texte.agentenLokaleHelfer.reparaturAuftrag(k.lokaleKritik),
                 modell: lokaleHelfer.modell,
                 adresse: lokaleHelfer.adresse,
                 aufSchritt: (name, eingabe) =>

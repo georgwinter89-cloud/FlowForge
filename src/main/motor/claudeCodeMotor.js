@@ -68,6 +68,9 @@ const NUR_LESEN_ERLAUBT = new Set([
 // Sie setzen die harten Kartenregeln selbst durch — keine Rückfrage nötig.
 const KARTEN_PRAEFIX = 'mcp__karten__'
 const KARTEN_NUR_LESEN = 'mcp__karten__karten_uebersicht'
+// Audit (BAUPLAN 25): Karten anlegen ist die einzige Schreibarbeit des
+// nur-lesenden Audit-Blocks — freigeschaltet über darfKartenAnlegen.
+const KARTEN_ANLEGEN = 'mcp__karten__karte_anlegen'
 
 // Mensch-Werkzeuge (BAUPLAN 9): eine Frage stellen verändert nichts am Projekt —
 // erlaubt ohne Rückfrage, auch unter der Sperre „darf nur lesen" (der
@@ -251,8 +254,11 @@ function liegtImProjekt(datei, projektPfad) {
 // Gefahr" — nur-lesende Blöcke dürfen dann Befehle ausführen wie der Bauer
 // (normale Befehls-Einstufung samt Git-Sperre und Rückfragen); die
 // Schreib-Werkzeuge bleiben unter der Sperre.
+// darfKartenAnlegen (BAUPLAN 25): Das Audit ist nur-lesend für Dateien und
+// Befehle, darf aber Karten anlegen — genau karte_anlegen ist dann trotz
+// „darf nur lesen" erlaubt (nicht aktualisieren, nicht erledigen).
 // Exportiert, damit sich die Einstufung ohne laufenden Motor prüfen lässt.
-export function pruefeWerkzeug(name, eingabe, projektPfad, nurLesen, darfPruefen, lokaleKi = true, nurLesenBefehle = false) {
+export function pruefeWerkzeug(name, eingabe, projektPfad, nurLesen, darfPruefen, lokaleKi = true, nurLesenBefehle = false, darfKartenAnlegen = false) {
   if (name.startsWith(MENSCH_PRAEFIX)) return { erlaubt: true }
   // Lokale Helfer-KI: erlaubt, außer das Häkchen „lokale KI erlaubt" ist am
   // laufenden Block abgewählt (BAUPLAN 20): dann ist das eine echte Sperre,
@@ -282,7 +288,11 @@ export function pruefeWerkzeug(name, eingabe, projektPfad, nurLesen, darfPruefen
   // Karten-Werkzeuge zuerst: die Übersicht ist rein lesend, alles andere
   // schreibt — und fällt damit unter die Sperre „darf nur lesen".
   if (name.startsWith(KARTEN_PRAEFIX)) {
-    if (nurLesen && name !== KARTEN_NUR_LESEN)
+    if (
+      nurLesen &&
+      name !== KARTEN_NUR_LESEN &&
+      !(darfKartenAnlegen && name === KARTEN_ANLEGEN)
+    )
       return { gesperrt: texte.rechteFrage.nurLesenGesperrtFuerAgent, tickerText: texte.ticker.nurLesenGesperrt }
     return { erlaubt: true }
   }
@@ -400,7 +410,11 @@ function tickerZeilen(nachricht, projektPfad, blockTaskIds) {
         break
       case 'Task':
       case 'Agent':
-        zeilen.push(t.unteraufgabe)
+        // Das Ziel der Unteraufgabe sichtbar machen (BAUPLAN 25) — so sind
+        // z.B. die drei Blickwinkel-Prüfer des Audits im Ticker erkennbar.
+        zeilen.push(
+          e.description ? t.unteraufgabeMitZiel(kuerzen(e.description, 80)) : t.unteraufgabe
+        )
         break
       case 'Bash':
       case 'PowerShell':
@@ -701,7 +715,8 @@ export function starteLaufMotor(optionen) {
       block?.nurLesen ?? true,
       block?.darfPruefen ?? false,
       block?.lokaleKi ?? true,
-      nurLesenBefehle
+      nurLesenBefehle,
+      block?.darfKartenAnlegen ?? false
     )
     if (urteil.gesperrt) return nein(urteil.gesperrt, urteil.tickerText)
     if (urteil.erlaubt)
@@ -731,6 +746,9 @@ export function starteLaufMotor(optionen) {
           // Trefferquote (BAUPLAN 23): recherche_bewerten nur, wenn der
           // Schalter an ist — sonst kein Werkzeug, kein Mehrverbrauch.
           bewerten: Boolean(lokaleHelfer.bewerten),
+          // Projektwissen (BAUPLAN 25): die Kartenauswahl des Laufs wird jedem
+          // lokalen Auftrag vorangestellt — je Aufruf frisch gelesen.
+          holeProjektwissen: lokaleHelfer.projektwissen ?? null,
           aufEreignis
         })
       : null
@@ -825,7 +843,8 @@ export function starteLaufMotor(optionen) {
             block?.nurLesen ?? true,
             block?.darfPruefen ?? false,
             block?.lokaleKi ?? true,
-            nurLesenBefehle
+            nurLesenBefehle,
+            block?.darfKartenAnlegen ?? false
           )
           if (urteil.erlaubt) return { behavior: 'allow', updatedInput: eingabeDaten }
           if (urteil.gesperrt) {
@@ -1115,7 +1134,8 @@ export function starteLaufMotor(optionen) {
     // Auftrag ein), und das Fazit kommt als Ergebnis zurück.
     // lokaleKi (BAUPLAN 20): false = Häkchen „lokale KI erlaubt" ist an diesem
     // Block abgewählt — lokal_recherchieren wird für seine Agenten hart abgelehnt.
-    blockAusfuehren({ auftrag, blockName, nurLesen = false, darfPruefen = false, lokaleKi = true, uebertrag }) {
+    // darfKartenAnlegen (BAUPLAN 25): das Audit darf trotz „nur lesen" Karten anlegen.
+    blockAusfuehren({ auftrag, blockName, nurLesen = false, darfPruefen = false, lokaleKi = true, darfKartenAnlegen = false, uebertrag }) {
       if (tot)
         return Promise.resolve({
           zustand: 'fehlgeschlagen',
@@ -1132,6 +1152,7 @@ export function starteLaufMotor(optionen) {
           nurLesen,
           darfPruefen,
           lokaleKi,
+          darfKartenAnlegen,
           uebertrag: uebertrag ?? { aktiv: false, testModus: false, anweisung: '' },
           aufloesen,
           blockTaskIds: new Set(),

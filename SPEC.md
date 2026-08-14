@@ -1,6 +1,6 @@
 # FlowForge — Produkt-Spezifikation V1
 
-Stand: 13.08.2026 · Ursprung: Grilling-Session vom 07.08.2026 (von Georg freigegeben) ·
+Stand: 14.08.2026 · Ursprung: Grilling-Session vom 07.08.2026 (von Georg freigegeben) ·
 fortlaufend gepflegt — dieses Dokument beschreibt die Gegenwart, Verhaltensänderungen
 werden hier nachgezogen (Historie liefert git).
 
@@ -124,8 +124,11 @@ Der Verbrauch steht je Block und für den ganzen Lauf im Bericht — seit 13.08.
   vorübergehend in Stücke zerfallen (z.B. um einen Block herauszunehmen); die
   braucht/liefert-Steck-Prüfung greift, sobald die Pfeile wieder alle Karten zu einem
   zusammenhängenden Schaubild verbinden — und spätestens beim Start, der immer streng
-  prüft. Parallelität **innerhalb** von Blöcken (z.B. ein Audit-Block, der intern zwei
-  Prüfer startet) gibt es noch nicht.
+  prüft. Parallelität **innerhalb** eines Blocks gibt es beim Audit (seit Bauschritt 25):
+  Sein Agent startet die drei Blickwinkel-Prüfer als gleichzeitige Unteraufgaben —
+  ob der Motor sie wirklich parallel ausführt, entscheidet das Modell; sonst laufen
+  sie nacheinander (jede Unteraufgabe steht sichtbar im Ticker, seit Bauschritt 25
+  samt ihrem Ziel), das Ergebnis ist dasselbe.
 - **Fehlschlag-Rückführung:** „bei Fehlschlag zurück zu Block X" (braucht der Prüfer sofort).
   Sind alle Beanstandungen mechanisch, versucht zuerst die lokale Vorreparatur (§4.3) —
   ohne reguläre Runden zu verbrauchen.
@@ -147,9 +150,8 @@ blockieren den Weiterlauf, Regeln stehen nicht nur als Text im Prompt.
 
 **Arbeitsblöcke** (echte Arbeitsaufträge, seit Bauschritt 8/9): Kontext laden ·
 Spec-Interview · Paket schneiden · Angreifer (nur lesend) · Diagnose (nur
-lesend) · Bauer · Prüfer · Frage an den Menschen (nur lesend) · Sessionende
-(bringt die Karten auf Stand). Noch ausstehend: Audit (startet intern
-parallele Prüfer; noch keinem Bauschritt zugeordnet).
+lesend) · Bauer · Prüfer · Audit (nur lesend, legt Karten an) · Frage an den
+Menschen (nur lesend) · Sessionende (bringt die Karten auf Stand).
 Auftragsquelle von Paket schneiden und Diagnose (Entscheidung Georg,
 07.08.2026): das Wunsch- bzw. Fehlerbild-Feld am Block **oder**, wenn es leer
 ist, die offenen Aufgaben-Karten der Kartenauswahl — sind beide leer, startet
@@ -217,6 +219,25 @@ Ganzes hält (Maßstab: Status-Karte, Entscheidungs-Karten, Startanleitung), sta
 eine gewachsene Projekt-Mappe abzuspielen. Gedacht als manueller Ein-Block-Lauf,
 nicht als Teil jeder Kette.
 
+**Audit** (seit Bauschritt 25): der Rundum-Blick übers ganze Projekt — beurteilt
+das Projekt als Ganzes, nicht das aktuelle Paket (dafür gibt es den Prüfer).
+Manueller Ein-Block-Lauf für zwischendurch, nicht Teil der Bau-Vorlagen; liefert
+„Befundliste", falls es doch in eine Kette gesteckt wird. Sein Agent startet
+**drei feste Blickwinkel-Prüfer** als Unteraufgaben — Fehler & Randfälle ·
+Verständlichkeit & Wildwuchs · Sicherheit & Datenverlust — möglichst gleichzeitig
+(§4.1) und bündelt ihre Funde. **Volle Lesetiefe, bewusst teuer** (Entscheidung
+Georg, 14.08.2026 — gegen die Zügel-Empfehlung): keine Stichproben-Zügel wie beim
+Angreifer; dafür steht die Kosten-Folge sichtbar am Start im Ticker (ein
+Audit-Lauf kann mehrere hunderttausend Tokens kosten). Die lokale Helfer-KI
+bleibt als Recherche-Entlastung erlaubt (Häkchen je Block gilt). Je
+**wesentlichem** Befund legt das Audit eine offene Aufgaben-Karte an (übliche
+Längengrenzen; Kleinkram bleibt im Abschlussbericht) — die Befunde rutschen
+damit automatisch in die Kartenauswahl der nächsten Bau-Läufe, Paket schneiden
+nimmt sie als Auftragsquelle. Mechanik: Das Audit ist nur-lesend für Dateien und
+Befehle, darf aber Karten anlegen — ein eigenes Kennzeichen am Block (analog
+„darfPruefen"), durchgesetzt am Werkzeugaufruf; genau karte_anlegen ist
+freigeschaltet. Die vollständige Befundliste steht im Abschlusstext.
+
 **Kontext-Sparsamkeit** (Entscheidung Georg, 13.08.2026): Erkundungslastige Blöcke
 (Angreifer, Diagnose, Prüfer, Bauer) delegieren Suchen und Einlesen per Auftrag an
 **Unteraufgaben** — der Wegwerf-Helfer wühlt in seinem eigenen Kontext und liefert
@@ -256,7 +277,16 @@ gelesen, wonach gesucht, welcher Ordner angesehen wird; Pfade und Muster gekürz
 für Recherche, Entwurf, Reparatur und Bauen gleichermaßen) —,
 der Laufbericht weist den Anteil der lokalen KI aus (Recherchen, Schritte,
 Fehlschläge, Reparatur-Versuche, Entwürfe, Teilstücke), und ist Ollama beim Laufstart nicht erreichbar, sagt der Ticker das
-ehrlich und alles läuft wie gewohnt über den Motor. V1-Experiment auf Georgs Wunsch —
+ehrlich und alles läuft wie gewohnt über den Motor.
+**Projektwissen** (seit Bauschritt 25): FlowForge stellt jedem lokalen Auftrag
+(Recherche, Entwurf, Reparatur, Bauen) automatisch die Kartenauswahl des Laufs
+voran — Status-Karte, offene Aufgaben, manuell Gewählte — als Abschnitt
+„Projektwissen" im Auftragstext, je Aufruf frisch gelesen. Grund: Die lokale KI
+kann keine Rückfragen stellen (Einweg-Kreisläufe); was der Auftrag nicht nennt,
+existiert für sie nicht — Festlegungen aus Entscheidungs-Karten würden sonst
+übergangen. Kostet kein Kontingent, nur lokale Tokens; bewusst KEIN direkter
+Blick in karten.json (Verwaltungsdatei-Tabu, Halluzinationsgefahr kleiner
+Modelle). V1-Experiment auf Georgs Wunsch —
 der vollwertige lokale Motor bleibt V2 (§2).
 
 **Trefferquote der lokalen KI** (seit Bauschritt 23): Im Lokale-KI-Abschnitt der

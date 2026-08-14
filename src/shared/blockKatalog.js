@@ -410,6 +410,58 @@ export const BLOCK_KATALOG = [
       'PRUEFUNG: BESTANDEN oder PRUEFUNG: FEHLGESCHLAGEN'
   },
   {
+    // Audit (BAUPLAN 25): Rundum-Blick übers ganze Projekt mit drei intern
+    // parallelen Blickwinkel-Prüfern. Manueller Ein-Block-Lauf für
+    // zwischendurch (wie die Gesamtprüfung) — nicht Teil der Bau-Vorlagen.
+    // nurLesen für Dateien und Befehle; Karten anlegen ist die einzige
+    // Schreibarbeit (darfKartenAnlegen, durchgesetzt am Werkzeugaufruf) —
+    // wesentliche Befunde werden offene Aufgaben-Karten und rutschen so in
+    // die Kartenauswahl der nächsten Bau-Läufe. audit: true schaltet den
+    // Kosten-Hinweis am Start frei (volle Lesetiefe, bewusst teuer).
+    id: 'audit',
+    name: 'Audit',
+    symbol: '🧭',
+    beschreibung:
+      'Rundum-Blick übers ganze Projekt: drei Blickwinkel-Prüfer suchen Fehler, Wildwuchs und Risiken — wesentliche Befunde werden Aufgaben-Karten. Bewusst gründlich und teuer.',
+    braucht: [],
+    liefert: ['Befundliste'],
+    nurLesen: true,
+    prueft: false,
+    uebung: false,
+    erzeugtAufgaben: true,
+    darfKartenAnlegen: true,
+    audit: true,
+    felder: [],
+    auftrag:
+      'Du bist das Audit: der Rundum-Blick über das GANZE Projekt — nicht über ein ' +
+      'einzelnes Arbeitspaket (dafür gibt es den Prüfer). Du beurteilst ehrlich, wie es um ' +
+      'das Projekt steht. Antworte auf Deutsch. Du darfst keine Dateien verändern und ' +
+      'nichts ausführen — nur lesen; deine einzige Schreibarbeit ist das Anlegen von ' +
+      'Karten (karte_anlegen ist für dich freigeschaltet). ' +
+      'Starte als Erstes DREI Blickwinkel-Prüfer als Unteraufgaben (Agent-Werkzeug) — ' +
+      'alle drei Aufrufe in EINER Nachricht, damit sie gleichzeitig laufen können; geht ' +
+      'das nicht, laufen sie nacheinander. Jeder Blickwinkel-Prüfer darf das ganze ' +
+      'Projekt in voller Tiefe lesen — keine Stichproben — und liefert dir nummerierte ' +
+      'Funde mit Fundort (Datei), je ein bis zwei Sätze, nach Schwere sortiert; findet er ' +
+      'nichts, meldet er das ehrlich. Die drei Blickwinkel: ' +
+      '1. Fehler & Randfälle — wo verhält sich das Projekt falsch, wo brechen Randfälle, ' +
+      'wo widersprechen sich Code, Karten und Startanleitung? ' +
+      '2. Verständlichkeit & Wildwuchs — wo ist das Projekt unnötig kompliziert, doppelt, ' +
+      'tot oder so gewachsen, dass niemand mehr durchblickt? ' +
+      '3. Sicherheit & Datenverlust — wo können Daten verloren gehen oder überschrieben ' +
+      'werden, wo fehlen Absicherungen gegen Fehlbedienung und kaputte Eingaben? ' +
+      'Für zusätzliche eigene Vorarbeit delegierst du Einlesen und Suchen wie üblich ' +
+      '(bevorzugt lokal_recherchieren, falls es bereitsteht — sonst das Agent-Werkzeug). ' +
+      'Danach bündelst du die Funde: Dubletten zusammenführen, ehrlich gewichten — nicht ' +
+      'jeder Fund ist wesentlich. Lege für jeden WESENTLICHEN Befund mit karte_anlegen ' +
+      'eine Aufgaben-Karte an (Längengrenzen beachten — lieber mehrere fokussierte Karten ' +
+      'als eine lange); Kleinkram bleibt im Abschlussbericht. Erfinde keine Funde — ein ' +
+      'Projekt ohne wesentliche Befunde ist ein gutes Ergebnis und wird genau so berichtet. ' +
+      'Dein Abschlusstext ist die vollständige Befundliste: je Blickwinkel die Funde mit ' +
+      'Fundort und Gewicht, welche Aufgaben-Karten du angelegt hast — und was bewusst nur ' +
+      'Kleinkram ist.'
+  },
+  {
     id: 'frage-mensch',
     name: 'Frage an den Menschen',
     symbol: '💬',

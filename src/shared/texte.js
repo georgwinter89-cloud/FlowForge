@@ -461,6 +461,14 @@ export const texte = {
       uebernommen
         ? 'Bewertung vermerkt: Fazit übernommen.'
         : 'Bewertung vermerkt: Fazit verworfen — recherchiere selbst nach, was du brauchst.',
+    // Projektwissen (BAUPLAN 25): FlowForge stellt die Kartenauswahl des Laufs
+    // jedem lokalen Auftrag voran — die lokale KI kann keine Rückfragen
+    // stellen; was nicht im Auftrag steht, existiert für sie nicht.
+    projektwissen: (liste) =>
+      'Projektwissen (aktuelle Projektkarten, von FlowForge vorangestellt — Festlegungen ' +
+      'aus Entscheidungs-Karten gelten verbindlich, rolle sie nicht neu auf):\n' +
+      liste +
+      '\n\nDein Auftrag:\n',
     // Lokale Vorreparatur (BAUPLAN 20): der Auftrag an das lokale Modell —
     // eng umrissen, nur die mechanischen Beanstandungen des Prüfers.
     reparaturAuftrag: (kritik) =>
@@ -971,6 +979,9 @@ export const texte = {
     durchsucht: 'Durchsucht das Projekt.',
     plant: 'Plant die Arbeitsschritte.',
     unteraufgabe: 'Startet eine Unteraufgabe.',
+    // Ziel der Unteraufgabe sichtbar (BAUPLAN 25) — z.B. die drei
+    // Blickwinkel-Prüfer des Audits.
+    unteraufgabeMitZiel: (ziel) => `Startet Unteraufgabe: ${ziel}`,
     // Zeilen aus Unteraufgaben (BAUPLAN 17): der Wegwerf-Helfer wühlt in
     // seinem eigenen Kontext — im Ticker klar gekennzeichnet.
     unteraufgabeZeile: (text) => `Unteraufgabe · ${text}`,
@@ -1020,6 +1031,10 @@ export const texte = {
     zurueckgesetzt: 'Projektordner auf den letzten Sicherungspunkt zurückgesetzt.',
     fertigIn: (sekunden) => `Fertig nach ${sekunden} Sekunden.`,
     blockStartet: (nr, gesamt, name) => `Block ${nr} von ${gesamt}: „${name}" startet.`,
+    // Audit (BAUPLAN 25): volle Lesetiefe, bewusst teuer — die Kosten-Folge
+    // steht sichtbar am Start (Entscheidung Georg, 14.08.2026).
+    auditKostenHinweis:
+      'Rundum-Blick mit voller Lesetiefe: Die drei Blickwinkel-Prüfer lesen das ganze Projekt — ein Audit-Lauf kann mehrere hunderttausend Tokens kosten.',
     zweigeZusammengefuehrt: (name, anzahl) =>
       `„${name}" führt ${anzahl} Zweige zusammen — alle Vorgänger sind fertig.`,
     pruefungBestanden: 'Prüfung bestanden.',

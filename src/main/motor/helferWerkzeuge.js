@@ -28,8 +28,23 @@ import { sicherungspunktAnlegen, aufLetztenPunktZuruecksetzen } from '../sicheru
 // lokal_recherchieren — erst damit ist die Kosten-Wette der lokalen KI über
 // alle drei Helfer-Arten ehrlich messbar. Ist er aus, gibt es weder Werkzeug
 // noch Hinweis: kein Mehrverbrauch.
-export async function helferWerkzeugServer({ projektPfad, modell, adresse, bewerten = false, aufEreignis }) {
+// holeProjektwissen (BAUPLAN 25): liefert die Kartenauswahl des Laufs als
+// Abschnitt „Projektwissen" — FlowForge stellt sie jedem lokalen Auftrag
+// voran. Grund: Die lokale KI kann keine Rückfragen stellen (Einweg-
+// Kreisläufe); was nicht im Auftrag steht, existiert für sie nicht —
+// Festlegungen aus Entscheidungs-Karten würden sonst übergangen. Je Aufruf
+// frisch gelesen, denn die Kartenauswahl wächst mitten im Lauf.
+export async function helferWerkzeugServer({ projektPfad, modell, adresse, bewerten = false, holeProjektwissen = null, aufEreignis }) {
   const { createSdkMcpServer, tool } = await import('@anthropic-ai/claude-agent-sdk')
+
+  function mitProjektwissen(auftrag) {
+    try {
+      return (holeProjektwissen?.() ?? '') + String(auftrag ?? '')
+    } catch {
+      // Ein klemmender Kartenblick darf den lokalen Auftrag nicht verhindern.
+      return String(auftrag ?? '')
+    }
+  }
 
   const recherchieren = tool(
     'lokal_recherchieren',
@@ -45,7 +60,7 @@ export async function helferWerkzeugServer({ projektPfad, modell, adresse, bewer
       aufEreignis({ art: 'ticker', text: texte.ticker.lokaleHelferStart(modell) })
       const ergebnis = await lokalRecherchieren({
         projektPfad,
-        auftrag,
+        auftrag: mitProjektwissen(auftrag),
         modell,
         adresse,
         // Detail-Zeilen (BAUPLAN 23): Werkzeug UND Eingabe wandern in den
@@ -129,7 +144,7 @@ export async function helferWerkzeugServer({ projektPfad, modell, adresse, bewer
       aufEreignis({ art: 'ticker', text: texte.ticker.lokaleEntwurfStart(modell) })
       const ergebnis = await lokalEntwerfen({
         projektPfad,
-        auftrag,
+        auftrag: mitProjektwissen(auftrag),
         modell,
         adresse,
         aufSchritt: (name, eingabe) =>
@@ -247,7 +262,7 @@ export async function helferWerkzeugServer({ projektPfad, modell, adresse, bewer
       aufEreignis({ art: 'ticker', text: texte.ticker.lokaleBauenStart(teilstueck, modell) })
       const ergebnis = await lokalBauen({
         projektPfad,
-        auftrag,
+        auftrag: mitProjektwissen(auftrag),
         modell,
         adresse,
         aufSchritt: (name, eingabe) =>
