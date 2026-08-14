@@ -15,7 +15,9 @@ import { texte } from '../shared/texte.js'
 // laufstand.json (Zwischenstand des laufenden Laufs — eine Wiederherstellung
 // würde sonst einen veralteten „unterbrochenen Lauf" zurückholen).
 // arbeitsablage: Wegwerf-Fläche der Agenten — wird am Lauf-Ende ohnehin geleert.
-const AUSGESCHLOSSEN = new Set(['.git', 'laufberichte', 'node_modules', 'laufstand.json', 'arbeitsablage'])
+// naechster-lauf.json (Karten-Vorschlag fürs nächste Paket, BAUPLAN 28): eine
+// Wiederherstellung würde sonst abgeräumte alte Vorschläge zurückholen.
+const AUSGESCHLOSSEN = new Set(['.git', 'laufberichte', 'node_modules', 'laufstand.json', 'arbeitsablage', 'naechster-lauf.json'])
 const ZWEIG = 'haupt'
 const AUTOR = { name: 'FlowForge', email: 'flowforge@lokal' }
 

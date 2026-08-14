@@ -18,6 +18,7 @@ import { menschWerkzeugServer } from './menschWerkzeuge.js'
 import { kontextFensterFuerModell, kontextFensterMerken } from './motorWissen.js'
 import { startWerkzeugServer } from './startWerkzeuge.js'
 import { vorschlagWerkzeugServer } from './vorschlagWerkzeuge.js'
+import { laufVorschlagWerkzeugServer } from './laufVorschlagWerkzeuge.js'
 
 const laden = createRequire(import.meta.url)
 
@@ -94,6 +95,13 @@ const HELFER_PRAEFIX = 'mcp__helfer__'
 // Rechte-Rückfrage aus (Feedback Georg, 14.08.2026 — vorher hartes Nein).
 const VORSCHLAG_PRAEFIX = 'mcp__vorschlaege__'
 
+// Karten-Vorschlag fürs nächste Paket (BAUPLAN 28): naechster_lauf_vorschlagen
+// speichert nur einen Vorschlag — angewendet wird nie automatisch, deshalb ist
+// es auch unter „darf nur lesen" unbedenklich. Frei nur für Blöcke mit dem
+// Kennzeichen laufVorschlag (Sessionende); andere Blöcke lösen die übliche
+// Rechte-Rückfrage aus (dasselbe Muster wie karte_vorschlagen).
+const LAUF_VORSCHLAG_PRAEFIX = 'mcp__naechsterlauf__'
+
 // FlowForges eigene Verwaltungsdateien im Projektordner: direkte Änderungen
 // würden die harten Regeln umgehen (z.B. die Karten-Längengrenze oder die
 // Startanleitungs-Validierung) — hartes Nein, der Agent nutzt die Werkzeuge.
@@ -102,7 +110,8 @@ const VERWALTUNGS_DATEIEN = new Set([
   'karten.json',
   'workflow.json',
   'startanleitung.json',
-  'laufstand.json'
+  'laufstand.json',
+  'naechster-lauf.json'
 ])
 const BERICHTE_ORDNER = 'laufberichte'
 
@@ -315,10 +324,16 @@ function liegtImProjekt(datei, projektPfad) {
 // (Feedback Georg, 14.08.2026), damit der Nutzer nicht ungefragt mit
 // Vorschlägen unterbrochen wird, ein Bauer mit gutem Grund aber auch nicht
 // ins Leere läuft.
-export function pruefeWerkzeug(name, eingabe, projektPfad, nurLesen, darfPruefen, lokaleKi = true, nurLesenBefehle = false, darfKartenAnlegen = false, darfVorschlagen = false) {
+export function pruefeWerkzeug(name, eingabe, projektPfad, nurLesen, darfPruefen, lokaleKi = true, nurLesenBefehle = false, darfKartenAnlegen = false, darfVorschlagen = false, darfLaufVorschlag = false) {
   if (name.startsWith(MENSCH_PRAEFIX)) return { erlaubt: true }
   if (name.startsWith(VORSCHLAG_PRAEFIX)) {
     if (!darfVorschlagen) return { frage: texte.rechteFrage.vorschlag }
+    return { erlaubt: true }
+  }
+  // Karten-Vorschlag fürs nächste Paket (BAUPLAN 28): nur ein Vorschlag, nie
+  // eine Änderung — rückfragefrei nur im Sessionende (Kennzeichen laufVorschlag).
+  if (name.startsWith(LAUF_VORSCHLAG_PRAEFIX)) {
+    if (!darfLaufVorschlag) return { frage: texte.rechteFrage.laufVorschlag }
     return { erlaubt: true }
   }
   // Lokale Helfer-KI: erlaubt, außer das Häkchen „lokale KI erlaubt" ist am
@@ -651,7 +666,10 @@ export function starteLaufMotor(optionen) {
     aufMenschFrage,
     // Karten-Vorschläge (BAUPLAN 26): löst mit der Entscheidung des Nutzers
     // auf — oder mit null, wenn der Lauf angehalten wurde.
-    aufKartenVorschlag
+    aufKartenVorschlag,
+    // Karten-Vorschlag fürs nächste Paket (BAUPLAN 28): speichert den
+    // Vorschlag des Sessionendes — kein Warten, nur eine Meldung.
+    aufLaufVorschlag
   } = optionen
 
   let kindProzess = null
@@ -809,7 +827,8 @@ export function starteLaufMotor(optionen) {
       block?.lokaleKi ?? true,
       nurLesenBefehle,
       block?.darfKartenAnlegen ?? false,
-      block?.darfVorschlagen ?? false
+      block?.darfVorschlagen ?? false,
+      block?.darfLaufVorschlag ?? false
     )
     if (urteil.gesperrt) return nein(urteil.gesperrt, urteil.tickerText)
     if (urteil.erlaubt)
@@ -833,6 +852,11 @@ export function starteLaufMotor(optionen) {
     // freigeschaltet nur für Blöcke mit kartenVorschlaege (pruefeWerkzeug).
     const vorschlagServer = aufKartenVorschlag
       ? await vorschlagWerkzeugServer({ projektPfad, aufKartenVorschlag })
+      : null
+    // Karten-Vorschlag fürs nächste Paket (BAUPLAN 28): das Werkzeug des
+    // Sessionendes — freigeschaltet nur für Blöcke mit laufVorschlag.
+    const laufVorschlagServer = aufLaufVorschlag
+      ? await laufVorschlagWerkzeugServer({ projektPfad, aufLaufVorschlag })
       : null
     // Lokale Helfer-KI (Experiment): nur registriert, wenn beim Laufstart
     // bestätigt war, dass Ollama läuft und das Modell da ist.
@@ -886,6 +910,7 @@ export function starteLaufMotor(optionen) {
           mensch: menschServer,
           start: startServer,
           ...(vorschlagServer ? { vorschlaege: vorschlagServer } : {}),
+          ...(laufVorschlagServer ? { naechsterlauf: laufVorschlagServer } : {}),
           ...(helferServer ? { helfer: helferServer } : {})
         },
         // Der Hauptfaden ist der Koordinator: schlanker eigener Systemtext
@@ -944,7 +969,8 @@ export function starteLaufMotor(optionen) {
             block?.lokaleKi ?? true,
             nurLesenBefehle,
             block?.darfKartenAnlegen ?? false,
-            block?.darfVorschlagen ?? false
+            block?.darfVorschlagen ?? false,
+            block?.darfLaufVorschlag ?? false
           )
           if (urteil.erlaubt) return { behavior: 'allow', updatedInput: eingabeDaten }
           if (urteil.gesperrt) {
@@ -1236,7 +1262,8 @@ export function starteLaufMotor(optionen) {
     // Block abgewählt — lokal_recherchieren wird für seine Agenten hart abgelehnt.
     // darfKartenAnlegen (BAUPLAN 25): das Audit darf trotz „nur lesen" Karten anlegen.
     // darfVorschlagen (BAUPLAN 26): karte_vorschlagen nur für den Karten-Prüfer.
-    blockAusfuehren({ auftrag, blockName, nurLesen = false, darfPruefen = false, lokaleKi = true, darfKartenAnlegen = false, darfVorschlagen = false, uebertrag }) {
+    // darfLaufVorschlag (BAUPLAN 28): naechster_lauf_vorschlagen nur fürs Sessionende.
+    blockAusfuehren({ auftrag, blockName, nurLesen = false, darfPruefen = false, lokaleKi = true, darfKartenAnlegen = false, darfVorschlagen = false, darfLaufVorschlag = false, uebertrag }) {
       if (tot)
         return Promise.resolve({
           zustand: 'fehlgeschlagen',
@@ -1255,6 +1282,7 @@ export function starteLaufMotor(optionen) {
           lokaleKi,
           darfKartenAnlegen,
           darfVorschlagen,
+          darfLaufVorschlag,
           uebertrag: uebertrag ?? { aktiv: false, testModus: false, anweisung: '' },
           aufloesen,
           blockTaskIds: new Set(),

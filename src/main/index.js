@@ -32,6 +32,7 @@ import {
   projektZustaende
 } from './lauf.js'
 import { workflowLaden, workflowSpeichern } from './workflow.js'
+import { laufVorschlagLaden, laufVorschlagLoeschen } from './naechsterLauf.js'
 import {
   sicherungspunkteLaden,
   wiederherstellenVorschau,
@@ -161,6 +162,16 @@ function registriereIpc() {
     laufVorschlagAntworten(frageId, wahl, felder)
   )
   ipcMain.handle('lauf-zustand', (_e, pfad) => laufZustand(pfad))
+  // Karten-Vorschlag fürs nächste Paket (BAUPLAN 28): die Vorschlags-Zeile an
+  // der Kartenauswahl — gelöschte Karten fallen beim Laden still heraus.
+  ipcMain.handle('naechster-lauf-laden', (_e, pfad) => ({
+    ok: true,
+    vorschlag: laufVorschlagLaden(pfad)
+  }))
+  ipcMain.handle('naechster-lauf-verwerfen', (_e, pfad) => {
+    laufVorschlagLoeschen(pfad)
+    return { ok: true }
+  })
   // Nachlauf-Chat (BAUPLAN 27): Gespräch mit der Lauf-Session nach dem Lauf.
   // Läuft oder wartet das Projekt, ist der Chat gesperrt (ein Schreiber pro
   // Projekt, SPEC §5) — das Senden wird hier hart abgewiesen.

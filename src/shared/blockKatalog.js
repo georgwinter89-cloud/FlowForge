@@ -547,12 +547,16 @@ export const BLOCK_KATALOG = [
     name: 'Sessionende',
     symbol: '🌙',
     beschreibung:
-      'Bringt das Projektgedächtnis auf Stand: Status-Karte aktualisieren, Erledigtes abhaken, Offenes festhalten.',
+      'Bringt das Projektgedächtnis auf Stand: Status-Karte aktualisieren, Erledigtes abhaken, Offenes festhalten — und deckt den Tisch für den nächsten Lauf.',
     braucht: ['Umsetzungsbericht', 'Prüfbeleg'],
     liefert: [],
     nurLesen: false,
     prueft: false,
     uebung: false,
+    // Karten-Vorschlag fürs nächste Paket (BAUPLAN 28): nur das Sessionende
+    // darf naechster_lauf_vorschlagen rückfragefrei nutzen — durchgesetzt am
+    // Werkzeugaufruf (dasselbe Freischalt-Muster wie kartenVorschlaege).
+    laufVorschlag: true,
     felder: [],
     auftrag:
       'Du bist das Sessionende: Du bringst das Projektgedächtnis auf den neuesten Stand — am ' +
@@ -566,7 +570,15 @@ export const BLOCK_KATALOG = [
       '4. Lege für offen gebliebene oder neu entdeckte Arbeit kurze Aufgaben-Karten an; halte ' +
       'getroffene Entscheidungen und neues Wissen als Entscheidungs- bzw. Wissens-Karten fest. ' +
       'Beachte die harten Längengrenzen — lieber mehrere fokussierte Karten als eine lange. ' +
-      'Dein Abschlusstext (3 bis 6 Sätze): welche Karten du geändert oder angelegt hast und warum.'
+      '5. Deck den Tisch für den nächsten Lauf: Schlage mit naechster_lauf_vorschlagen die ' +
+      'Karten vor, die der nächste Lauf bekommen sollte (kartenIds aus karten_uebersicht — ' +
+      'du kennst den Lauf gerade am besten: was fertig wurde, was offen blieb). Dazu ' +
+      'empfehlung: EIN Satz in Alltagssprache, was als Nächstes ansteht (du darfst eine ' +
+      'Vorlage nennen, z.B. „als Nächstes ‚Bug jagen‘"), und begruendung: kurz, warum genau ' +
+      'diese Karten. Das ist nur eine Einladung an den Nutzer — FlowForge baut nichts um und ' +
+      'startet nichts. ' +
+      'Dein Abschlusstext (3 bis 6 Sätze): welche Karten du geändert oder angelegt hast und ' +
+      'warum — und was du für den nächsten Lauf vorgeschlagen hast.'
   },
   {
     id: 'spaeher',

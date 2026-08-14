@@ -257,6 +257,16 @@ export const texte = {
     immerDabei: 'immer dabei',
     entfernen: 'Aus der Auswahl nehmen'
   },
+  // Karten-Vorschlag fürs nächste Paket (BAUPLAN 28): die Vorschlags-Zeile an
+  // der Kartenauswahl im Schaubild-Tab — eine Einladung, kein neuer Standard.
+  laufVorschlag: {
+    ueberschrift: 'Aus dem letzten Lauf empfohlen',
+    hinweis:
+      'Das Sessionende des letzten Laufs schlägt diese Karten für den nächsten Lauf vor. „Übernehmen" stellt die Kartenauswahl genau darauf um — danach wie gewohnt änderbar. Du kannst den Vorschlag auch verwerfen oder einfach ignorieren.',
+    uebernehmen: 'Übernehmen',
+    verwerfen: 'Verwerfen',
+    ohneKarten: 'ohne Karten'
+  },
   // Gespräch mit dem Agenten (BAUPLAN 9): Frage-Blöcke und das Spec-Interview
   // stellen Fragen über das mensch-Werkzeug — beantwortet wird hier.
   gespraech: {
@@ -405,6 +415,27 @@ export const texte = {
       'Der Nutzer hat den Vorschlag BEARBEITET übernommen. Angewendet wurde seine ' +
       `Fassung — Titel: „${titel ?? ''}", Inhalt: „${text ?? ''}". Diese Fassung gilt; ` +
       'vermerke sie in deinem Kartenbericht.'
+  },
+  // Karten-Vorschlag fürs nächste Paket (BAUPLAN 28): Texte an den
+  // Sessionende-Agenten für naechster_lauf_vorschlagen.
+  agentenLaufVorschlag: {
+    werkzeugBeschreibung:
+      'Schlägt die Kartenauswahl für den NÄCHSTEN Lauf vor: Karten-IDs plus ein Satz ' +
+      'Empfehlung in Alltagssprache, was als Nächstes ansteht. FlowForge speichert das ' +
+      'nur als Vorschlag — der Nutzer entscheidet selbst; nichts wird umgebaut oder gestartet.',
+    serverHinweis:
+      'Mit naechster_lauf_vorschlagen deckst du den Tisch für den nächsten Lauf — ein ' +
+      'Vorschlag an den Nutzer, keine Automatik. Ein erneuter Aufruf ersetzt den alten Vorschlag.',
+    unbekannteIds: (ids) =>
+      `Keine Karte(n) mit diesen ids: ${ids} — nimm nur ids aus karten_uebersicht.`,
+    pruefkartenTabu:
+      'Prüfkarten gehören nicht in die Kartenauswahl — sie haben ihren eigenen Weg über ' +
+      'den Prüfer. Lass sie aus dem Vorschlag weg.',
+    empfehlungUngueltig: (max) =>
+      `Abgelehnt: empfehlung muss gefüllt sein — ein Satz in Alltagssprache, höchstens ${max} Zeichen.`,
+    gespeichert: (anzahl) =>
+      `Vorschlag gespeichert (${anzahl} Karte${anzahl === 1 ? '' : 'n'}). Der Nutzer sieht ` +
+      'ihn an der Kartenauswahl und entscheidet selbst — ein erneuter Aufruf ersetzt ihn.'
   },
   agentenKarten: {
     kontext: (liste) =>
@@ -991,6 +1022,10 @@ export const texte = {
     // im Karten-Prüfer — andere Blöcke fragen nach dem üblichen Verfahren.
     vorschlag:
       'Der Agent möchte dir einen Karten-Vorschlag machen — üblich ist das nur im Karten-Prüfer-Block. Erlaubst du es, entscheidest du den Vorschlag danach trotzdem Karte für Karte.',
+    // Karten-Vorschlag fürs nächste Paket (BAUPLAN 28): rückfragefrei nur im
+    // Sessionende — andere Blöcke fragen nach dem üblichen Verfahren.
+    laufVorschlag:
+      'Der Agent möchte eine Kartenauswahl für den nächsten Lauf vorschlagen — üblich ist das nur im Sessionende-Block. Erlaubst du es, bleibt es trotzdem nur ein Vorschlag, den du an der Kartenauswahl übernimmst oder verwirfst.',
     abgelehntFuerAgent:
       'Der Nutzer hat das nicht erlaubt. Suche einen anderen Weg innerhalb des Projektordners — oder beende den Auftrag mit einer kurzen Erklärung.',
     gitGesperrtFuerAgent:
@@ -1189,6 +1224,10 @@ export const texte = {
     kartenVorschlagBearbeitet: (titel) =>
       `Karten-Vorschlag mit deinen Änderungen übernommen: „${titel}".`,
     kartenVorschlagAbgelehnt: (titel) => `Karten-Vorschlag abgelehnt: „${titel}".`,
+    // Karten-Vorschlag fürs nächste Paket (BAUPLAN 28): sichtbar im Ticker
+    // und damit auch im Laufbericht des erzeugenden Laufs.
+    laufVorschlagGespeichert: (anzahl, empfehlung) =>
+      `Vorschlag fürs nächste Paket: ${anzahl} Karte${anzahl === 1 ? '' : 'n'} — ${empfehlung}`,
     // Audit (BAUPLAN 25): volle Lesetiefe, bewusst teuer — die Kosten-Folge
     // steht sichtbar am Start (Entscheidung Georg, 14.08.2026).
     auditKostenHinweis:
@@ -1356,6 +1395,12 @@ export const texte = {
     // Karten-Prüfers steht sichtbar im Bericht — nicht nur in Ticker-Zeilen.
     kartenVorschlaegeZeile: (z) =>
       `Karten-Vorschläge: ${z.uebernommen ?? 0} übernommen · ${z.bearbeitet ?? 0} bearbeitet · ${z.abgelehnt ?? 0} abgelehnt`,
+    // Karten-Vorschlag fürs nächste Paket (BAUPLAN 28): der Vorschlag des
+    // Sessionendes samt Empfehlung und Begründung im Bericht.
+    naechsterLaufZeile: (v) =>
+      `Vorschlag fürs nächste Paket: ${v.empfehlung}` +
+      (v.karten?.length ? ` — Karten: ${v.karten.join(', ')}` : ' — ohne Karten') +
+      (v.begruendung ? ` (${v.begruendung})` : ''),
     // Lokale Helfer-KI (Wunsch Georg, 13.08.2026): ihr Anteil im Bericht.
     // Seit BAUPLAN 20 zählen auch die Vorreparatur-Versuche mit — samt der
     // Frage, wie viele davon die Nachprüfung bestanden haben.

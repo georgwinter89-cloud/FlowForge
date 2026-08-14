@@ -15,6 +15,7 @@ import KontextAnzeige from './KontextAnzeige.jsx'
 const t = texte.lauf
 const tk = texte.kette
 const ta = texte.kartenAuswahl
+const tn = texte.laufVorschlag
 const te = texte.entscheidung
 const tf = texte.rechteFrage
 const tb = texte.laufberichte
@@ -592,6 +593,11 @@ function Laufbericht({ bericht }) {
           {bericht.kartenVorschlaege && (
             <p className="feld-hinweis">{tb.kartenVorschlaegeZeile(bericht.kartenVorschlaege)}</p>
           )}
+          {/* Karten-Vorschlag fürs nächste Paket (BAUPLAN 28): der Vorschlag
+              des Sessionendes samt Empfehlung, sichtbar im Bericht. */}
+          {bericht.naechsterLauf && (
+            <p className="feld-hinweis">{tb.naechsterLaufZeile(bericht.naechsterLauf)}</p>
+          )}
           {(bericht.blockErgebnisse ?? []).length > 0 && (
             <div>
               <p className="bericht-abschnitt">{tb.blockErgebnisseLabel}</p>
@@ -908,6 +914,9 @@ export default function Leinwand({
   // rauswerfen (raus). Beides gilt für den nächsten Start, wird nicht gespeichert.
   const [kontextZusatz, setKontextZusatz] = useState(() => new Set())
   const [kontextRaus, setKontextRaus] = useState(() => new Set())
+  // Karten-Vorschlag fürs nächste Paket (BAUPLAN 28): die Vorschlags-Zeile an
+  // der Kartenauswahl — null = keiner da, sonst { empfehlung, karten }.
+  const [laufVorschlag, setLaufVorschlag] = useState(null)
   // Schaubild: gemessene Kartengrößen, laufender Karten-Zug, laufender Pfeil-Zug
   const [groessen, setGroessen] = useState({})
   const [ziehen, setZiehen] = useState(null) // { instanzId, dx, dy }
@@ -944,10 +953,17 @@ export default function Leinwand({
     })
   }
 
+  // Karten-Vorschlag fürs nächste Paket (BAUPLAN 28): frisch aus dem
+  // Hauptprozess — gelöschte Karten fallen dort schon still heraus.
+  function laufVorschlagLaden() {
+    window.flowforge.naechsterLaufLaden(pfad).then((e) => e.ok && setLaufVorschlag(e.vorschlag))
+  }
+
   useEffect(() => {
     berichteLaden()
     punkteLaden()
     chatLaden()
+    laufVorschlagLaden()
     window.flowforge.workflowLaden(pfad).then((e) => e.ok && setWorkflow(e.workflow))
     window.flowforge.einstellungenLaden().then((e) => e.ok && setModus(e.einstellungen.motorModus))
     // Läuft schon etwas? Dann Anzeige und offene Fragen wiederherstellen —
@@ -1010,6 +1026,8 @@ export default function Leinwand({
         // Start geschlossen; ein neuer entsteht nach diesem Lauf.
         setChat(null)
         setChatVerlauf([])
+        // Der Lauf-Start hat den Karten-Vorschlag abgeräumt (BAUPLAN 28).
+        setLaufVorschlag(null)
         setZustand('laeuft')
         setTab('lauf')
       }
@@ -1089,6 +1107,8 @@ export default function Leinwand({
         punkteLaden()
         // Nach dem Lauf öffnet sich der Chat zur frischen Lauf-Session.
         chatLaden()
+        // Ein Sessionende kann einen Karten-Vorschlag hinterlassen haben.
+        laufVorschlagLaden()
         // Nach hartem Abbruch oder Wiederherstellung wurde der Projektordner
         // zurückgesetzt — Karten neu laden.
         if (ereignis.zustand === 'hart-abgebrochen' || ereignis.zustand === 'wiederhergestellt')
@@ -1405,6 +1425,32 @@ export default function Leinwand({
     else setKontextRaus((alt) => new Set(alt).add(karte.id))
   }
 
+  // Karten-Vorschlag fürs nächste Paket (BAUPLAN 28): „Übernehmen" stellt die
+  // Kartenauswahl exakt auf den Vorschlag um — abgebildet auf die bestehende
+  // Zusatz/Raus-Mechanik: Vorgeschlagene Karten außerhalb der Standard-
+  // Vorauswahl kommen als Zusatz dazu, nicht vorgeschlagene offene Aufgaben
+  // fliegen raus. Danach ist alles wie gewohnt per × und Drag & Drop änderbar —
+  // das IST das Bearbeiten. Die Status-Karte bleibt immer dabei.
+  function laufVorschlagUebernehmen() {
+    const gewollt = new Set(laufVorschlag.karten.map((k) => k.id))
+    const zusatz = new Set()
+    const raus = new Set()
+    for (const karte of karten ?? []) {
+      if (karte.sorte === 'status') continue
+      const standard = karte.sorte === 'aufgabe' && !karte.erledigt
+      if (gewollt.has(karte.id)) {
+        if (!standard) zusatz.add(karte.id)
+      } else if (standard) raus.add(karte.id)
+    }
+    setKontextZusatz(zusatz)
+    setKontextRaus(raus)
+  }
+
+  async function laufVorschlagVerwerfen() {
+    setLaufVorschlag(null)
+    await window.flowforge.naechsterLaufVerwerfen(pfad)
+  }
+
   // --- Lauf ---------------------------------------------------------------
 
   async function starten() {
@@ -1643,6 +1689,36 @@ export default function Leinwand({
               )}
             </span>
           ))}
+        </div>
+      )}
+
+      {/* Karten-Vorschlag fürs nächste Paket (BAUPLAN 28): kein blockierender
+          Dialog — eine Zeile mit Empfehlung, Karten-Chips und zwei Knöpfen.
+          Dritter Weg: einfach ignorieren und wie bisher selbst wählen. */}
+      {tab === 'schaubild' && bearbeitbar && laufVorschlag && (
+        <div className="kontext-bereich vorschlag-zeile" title={tn.hinweis}>
+          <span className="kontext-titel">{tn.ueberschrift}:</span>
+          <span className="vorschlag-empfehlung">{laufVorschlag.empfehlung}</span>
+          {laufVorschlag.karten.length === 0 && (
+            <em className="chip-fest">{tn.ohneKarten}</em>
+          )}
+          {laufVorschlag.karten.map((karte) => (
+            <span
+              key={karte.id}
+              className={'kontext-chip chip-' + karte.sorte}
+              title={texte.karten.sorten[karte.sorte] + ': ' + karte.titel}
+            >
+              <span className="chip-text">
+                {texte.karten.sorten[karte.sorte]}: {karte.titel}
+              </span>
+            </span>
+          ))}
+          <button className="vorschlag-knopf" onClick={laufVorschlagUebernehmen}>
+            {tn.uebernehmen}
+          </button>
+          <button className="vorschlag-knopf" onClick={laufVorschlagVerwerfen}>
+            {tn.verwerfen}
+          </button>
         </div>
       )}
 

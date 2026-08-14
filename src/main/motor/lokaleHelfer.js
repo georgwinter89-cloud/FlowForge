@@ -269,7 +269,8 @@ const SCHREIB_TABU_DATEIEN = new Set([
   'karten.json',
   'workflow.json',
   'startanleitung.json',
-  'laufstand.json'
+  'laufstand.json',
+  'naechster-lauf.json'
 ])
 const SCHREIB_TABU_ORDNER = new Set(['pruefung', 'laufberichte', 'node_modules', '.git'])
 

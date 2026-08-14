@@ -88,7 +88,9 @@ Der Verbrauch steht je Block und für den ganzen Lauf im Bericht — seit 13.08.
 (im Abo-Modus nur zur Einordnung ausgewiesen). Seit Bauschritt 27 vermerkt der Bericht
 außerdem die **Session-Kennung des Laufs** (über sie setzt der Nachlauf-Chat die
 Lauf-Session fort, §6) und trägt den **Chat-Verlauf** des Nachlauf-Chats als eigenen
-Abschnitt nach (Bilder als Marker, nicht als Daten).
+Abschnitt nach (Bilder als Marker, nicht als Daten). Seit Bauschritt 28 steht auch der
+**Karten-Vorschlag fürs nächste Paket** (§5) samt Empfehlung und Begründung im Bericht
+des erzeugenden Laufs.
 
 ### 3.3 Sicherungspunkte
 
@@ -161,7 +163,8 @@ blockieren den Weiterlauf, Regeln stehen nicht nur als Text im Prompt.
 Spec-Interview · Paket schneiden · Angreifer (nur lesend) · Diagnose (nur
 lesend) · Bauer · Prüfer · Gesamtprüfung · Audit (nur lesend, legt Karten an) ·
 Karten-Prüfer (nur lesend, macht Vorschläge) · Frage an den Menschen (nur
-lesend) · Sessionende (bringt die Karten auf Stand).
+lesend) · Sessionende (bringt die Karten auf Stand und schlägt die
+Kartenauswahl fürs nächste Paket vor, §5).
 Auftragsquelle von Paket schneiden und Diagnose (Entscheidung Georg,
 07.08.2026): das Wunsch- bzw. Fehlerbild-Feld am Block **oder**, wenn es leer
 ist, die offenen Aufgaben-Karten der Kartenauswahl — sind beide leer, startet
@@ -554,6 +557,25 @@ Angreifer durch die Diagnose.
   **Status-Karte (immer) + offene Aufgaben-Karten**; der Nutzer kann weitere Karten per
   Drag & Drop in die Auswahl ziehen und vorausgewählte per Klick rauswerfen, dann Start.
   Die gewählten Karten bekommt der Agent zu Beginn **jedes Blocks** frisch mit.
+- **Karten-Vorschlag fürs nächste Paket** (seit Bauschritt 28): Das Sessionende benennt
+  über das Werkzeug `naechster_lauf_vorschlagen` (nur dort rückfragefrei — dasselbe
+  Freischalt-Muster wie `karte_vorschlagen`, durchgesetzt am Werkzeugaufruf; andere
+  Blöcke lösen eine Rückfrage aus) die Karten für den nächsten Lauf, dazu **einen Satz
+  Empfehlung in Alltagssprache** samt kurzer Begründung. Der Satz darf eine Vorlage
+  nennen, aber FlowForge baut nichts um und startet nichts — die Leinwand gehört dem
+  Nutzer. Gespeichert als eigene Verwaltungsdatei im Projektordner (für
+  Agenten-Dateizugriffe gesperrt, von Sicherungspunkten ausgenommen) — der Vorschlag
+  überlebt App-Neustarts. Angezeigt als Vorschlags-Zeile an der Kartenauswahl im
+  Schaubild-Tab (kein blockierender Dialog): Empfehlung plus Karten-Chips, dazu
+  **„Übernehmen"** (die Auswahl springt exakt auf den Vorschlag; danach wie gewohnt
+  änderbar — das ist das Bearbeiten) und **„Verwerfen"**; ignorieren geht immer. Nur
+  existierende Karten-IDs zählen (gelöschte fallen beim Anzeigen still heraus,
+  Prüfkarten und Fantasie-IDs weist das Werkzeug ab, die Status-Karte fällt still
+  heraus — sie ist ohnehin immer dabei). Verfall statt Pflege: Ein Lauf-Start räumt
+  den Vorschlag ab (übernommen oder nicht), ein neues Sessionende ersetzt ihn; Läufe
+  ohne Sessionende erzeugen keinen. Die festgenagelte Standard-Vorauswahl bleibt der
+  Normalfall. Ehrlichkeit: Vorschlag samt Empfehlung steht im Ticker und im
+  Laufbericht des erzeugenden Laufs.
 - **Parallelität** (seit Bauschritt 12): Bis zu **3 Workflows gleichzeitig, aber nur in
   verschiedenen Projekten.** Pro Projekt schreibt immer nur **ein** Agent (mehrere lesende
   erlaubt). Weitere Starts landen in einer Warteschlange und laufen automatisch an: sichtbar

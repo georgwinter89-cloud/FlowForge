@@ -45,6 +45,8 @@ contextBridge.exposeInMainWorld('flowforge', {
   laufVorschlagAntworten: (frageId, wahl, felder) =>
     ipcRenderer.invoke('lauf-vorschlag-antworten', { frageId, wahl, felder }),
   laufZustand: (pfad) => ipcRenderer.invoke('lauf-zustand', pfad),
+  naechsterLaufLaden: (pfad) => ipcRenderer.invoke('naechster-lauf-laden', pfad),
+  naechsterLaufVerwerfen: (pfad) => ipcRenderer.invoke('naechster-lauf-verwerfen', pfad),
   chatZustand: (pfad) => ipcRenderer.invoke('chat-zustand', pfad),
   chatSenden: (pfad, text, bilder) => ipcRenderer.invoke('chat-senden', { pfad, text, bilder }),
   chatReparierenSetzen: (pfad, an) => ipcRenderer.invoke('chat-reparieren', { pfad, an }),

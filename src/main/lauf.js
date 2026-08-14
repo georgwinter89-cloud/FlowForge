@@ -65,6 +65,7 @@ import {
 } from './sicherungspunkte.js'
 import { workflowLaden } from './workflow.js'
 import { laufstandSpeichern, laufstandLaden, laufstandLoeschen } from './laufstand.js'
+import { laufVorschlagSpeichern, laufVorschlagLoeschen } from './naechsterLauf.js'
 import { chatBeschaeftigt, chatSchliessen } from './nachlaufChat.js'
 
 const BERICHTE_ORDNER = 'laufberichte'
@@ -511,6 +512,12 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
   }
   const punktVorLauf = sicherung.id
 
+  // Karten-Vorschlag fürs nächste Paket (BAUPLAN 28): Der Vorschlag gilt genau
+  // für den nächsten Lauf — dieser Start räumt ihn ab (übernommen oder nicht).
+  // Erst jetzt, wo der Lauf wirklich startet: Ein gescheiterter Startversuch
+  // soll die Vorschlags-Zeile nicht kosten.
+  laufVorschlagLoeschen(projektPfad)
+
   const bericht = {
     id: crypto.randomUUID(),
     workflow: namen.join(' → '),
@@ -701,6 +708,16 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       lauf.offeneVorschlaege.push({ frageId, vorschlag })
       if (lauf.offeneVorschlaege.length === 1) senden({ art: 'vorschlag', frageId, vorschlag })
     })
+  }
+
+  // Karten-Vorschlag fürs nächste Paket (BAUPLAN 28): Das Sessionende benennt
+  // die Karten für den nächsten Lauf. Gespeichert wird nur ein Vorschlag —
+  // angezeigt an der Kartenauswahl im Schaubild-Tab, entschieden vom Nutzer;
+  // ein erneuter Aufruf (oder ein späteres Sessionende) ersetzt den alten.
+  function laufVorschlagAnnehmen({ kartenIds, empfehlung, begruendung, kartenTitel }) {
+    laufVorschlagSpeichern(projektPfad, { kartenIds, empfehlung, begruendung, erstelltAm: jetztIso() })
+    bericht.naechsterLauf = { empfehlung, begruendung, karten: kartenTitel }
+    tickern(texte.ticker.laufVorschlagGespeichert(kartenTitel.length, empfehlung))
   }
 
   // Folgen-Frage nach verbrauchten Reparatur-Runden (SPEC §4.1). Die Ergebnisse
@@ -1011,7 +1028,8 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         },
         aufRechteFrage: rechteFrageStellen,
         aufMenschFrage: (daten) => menschFrageStellen(daten, holeName()),
-        aufKartenVorschlag: vorschlagStellen
+        aufKartenVorschlag: vorschlagStellen,
+        aufLaufVorschlag: laufVorschlagAnnehmen
       })
     }
 
@@ -1077,6 +1095,9 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           // Karten-Prüfer (BAUPLAN 26): darf Karten-Vorschläge machen —
           // entschieden wird jeder vom Nutzer, angewendet von FlowForge.
           darfVorschlagen: Boolean(k.def.kartenVorschlaege),
+          // Sessionende (BAUPLAN 28): darf die Kartenauswahl für den
+          // nächsten Lauf vorschlagen — nur ein Vorschlag, nie eine Automatik.
+          darfLaufVorschlag: Boolean(k.def.laufVorschlag),
           // Häkchen je Block (BAUPLAN 20): abgewählt = lokal_recherchieren
           // wird für die Agenten dieses Blocks hart abgelehnt.
           lokaleKi: k.eintrag.lokaleKi !== false,

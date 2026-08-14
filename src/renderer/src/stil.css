@@ -1399,6 +1399,35 @@ body {
   color: var(--signal-text);
 }
 
+/* Karten-Vorschlag fürs nächste Paket (BAUPLAN 28): die Vorschlags-Zeile an
+   der Kartenauswahl — eine Einladung, kein blockierender Dialog. */
+.vorschlag-zeile {
+  border-style: solid;
+  border-color: var(--akzent-hell);
+}
+
+.vorschlag-empfehlung {
+  font-size: 12.5px;
+  color: var(--text-blass);
+  max-width: 480px;
+}
+
+.vorschlag-knopf {
+  flex-shrink: 0;
+  padding: 3px 10px;
+  border: 1px solid var(--rand-kontrolle);
+  border-radius: var(--radius-pille);
+  background: var(--flaeche-tief);
+  color: var(--text-blass);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.vorschlag-knopf:hover {
+  border-color: var(--akzent-hell);
+  color: var(--akzent-text);
+}
+
 /* Karten in der Seitenleiste lassen sich in die Vorauswahl ziehen */
 .karte[draggable='true'] {
   cursor: grab;
