@@ -516,7 +516,12 @@ Befehls-Einstufung (seit Bauschritt 8): Kommandozeilen-Befehle, die mit einem be
 Entwickler-Werkzeug beginnen (node, npm, npx, pnpm, yarn, tsc, vitest, jest, python,
 pip, pytest), laufen ohne Rückfrage — das deckt „Tests ausführen" und „Programm-
 bibliotheken installieren" ab. Rein lesende Befehle (dir, type, findstr …) ebenso.
-Verkettete Befehle laufen nur durch, wenn jedes Teilstück bekannt ist. Alle anderen
+Verkettete Befehle laufen nur durch, wenn jedes Teilstück bekannt ist. Ein
+`cd`-Vorspann und PowerShell-Zuweisungen mit reiner Wert-Rechtsseite (`$x = "…"`,
+`$env:X="1"`) führen selbst nichts aus und zählen nicht als Teilstück (seit
+14.08.2026 — vorher lösten sie hunderte unnötige Rückfragen aus); steht rechts
+der Zuweisung ein Befehl, wird genau der eingestuft, und Unterausführungen
+(`$(…)`, Backticks) heben die Ausnahme auf. Alle anderen
 Befehle lösen eine Rückfrage aus; Git bleibt hart gesperrt (§3.3), und die Prüfmappe
 `pruefung/` dürfen nur Prüf-Blöcke verändern (§4.3 — hartes Nein, auch für Befehle,
 die erkennbar hineinschreiben). Die Sperre „darf nur lesen" (§4.2) steht darüber:

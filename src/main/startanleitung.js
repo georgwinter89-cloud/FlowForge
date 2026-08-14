@@ -42,7 +42,7 @@ function pruefeAnleitung(projektPfad, eingabe) {
   const befehl = String(eingabe?.befehl ?? '').trim()
   const adresse = String(eingabe?.adresse ?? '').trim()
   if (!beschreibung || beschreibung.length > BESCHREIBUNG_MAX)
-    return { fehler: texte.agentenStart.fehlerBeschreibung(BESCHREIBUNG_MAX) }
+    return { fehler: texte.agentenStart.fehlerBeschreibung(BESCHREIBUNG_MAX, beschreibung.length) }
   if (!befehl && !adresse) return { fehler: texte.agentenStart.fehlerQuelleFehlt }
   if (befehl.length > BEFEHL_MAX || adresse.length > ADRESSE_MAX)
     return { fehler: texte.agentenStart.fehlerZuLang }

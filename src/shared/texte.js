@@ -234,10 +234,14 @@ export const texte = {
   },
   kartenRegeln: {
     titelFehlt: 'Bitte gib der Karte einen Titel.',
-    titelZuLang: (max) => `Der Titel ist zu lang (höchstens ${max} Zeichen).`,
+    titelZuLang: (max, ist) =>
+      `Der Titel ist zu lang: ${ist} von höchstens ${max} Zeichen.`,
     textFehlt: 'Bitte schreib etwas in die Karte.',
-    textZuLang: (max) =>
-      `Der Inhalt ist zu lang (höchstens ${max} Zeichen). Bitte kürzen — oder den Inhalt auf mehrere Karten aufteilen.`,
+    // Mit Ist-Länge (Befund 14.08.2026): Ohne die Zahl kürzte der Agent
+    // blind und lief mehrfach in dieselbe Ablehnung.
+    textZuLang: (max, ist) =>
+      `Der Inhalt ist zu lang: ${ist} von höchstens ${max} Zeichen — kürze um ` +
+      `mindestens ${ist - max} Zeichen oder teile den Inhalt auf mehrere fokussierte Karten auf.`,
     statusUnantastbar: 'Die Status-Karte gibt es genau einmal — sie kann nicht gelöscht oder neu angelegt werden.',
     nurAufgabenErledigbar: 'Nur Aufgaben-Karten können erledigt werden.',
     // Prüfkarten (BAUPLAN 18): legt und pflegt ausschließlich FlowForge.
@@ -618,8 +622,8 @@ export const texte = {
       `Startanleitung festgelegt: ${anleitung.beschreibung}` +
       (anleitung.befehl ? ` · Befehl: ${anleitung.befehl}` : '') +
       (anleitung.adresse ? ` · Adresse: ${anleitung.adresse}` : ''),
-    fehlerBeschreibung: (max) =>
-      `Die beschreibung fehlt oder ist zu lang (höchstens ${max} Zeichen) — ein Satz in Alltagssprache genügt.`,
+    fehlerBeschreibung: (max, ist = 0) =>
+      `Die beschreibung fehlt oder ist zu lang (höchstens ${max} Zeichen${ist > max ? `, deine hat ${ist}` : ''}) — ein Satz in Alltagssprache genügt.`,
     fehlerQuelleFehlt:
       'Gib mindestens eines an: befehl (Kommandozeile im Projektordner) und/oder adresse (http(s)-Adresse oder Datei im Projektordner).',
     fehlerZuLang: 'befehl oder adresse ist zu lang — halte beides kurz und konkret.',

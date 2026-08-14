@@ -13,8 +13,8 @@ export function pruefeKarteneingabe({ titel, text }) {
   const t = (titel ?? '').trim()
   const x = (text ?? '').trim()
   if (!t) return texte.kartenRegeln.titelFehlt
-  if (t.length > TITEL_MAX) return texte.kartenRegeln.titelZuLang(TITEL_MAX)
+  if (t.length > TITEL_MAX) return texte.kartenRegeln.titelZuLang(TITEL_MAX, t.length)
   if (!x) return texte.kartenRegeln.textFehlt
-  if (x.length > TEXT_MAX) return texte.kartenRegeln.textZuLang(TEXT_MAX)
+  if (x.length > TEXT_MAX) return texte.kartenRegeln.textZuLang(TEXT_MAX, x.length)
   return null
 }

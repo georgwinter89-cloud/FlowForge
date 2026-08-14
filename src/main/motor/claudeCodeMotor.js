@@ -138,7 +138,24 @@ function befehlsNamen(befehl) {
     // $(…)-Unterausführung und Backticks; sonst normal einstufen.
     if (/^for\s+\S+\s+in\s[^$`]*$/i.test(getrimmt)) continue
     if (/^(done|fi|esac)$/i.test(getrimmt)) continue
-    const woerter = getrimmt.split(/\s+/)
+    // `cd …` wechselt nur den Arbeitsordner und führt nichts aus (Befund
+    // 14.08.2026: Der Motor stellt fast jedem Befehl ein `cd "<Projekt>" &&`
+    // voran — das löste hunderte unnötige Rückfragen aus). Nur ohne
+    // $(…)-Unterausführung und Backticks überspringen.
+    if (/^cd(\s|$)/i.test(getrimmt) && !getrimmt.includes('$(') && !getrimmt.includes('`'))
+      continue
+    // PowerShell-Zuweisungen (`$edge = "…"`, `$env:X="1"`) führen selbst nichts
+    // aus: Ist die rechte Seite nur ein Wert (Text in Anführungszeichen, Zahl
+    // oder eine andere Variable), wird das Teilstück übersprungen — steht dort
+    // ein Befehl (`$x = Get-Content …`), wird genau der eingestuft.
+    let einzustufen = getrimmt
+    const zuweisung = getrimmt.match(/^\$\{?[\w:.()-]*\}?\s*=(?![=~])\s*([\s\S]*)$/)
+    if (zuweisung && !getrimmt.includes('$(') && !getrimmt.includes('`')) {
+      const rechts = zuweisung[1].trim()
+      if (/^(?:"[^"]*"|'[^']*'|-?\d[\d.]*|\$\{?[\w:.()-]+\}?|)$/.test(rechts)) continue
+      einzustufen = rechts
+    }
+    const woerter = einzustufen.split(/\s+/)
     while (woerter.length > 0 && GERUEST_VORSILBEN.has(woerter[0].toLowerCase())) woerter.shift()
     const erster = woerter[0]
     if (!erster) continue
