@@ -422,6 +422,11 @@ function Laufbericht({ bericht }) {
           {bericht.lokaleHelfer && (
             <p className="feld-hinweis">{tb.lokaleHelferZeile(bericht.lokaleHelfer)}</p>
           )}
+          {/* Karten-Vorschläge (Zweit-Audit D-03): SPEC verspricht die Zählung
+              im Laufbericht — vorher wurde sie nur gespeichert, nie gezeigt. */}
+          {bericht.kartenVorschlaege && (
+            <p className="feld-hinweis">{tb.kartenVorschlaegeZeile(bericht.kartenVorschlaege)}</p>
+          )}
           {(bericht.blockErgebnisse ?? []).length > 0 && (
             <div>
               <p className="bericht-abschnitt">{tb.blockErgebnisseLabel}</p>

@@ -93,7 +93,10 @@ Der Verbrauch steht je Block und für den ganzen Lauf im Bericht — seit 13.08.
   Lauf** und **nach jedem erfolgreichen schreibenden Block** (technisch Git, für den Nutzer
   unsichtbar — sichtbar nur als Liste: „14:32 — Prüfer bestanden"). Nur-lesende Blöcke
   ändern nichts und erzeugen deshalb keinen Punkt — ein Punkt, während parallel ein
-  schreibender Block arbeitet, würde dessen halbfertige Änderungen einfrieren.
+  schreibender Block arbeitet, würde dessen halbfertige Änderungen einfrieren. Die
+  Garantie „ändern nichts" gilt nicht, wenn die Einstellung „Nur-lesende Blöcke dürfen
+  Befehle ausführen" (§7) an ist: Ein ausgeführtes Skript kann dann Dateien verändern —
+  einen Sicherungspunkt gibt es für solche Blöcke trotzdem nicht.
 - Technik-Absicherung: Die Verwaltung nutzt ein eigenes, verstecktes Git-Verzeichnis
   **außerhalb** des Projektordners — das Projekt darf selbst ein Git-Repo sein oder werden.
   Dem Agenten ist Git-Benutzung per Sperre untersagt (hartes Nein, keine Rückfrage).
@@ -117,7 +120,10 @@ Der Verbrauch steht je Block und für den ganzen Lauf im Bericht — seit 13.08.
   ausgehen und mehrere an einer ankommen; Kreise sind verboten. Ein Block startet,
   sobald alle seine Vorgänger fertig sind — ein Block mit mehreren eingehenden Pfeilen
   führt die Zweige zusammen (er wartet auf alle). Gleichzeitig laufen dürfen mehrere
-  lesende Blöcke, aber höchstens ein schreibender (§5); ein sichtbarer Hinweis im
+  lesende Blöcke, aber höchstens ein schreibender (§5) — Achtung: Ist die Einstellung
+  „Nur-lesende Blöcke dürfen Befehle ausführen" (§7) an, kann auch ein „lesender"
+  Block über ausgeführte Skripte Dateien verändern; die Parallel-Regel bleibt dann
+  bewusst auf eigene Gefahr. Ein sichtbarer Hinweis im
   Ticker warnt, dass parallele Blöcke den Verbrauch vervielfachen. braucht/liefert
   gilt entlang der Pfeile: Was ein Block braucht, muss einer seiner Vorfahren liefern.
   **Zwischenstände beim Umbauen sind erlaubt:** Beim Bearbeiten darf das Schaubild
@@ -150,9 +156,9 @@ blockieren den Weiterlauf, Regeln stehen nicht nur als Text im Prompt.
 
 **Arbeitsblöcke** (echte Arbeitsaufträge, seit Bauschritt 8/9): Kontext laden ·
 Spec-Interview · Paket schneiden · Angreifer (nur lesend) · Diagnose (nur
-lesend) · Bauer · Prüfer · Audit (nur lesend, legt Karten an) · Karten-Prüfer
-(nur lesend, macht Vorschläge) · Frage an den Menschen (nur lesend) ·
-Sessionende (bringt die Karten auf Stand).
+lesend) · Bauer · Prüfer · Gesamtprüfung · Audit (nur lesend, legt Karten an) ·
+Karten-Prüfer (nur lesend, macht Vorschläge) · Frage an den Menschen (nur
+lesend) · Sessionende (bringt die Karten auf Stand).
 Auftragsquelle von Paket schneiden und Diagnose (Entscheidung Georg,
 07.08.2026): das Wunsch- bzw. Fehlerbild-Feld am Block **oder**, wenn es leer
 ist, die offenen Aufgaben-Karten der Kartenauswahl — sind beide leer, startet
@@ -235,7 +241,9 @@ bleibt als Recherche-Entlastung erlaubt (Häkchen je Block gilt). Je
 Längengrenzen; Kleinkram bleibt im Abschlussbericht) — die Befunde rutschen
 damit automatisch in die Kartenauswahl der nächsten Bau-Läufe, Paket schneiden
 nimmt sie als Auftragsquelle. Mechanik: Das Audit ist nur-lesend für Dateien und
-Befehle, darf aber Karten anlegen — ein eigenes Kennzeichen am Block (analog
+Befehle (Befehls-Ausführung nur, falls die §7-Einstellung „Nur-lesende Blöcke
+dürfen Befehle ausführen" an ist — sie gilt für alle nur-lesenden Blöcke, auch
+das Audit), darf aber Karten anlegen — ein eigenes Kennzeichen am Block (analog
 „darfPruefen"), durchgesetzt am Werkzeugaufruf; genau karte_anlegen ist
 freigeschaltet. Die vollständige Befundliste steht im Abschlusstext.
 
@@ -603,12 +611,21 @@ Befehls-Einstufung (seit Bauschritt 8): Kommandozeilen-Befehle, die mit einem be
 Entwickler-Werkzeug beginnen (node, npm, npx, pnpm, yarn, tsc, vitest, jest, python,
 pip, pytest), laufen ohne Rückfrage — das deckt „Tests ausführen" und „Programm-
 bibliotheken installieren" ab. Rein lesende Befehle (dir, type, findstr …) ebenso.
-Verkettete Befehle laufen nur durch, wenn jedes Teilstück bekannt ist. Ein
+Verkettete Befehle laufen nur durch, wenn jedes Teilstück bekannt ist — als
+Trenner zählen `&&`, `||`, `;`, `|`, Zeilenumbruch und auch das **einzelne `&`**
+(seit dem Zweit-Audit vom 14.08.2026). Enthält ein Teilstück eine
+Kommando-Substitution (`$(…)`, Backticks, `<(…)`), zählt es als Ganzes als
+unbekannter Befehl — Rückfrage bzw. unter „darf nur lesen" hartes Nein, denn in
+solchen Argumenten können beliebige Befehle stecken. Ein
 `cd`-Vorspann und PowerShell-Zuweisungen mit reiner Wert-Rechtsseite (`$x = "…"`,
 `$env:X="1"`) führen selbst nichts aus und zählen nicht als Teilstück (seit
 14.08.2026 — vorher lösten sie hunderte unnötige Rückfragen aus); steht rechts
-der Zuweisung ein Befehl, wird genau der eingestuft, und Unterausführungen
-(`$(…)`, Backticks) heben die Ausnahme auf. Alle anderen
+der Zuweisung ein Befehl, wird genau der eingestuft. Bash-Umgebungsvorsilben
+(`VAR=wert befehl`) werden übersprungen und der Befehl dahinter eingestuft —
+außer bei gefährlichen Variablen (PATH, NODE_OPTIONS …), die den Befehl umleiten
+oder Code einschleusen könnten. Eine Datei-Umleitung (`>`/`>>`) auf ein Ziel
+**außerhalb des Projektordners** löst dieselbe Rückfrage aus wie ein
+Schreib-Werkzeug außerhalb der Projektgrenze. Alle anderen
 Befehle lösen eine Rückfrage aus; Git bleibt hart gesperrt (§3.3), und die Prüfmappe
 `pruefung/` dürfen nur Prüf-Blöcke verändern (§4.3 — hartes Nein, auch für Befehle,
 die erkennbar hineinschreiben). Die Sperre „darf nur lesen" (§4.2) steht darüber:
@@ -622,7 +639,10 @@ dürfen Befehle ausführen (auf eigene Gefahr)"** ist an (Entscheidung Georg,
 14.08.2026; Standard: aus): Dann durchlaufen Befehle nur-lesender Blöcke die
 normale Befehls-Einstufung wie beim Bauer (Git und Prüfmappe bleiben gesperrt,
 Unbekanntes fragt) — Angreifer und Diagnose können so z.B. Prüfskripte laufen
-lassen, um ihre Funde zu belegen. Die Schreib-Werkzeuge (Dateien, Karten,
+lassen, um ihre Funde zu belegen. Damit der Agent das auch versucht, bekommt
+jeder nur-lesende Block bei aktiver Einstellung einen Auftrags-Zusatz, der das
+kategorische Befehls-Verbot seines Katalog-Auftrags aufhebt (seit dem
+Zweit-Audit vom 14.08.2026). Die Schreib-Werkzeuge (Dateien, Karten,
 Startanleitung) bleiben für diese Blöcke gesperrt; ein ausgeführtes Skript kann
 aber Dateien verändern — deshalb steht die aktive Einstellung sichtbar am
 Laufstart im Ticker.

@@ -131,6 +131,11 @@ const BEFEHLE_OHNE_RUECKFRAGE = new Set([
 // wird jeweils, was danach kommt.
 const GERUEST_VORSILBEN = new Set(['do', 'then', 'else', 'if', 'while', 'until', 'elif'])
 
+// Umgebungsvariablen, die den Befehl dahinter umleiten oder Code einschleusen
+// können — eine solche Vorsilbe wird NICHT übersprungen (Zweit-Audit C-03).
+const GEFAEHRLICHE_UMGEBUNG =
+  /^(path|pathext|comspec|shell|ifs|env|bash_env|psmodulepath|node_options|pythonpath|pythonhome|pythonstartup|ld_\w*|dyld_\w*)=/i
+
 // Zerlegt einen verketteten Befehl in seine Teilstücke und liefert die
 // Werkzeugnamen (cd-Vorspann wird übersprungen — er wechselt nur den Ordner).
 // Lese-Schleifen wie `for f in a.js b.js; do head $f; done` (Feedback Georg,
@@ -138,7 +143,12 @@ const GERUEST_VORSILBEN = new Set(['do', 'then', 'else', 'if', 'while', 'until',
 // übersprungen — eingestuft werden die Befehle im Schleifenkörper.
 function befehlsNamen(befehl) {
   const namen = []
-  for (const teil of String(befehl).split(/&&|\|\||[;|\n]/)) {
+  // Harmlose Zusammenführungs-Umleitungen (2>&1, 1>&2 …) vor der Zerlegung
+  // entfernen — ihr & ist kein Befehls-Trenner (Zweit-Audit C-01).
+  const bereinigt = String(befehl).replace(/\d*>&\d+/g, ' ')
+  // Auch das EINZELNE & trennt Befehle (Hintergrund-Verkettung) — vorher
+  // wurde bei „dir & del x" nur „dir" eingestuft (Zweit-Audit C-01).
+  for (const teil of bereinigt.split(/&&|\|\||[;&|\n]/)) {
     // Reine Text-Ausgaben wie "ExitCode=$LASTEXITCODE" (übliches
     // PowerShell-Anhängsel des Motors) führen nichts aus — außer sie enthalten
     // eine $(…)-Unterausführung oder Backticks, dann zählen sie als Befehl.
@@ -148,6 +158,14 @@ function befehlsNamen(befehl) {
     // $(…)-Unterausführung und Backticks; sonst normal einstufen.
     if (/^for\s+\S+\s+in\s[^$`]*$/i.test(getrimmt)) continue
     if (/^(done|fi|esac)$/i.test(getrimmt)) continue
+    // Kommando-Substitution führt Befehle mitten im Argument aus: $(…),
+    // Backticks und <(…) machen das ganze Teilstück zu einem unbekannten
+    // Befehl (Zweit-Audit C-01) — Rückfrage bzw. unter „darf nur lesen"
+    // hartes Nein, statt nur das erste, harmlose Wort einzustufen.
+    if (getrimmt.includes('$(') || getrimmt.includes('`') || getrimmt.includes('<(')) {
+      namen.push('kommando-substitution')
+      continue
+    }
     // `cd …` wechselt nur den Arbeitsordner und führt nichts aus (Befund
     // 14.08.2026: Der Motor stellt fast jedem Befehl ein `cd "<Projekt>" &&`
     // voran — das löste hunderte unnötige Rückfragen aus). Nur ohne
@@ -167,6 +185,17 @@ function befehlsNamen(befehl) {
     }
     const woerter = einzustufen.split(/\s+/)
     while (woerter.length > 0 && GERUEST_VORSILBEN.has(woerter[0].toLowerCase())) woerter.shift()
+    // Bash-Umgebungsvorsilben `VAR=wert befehl` setzen die Variable nur für
+    // genau diesen Aufruf — eingestuft wird der Befehl dahinter (Zweit-Audit
+    // C-03). Gefährliche Variablen (PATH & Co. können den Befehl umleiten,
+    // NODE_OPTIONS & Co. Code einschleusen) bleiben stehen und machen das
+    // Teilstück zum unbekannten Befehl.
+    while (
+      woerter.length > 1 &&
+      /^[A-Za-z_]\w*=/.test(woerter[0]) &&
+      !GEFAEHRLICHE_UMGEBUNG.test(woerter[0])
+    )
+      woerter.shift()
     const erster = woerter[0]
     if (!erster) continue
     namen.push(
@@ -198,6 +227,21 @@ function befehlNurLesend(befehl) {
   if (ohneHarmloseUmleitung.includes('>')) return false
   const namen = befehlsNamen(befehl).filter((name) => name !== 'cd')
   return namen.length > 0 && namen.every((name) => LESE_BEFEHLE.has(name))
+}
+
+// Datei-Umleitungen (>, >>) schreiben am Schreib-Werkzeug vorbei — die
+// Projekt-Grenze (SPEC §7) gilt auch für sie (Zweit-Audit C-02): Zeigt ein
+// Umleitungsziel aus dem Projektordner hinaus, wird gefragt. 2>&1 und
+// Wegwerf-Ziele (NUL, /dev/null) verändern keine Datei und zählen nicht.
+function umleitungsZielAusserhalb(befehl, projektPfad) {
+  const text = String(befehl)
+    .replace(/\d*>&\d+/g, ' ')
+    .replace(/>+\s*(\/dev\/null|nul)\b/gi, ' ')
+  for (const treffer of text.matchAll(/>+\s*("[^"]+"|'[^']+'|\S+)/g)) {
+    const ziel = treffer[1].replace(/^["']|["']$/g, '')
+    if (!liegtImProjekt(ziel, projektPfad)) return ziel
+  }
+  return null
 }
 
 // Der Prüfordner (SPEC §4.3, Entscheidung Georg, 12.08.2026): Die Prüfmappe
@@ -350,6 +394,11 @@ export function pruefeWerkzeug(name, eingabe, projektPfad, nurLesen, darfPruefen
       return { gesperrt: texte.rechteFrage.pruefmappeBildFuerAgent, tickerText: texte.ticker.pruefmappeBildGesperrt }
     if (!darfPruefen && befehlAendertPruefmappe(befehl))
       return { gesperrt: texte.rechteFrage.pruefmappeGesperrtFuerAgent, tickerText: texte.ticker.pruefmappeGesperrt }
+    // Umleitungsziel außerhalb des Projektordners: dieselbe Grenze wie bei
+    // den Schreib-Werkzeugen — Rückfrage statt stillem Schreiben (C-02).
+    const umleitungsZiel = umleitungsZielAusserhalb(befehl, projektPfad)
+    if (umleitungsZiel)
+      return { frage: texte.rechteFrage.schreibenAusserhalb(umleitungsZiel) }
     if (befehlOhneRueckfrage(befehl)) return { erlaubt: true }
     return { frage: texte.rechteFrage.befehl(befehl) }
   }
@@ -367,6 +416,19 @@ function kurzerPfad(datei, projektPfad) {
 function kuerzen(text, max = 160) {
   const einzeilig = String(text).replace(/\s+/g, ' ').trim()
   return einzeilig.length > max ? einzeilig.slice(0, max) + ' …' : einzeilig
+}
+
+// Das Werkzeug-Ergebnis des Agent-Aufrufs trägt hinter dem Fazit noch
+// Metadaten der CLI (agentId-Zeile, usage-Block) — die gehören nicht in
+// Übergaben und Laufberichte. Gestutzt wird nur, wenn vor der agentId-Marke
+// wirklich Text steht (Zweit-Audit C-04): Ein Fazit, das zufällig mit
+// „agentId:" beginnt, bleibt unverändert, statt still auf leer zu schrumpfen.
+// Exportiert, damit sich das Stutzen ohne laufenden Motor prüfen lässt.
+export function fazitStutzen(text) {
+  let t = String(text)
+  const marke = t.lastIndexOf('\nagentId:')
+  if (marke > 0) t = t.slice(0, marke)
+  return t.replace(/<usage>[\s\S]*?<\/usage>\s*$/, '').trim()
 }
 
 // Übersetzt eine SDK-Nachricht in Klartext-Zeilen für den Liveticker.
@@ -672,16 +734,6 @@ export function starteLaufMotor(optionen) {
       sessionKennung,
       ...extra
     })
-  }
-
-  // Das Werkzeug-Ergebnis des Agent-Aufrufs trägt hinter dem Fazit noch
-  // Metadaten der CLI (agentId-Zeile, usage-Block) — die gehören nicht in
-  // Übergaben und Laufberichte.
-  function fazitStutzen(text) {
-    let t = String(text)
-    const marke = t.startsWith('agentId:') ? 0 : t.lastIndexOf('\nagentId:')
-    if (marke >= 0) t = t.slice(0, marke)
-    return t.replace(/<usage>[\s\S]*?<\/usage>\s*$/, '').trim()
   }
 
   // Harte Sperren pro Aufrufer (BAUPLAN 19), durchgesetzt VOR jedem

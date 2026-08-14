@@ -28,9 +28,10 @@ geblieben ist.
 
 1. Sessionstart wie üblich: SPEC.md, BAUPLAN.md, `git log --oneline` lesen.
 2. **Umgebung messen statt annehmen** — fehlt etwas, ist das eine Meldung an
-   Georg, kein stiller Ausweichpfad: `npm run build` läuft am unveränderten
-   Stand durch; Electron-Prüfskripte laufen (`npx electron <skript>` im
-   Scratch-Ordner); für Motor-Läufe: App aus `out/` startbar mit
+   Georg, kein stiller Ausweichpfad: `npm run build` und `npm test` (die
+   Regel-Prüfungen in `pruefungen/`, seit der Zweitaudit-Behebung 14.08.2026)
+   laufen am unveränderten Stand durch; Electron-Prüfskripte laufen
+   (`npx electron <skript>` im Scratch-Ordner); für Motor-Läufe: App aus `out/` startbar mit
    `--remote-debugging-port` (CDP-Fernsteuerung ist der Testweg, keine
    Desktop-Steuerung), Motor im Abo-Modus angemeldet.
 3. **Verdachtsliste schreiben** — Verdacht schlägt Checkliste, ohne

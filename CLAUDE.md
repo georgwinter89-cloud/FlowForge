@@ -20,6 +20,7 @@ Ausnahme: Sagt Georg „Führe das Zweit-Audit aus", gilt statt alldem die Proze
 - Versionsnummer in package.json an den Bauschritt koppeln: Bauschritt N → 0.N.0
   (Zwischen-Sessions ohne Bauschritt erhöhen die dritte Stelle). Erst dann bauen —
   Georg erkennt den Stand am Dateinamen der Setup-Datei.
+- `npm test` (Regel-Prüfungen in `pruefungen/`) muss grün sein, bevor gebaut wird.
 - Installierbare Version bauen; Build-Befehle sind die in package.json definierten Scripts.
 - Abschluss-Commit: „Bauschritt N: <Titel>".
 

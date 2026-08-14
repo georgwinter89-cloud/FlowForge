@@ -1,6 +1,5 @@
 // Alle Oberflächen-Texte zentral an einem Ort (Deutsch; weitere Sprachen in V2).
 export const texte = {
-  appName: 'FlowForge',
   fensterTitel: 'FlowForge',
   // Kopfleiste = Titelleiste der dunklen Werkbank (Mockup-Runden 3+4).
   kopfleiste: {
@@ -72,7 +71,6 @@ export const texte = {
     neuerBlock: 'Neuer Block',
     ueberschriftNeu: 'Eigenen Block erstellen',
     ueberschriftBearbeiten: 'Block bearbeiten',
-    schrittAnzeige: (nr, gesamt) => `Schritt ${nr} von ${gesamt}`,
     schritt1Titel: 'Was soll der Block tun?',
     schritt2Titel: 'Was braucht und liefert er?',
     schritt3Titel: 'Welche Sperren gelten?',
@@ -99,7 +97,7 @@ export const texte = {
     etikettHinzufuegen: 'Hinzufügen',
     nurLesenFeld: 'Sperre „darf nur lesen"',
     nurLesenHinweis:
-      'Der Block darf dann nichts verändern: kein Schreiben, keine Befehle, kein Internet — nur lesen. Die sichere Wahl für alles, was nur ansehen und berichten soll. Nur-lesende Blöcke dürfen außerdem parallel zu einem schreibenden laufen.',
+      'Der Block darf dann nichts verändern: kein Schreiben, keine verändernden Befehle (rein lesende laufen durch), kein Internet — nur lesen. Die sichere Wahl für alles, was nur ansehen und berichten soll. Nur-lesende Blöcke dürfen außerdem parallel zu einem schreibenden laufen.',
     vorschauHinweis:
       'So liegt der Block in der Bibliothek — und genau diesen Arbeitsauftrag bekommt der Agent. Passt alles? Dann speichern.',
     vorschauAuftrag: 'Arbeitsauftrag an den Agenten',
@@ -347,6 +345,9 @@ export const texte = {
       'Entscheidungs-Karten sind Festlegungen des Nutzers — sie werden nie umformuliert ' +
       'oder gelöscht. Widerspricht der Code der Festlegung, schlage stattdessen mit ' +
       'art "anlegen" eine Aufgaben-Karte vor, die den Widerspruch benennt.',
+    statusNurAktualisierbar:
+      'Die Status-Karte wird nie gelöscht — sie ist nur aktualisierbar. Ist ihr Inhalt ' +
+      'veraltet, schlage mit art "aktualisieren" einen neuen Inhalt vor (ihr Titel bleibt fest).',
     felderUngueltig: (titelMax, textMax) =>
       `Abgelehnt: titel (höchstens ${titelMax} Zeichen) und text (höchstens ${textMax} ` +
       'Zeichen) müssen beide gefüllt sein. Bei der Status-Karte zählt nur der text — ' +
@@ -388,6 +389,17 @@ export const texte = {
     ueberschrift: 'Übergaben aus den vorherigen Blöcken dieses Laufs:\n\n',
     eintrag: (etikett, blockName, text) => `### ${etikett} — von Block „${blockName}"\n${text}\n\n`,
     auftragEinleitung: 'Dein Arbeitsauftrag:\n',
+    // Einstellung „Nur-lesende Blöcke dürfen Befehle ausführen" (Zweit-Audit
+    // D-01): Die Blockaufträge verbieten Befehle kategorisch — ohne diesen
+    // Zusatz versucht der Agent es auftragsgemäß gar nicht erst, obwohl die
+    // Sperre im Motor längst gelockert ist.
+    nurLesenBefehleZusatz:
+      '\n\nZusatz von FlowForge: Die Einstellung „Nur-lesende Blöcke dürfen Befehle ' +
+      'ausführen" ist an — abweichend von deinem Auftrag darfst du in diesem Lauf ' +
+      'Befehle ausführen (z.B. Prüfskripte oder Tests, um deine Funde zu belegen). ' +
+      'Es gelten die normalen Befehls-Regeln: Git und die Prüfmappe bleiben gesperrt, ' +
+      'Unbekanntes löst eine Rückfrage aus. Die Schreib-Werkzeuge für Dateien bleiben ' +
+      'für diesen Block gesperrt; für Karten gilt weiter, was dein Auftrag sagt.',
     prueferRueckmeldung: (kritik) =>
       '\n\nRückmeldung des Prüfers aus der letzten Runde (bitte beheben):\n' + kritik,
     // Reparatur-Runde beim Prüfer (Entscheidung Georg, 12.08.2026): nur die
@@ -833,7 +845,6 @@ export const texte = {
     denkenKoordinator: 'Koordinator',
     denkenUnteraufgabe: 'Unteraufgabe',
     denkenLokaleKi: 'lokale KI',
-    tickerUeberschrift: 'Liveticker',
     verbrauchKontext: (von, bis) => `Kontext: etwa ${von}–${bis} % gefüllt`,
     verbrauchTokens: (tokens) => `${tokens.toLocaleString('de-DE')} Tokens`,
     verbrauchKosten: (usd) => `Kosten bisher: ${usd.toFixed(2).replace('.', ',')} $`,
@@ -914,7 +925,7 @@ export const texte = {
     // Verfeinerte Lese-Sperre (Feedback Georg, 12.08.2026): rein lesende
     // Befehle laufen durch — für alles andere sagt die Meldung ehrlich, warum.
     nurLesenBefehlFuerAgent:
-      'Dieser Block darf nur lesen. Rein lesende Befehle (dir, ls, type, cat, findstr, grep, where, echo, pwd, head, tail, wc) laufen durch — dieser Befehl gehört nicht dazu, auch Ausführen von Programmen oder Tests zählt nicht als Lesen. Nutze die Lese-Werkzeuge oder einen rein lesenden Befehl.',
+      'Dieser Block darf nur lesen. Rein lesende Befehle (z.B. dir, ls, type, cat, findstr, grep, where, echo, pwd, head, tail, wc — auch die PowerShell-Gegenstücke wie Get-ChildItem, Get-Content, Select-String) laufen durch — dieser Befehl gehört nicht dazu, auch Ausführen von Programmen oder Tests zählt nicht als Lesen. Nutze die Lese-Werkzeuge oder einen rein lesenden Befehl.',
     // Prüfmappen-Sperre (Feedback Georg, 12.08.2026): die Testdateien im
     // Prüfordner gehören dem Prüfer — kein anderer Block ändert sie.
     pruefmappeGesperrtFuerAgent:
@@ -1266,6 +1277,10 @@ export const texte = {
       `Der Kontext von „${block}" war voll, aber die Übergabe ging verloren — die frische Session hat den Stand selbst aus Projektordner und Karten gelesen.`,
     fortgesetztHinweis: 'Dieser Lauf wurde nach einer Unterbrechung am letzten Sicherungspunkt fortgesetzt.',
     blockTokens: (tokens) => `Verbrauch: ${tokens.toLocaleString('de-DE')} Tokens`,
+    // Karten-Vorschläge (Zweit-Audit D-03): Die gespeicherte Zählung des
+    // Karten-Prüfers steht sichtbar im Bericht — nicht nur in Ticker-Zeilen.
+    kartenVorschlaegeZeile: (z) =>
+      `Karten-Vorschläge: ${z.uebernommen ?? 0} übernommen · ${z.bearbeitet ?? 0} bearbeitet · ${z.abgelehnt ?? 0} abgelehnt`,
     // Lokale Helfer-KI (Wunsch Georg, 13.08.2026): ihr Anteil im Bericht.
     // Seit BAUPLAN 20 zählen auch die Vorreparatur-Versuche mit — samt der
     // Frage, wie viele davon die Nachprüfung bestanden haben.

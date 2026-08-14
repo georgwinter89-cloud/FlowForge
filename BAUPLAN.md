@@ -1,6 +1,6 @@
 # FlowForge — Bauplan V1
 
-Stand: 07.08.2026 · Grundlage: [SPEC.md](SPEC.md) · Status: nach Angreifer-Prüfung
+Ursprung: 07.08.2026, fortlaufend gepflegt · Grundlage: [SPEC.md](SPEC.md) · Status: nach Angreifer-Prüfung
 (2 Angriffslisten eingearbeitet; 21 Funde, davon 3 blockierend — alle aufgelöst.
 Motor-Entscheidung durch Georg am 07.08.2026: Abo-Modus für Eigengebrauch, Details SPEC §2.
 Leinwand-Entscheidung durch Georg am 07.08.2026: Schaubild aus Karten + Pfeilen als

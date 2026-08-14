@@ -1156,6 +1156,12 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         // — nur wenn die lokale KI bereitsteht und das Häkchen am Block an ist.
         if (lokaleHelfer && k.def.startanleitungPflicht && k.eintrag.lokaleKi !== false)
           auftrag += texte.agentenLokaleHelfer.bauenAuftragZusatz
+        // Einstellung „Nur-lesende Blöcke dürfen Befehle ausführen" (Zweit-
+        // Audit D-01): Die Katalog-Aufträge verbieten Befehle kategorisch
+        // („versuche es gar nicht erst") — bei aktiver Einstellung lockert
+        // dieser Zusatz den Auftrag, sonst bleibt die Sperre im Motor Theorie.
+        if (einstellungen.nurLesenBefehle && k.def.nurLesen)
+          auftrag += texte.agentenUebergabe.nurLesenBefehleZusatz
         // Häkchen je Block (BAUPLAN 20): Ist die lokale KI für diesen Block
         // abgewählt, fliegt ihr Hinweis aus dem Auftrag — die harte Sperre
         // für das Werkzeug selbst sitzt im Motor.

@@ -15,6 +15,45 @@ import { texte } from '../../shared/texte.js'
 import { TITEL_MAX, TEXT_MAX } from '../../shared/kartenRegeln.js'
 import { kartenLaden } from '../projekte.js'
 
+// Leitplanken je Art — abgewiesene Vorschläge erreichen den Nutzer nie.
+// Reine Funktion, exportiert, damit sich die Regeln ohne Motor prüfen lassen:
+// liefert { fehler } oder { ok, titel, text } (titel/text ggf. normalisiert).
+export function vorschlagLeitplanken({ art, kartenId, karte, titel, text }) {
+  const tv = texte.agentenVorschlag
+  if (art !== 'anlegen' && !karte) return { fehler: tv.unbekannteId(String(kartenId ?? '?')) }
+  if (karte?.sorte === 'pruefung') return { fehler: tv.pruefkarteTabu }
+  if (karte?.sorte === 'entscheidung' && art !== 'erledigen' && art !== 'oeffnen')
+    return { fehler: tv.entscheidungTabu }
+  if (art === 'aktualisieren') {
+    if (!['status', 'wissen', 'aufgabe'].includes(karte.sorte))
+      return { fehler: tv.entscheidungTabu }
+    const neuerTitel = karte.sorte === 'status' ? karte.titel : String(titel ?? '').trim()
+    const neuerText = String(text ?? '').trim()
+    if (!neuerTitel || !neuerText || neuerTitel.length > TITEL_MAX || neuerText.length > TEXT_MAX)
+      return { fehler: tv.felderUngueltig(TITEL_MAX, TEXT_MAX) }
+    if (neuerTitel === karte.titel && neuerText === karte.text)
+      return { fehler: tv.nichtsGeaendert }
+    return { ok: true, titel: neuerTitel, text: neuerText }
+  }
+  if (art === 'erledigen' || art === 'oeffnen') {
+    if (karte.sorte !== 'aufgabe') return { fehler: tv.nurAufgaben }
+    if (art === 'erledigen' && karte.erledigt) return { fehler: tv.schonErledigt }
+    if (art === 'oeffnen' && !karte.erledigt) return { fehler: tv.schonOffen }
+  }
+  if (art === 'loeschen' && !['wissen', 'aufgabe'].includes(karte.sorte))
+    // Die Status-Karte bekommt ihre eigene, sachlich richtige Begründung
+    // (Zweit-Audit D-08) — sie ist keine Festlegung, sondern nur fest verbaut.
+    return { fehler: karte.sorte === 'status' ? tv.statusNurAktualisierbar : tv.entscheidungTabu }
+  if (art === 'anlegen') {
+    const neuerTitel = String(titel ?? '').trim()
+    const neuerText = String(text ?? '').trim()
+    if (!neuerTitel || !neuerText || neuerTitel.length > TITEL_MAX || neuerText.length > TEXT_MAX)
+      return { fehler: tv.felderUngueltig(TITEL_MAX, TEXT_MAX) }
+    return { ok: true, titel: neuerTitel, text: neuerText }
+  }
+  return { ok: true, titel: titel ?? null, text: text ?? null }
+}
+
 // Baut den In-Prozess-Werkzeugkasten „vorschlaege" für einen Motor-Lauf.
 // aufKartenVorschlag(vorschlag) kommt aus der Lauf-Verwaltung und löst mit
 // { wahl: 'uebernommen' | 'bearbeitet' | 'abgelehnt', titel?, text? } auf —
@@ -60,38 +99,10 @@ export async function vorschlagWerkzeugServer({ projektPfad, aufKartenVorschlag 
       if (!geladen.ok) return fehler(geladen.fehler)
       const karte = kartenId ? geladen.karten.find((k) => k.id === kartenId) : null
 
-      // Leitplanken je Art — abgewiesene Vorschläge erreichen den Nutzer nie.
-      if (art !== 'anlegen' && !karte) return fehler(tv.unbekannteId(String(kartenId ?? '?')))
-      if (karte?.sorte === 'pruefung') return fehler(tv.pruefkarteTabu)
-      if (karte?.sorte === 'entscheidung' && art !== 'erledigen' && art !== 'oeffnen')
-        return fehler(tv.entscheidungTabu)
-      if (art === 'aktualisieren') {
-        if (!['status', 'wissen', 'aufgabe'].includes(karte.sorte))
-          return fehler(tv.entscheidungTabu)
-        const neuerTitel = karte.sorte === 'status' ? karte.titel : String(titel ?? '').trim()
-        const neuerText = String(text ?? '').trim()
-        if (!neuerTitel || !neuerText || neuerTitel.length > TITEL_MAX || neuerText.length > TEXT_MAX)
-          return fehler(tv.felderUngueltig(TITEL_MAX, TEXT_MAX))
-        if (neuerTitel === karte.titel && neuerText === karte.text)
-          return fehler(tv.nichtsGeaendert)
-        titel = neuerTitel
-        text = neuerText
-      }
-      if (art === 'erledigen' || art === 'oeffnen') {
-        if (karte.sorte !== 'aufgabe') return fehler(tv.nurAufgaben)
-        if (art === 'erledigen' && karte.erledigt) return fehler(tv.schonErledigt)
-        if (art === 'oeffnen' && !karte.erledigt) return fehler(tv.schonOffen)
-      }
-      if (art === 'loeschen' && !['wissen', 'aufgabe'].includes(karte.sorte))
-        return fehler(tv.entscheidungTabu)
-      if (art === 'anlegen') {
-        const neuerTitel = String(titel ?? '').trim()
-        const neuerText = String(text ?? '').trim()
-        if (!neuerTitel || !neuerText || neuerTitel.length > TITEL_MAX || neuerText.length > TEXT_MAX)
-          return fehler(tv.felderUngueltig(TITEL_MAX, TEXT_MAX))
-        titel = neuerTitel
-        text = neuerText
-      }
+      const urteil = vorschlagLeitplanken({ art, kartenId, karte, titel, text })
+      if (urteil.fehler) return fehler(urteil.fehler)
+      titel = urteil.titel
+      text = urteil.text
 
       const antwort = await aufKartenVorschlag({
         art,
