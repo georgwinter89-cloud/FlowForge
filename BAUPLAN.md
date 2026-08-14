@@ -420,15 +420,22 @@ liest und tut — und ob Opus ihr Fazit wirklich berücksichtigt hat.)
   Reparatur und Bauen gleichermaßen; nur texte.js und die vier
   aufSchritt-Aufrufer werden angefasst.
 - **Fazit-Annahme sichtbar — dasselbe Abnahme-Muster wie bei Entwürfen und
-  Teilstücken:** Neues Pflicht-Werkzeug `recherche_bewerten` nach jedem
-  lokal_recherchieren: Der Block-Agent meldet übernommen (Fazit fließt in
-  seine Arbeit ein) oder verworfen (selbst nachrecherchiert), mit einem Satz
-  Begründung. Ticker („Agent übernimmt das Fazit: …" / „Agent verwirft das
-  Fazit: …") und Laufbericht (Lokale-Helfer-Zeile: Recherchen
-  übernommen/verworfen) zählen mit — erst damit ist die Kosten-Wette der
-  lokalen KI über alle drei Helfer-Arten ehrlich messbar (wichtig für die
-  Hardware-Entscheidung 2× RTX 5070 Ti). Bewusster Preis: ein kleiner
-  zusätzlicher Werkzeugaufruf je Recherche.
+  Teilstücken, hinter eigenem Schalter** (Wunsch Georg, 14.08.2026): Neue
+  Einstellung im Lokale-KI-Abschnitt, etwa „Trefferquote der lokalen KI
+  erfassen (minimaler Token-Mehrverbrauch)". Ist sie an, bekommt der
+  Block-Agent das Pflicht-Werkzeug `recherche_bewerten` nach jedem
+  lokal_recherchieren: übernommen (Fazit fließt in seine Arbeit ein) oder
+  verworfen (selbst nachrecherchiert), mit einem Satz Begründung. Ticker
+  („Agent übernimmt das Fazit: …" / „Agent verwirft das Fazit: …") und
+  Laufbericht (Lokale-Helfer-Zeile: Recherchen übernommen/verworfen) zählen
+  mit — erst damit ist die Kosten-Wette der lokalen KI über alle drei
+  Helfer-Arten ehrlich messbar (wichtig für die Hardware-Entscheidung
+  2× RTX 5070 Ti). Ist der Schalter aus, gibt es weder Werkzeug noch
+  Auftrags-Hinweis — kein Mehrverbrauch. Die Abnahmen bei Entwürfen und
+  Teilstücken bleiben immer Pflicht (sie steuern Übernahme und Rückrollen,
+  sind also Mechanik, keine Messung). Vorschlag Standard: an, solange die
+  lokale KI ein Experiment ist — ohne Quote ist die Wette blind; Georg kann
+  ihn jederzeit abwählen.
 **Alltagstest:** Georg startet einen Lauf mit lokaler Recherche und liest im
 Ticker Datei für Datei mit, was die lokale KI tut; danach steht sichtbar, ob
 der Agent das Fazit übernommen hat, und der Laufbericht zählt beides.
