@@ -535,6 +535,29 @@ Der Ordner `arbeitsablage/` ist die Wegwerf-Fläche aller Agenten für Hilfsskri
 und Probeläufe: von Sicherungspunkten ausgenommen, von FlowForge am Lauf-Ende
 automatisch geleert.
 
+**Prozess-Hygiene** (seit Bauschritt 32, Befund Georg 15.08.2026: ein Prüfer-Lauf
+hatte einen Server gestartet und nie beendet — der lief unsichtbar weiter, der Port
+war belegt): Am Ende jedes Laufs — erfolgreich, sanft gestoppt oder hart
+abgebrochen — beendet FlowForge alle noch lebenden Prozesse, die aus dem Lauf
+heraus gestartet wurden, und vermerkt es ehrlich im Ticker („2 verwaiste Prozesse
+aus dem Lauf beendet (node.exe)"). Mechanik: Während eines Laufs (und eines Chats
+oder einer laufenden App) fragt ein dauerhafter PowerShell-**Späher** alle 2
+Sekunden die Prozessliste ab (~60–120 ms je Abfrage); die Motor-Prozesse melden
+sich als Wurzeln, und FlowForge merkt sich je Lauf transitiv jeden Prozess, dessen
+Elternteil zur bekannten Menge gehört — auch wenn der Elternteil längst tot ist
+(die Bash-Shell des Agenten stirbt sofort nach `npm start &`) —, je Prozess PID +
+Startzeit gegen Wiederverwendung. Die Motor-Prozesse selbst bekommen anderthalb
+Sekunden, geordnet zu enden, dann fallen auch sie. Grenze (ehrlich): Eine
+Zwischen-Shell, die kürzer als ein Abfrage-Abstand lebt, sieht der Späher nie —
+ihr Kind wird nicht automatisch beendet, sondern erscheint im App-Tab (§8) als
+„vermutlich aus einem Lauf" mit Beenden-Knopf. Der Chat räumt beim Schließen
+(Laufstart) ebenso ab. Die per App-Tab gestartete App bleibt unangetastet (eigene
+Gruppe, eigener Stopp-Knopf). **FlowForge-Ende räumt ab:** Beim normalen Beenden
+werden laufende Motoren, Chats, die gestartete App und alle gemerkten Nachkommen
+mit beendet (Node beendet unter Windows keine Kinder); ein unterbrochener Lauf
+bleibt als Laufstand wiederaufnehmbar (§3.3). „Nichts läuft unsichtbar weiter"
+gilt fürs normale Beenden, nicht für einen Absturz.
+
 **Übungs-Blöcke** bleiben für Probeläufe in der Bibliothek (eigener Abschnitt):
 Späher, Mini-Bauer, fairer und strenger Übungs-Prüfer, Karten-Probe, Rechte-Probe.
 
@@ -836,11 +859,37 @@ seinem Lauf, bekommt er genau eine Nachbesserungs-Runde (unabhängig von den Rep
 fehlt sie danach immer noch, macht der Lauf weiter und vermerkt das ehrlich im Ticker und am
 Block-Ergebnis.
 
-Pro Projekt gibt es einen **„App starten"-Knopf** (im Kopf der Projektansicht), der genau
-diese Anleitung ausführt: Befehl → eigenes sichtbares Konsolenfenster im Projektordner;
-Adresse → Browser (bei Web-Apps mit eigenem Server wartet FlowForge bis zu 30 Sekunden,
-bis die Adresse antwortet, und öffnet den Browser erst dann); Datei-Adresse → Standard-
-programm der Datei. Ohne Startanleitung ist der Knopf grau und erklärt, wie sie entsteht.
+Ausgeführt wird die Anleitung **im Tab „App"** der Projektansicht (seit Bauschritt 32; das
+frühere externe Konsolenfenster gibt es nicht mehr — Entscheidung Georg, 15.08.2026). Der
+Tab zeigt die Startanleitung, **Starten / Stoppen / Neu starten**, den Zustand („läuft
+seit …", „gestoppt um …", „beendet mit Code …") und die **Ausgabe der laufenden App live**
+(Standard- und Fehlerausgabe in einem Strom, ANSI-Farbcodes gestrippt, `\r`-Fortschritts-
+zeilen werden überschrieben, Puffer ~120.000 Zeichen). Der Befehl läuft im Projektordner
+über eine Shell mit UTF-8-Codepage (`chcp 65001`), Python-Kinder bekommen `PYTHONUTF8=1`/
+`PYTHONIOENCODING=utf-8`, Farben sind per `NO_COLOR`/`FORCE_COLOR=0` abgestellt. **Der
+Prozess hat keine Eingabe** — Startanleitungen müssen ohne Tastatureingabe auskommen.
+Stoppen trifft immer den ganzen Prozessbaum (`taskkill /T /F`) samt den vom Späher (§5)
+gemerkten Nachkommen. Adresse → „Adresse im Browser öffnen" (bei Web-Apps mit eigenem
+Befehl wartet FlowForge bis zu 30 Sekunden, bis die Adresse antwortet, und öffnet den
+Browser erst dann — auch automatisch nach dem Start); Datei-Adresse → Standardprogramm der
+Datei; Anleitung ohne Befehl → „Starten" öffnet nur die Adresse/Datei.
+
+**Port-Prüfung vor dem Start:** Ist der Port einer lokalen Startanleitungs-Adresse belegt,
+nennt FlowForge den Besitzer-Prozess (Name, PID, Befehlszeile) und bietet an, ihn zu beenden
+und die App dann zu starten — der direkte Treffer fürs Symptom „Port belegt vom vergessenen
+Prüfer-Server".
+
+Der **„App starten"-Knopf** im Kopf der Projektansicht springt in den App-Tab und startet
+dort (läuft die App schon, springt er nur: „App läuft"). Ohne Startanleitung ist der Knopf
+grau und erklärt, wie sie entsteht.
+
+**Rückfall-Liste „noch laufende Prozesse aus Läufen"** unten im App-Tab: Prozesse, die sich
+am Lauf-Ende nicht beenden ließen, und verwaiste Prozesse, die während eines Laufs
+entstanden sind (Elternteil tot; ehrlich als „vermutlich aus einem Lauf" markiert — es kann
+auch etwas Selbstgestartetes sein, deshalb steht die Befehlszeile dabei) — je Zeile ein
+Beenden-Knopf mit Abgleich PID + Startzeit. Die per „Starten" gestartete App steht dort
+nicht (sie hat ihren eigenen Stopp-Knopf), ebenso wenig Prozesse eines gerade laufenden
+Laufs.
 
 ## 9. GUI-Grundaufbau
 
@@ -870,7 +919,8 @@ und auf der Hero-Kachel.
   Kartenauswahl) · **Lauf** (Verbrauch, Stopp, Gespräch, Liveticker, Denk-Bereich,
   Ergebnis) · **Laufberichte** (seit Bauschritt 15 filterbar nach Ausgang; Details je
   Bericht mit Dauer und den Ergebnissen jedes Blocks) · **Sicherungspunkte** ·
-  **Metriken** (seit Bauschritt 31, §3.4 — aufs Projekt vorgefiltert). Beim Lauf-Start wechselt
+  **Metriken** (seit Bauschritt 31, §3.4 — aufs Projekt vorgefiltert) · **App** (seit
+  Bauschritt 32, §8 — Startanleitung ausführen, Ausgabe live, Prozess-Liste). Beim Lauf-Start wechselt
   die Ansicht automatisch zum Lauf-Tab; wartet dort eine Frage, zeigt der Tab
   einen roten Punkt. Die laufende Block-Karte bleibt im Schaubild-Tab hervorgehoben.
 

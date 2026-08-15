@@ -20,6 +20,7 @@ import { startWerkzeugServer } from './startWerkzeuge.js'
 import { vorschlagWerkzeugServer } from './vorschlagWerkzeuge.js'
 import { laufVorschlagWerkzeugServer } from './laufVorschlagWerkzeuge.js'
 import { kartenZuteilungWerkzeugServer } from './kartenZuteilungWerkzeuge.js'
+import { prozessWurzelMelden } from '../prozesse.js'
 
 const laden = createRequire(import.meta.url)
 
@@ -997,6 +998,9 @@ export function starteLaufMotor(optionen) {
             stdio: ['pipe', 'pipe', 'pipe'],
             windowsHide: true
           })
+          // Prozess-Hygiene (BAUPLAN 32): der Motor-Prozess ist eine Wurzel —
+          // alles, was der Agent daraus startet, gehört zum Lauf.
+          if (kindProzess.pid) prozessWurzelMelden('lauf:' + projektPfad, projektPfad, kindProzess.pid)
           return kindProzess
         },
         // Harte Sperren pro Aufrufer — vor jedem Werkzeugaufruf, auch dem
@@ -1594,6 +1598,8 @@ export function starteChatMotor(optionen) {
             stdio: ['pipe', 'pipe', 'pipe'],
             windowsHide: true
           })
+          // Prozess-Hygiene (BAUPLAN 32): auch der Chat-Prozess ist eine Wurzel.
+          if (kindProzess.pid) prozessWurzelMelden('chat:' + projektPfad, projektPfad, kindProzess.pid)
           return kindProzess
         },
         hooks: { PreToolUse: [{ hooks: [vorWerkzeug] }] },

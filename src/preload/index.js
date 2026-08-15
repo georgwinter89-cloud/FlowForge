@@ -60,7 +60,21 @@ contextBridge.exposeInMainWorld('flowforge', {
   metrikenLaden: () => ipcRenderer.invoke('metriken-laden'),
   pruefmappeLesen: (pfad) => ipcRenderer.invoke('pruefmappe-lesen', pfad),
   startanleitungLaden: (pfad) => ipcRenderer.invoke('startanleitung-laden', pfad),
-  appStarten: (pfad) => ipcRenderer.invoke('app-starten', pfad),
+  // App-Tab (BAUPLAN 32): Start/Stopp/Neustart, Zustand samt Ausgabe, Adresse
+  // öffnen; Rückfall-Liste noch laufender Prozesse aus Läufen.
+  appStarten: (pfad, portFreimachen = false) =>
+    ipcRenderer.invoke('app-starten', { pfad, portFreimachen }),
+  appStoppen: (pfad) => ipcRenderer.invoke('app-stoppen', pfad),
+  appNeustarten: (pfad) => ipcRenderer.invoke('app-neustarten', pfad),
+  appZustand: (pfad) => ipcRenderer.invoke('app-zustand', pfad),
+  appAdresseOeffnen: (pfad) => ipcRenderer.invoke('app-adresse-oeffnen', pfad),
+  verwaisteProzesse: () => ipcRenderer.invoke('verwaiste-prozesse'),
+  prozessBeenden: (pid, start) => ipcRenderer.invoke('prozess-beenden', { pid, start }),
+  aufAppEreignis: (rueckruf) => {
+    const empfaenger = (_ereignis, daten) => rueckruf(daten)
+    ipcRenderer.on('app-ereignis', empfaenger)
+    return () => ipcRenderer.removeListener('app-ereignis', empfaenger)
+  },
   sicherungspunkteLaden: (pfad) => ipcRenderer.invoke('sicherungspunkte-laden', pfad),
   wiederherstellenVorschau: (pfad, punktId) =>
     ipcRenderer.invoke('wiederherstellen-vorschau', { pfad, punktId }),

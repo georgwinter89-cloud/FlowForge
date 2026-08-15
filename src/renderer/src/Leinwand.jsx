@@ -12,6 +12,7 @@ import { BlockChips } from './Blockbibliothek.jsx'
 import Bestaetigung from './Bestaetigung.jsx'
 import KontextAnzeige from './KontextAnzeige.jsx'
 import Metriken from './Metriken.jsx'
+import AppTab from './AppTab.jsx'
 
 const t = texte.lauf
 const tk = texte.kette
@@ -984,6 +985,11 @@ export default function Leinwand({
   karten,
   // Sprung zum Laufbericht (BAUPLAN 30): { laufId, n } aus der Herkunfts-Kopfzeile.
   berichtSprung = null,
+  // App-Tab (BAUPLAN 32): Startanleitung, Sprung+Start vom Kopf-Knopf (Zähler),
+  // Rückmeldung des App-Zustands an den Kopf.
+  anleitung = null,
+  appSprung = 0,
+  onAppZustand,
   kontingentVerhalten,
   onKontingentVerhalten,
   onWiederhergestellt
@@ -1036,7 +1042,7 @@ export default function Leinwand({
   // initialTab: „Zum Gespräch"/„Zum Lauf" auf der Projektübersicht öffnen
   // das Projekt direkt mit dem Lauf-Tab vorn.
   const [tab, setTab] = useState(
-    ['schaubild', 'lauf', 'berichte', 'punkte', 'metriken'].includes(initialTab) ? initialTab : 'schaubild'
+    ['schaubild', 'lauf', 'berichte', 'punkte', 'metriken', 'app'].includes(initialTab) ? initialTab : 'schaubild'
   )
   // Eigener Bestätigungs-Dialog statt window.confirm (Bugfix 13.08.2026):
   // null = zu, sonst { frage, knopf, gefahr, aktion }.
@@ -1261,6 +1267,12 @@ export default function Leinwand({
     setBerichtFilter('alle')
     setTab('berichte')
   }, [berichtSprung])
+
+  // „App starten" im Kopf (BAUPLAN 32): springt in den App-Tab; der Start
+  // selbst passiert dort (Zähler appSprung als Anstoß).
+  useEffect(() => {
+    if (appSprung) setTab('app')
+  }, [appSprung])
 
   useEffect(() => {
     denkEnde.current?.scrollIntoView({ block: 'nearest' })
@@ -1746,7 +1758,11 @@ export default function Leinwand({
     ['punkte', `${texte.projektansicht.tabPunkte} (${punkte.length})`],
     // Metriken (BAUPLAN 31): dieselbe Seite wie in der Titelleiste, aufs
     // Projekt vorgefiltert — eigener Baustein (Metriken.jsx).
-    ['metriken', texte.projektansicht.tabMetriken]
+    ['metriken', texte.projektansicht.tabMetriken],
+    // App-Tab (BAUPLAN 32): die Startanleitung läuft in FlowForge — eigener
+    // Baustein (AppTab.jsx), immer gemountet, damit die Ausgabe nicht verloren
+    // geht, wenn Georg zwischen den Tabs wechselt.
+    ['app', texte.projektansicht.tabApp]
   ]
 
   return (
@@ -2271,6 +2287,16 @@ export default function Leinwand({
           <Metriken projektPfad={pfad} />
         </div>
       )}
+
+      <div style={tab === 'app' ? undefined : { display: 'none' }}>
+        <AppTab
+          pfad={pfad}
+          anleitung={anleitung}
+          sichtbar={tab === 'app'}
+          startAnstoss={appSprung}
+          onZustand={onAppZustand}
+        />
+      </div>
 
       {vorschau && (
         <div className="dialog-schleier">

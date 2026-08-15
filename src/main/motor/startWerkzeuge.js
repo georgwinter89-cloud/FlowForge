@@ -24,8 +24,9 @@ export async function startWerkzeugServer({ projektPfad, aufEreignis }) {
         .string()
         .optional()
         .describe(
-          'Kommandozeilen-Befehl, der die App startet — läuft im Projektordner in einem ' +
-            'eigenen, sichtbaren Konsolenfenster (z.B. „npm start" oder „node app.js")'
+          'Kommandozeilen-Befehl, der die App startet — läuft im Projektordner in FlowForge ' +
+            'mit sichtbarer Ausgabe, aber OHNE Tastatureingabe: er darf nichts abfragen und ' +
+            'muss von allein laufen (z.B. „npm start" oder „node app.js")'
         ),
       adresse: z
         .string()

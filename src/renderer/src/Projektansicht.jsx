@@ -196,8 +196,10 @@ export default function Projektansicht({ pfad, initialTab }) {
   const [formular, setFormular] = useState(false)
   // Startanleitung (SPEC §8): null = noch keine — der Knopf bleibt grau.
   const [anleitung, setAnleitung] = useState(null)
-  const [startLaeuft, setStartLaeuft] = useState(false)
-  const [startFehler, setStartFehler] = useState('')
+  // App-Tab (BAUPLAN 32): der Kopf-Knopf springt in den Tab und startet dort
+  // (Zähler als Anstoß); läuft die App schon, springt er nur.
+  const [appSprung, setAppSprung] = useState(0)
+  const [appLaeuft, setAppLaeuft] = useState(false)
   // Eigene Blöcke (SPEC §4.5, BAUPLAN 14): null = noch nicht geladen — erst
   // dann rendert die Leinwand, sonst könnte sie eigene Blöcke im Schaubild
   // nicht auflösen. false = Editor zu, 'neu' = neuer Block, sonst der Block.
@@ -301,13 +303,8 @@ export default function Projektansicht({ pfad, initialTab }) {
     })
   }, [pfad])
 
-  async function appStarten() {
-    if (startLaeuft) return
-    setStartFehler('')
-    setStartLaeuft(true)
-    const ergebnis = await window.flowforge.appStarten(pfad)
-    setStartLaeuft(false)
-    if (!ergebnis.ok) setStartFehler(ergebnis.fehler)
+  function appStarten() {
+    setAppSprung((n) => n + 1)
   }
 
   // Jede Kartenänderung liefert den neuen Gesamtstand zurück.
@@ -411,7 +408,6 @@ export default function Projektansicht({ pfad, initialTab }) {
       <div className="ansicht-kopf">
         <h1>{projekt?.name}</h1>
         <div className="kopf-rechts">
-          {startFehler && <span className="start-fehler">{startFehler}</span>}
           <button
             className="knopf-sekundaer knopf-klein"
             onClick={() => setEinstellungenOffen(true)}
@@ -420,11 +416,11 @@ export default function Projektansicht({ pfad, initialTab }) {
           </button>
           <button
             className="knopf-primaer"
-            disabled={!anleitung || startLaeuft}
+            disabled={!anleitung}
             title={anleitung ? anleitung.beschreibung : tst.keineHinweis}
             onClick={appStarten}
           >
-            ▶ {startLaeuft ? tst.startet : tst.knopf}
+            ▶ {appLaeuft ? tst.knopfLaeuft : tst.knopf}
           </button>
         </div>
       </div>
@@ -510,6 +506,9 @@ export default function Projektansicht({ pfad, initialTab }) {
               initialTab={initialTab}
               karten={karten}
               berichtSprung={berichtSprung}
+              anleitung={anleitung}
+              appSprung={appSprung}
+              onAppZustand={(z) => setAppLaeuft(Boolean(z?.laeuft || z?.startet))}
               kontingentVerhalten={projekt?.kontingentVerhalten ?? 'pausieren'}
               onKontingentVerhalten={kontingentVerhaltenSetzen}
               onWiederhergestellt={projektLaden}

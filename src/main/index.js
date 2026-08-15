@@ -41,7 +41,16 @@ import {
   wiederherstellenVorschau,
   wiederherstellen
 } from './sicherungspunkte.js'
-import { startanleitungLaden, appStarten } from './startanleitung.js'
+import { startanleitungLaden } from './startanleitung.js'
+import {
+  appStarten,
+  appStoppen,
+  appNeustarten,
+  appZustand,
+  appAdresseOeffnen,
+  alleAppsStoppen
+} from './appProzess.js'
+import { verwaisteListe, prozessBeenden, alleProzesseAbraeumen } from './prozesse.js'
 import {
   eigeneBloeckeLaden,
   eigeneBloeckeListe,
@@ -221,9 +230,19 @@ function registriereIpc() {
   // Zustände für die Kacheln der Projektübersicht (SPEC §9, BAUPLAN 15).
   ipcMain.handle('projekt-zustaende', (_e, pfade) => projektZustaende(pfade))
 
-  // Startanleitung & „App starten"-Knopf (SPEC §8, BAUPLAN 10).
+  // Startanleitung & App-Tab (SPEC §8, BAUPLAN 10/32): Start, Stopp, Neustart,
+  // Zustand samt Ausgabe, Adresse öffnen; dazu die Rückfall-Liste noch
+  // laufender Prozesse aus Läufen mit Beenden-Knopf.
   ipcMain.handle('startanleitung-laden', (_e, pfad) => startanleitungLaden(pfad))
-  ipcMain.handle('app-starten', (_e, pfad) => appStarten(pfad))
+  ipcMain.handle('app-starten', (_e, { pfad, portFreimachen }) =>
+    appStarten(pfad, { portFreimachen: Boolean(portFreimachen) })
+  )
+  ipcMain.handle('app-stoppen', (_e, pfad) => appStoppen(pfad))
+  ipcMain.handle('app-neustarten', (_e, pfad) => appNeustarten(pfad))
+  ipcMain.handle('app-zustand', (_e, pfad) => appZustand(pfad))
+  ipcMain.handle('app-adresse-oeffnen', (_e, pfad) => appAdresseOeffnen(pfad))
+  ipcMain.handle('verwaiste-prozesse', async () => ({ ok: true, prozesse: await verwaisteListe() }))
+  ipcMain.handle('prozess-beenden', (_e, { pid, start }) => prozessBeenden(Number(pid), Number(start)))
 
   ipcMain.handle('sicherungspunkte-laden', (_e, pfad) => sicherungspunkteLaden(pfad))
   ipcMain.handle('wiederherstellen-vorschau', (_e, { pfad, punktId }) => {
@@ -265,4 +284,29 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
+})
+
+// FlowForge-Ende räumt ab (BAUPLAN 32): Node beendet unter Windows keine
+// Kinder — laufende Motoren, Chats, die gestartete App und alle gemerkten
+// Nachkommen werden beim normalen Beenden mit beendet. „Nichts läuft
+// unsichtbar weiter" gilt fürs normale Beenden, nicht für einen Absturz. Ein
+// unterbrochener Lauf bleibt als Laufstand wiederaufnehmbar (SPEC §3.3).
+let abgeraeumt = false
+app.on('before-quit', (ereignis) => {
+  if (abgeraeumt) return
+  abgeraeumt = true
+  ereignis.preventDefault()
+  const aufraeumen = (async () => {
+    try {
+      await alleAppsStoppen()
+    } catch {
+      // weiter — der Rest räumt trotzdem
+    }
+    try {
+      await alleProzesseAbraeumen()
+    } catch {
+      // nicht hängen bleiben
+    }
+  })()
+  Promise.race([aufraeumen, new Promise((r) => setTimeout(r, 6000))]).then(() => app.quit())
 })

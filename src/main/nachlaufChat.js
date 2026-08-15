@@ -17,6 +17,7 @@ import {
   FORTSETZUNG_WAECHTER_PROZENT
 } from './motor/schnittstelle.js'
 import { sicherungspunktAnlegen } from './sicherungspunkte.js'
+import { prozessgruppeAbraeumen } from './prozesse.js'
 
 const BERICHTE_ORDNER = 'laufberichte'
 // Bilder je Nachricht (Screenshots per Strg+V oder Datei-Knopf): Deckel, damit
@@ -441,4 +442,7 @@ export function chatSchliessen(projektPfad) {
   for (const antworten of [...chat.fragen.values()]) antworten(false)
   chat.motor?.hartStoppen()
   chats.delete(projektPfad)
+  // Prozess-Hygiene (BAUPLAN 32): Was der Chat (im Reparatur-Modus) gestartet
+  // hat und noch lebt, geht mit dem Chat.
+  void prozessgruppeAbraeumen('chat:' + projektPfad)
 }

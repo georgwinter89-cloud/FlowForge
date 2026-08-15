@@ -2752,3 +2752,199 @@ body {
   color: var(--text-leise);
   font-family: var(--schrift-mono);
 }
+
+/* App-Tab (BAUPLAN 32): Startanleitung, Zustand, Ausgabe der laufenden App
+   live in Mono, Rückfall-Liste noch laufender Prozesse. */
+.app-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 8px;
+  border-top: 1px solid var(--rand);
+  padding-top: 12px;
+}
+
+.app-tab h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-zweit);
+}
+
+.app-kopf,
+.app-ausgabe-bereich,
+.app-verwaiste {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--rand-panel);
+  border-radius: var(--radius-panel);
+  background: var(--flaeche-tief);
+}
+
+.app-beschreibung {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.app-anleitung {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  column-gap: 12px;
+  row-gap: 4px;
+  margin: 0;
+  font-size: 12px;
+}
+
+.app-anleitung dt {
+  color: var(--text-leise);
+  font-weight: 700;
+}
+
+.app-anleitung dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.app-anleitung code,
+.app-prozess-befehl,
+.dialog code {
+  font-family: var(--schrift-mono);
+  font-size: 11.5px;
+  color: var(--text-zweit);
+}
+
+.app-zeile {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.app-zustand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-leise);
+}
+
+.app-zustand-laeuft {
+  color: var(--signal-text);
+  font-weight: 700;
+}
+
+.app-zustand .pulspunkt {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--signal-punkt);
+  animation: ff-pulse 1.4s infinite;
+}
+
+.app-wartet {
+  color: var(--text-leise);
+  font-weight: 400;
+}
+
+.app-abschnitt-kopf {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.app-ausgabe {
+  max-height: 420px;
+  min-height: 120px;
+  overflow: auto;
+  padding: 10px 12px;
+  border: 1px solid var(--rand-panel);
+  border-radius: var(--radius-karte);
+  background: #070a12;
+}
+
+.app-ausgabe pre {
+  margin: 0;
+  font-family: var(--schrift-mono);
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--text-zweit);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.app-sauber {
+  color: var(--gut-text);
+}
+
+.app-prozess-liste {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.app-prozess-zeile {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--rand-panel);
+  border-radius: var(--radius-karte);
+  background: var(--flaeche);
+}
+
+.app-prozess-text {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  min-width: 0;
+  font-size: 12px;
+}
+
+.app-prozess-name {
+  font-weight: 700;
+  color: var(--text);
+}
+
+.app-prozess-pid {
+  font-family: var(--schrift-mono);
+  font-weight: 400;
+  color: var(--text-leise);
+}
+
+.app-prozess-marke {
+  padding: 1px 7px;
+  border: 1px solid var(--rand-kontrolle);
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-gedimmt);
+}
+
+.app-prozess-marke.app-prozess-sicher {
+  border-color: var(--signal);
+  color: var(--signal-text);
+}
+
+.app-prozess-zeit {
+  color: var(--text-leise);
+}
+
+.app-prozess-befehl {
+  flex-basis: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

@@ -122,6 +122,8 @@ export const texte = {
     tabPunkte: 'Sicherungspunkte',
     // Metriken (BAUPLAN 31): dieselbe Seite wie in der Titelleiste, aufs Projekt vorgefiltert.
     tabMetriken: 'Metriken',
+    // App-Tab (BAUPLAN 32): die Startanleitung läuft in FlowForge.
+    tabApp: 'App',
     tabLaufLeer: 'Noch kein Lauf in dieser Sitzung. Starte den Workflow im Schaubild-Tab.',
     einstellungenKnopf: 'Projekt-Einstellungen',
     bibliothekTitel: 'Blockbibliothek',
@@ -1079,8 +1081,67 @@ export const texte = {
       '. Wähle die passende — passt keine wirklich, nimm "eigene". Erfinde keinen neuen Wert.'
   },
   // Startanleitung & „App starten"-Knopf (SPEC §8, BAUPLAN 10).
+  // App-Tab (BAUPLAN 32, SPEC §8): Ausgabe der laufenden App in FlowForge,
+  // Start/Stopp/Neustart, Port-Prüfung, Rückfall-Liste verwaister Prozesse.
+  app: {
+    ueberschrift: 'Deine App',
+    keineAnleitung:
+      'Noch keine Startanleitung. Ein Bau-Workflow (z.B. „Feature hinzufügen") legt sie an — danach startet deine App hier mit einem Klick, und du siehst ihre Ausgabe live.',
+    beschreibungLabel: 'Was die App tut',
+    befehlLabel: 'Befehl',
+    adresseLabel: 'Adresse',
+    keinBefehl: 'Diese Startanleitung hat keinen Befehl — nur eine Adresse bzw. Datei. „Starten" öffnet sie direkt.',
+    starten: 'Starten',
+    stoppen: 'Stoppen',
+    neustarten: 'Neu starten',
+    adresseOeffnen: 'Adresse im Browser öffnen',
+    wartetAufAdresse: 'wartet, bis die Adresse antwortet …',
+    zustandAus: 'nicht gestartet',
+    zustandStartet: 'startet …',
+    zustandLaeuft: (seit) => `läuft seit ${seit}`,
+    zustandBeendet: (code, wann) =>
+      code === 0 ? `beendet (Code 0) um ${wann}` : `beendet mit Code ${code ?? '?'} um ${wann}`,
+    zustandGestoppt: (wann) => `gestoppt um ${wann}`,
+    zustandNurAdresse: 'geöffnet (kein eigener Prozess)',
+    ausgabeTitel: 'Ausgabe',
+    ausgabeLeer: 'Noch keine Ausgabe. Wenn deine App etwas schreibt, steht es hier — mit Umlauten.',
+    ausgabeHinweis:
+      'Standard- und Fehlerausgabe der App, live. Eingaben sind nicht möglich: Die Startanleitung muss ohne Tastatur auskommen.',
+    startZeile: (befehl) => `▶ ${befehl}`,
+    endeZeile: (code) => (code === 0 ? '■ Die App hat sich beendet (Code 0).' : `■ Die App hat sich beendet — Code ${code ?? '?'}.`),
+    stoppZeile: '■ Gestoppt über FlowForge.',
+    fehlerLaeuftSchon: 'Die App läuft schon — stopp sie zuerst oder nimm „Neu starten".',
+    fehlerKeineAdresse: 'Diese Startanleitung hat keine Adresse.',
+    fehlerAdresseNichtErreichbar:
+      'Die App hat sich beendet, bevor die Adresse geantwortet hat — sieh in die Ausgabe.',
+    fehlerStart: (grund) => `Die App ließ sich nicht starten${grund ? `: ${grund}` : '.'}`,
+    fehlerPortFlowForge: (port) => `Port ${port} gehört FlowForge selbst — das kann ich nicht beenden.`,
+    fehlerPortNichtFrei: (port) =>
+      `Port ${port} ist immer noch belegt. Sieh in der Liste „noch laufende Prozesse" nach oder warte einen Moment.`,
+    // Port-Prüfung vor dem Start: Dialog mit dem Besitzer-Prozess.
+    portBelegtTitel: 'Port ist belegt',
+    portBelegtFrage: (port, name, pid) =>
+      `Port ${port} ist schon belegt — von „${name || 'unbekannt'}" (Prozess ${pid}). Meist ist das ein Server, den ein früherer Lauf gestartet und nie beendet hat. Soll ich ihn beenden und deine App dann starten?`,
+    portBelegtBefehl: 'Befehlszeile',
+    portBelegtKnopf: 'Beenden und starten',
+    // Rückfall-Liste (BAUPLAN 32): falls doch einmal etwas hängen bleibt.
+    verwaisteTitel: 'Noch laufende Prozesse aus Läufen',
+    verwaisteHinweis:
+      'Normalerweise beendet FlowForge am Ende jedes Laufs alles, was der Lauf gestartet hat. Diese Liste ist der Rückfall: Prozesse, die sich nicht beenden ließen, und verwaiste Prozesse, die während eines Laufs entstanden sind (vermutlich aus einem Lauf — kann aber auch etwas sein, das du selbst gestartet hast; sieh auf die Befehlszeile).',
+    verwaisteLeer: 'Nichts hängt — alles sauber.',
+    verwaisteAktualisieren: 'Liste aktualisieren',
+    verwaisteSicher: 'aus einem Lauf',
+    verwaisteVermutlich: 'vermutlich aus einem Lauf',
+    verwaisteGestartet: (wann) => `gestartet ${wann}`,
+    prozessBeenden: 'Beenden',
+    prozessBeendenFrage: (name, pid) =>
+      `Prozess „${name || 'unbekannt'}" (${pid}) beenden? Das geht sofort und ohne Rückfrage an das Programm.`,
+    prozessWiederverwendet: 'Dieser Prozess ist inzwischen ein anderer — die Liste wird neu geladen.',
+    prozessNichtBeendet: 'Der Prozess ließ sich nicht beenden — vielleicht braucht er Administratorrechte.'
+  },
   startanleitung: {
     knopf: 'App starten',
+    knopfLaeuft: 'App läuft',
     startet: 'startet …',
     keineHinweis:
       'Noch keine Startanleitung. Ein Bau-Workflow (z.B. „Feature hinzufügen") legt sie an — danach startet deine App hier mit einem Klick.',
@@ -1470,6 +1531,16 @@ export const texte = {
         : `${n} Prüfkarten liegen an Prüfern — ihre aufbewahrten Prüfungen sind wieder in der Prüfmappe.`,
     pruefkarteAngelegt: (titel) => `Prüfung bestanden und aufbewahrt — neue Prüfkarte: „${titel}"`,
     arbeitsablageGeleert: 'Arbeitsablage geleert.',
+    // Prozess-Hygiene (BAUPLAN 32): am Lauf-Ende ehrlich vermerkt.
+    verwaisteBeendet: (n, namen = []) => {
+      const liste = [...new Set(namen.filter(Boolean))].slice(0, 4).join(', ')
+      return (
+        (n === 1 ? '1 verwaister Prozess' : `${n} verwaiste Prozesse`) +
+        ` aus dem Lauf beendet${liste ? ` (${liste})` : ''}.`
+      )
+    },
+    verwaisteUebrig: (n) =>
+      `${n} ${n === 1 ? 'Prozess aus dem Lauf ließ' : 'Prozesse aus dem Lauf ließen'} sich nicht beenden — siehe App-Tab, Liste „noch laufende Prozesse".`,
     verwaltungGesperrt: 'Schreib-Versuch auf eine FlowForge-Verwaltungsdatei gestoppt.',
     liestKarten: 'Liest die Projektkarten.',
     karteAngelegt: (titel) => `Karte angelegt: „${titel}"`,

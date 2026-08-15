@@ -71,6 +71,7 @@ import { laufVorschlagSpeichern, laufVorschlagLoeschen } from './naechsterLauf.j
 import { kartenZuteilungPruefen, paketMeldungPruefen } from './motor/kartenZuteilungWerkzeuge.js'
 import { chatBeschaeftigt, chatSchliessen } from './nachlaufChat.js'
 import { metrikUrteilSchreiben } from './metriken.js'
+import { prozessgruppeAnlegen, prozessgruppeAbraeumen } from './prozesse.js'
 
 const BERICHTE_ORDNER = 'laufberichte'
 
@@ -511,6 +512,10 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
   }
   aktiveLaeufe.set(projektPfad, lauf)
   laeufeMelden()
+  // Prozess-Hygiene (BAUPLAN 32): Ab jetzt beobachtet der Späher, was aus
+  // diesem Lauf heraus gestartet wird — die Motor-Prozesse melden sich als
+  // Wurzeln, ihre Nachkommen werden transitiv gemerkt und am Lauf-Ende beendet.
+  prozessgruppeAnlegen('lauf:' + projektPfad, projektPfad)
 
   // Lauf-Mappe statt Projekt-Mappe (Entscheidung Georg, 13.08.2026, BAUPLAN 17):
   // Die Prüfmappe pruefung/ gehört zum Lauf — ein neuer Lauf startet mit leerer
@@ -588,6 +593,7 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
   if (!sicherung.ok) {
     aktiveLaeufe.delete(projektPfad)
     laeufeMelden()
+    void prozessgruppeAbraeumen('lauf:' + projektPfad)
     return { ok: false, fehler: sicherung.fehler }
   }
   const punktVorLauf = sicherung.id
@@ -2059,6 +2065,21 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     for (const aufloesen of [...lauf.entscheidungen.values()]) aufloesen('zurueckstellen')
     for (const antworten of [...lauf.menschFragen.values()]) antworten(null)
     for (const antworten of [...lauf.vorschlaege.values()]) antworten(null)
+
+    // Prozess-Hygiene (BAUPLAN 32): Alles, was aus dem Lauf heraus gestartet
+    // wurde und noch lebt (Server des Prüfers, vergessene Shells), wird jetzt
+    // beendet — erfolgreich, sanft gestoppt oder hart abgebrochen, egal. Die
+    // Motor-Prozesse selbst bekommen anderthalb Sekunden, um geordnet zu
+    // enden; danach fallen auch sie. Ehrlich im Ticker vermerkt.
+    try {
+      await new Promise((r) => setTimeout(r, 1500))
+      const { beendet, uebrig } = await prozessgruppeAbraeumen('lauf:' + projektPfad)
+      const fremde = beendet.filter((e) => !e.wurzel)
+      if (fremde.length) tickern(texte.ticker.verwaisteBeendet(fremde.length, fremde.map((e) => e.name)))
+      if (uebrig.length) tickern(texte.ticker.verwaisteUebrig(uebrig.length))
+    } catch {
+      // Ein klemmender Späher darf das Laufende nicht stören.
+    }
 
     // Arbeitsablage leeren (Entscheidung Georg, 12.08.2026): Der Ordner
     // arbeitsablage/ ist die Wegwerf-Fläche der Agenten für Hilfsskripte und
