@@ -13,6 +13,9 @@ contextBridge.exposeInMainWorld('flowforge', {
   karteErledigtSetzen: (pfad, id, erledigt) =>
     ipcRenderer.invoke('karte-erledigt-setzen', { pfad, id, erledigt }),
   karteLoeschen: (pfad, id) => ipcRenderer.invoke('karte-loeschen', { pfad, id }),
+  karteThemaSetzen: (pfad, id, thema) => ipcRenderer.invoke('karte-thema-setzen', { pfad, id, thema }),
+  themaUmbenennen: (pfad, alt, neu) => ipcRenderer.invoke('thema-umbenennen', { pfad, alt, neu }),
+  sonderlaufStarten: (pfad, art) => ipcRenderer.invoke('sonderlauf-starten', { pfad, art }),
 
   einstellungenLaden: () => ipcRenderer.invoke('einstellungen-laden'),
   einstellungenSpeichern: (neu) => ipcRenderer.invoke('einstellungen-speichern', neu),
@@ -23,6 +26,8 @@ contextBridge.exposeInMainWorld('flowforge', {
   eigenenBlockSpeichern: (block) => ipcRenderer.invoke('eigener-block-speichern', block),
   eigenenBlockLoeschen: (id) => ipcRenderer.invoke('eigener-block-loeschen', id),
   blockAssistent: (beschreibung) => ipcRenderer.invoke('block-assistent', beschreibung),
+  klappenLaden: (pfad) => ipcRenderer.invoke('klappen-laden', pfad),
+  klappenSpeichern: (pfad, zustaende) => ipcRenderer.invoke('klappen-speichern', { pfad, zustaende }),
 
   workflowLaden: (pfad) => ipcRenderer.invoke('workflow-laden', pfad),
   workflowSpeichern: (pfad, workflow) => ipcRenderer.invoke('workflow-speichern', { pfad, workflow }),

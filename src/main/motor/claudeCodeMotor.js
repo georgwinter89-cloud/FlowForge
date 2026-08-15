@@ -686,7 +686,12 @@ export function starteLaufMotor(optionen) {
     aufLaufVorschlag,
     // Karten-Zuteilung (BAUPLAN 29): merkt sich, welche Karten die
     // nachfolgenden Blöcke bekommen — kein Warten, nur eine Meldung.
-    aufKartenZuteilung
+    aufKartenZuteilung,
+    // Paket melden (BAUPLAN 30): die Aufgaben-Karten des Pakets — kein Warten.
+    aufPaketMeldung = null,
+    // Herkunft (BAUPLAN 30): holeHerkunft(instanzId) liefert Block · Lauf ·
+    // Paket-Aufgaben für den Karten-Stempel des gerade laufenden Blocks.
+    holeHerkunft = null
   } = optionen
 
   let kindProzess = null
@@ -859,7 +864,13 @@ export function starteLaufMotor(optionen) {
 
     // Agent-Karten-Brücke (BAUPLAN 7): Karten lesen/schreiben mit denselben
     // harten Regeln wie für Menschen — läuft im FlowForge-Prozess selbst.
-    const kartenServer = await kartenWerkzeugServer({ projektPfad, aufEreignis })
+    const kartenServer = await kartenWerkzeugServer({
+      projektPfad,
+      aufEreignis,
+      // Herkunft (BAUPLAN 30): der Karten-Server stempelt mit dem gerade
+      // laufenden Block — der Motor reicht dessen Instanz-Kennung hinein.
+      holeHerkunft: holeHerkunft ? () => holeHerkunft(block?.instanzId ?? null) : null
+    })
     // Frage an den Menschen (BAUPLAN 9): pausiert den Lauf, bis der Nutzer
     // im Gespräch geantwortet hat.
     const menschServer = await menschWerkzeugServer({ aufMenschFrage })
@@ -882,7 +893,11 @@ export function starteLaufMotor(optionen) {
     const zuteilungServer = aufKartenZuteilung
       ? await kartenZuteilungWerkzeugServer({
           aufKartenZuteilung: (daten) =>
-            aufKartenZuteilung({ ...daten, instanzId: block?.instanzId ?? null })
+            aufKartenZuteilung({ ...daten, instanzId: block?.instanzId ?? null }),
+          // Paket melden (BAUPLAN 30): derselbe Server, dieselbe Freischaltung.
+          aufPaketMeldung: aufPaketMeldung
+            ? (daten) => aufPaketMeldung({ ...daten, instanzId: block?.instanzId ?? null })
+            : null
         })
       : null
     // Lokale Helfer-KI (Experiment): nur registriert, wenn beim Laufstart
@@ -1397,7 +1412,9 @@ export function starteChatMotor(optionen) {
     holeReparieren,
     vorErsterAenderung,
     aufEreignis,
-    aufRechteFrage
+    aufRechteFrage,
+    // Herkunft (BAUPLAN 30): Karten aus dem Chat tragen „vom Chat" samt Lauf.
+    herkunft = null
   } = optionen
 
   let kindProzess = null
@@ -1526,7 +1543,12 @@ export function starteChatMotor(optionen) {
     const { query } = await import('@anthropic-ai/claude-agent-sdk')
 
     // Karten-Werkzeuge wie im Lauf: „leg das als Aufgabe an" ist der Normalweg.
-    const kartenServer = await kartenWerkzeugServer({ projektPfad, aufEreignis })
+    // Herkunft (BAUPLAN 30): Karten aus dem Chat tragen „vom Chat" samt Lauf.
+    const kartenServer = await kartenWerkzeugServer({
+      projektPfad,
+      aufEreignis,
+      holeHerkunft: herkunft ? () => herkunft : null
+    })
     // Startanleitung: im Reparatur-Modus erlaubt, sonst von der Sperre gestoppt.
     const startServer = await startWerkzeugServer({ projektPfad, aufEreignis })
 

@@ -1,6 +1,6 @@
 # FlowForge — Produkt-Spezifikation V1
 
-Stand: 14.08.2026 · Ursprung: Grilling-Session vom 07.08.2026 (von Georg freigegeben) ·
+Stand: 15.08.2026 · Ursprung: Grilling-Session vom 07.08.2026 (von Georg freigegeben) ·
 fortlaufend gepflegt — dieses Dokument beschreibt die Gegenwart, Verhaltensänderungen
 werden hier nachgezogen (Historie liefert git).
 
@@ -69,6 +69,53 @@ Projektordners** auf (wie die Sicherungspunkte) — kein Agent sieht das Archiv,
 keinen Lauf Kontext. Der Nutzer kann Prüfkarten bearbeiten und löschen; **Löschen räumt
 die aufbewahrten Prüfdateien mit weg.** Agenten können Prüfkarten weder anlegen noch
 ändern (die Übersicht listet sie mit). Wiederholungsprüfung per Ziehen auf den Prüfer: §4.3.
+
+**Ordnung in der Karten-Seitenleiste** (seit Bauschritt 30): Die Karten stehen in vier
+festen, ausklappbaren **Gruppen**, die sich aus der Sorte ergeben (nichts zu pflegen):
+„Arbeit" (Status-Karte obenauf + offene Aufgaben) · „Wissen" (Entscheidungen + Wissen) ·
+„Geprüft" (Prüfkarten) · „Erledigt" (erledigte Aufgaben, standardmäßig eingeklappt). Der
+Sorten-Filter bleibt. In „Arbeit" und „Wissen" gibt es **Themen als zweite Ebene**: ein
+freies Schlagwort je Karte (höchstens 30 Zeichen), **Pflicht beim Anlegen** von Aufgaben-,
+Entscheidungs- und Wissens-Karten — im Formular wie für den Agenten (Parameter `thema` von
+`karte_anlegen`, hart durchgesetzt; Status- und Prüfkarten tragen kein Thema; das Bearbeiten
+alter Karten ohne Thema bleibt möglich, sie liegen unter „Sonstiges"). FlowForge
+normalisiert Groß-/Kleinschreibung und Leerzeichen; die kanonische Schreibweise ist die der
+zuerst angelegten Karte. Die vorhandenen Themen stehen im Blockauftrag, in
+`karten_uebersicht` und in der Ablehnungsmeldung („thema fehlt — vorhanden: …") — bewusst
+NICHT in der Werkzeugbeschreibung (Prompt-Cache). Regel für alle Agenten: primär
+einsortieren, ein neues Thema nur, wenn keines passt; das Spec-Interview bündelt seine
+ersten Karten in 3–6 Themen. Der Nutzer kann ein **Thema umbenennen** (alle Karten wandern
+mit; ein vorhandener Name legt zusammen) und eine **Karte per Drag & Drop** in eine andere
+Themengruppe ziehen. Die Einklapp-Zustände (Gruppen, Themen, Bibliotheks-Klappen) merkt
+FlowForge **je Projekt im Datenordner** — nicht in projekt.json, die ist Teil der
+Sicherungspunkte.
+
+**Aufräum-Knöpfe** in der Karten-Seitenleiste (Entscheidung Georg, 15.08.2026: Aufräumen
+gehört zu den Karten, nicht aufs Schaubild): **„Karten am Code prüfen"** startet den
+Karten-Prüfer (§4.3) und **„Themen sortieren"** seinen nur-lesenden Sortiermodus — jeweils
+als **Sonderlauf**: ein fester Ein-Block-Workflow im Hintergrund mit Lauf-Tab, Ticker,
+Abnahme-Dialog und Sperren wie bei jedem Lauf, aber die Leinwand bleibt unangetastet (der
+Laufbericht trägt die Marke „Sonderlauf"). Läuft oder wartet das Projekt, sind die Knöpfe
+gesperrt. Der Sortiermodus klassifiziert alle Karten ohne oder mit offensichtlich falschem
+Thema **ohne Code-Nachmessen** (bevorzugt vorhandene Themen) und schlägt sie in **einem
+Sammel-Dialog** vor (Vorschlagsart `thema` von `karte_vorschlagen`, Sammelform): Tabelle
+aller betroffenen Karten mit vorgeschlagenem Thema, je Zeile änderbar oder ablehnbar,
+„Alle übernehmen" / „Alle ablehnen". Thema setzen ist kein Umformulieren — auch
+Entscheidungs-Karten dürfen ein Thema vorgeschlagen bekommen.
+
+**Herkunft je Karte** (seit Bauschritt 30): FlowForge stempelt jede angelegte oder geänderte
+Karte mit ihrer Herkunft — vom Nutzer („von dir"), vom Nachlauf-Chat, vom Karten-Prüfer
+(übernommener Vorschlag), von FlowForge (Prüfkarten) oder von einem Block-Agenten: dann
+**Aufgabe(n) · Block · Lauf**. Die Aufgaben sind die Aufgaben-Karten, an denen der Lauf
+gerade arbeitet — die Auftragsquellen-Blöcke (Paket schneiden, Diagnose) melden sie
+strukturiert über das Werkzeug `paket_melden` (nur dort rückfragefrei — dasselbe
+Freischalt-Muster wie `karten_zuteilen`, im selben Werkzeug-Server; hart validiert: nur
+offene Aufgaben-Karten der Kartenauswahl, leer erlaubt, wenn das Wunsch-/Fehlerbild-Feld die
+Quelle war); Titel als Schnappschuss, falls die Aufgabe später gelöscht wird; die Meldung
+wandert in Laufstand, Ticker und Laufbericht („Paket dieses Laufs: …"). Anzeige als kompakte
+Kopfzeile unter dem Titel („zuletzt geändert vor 2 Std. · angelegt von Sessionende bei
+‚Login bauen' (Lauf 14.08., 11:08)"), klickbar zum Laufbericht; alte Karten ohne Herkunft
+zeigen nur das Datum. Die Herkunft wandert **nie** in Aufträge oder `karten_uebersicht`.
 
 Der Agent liest und schreibt Karten über eingebaute **Karten-Werkzeuge** (Übersicht, anlegen,
 aktualisieren, erledigen) — dieselben Regeln, hart durchgesetzt; abgelehnte Versuche sind im
@@ -270,10 +317,14 @@ oder „Ablehnen". Angewendet wird ausschließlich von FlowForge über die
 normalen Kartenfunktionen; der Ausgang geht als Werkzeug-Ergebnis an den
 Agenten zurück, damit sein Kartenbericht stimmt. Harte Leitplanken im Code:
 Entscheidungs-Karten werden nie umformuliert oder gelöscht (Festlegungen
-trifft der Nutzer), Prüfkarten pflegt FlowForge (keine Vorschläge), die
-Status-Karte ist nur aktualisierbar, neue Karten sind immer Aufgaben. Jeder
-Vorschlag trägt eine Begründung mit Beleg; Ticker und Laufbericht zählen
-übernommen/bearbeitet/abgelehnt.
+trifft der Nutzer) — ein **Thema** dürfen sie aber vorgeschlagen bekommen
+(Thema setzen ist kein Umformulieren, Bauschritt 30), Prüfkarten pflegt
+FlowForge (keine Vorschläge), die Status-Karte ist nur aktualisierbar, neue
+Karten sind immer Aufgaben (mit Thema). Jeder Vorschlag trägt eine Begründung
+mit Beleg; Ticker und Laufbericht zählen übernommen/bearbeitet/abgelehnt. Der
+Block bleibt in der Bibliothek für Ketten; als Knopf „Karten am Code prüfen"
+startet er ohne Leinwand als Sonderlauf, und sein Sortiermodus „Themen
+sortieren" (§3.1) nutzt dieselbe Mechanik mit Sammel-Dialog.
 
 **Kontext-Sparsamkeit** (Entscheidung Georg, 13.08.2026): Erkundungslastige Blöcke
 (Angreifer, Diagnose, Prüfer, Bauer) delegieren Suchen und Einlesen per Auftrag an
@@ -452,6 +503,15 @@ automatisch geleert.
 **Übungs-Blöcke** bleiben für Probeläufe in der Bibliothek (eigener Abschnitt):
 Späher, Mini-Bauer, fairer und strenger Übungs-Prüfer, Karten-Probe, Rechte-Probe.
 
+**Blockbibliothek in Kategorien** (seit Bauschritt 30), ausklappbar, nach der
+Aufgabe im Ablauf: Vorlagen · **Auftrag finden** (Spec-Interview, Paket
+schneiden, Diagnose, Frage an den Menschen) · **Bauen** (Bauer, Kontext laden) ·
+**Prüfen** (Angreifer, Prüfer, Gesamtprüfung, Audit) · **Gedächtnis**
+(Sessionende, Karten-Prüfer) · Eigene · Übung (standardmäßig eingeklappt).
+Katalog-Blöcke sitzen fest in ihrer Kategorie; eigene Blöcke wählen im
+Block-Editor eine Kategorie (§4.5) — vorhandene oder neue, die als eigene Klappe
+erscheint. Die Einklapp-Zustände merkt FlowForge je Projekt im Datenordner (§3.1).
+
 ### 4.4 Vorlagen-Workflows
 
 | Vorlage | Kette |
@@ -475,7 +535,11 @@ Angreifer durch die Diagnose.
 
 - Nutzer kann eigene Blöcke **erstellen, bearbeiten, löschen** — als Formular entlang der
   Block-Anatomie (§4.2). Eigene Blöcke gelten **global** (Abschnitt „Eigene Blöcke" in der
-  Bibliothek jedes Projekts); sie sind nie Prüfer und haben keine Formularfelder.
+  Bibliothek jedes Projekts); sie sind nie Prüfer und haben keine Formularfelder. Seit
+  Bauschritt 30 wählt jeder eigene Block eine **Kategorie** in der Bibliothek (eine der
+  vier festen, „Eigene" oder eine frei benannte, höchstens 30 Zeichen — global gespeichert
+  wie der Block selbst; Altbestand ohne Kategorie liegt unter „Eigene"); Stepper und
+  KI-Assistent kennen das Feld.
 - **Erstellungsassistent in 4 Schritten:** Was soll der Block tun? → Was braucht/liefert er? →
   Welche Sperren gelten (nur „darf nur lesen")? → Probelauf-Vorschau (der exakte
   Arbeitsauftrag, den der Agent bekäme). Eine **Stepper-Leiste** zeigt die Schritte
@@ -562,6 +626,7 @@ Angreifer durch die Diagnose.
   erledigte Aufgaben und Prüfkarten bleiben draußen: Historie liefert der Laufbericht,
   Prüfkarten haben ihren eigenen Weg über den Prüfer) und **„Standard-Auswahl"** (springt
   auf die festgenagelte Vorauswahl zurück); einzelne Chips bleiben wie gewohnt änderbar.
+  Prüfkarten per Drag & Drop in die Auswahl werden freundlich abgelehnt (seit Bauschritt 30).
 - **Karten-Zuteilung** (seit Bauschritt 29): Damit „alle Karten" nicht jeden Agenten
   flutet, teilen die Auftragsquellen-Blöcke (Paket schneiden, Diagnose) über das
   Werkzeug `karten_zuteilen` je nachfolgendem Block die Karten zu, die er wirklich
@@ -749,7 +814,8 @@ Design-Canvas): tiefdunkler Navy-Grund, Elektroblau als Marken- und Auswahlfarbe
 Signalrot für alles Lebendige (läuft, wartet auf Antwort, Lauf starten), Schrift
 Archivo (lokal gebündelt), Zahlen und Protokolle in JetBrains Mono. Das Fenster hat
 eine eigene dunkle Titelleiste (Blitz-Logo, „FlowForge WERKBANK", Brotkrume zum
-Zurückspringen); Windows zeichnet nur die drei Fensterknöpfe. Der **Kontext-Füllstand**
+Zurückspringen); Windows zeichnet nur die drei Fensterknöpfe. Installer, Fenster und
+Taskleiste tragen das **Blitz-Icon** (seit Bauschritt 30, aus dem Inline-SVG erzeugt). Der **Kontext-Füllstand**
 erscheint als Balken mit roter Marke an der Übertrags-Schwelle — in der Lauf-Ansicht
 und auf der Hero-Kachel.
 

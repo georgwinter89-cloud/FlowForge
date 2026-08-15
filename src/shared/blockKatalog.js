@@ -31,6 +31,16 @@ export const UEBERTRAG_GRENZE_MAX = 99
 // an dieser Schwelle zeichnet — der Renderer darf keine Motor-Module laden.
 export const UEBERTRAG_SCHWELLE_PROZENT = 85
 
+// Bereiche der Blockbibliothek (BAUPLAN 30): Klappen nach der Aufgabe im
+// Ablauf — Reihenfolge der Anzeige. Jeder Katalog-Arbeitsblock trägt sein
+// `bereich` fest (NICHT `kategorie`, das ist die Farbkategorie in
+// blockKategorie()); Übungs-Blöcke brauchen keins und landen unter „Übung".
+// Eigene Blöcke wählen ihren Bereich im Block-Editor: einen dieser Schlüssel,
+// BEREICH_EIGENE oder einen freien Namen (eigene Klappe). Anzeigenamen der
+// festen Bereiche stehen in texte.projektansicht.bereiche.
+export const BEREICHE = ['auftrag', 'bauen', 'pruefen', 'gedaechtnis']
+export const BEREICH_EIGENE = 'eigene'
+
 export const BLOCK_KATALOG = [
   {
     // Seit 12.08.2026 (Entscheidung Georg) nicht mehr Teil der Vorlagen: Jeder
@@ -47,6 +57,7 @@ export const BLOCK_KATALOG = [
     nurLesen: true,
     prueft: false,
     uebung: false,
+    bereich: 'bauen',
     felder: [],
     auftrag:
       'Du bist der erste Block eines Workflows und lädst den Kontext. Antworte auf Deutsch. ' +
@@ -73,6 +84,7 @@ export const BLOCK_KATALOG = [
     nurLesen: false,
     prueft: false,
     uebung: false,
+    bereich: 'auftrag',
     erzeugtAufgaben: true,
     felder: [
       {
@@ -117,7 +129,9 @@ export const BLOCK_KATALOG = [
       'Entscheidungs-Karte an („X festgelegt, weil Y"), lege die ersten Bau-Aufgaben als ' +
       'kleine, prüfbare Aufgaben-Karten an (die erste davon ist das erste Arbeitspaket) und ' +
       'aktualisiere die Status-Karte. Beachte die harten Längengrenzen — lieber mehrere ' +
-      'fokussierte Karten als eine lange. Dateien im Projektordner fasst du nicht an. ' +
+      'fokussierte Karten als eine lange. Jede Karte bekommt ein thema (kurzes Schlagwort): ' +
+      'Bündle die Karten in 3 bis 6 Themen — nicht mehr; sie sind die Ordnung der ' +
+      'Karten-Seitenleiste. Dateien im Projektordner fasst du nicht an. ' +
       'Dein Abschlusstext ist der Projekt-Überblick für die folgenden Blöcke — kompakt ' +
       '(höchstens etwa 25 Zeilen): 1. Was gebaut wird und für wen. 2. Der Kernablauf. ' +
       '3. Was bewusst draußen bleibt. 4. Die angelegten Aufgaben in der geplanten Reihenfolge.'
@@ -136,6 +150,7 @@ export const BLOCK_KATALOG = [
     nurLesen: true,
     prueft: false,
     uebung: false,
+    bereich: 'auftrag',
     // Karten-Zuteilung (BAUPLAN 29): nur Auftragsquellen-Blöcke dürfen
     // karten_zuteilen rückfragefrei nutzen — durchgesetzt am Werkzeugaufruf
     // (dasselbe Freischalt-Muster wie laufVorschlag). Den Werkzeug-Zusatz
@@ -193,6 +208,7 @@ export const BLOCK_KATALOG = [
     nurLesen: true,
     prueft: false,
     uebung: false,
+    bereich: 'pruefen',
     felder: [],
     auftrag:
       'Du bist der Angreifer: Du suchst, woran dieses Arbeitspaket scheitern könnte — BEVOR ' +
@@ -227,6 +243,7 @@ export const BLOCK_KATALOG = [
     nurLesen: true,
     prueft: false,
     uebung: false,
+    bereich: 'auftrag',
     // Karten-Zuteilung (BAUPLAN 29): wie Paket schneiden — die Diagnose ist
     // die Auftragsquelle von „Bug jagen".
     kartenZuteilung: true,
@@ -277,6 +294,7 @@ export const BLOCK_KATALOG = [
     nurLesen: false,
     prueft: false,
     uebung: false,
+    bereich: 'bauen',
     // Startanleitung als Pflicht-Artefakt (SPEC §8, BAUPLAN 10): Fehlt sie nach
     // dem Block, fordert der Lauf sie in einer Nachbesserungs-Runde ein.
     startanleitungPflicht: true,
@@ -330,6 +348,7 @@ export const BLOCK_KATALOG = [
     nurLesen: false,
     prueft: true,
     uebung: false,
+    bereich: 'pruefen',
     felder: [],
     auftrag:
       'Du bist der Prüfer — ein frischer Agent ohne das Arbeitswissen des Bauers. Antworte ' +
@@ -392,6 +411,7 @@ export const BLOCK_KATALOG = [
     nurLesen: false,
     prueft: true,
     uebung: false,
+    bereich: 'pruefen',
     felder: [],
     auftrag:
       'Du bist die Gesamtprüfung: Du prüfst, ob das Projekt als Ganzes noch hält, und ' +
@@ -436,6 +456,7 @@ export const BLOCK_KATALOG = [
     nurLesen: true,
     prueft: false,
     uebung: false,
+    bereich: 'pruefen',
     erzeugtAufgaben: true,
     darfKartenAnlegen: true,
     audit: true,
@@ -463,7 +484,8 @@ export const BLOCK_KATALOG = [
       'Danach bündelst du die Funde: Dubletten zusammenführen, ehrlich gewichten — nicht ' +
       'jeder Fund ist wesentlich. Lege für jeden WESENTLICHEN Befund mit karte_anlegen ' +
       'eine Aufgaben-Karte an (Längengrenzen beachten — lieber mehrere fokussierte Karten ' +
-      'als eine lange); Kleinkram bleibt im Abschlussbericht. Erfinde keine Funde — ein ' +
+      'als eine lange; thema bevorzugt ein vorhandenes); Kleinkram bleibt im ' +
+      'Abschlussbericht. Erfinde keine Funde — ein ' +
       'Projekt ohne wesentliche Befunde ist ein gutes Ergebnis und wird genau so berichtet. ' +
       'Dein Abschlusstext ist die vollständige Befundliste: je Blickwinkel die Funde mit ' +
       'Fundort und Gewicht, welche Aufgaben-Karten du angelegt hast — und was bewusst nur ' +
@@ -485,6 +507,7 @@ export const BLOCK_KATALOG = [
     nurLesen: true,
     prueft: false,
     uebung: false,
+    bereich: 'gedaechtnis',
     kartenVorschlaege: true,
     felder: [],
     auftrag:
@@ -509,7 +532,8 @@ export const BLOCK_KATALOG = [
       'vor; ist sie gegenstandslos, schlage „löschen" vor. ' +
       'ENTSCHEIDUNGS-KARTEN — Festlegungen des Nutzers formulierst du NIE um und ' +
       'löschst sie nie; prüfe stattdessen, ob der Code der Festlegung noch folgt: ' +
-      'Widerspricht er, schlage eine neue Aufgaben-Karte vor, die den Widerspruch benennt. ' +
+      'Widerspricht er, schlage eine neue Aufgaben-Karte vor, die den Widerspruch benennt ' +
+      '(mit thema — bevorzugt ein vorhandenes). ' +
       'PRÜFKARTEN pflegt FlowForge — zu ihnen machst du keine Vorschläge; fällt dir eine ' +
       'offensichtlich veraltete auf, erwähne sie nur im Bericht. ' +
       'Jeder Vorschlag trägt eine kurze Begründung mit Beleg. Mache einen Vorschlag nur, ' +
@@ -530,6 +554,7 @@ export const BLOCK_KATALOG = [
     nurLesen: true,
     prueft: false,
     uebung: false,
+    bereich: 'auftrag',
     felder: [
       {
         id: 'thema',
@@ -561,6 +586,7 @@ export const BLOCK_KATALOG = [
     nurLesen: false,
     prueft: false,
     uebung: false,
+    bereich: 'gedaechtnis',
     // Karten-Vorschlag fürs nächste Paket (BAUPLAN 28): nur das Sessionende
     // darf naechster_lauf_vorschlagen rückfragefrei nutzen — durchgesetzt am
     // Werkzeugaufruf (dasselbe Freischalt-Muster wie kartenVorschlaege).
@@ -577,7 +603,8 @@ export const BLOCK_KATALOG = [
       'erledigt hat. ' +
       '4. Lege für offen gebliebene oder neu entdeckte Arbeit kurze Aufgaben-Karten an; halte ' +
       'getroffene Entscheidungen und neues Wissen als Entscheidungs- bzw. Wissens-Karten fest. ' +
-      'Beachte die harten Längengrenzen — lieber mehrere fokussierte Karten als eine lange. ' +
+      'Beachte die harten Längengrenzen — lieber mehrere fokussierte Karten als eine lange; ' +
+      'jede neue Karte mit thema, bevorzugt ein vorhandenes. ' +
       '5. Deck den Tisch für den nächsten Lauf: Schlage mit naechster_lauf_vorschlagen die ' +
       'Karten vor, die der nächste Lauf bekommen sollte (kartenIds aus karten_uebersicht — ' +
       'du kennst den Lauf gerade am besten: was fertig wurde, was offen blieb). Dazu ' +
@@ -782,6 +809,27 @@ export function bekannteEtiketten() {
     for (const etikett of [...block.braucht, ...(block.brauchtOptional ?? []), ...block.liefert])
       menge.add(etikett)
   return [...menge]
+}
+
+// Freie Kategorien der eigenen Blöcke (BAUPLAN 30): alles, was weder
+// Katalog-Schlüssel noch „eigene" ist — alphabetisch, ohne Doppelte. Die
+// Bibliothek macht daraus je eine Klappe, der Block-Editor schlägt sie vor.
+export function freieBereiche() {
+  const menge = new Set()
+  for (const block of eigeneBloecke) {
+    const bereich = blockBereich(block)
+    if (bereich && bereich !== BEREICH_EIGENE && !BEREICHE.includes(bereich)) menge.add(bereich)
+  }
+  return [...menge].sort((a, b) => a.localeCompare(b, 'de'))
+}
+
+// Bereich eines Blocks für die Bibliotheks-Klappen (BAUPLAN 30): Katalog-
+// Blöcke tragen ihn fest; eigene Blöcke haben ihn gewählt (Altbestand ohne
+// Feld → „Eigene"). Übungs-Blöcke haben keinen Bereich (null).
+export function blockBereich(def) {
+  if (def?.uebung) return null
+  const wert = typeof def?.bereich === 'string' ? def.bereich.trim() : ''
+  return wert || BEREICH_EIGENE
 }
 
 // Farb-Kategorie eines Blocks für Leinwand und Bibliothek:

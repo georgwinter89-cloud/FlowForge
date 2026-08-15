@@ -16,7 +16,7 @@ import path from 'node:path'
 import crypto from 'node:crypto'
 import { BrowserWindow, Notification } from 'electron'
 import { texte } from '../shared/texte.js'
-import { blockDefinition } from '../shared/blockKatalog.js'
+import { blockDefinition, UEBERTRAG_GRENZE_STANDARD } from '../shared/blockKatalog.js'
 import {
   pruefeSchaubild,
   pruefeVersorgung,
@@ -35,8 +35,10 @@ import {
   karteAnlegen,
   karteAendern,
   karteErledigtSetzen,
-  karteLoeschen
+  karteLoeschen,
+  karteThemaSetzen
 } from './projekte.js'
+import { vorhandeneThemen } from '../shared/kartenRegeln.js'
 import {
   pruefkartenOrdner,
   pruefkarteEinlegen,
@@ -66,7 +68,7 @@ import {
 import { workflowLaden } from './workflow.js'
 import { laufstandSpeichern, laufstandLaden, laufstandLoeschen } from './laufstand.js'
 import { laufVorschlagSpeichern, laufVorschlagLoeschen } from './naechsterLauf.js'
-import { kartenZuteilungPruefen } from './motor/kartenZuteilungWerkzeuge.js'
+import { kartenZuteilungPruefen, paketMeldungPruefen } from './motor/kartenZuteilungWerkzeuge.js'
 import { chatBeschaeftigt, chatSchliessen } from './nachlaufChat.js'
 
 const BERICHTE_ORDNER = 'laufberichte'
@@ -80,7 +82,57 @@ const KONTINGENT_PAUSE_MS = 10 * 60 * 1000
 // Starts landen in der Warteschlange und laufen automatisch an.
 const MAX_PARALLEL_LAEUFE = 3
 const aktiveLaeufe = new Map() // projektPfad → Lauf
-const warteschlange = [] // { fenster, projektPfad, kartenIds, fortsetzen }
+const warteschlange = [] // { fenster, projektPfad, kartenIds, fortsetzen, sonderlauf }
+
+// Sonderläufe (BAUPLAN 30, Entscheidung Georg, 15.08.2026): Die Aufräum-Knöpfe
+// der Karten-Seitenleiste starten je einen festen Ein-Block-Workflow im
+// Hintergrund — Lauf-Tab, Ticker, Abnahme-Dialog und Sperren wie bei jedem
+// Lauf, aber die Leinwand bleibt unangetastet. 'karten-pruefen' = der
+// Karten-Prüfer (Einzeldialog je Vorschlag); 'themen-sortieren' = sein
+// nur-lesender Sortiermodus (Sammel-Dialog, kein Code-Nachmessen).
+export const SONDERLAEUFE = {
+  'karten-pruefen': { blockId: 'karten-pruefer' },
+  'themen-sortieren': { blockId: 'karten-pruefer', themenSortieren: true }
+}
+
+// Die Blockdefinition eines Sonderlaufs: der Katalog-Block, im Sortiermodus
+// mit eigenem Namen und Auftrag (Kennzeichen themenSortieren).
+function sonderlaufDefinition(sonderlauf) {
+  const vorlage = SONDERLAEUFE[sonderlauf?.art]
+  if (!vorlage) return null
+  const def = blockDefinition(vorlage.blockId)
+  if (!def) return null
+  if (!vorlage.themenSortieren) return def
+  return {
+    ...def,
+    name: texte.sonderlauf.themenSortierenName,
+    auftrag: texte.agentenThemenSortieren.auftrag,
+    themenSortieren: true
+  }
+}
+
+// Ad-hoc-Workflow eines Sonderlaufs: genau ein Block, keine Pfeile, keine
+// Reparatur-Runden. Die Instanz-Kennung kommt aus dem Sonderlauf-Objekt —
+// eine Wiederaufnahme baut damit denselben Workflow wieder auf.
+function sonderlaufWorkflow(sonderlauf) {
+  const vorlage = SONDERLAEUFE[sonderlauf.art]
+  return {
+    reparaturRunden: 0,
+    uebertragGrenze: UEBERTRAG_GRENZE_STANDARD,
+    bloecke: [
+      {
+        instanzId: sonderlauf.instanzId,
+        blockId: vorlage.blockId,
+        feldWerte: {},
+        zurueckZu: null,
+        lokaleKi: true,
+        pruefKarten: [],
+        position: { x: 40, y: 40 }
+      }
+    ],
+    pfeile: []
+  }
+}
 // Läufe, die gerade aus der Warteschlange anlaufen, aber noch keinen Eintrag in
 // aktiveLaeufe haben — sonst könnten zwei gleichzeitig endende Läufe die
 // 3er-Grenze überschießen.
@@ -102,10 +154,10 @@ function laeufeMelden() {
     if (!fenster.isDestroyed()) fenster.webContents.send('lauf-ereignis', daten)
 }
 
-function inWarteschlangeStellen(fenster, projektPfad, kartenIds, fortsetzen) {
+function inWarteschlangeStellen(fenster, projektPfad, kartenIds, fortsetzen, sonderlauf = null) {
   if (warteschlange.some((eintrag) => eintrag.projektPfad === projektPfad))
     return { ok: false, fehler: texte.lauf.schonInWarteschlange }
-  warteschlange.push({ fenster, projektPfad, kartenIds, fortsetzen })
+  warteschlange.push({ fenster, projektPfad, kartenIds, fortsetzen, sonderlauf })
   laeufeMelden()
   return { ok: true, wartet: true, position: warteschlange.length }
 }
@@ -127,7 +179,14 @@ async function warteschlangeAnstossen() {
     try {
       ergebnis = eintrag.fortsetzen
         ? await laufFortsetzen(eintrag.fenster, eintrag.projektPfad, true)
-        : await laufStarten(eintrag.fenster, eintrag.projektPfad, eintrag.kartenIds, null, true)
+        : await laufStarten(
+            eintrag.fenster,
+            eintrag.projektPfad,
+            eintrag.kartenIds,
+            null,
+            true,
+            eintrag.sonderlauf
+          )
     } catch (fehler) {
       ergebnis = { ok: false, fehler: String(fehler?.message ?? fehler) }
     } finally {
@@ -257,7 +316,12 @@ function kartenKontext(projektPfad, kartenIds) {
     (k) => k.sorte === 'status' || kartenIds.includes(k.id)
   )
   if (gewaehlt.length === 0) return ''
-  return texte.agentenKarten.kontext(gewaehlt.map((k) => '- ' + kartenZeile(k)).join('\n'))
+  // Themen (BAUPLAN 30): Die vorhandenen Themen stehen im Auftrag — bewusst
+  // nicht in der Werkzeugbeschreibung (Prompt-Cache).
+  return texte.agentenKarten.kontext(
+    gewaehlt.map((k) => '- ' + kartenZeile(k)).join('\n'),
+    vorhandeneThemen(geladen.karten)
+  )
 }
 
 // Projektwissen für die lokale KI (BAUPLAN 25): Die Kartenauswahl des Laufs
@@ -293,8 +357,18 @@ function gekuerzt(text) {
 // Kommt nur über laufFortsetzen() herein.
 // ausWarteschlange (BAUPLAN 12): Start durch den automatischen Anlauf — dann
 // wird bei belegtem Platz nicht erneut eingereiht, sondern ehrlich abgelehnt.
-export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung = null, ausWarteschlange = false) {
+// sonderlauf (BAUPLAN 30): { art, instanzId } — statt des Schaubilds läuft ein
+// fester Ein-Block-Workflow (SONDERLAEUFE); die Leinwand bleibt unangetastet.
+export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung = null, ausWarteschlange = false, sonderlauf = null) {
   if (!fs.existsSync(projektPfad)) return { ok: false, fehler: texte.fehler.projektNichtGefunden }
+  if (sonderlauf && !SONDERLAEUFE[sonderlauf.art])
+    return { ok: false, fehler: texte.fehler.unbekannt }
+  // Blockdefinition je Block dieses Laufs — bei Sonderläufen ggf. mit
+  // eigenem Namen und Auftrag (Sortiermodus des Karten-Prüfers).
+  const defVon = (blockId) =>
+    sonderlauf && blockId === SONDERLAEUFE[sonderlauf.art].blockId
+      ? sonderlaufDefinition(sonderlauf)
+      : blockDefinition(blockId)
 
   // Ohne ausdrückliche Auswahl gilt die festgenagelte Vorauswahl:
   // Status-Karte (immer) + offene Aufgaben-Karten.
@@ -306,7 +380,9 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       : []
   }
 
-  const geladen = workflowLaden(projektPfad)
+  const geladen = sonderlauf
+    ? { ok: true, workflow: sonderlaufWorkflow(sonderlauf) }
+    : workflowLaden(projektPfad)
   if (!geladen.ok) return geladen
   const workflow = geladen.workflow
   // Schaubild prüfen (SPEC §4.1): kreisfrei, zusammenhängend — die topologische
@@ -352,7 +428,7 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
   // Wiederaufnahme entfällt die Prüfung: frühere Blöcke sind schon gelaufen,
   // ihre Aufgaben können bereits abgehakt sein.
   for (const eintrag of fortsetzung ? [] : kette) {
-    const def = blockDefinition(eintrag.blockId)
+    const def = defVon(eintrag.blockId)
     for (const feld of def.felder) {
       if (!feld.oderOffeneAufgaben) continue
       if ((eintrag.feldWerte?.[feld.id] ?? '').trim()) continue
@@ -361,7 +437,7 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       // noch keine Karten, die Aufgaben entstehen erst im Lauf.
       if (
         vorfahrenSortiert(workflow.bloecke, workflow.pfeile, eintrag.instanzId).some(
-          (v) => blockDefinition(v.blockId).erzeugtAufgaben
+          (v) => defVon(v.blockId).erzeugtAufgaben
         )
       )
         continue
@@ -390,10 +466,10 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
   // seine Platz-Prüfung hat der Anstoßer vor dem Herausnehmen gemacht.
   if (aktiveLaeufe.has(projektPfad)) {
     if (ausWarteschlange) return { ok: false, fehler: texte.lauf.schonAktiv }
-    return inWarteschlangeStellen(fenster, projektPfad, kartenIds, Boolean(fortsetzung))
+    return inWarteschlangeStellen(fenster, projektPfad, kartenIds, Boolean(fortsetzung), sonderlauf)
   }
   if (!ausWarteschlange && plaetzeBelegt() >= MAX_PARALLEL_LAEUFE)
-    return inWarteschlangeStellen(fenster, projektPfad, kartenIds, Boolean(fortsetzung))
+    return inWarteschlangeStellen(fenster, projektPfad, kartenIds, Boolean(fortsetzung), sonderlauf)
 
   // Nachlauf-Chat (BAUPLAN 27): Arbeitet der Chat gerade in diesem Projekt,
   // startet kein Lauf — ein Schreiber pro Projekt (SPEC §5). Ein untätiger
@@ -428,7 +504,9 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     offeneEntscheidung: null,
     // Gesprächsverlauf dieses Laufs (Fragen des Agenten + Antworten) — die
     // Ansicht stellt ihn nach einem Wechsel daraus wieder her.
-    gespraech: []
+    gespraech: [],
+    // Sonderlauf (BAUPLAN 30): Kennzeichen für die Ansicht.
+    sonderlauf: sonderlauf?.art ?? null
   }
   aktiveLaeufe.set(projektPfad, lauf)
   laeufeMelden()
@@ -471,7 +549,7 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     )
     const schonEingelegt = new Set()
     for (const eintrag of kette) {
-      if (!blockDefinition(eintrag.blockId)?.prueft) continue
+      if (!defVon(eintrag.blockId)?.prueft) continue
       const liste = []
       for (const kartenId of eintrag.pruefKarten ?? []) {
         const karte = pruefkartenNachId.get(kartenId)
@@ -501,7 +579,7 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
 
   // Sicherheitsnetz vor dem Lauf: der Stand von jetzt ist immer wiederholbar —
   // und die Folgen-Frage kann genau hierauf zurücksetzen.
-  const namen = kette.map((b) => blockDefinition(b.blockId).name)
+  const namen = kette.map((b) => defVon(b.blockId).name)
   const sicherung = await sicherungspunktAnlegen(
     projektPfad,
     texte.sicherungen.beschriftungVorLauf(namen[0])
@@ -537,6 +615,9 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     uebertraege: [],
     // Wiederaufnahme nach Unterbrechung (BAUPLAN 11).
     fortgesetzt: Boolean(fortsetzung),
+    // Sonderlauf (BAUPLAN 30): Kennzeichen für Bericht und Ansicht — die
+    // Leinwand war nicht beteiligt.
+    ...(sonderlauf ? { sonderlauf: sonderlauf.art } : {}),
     // Abschlusstext jedes gelaufenen Blocks — die Leinwand zeigt ihn direkt
     // an der jeweiligen Karte an.
     blockErgebnisse: [],
@@ -642,11 +723,24 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
   // Angewendet wird hier, von FlowForge selbst, über die normalen
   // Kartenfunktionen; der Agent wartet derweil auf sein Werkzeug-Ergebnis.
   // Löst mit der Entscheidung auf — oder mit null, wenn der Lauf endet.
-  function vorschlagStellen(vorschlag) {
+  // Herkunft (BAUPLAN 30) für übernommene Vorschläge: „vom Karten-Prüfer".
+  function vorschlagHerkunft(blockName) {
+    return {
+      quelle: 'kartenpruefer',
+      block: blockName,
+      laufId: bericht.id,
+      laufStart: bericht.gestartetAm
+    }
+  }
+
+  function vorschlagStellen(vorschlag, blockName = '') {
     return new Promise((aufloesen) => {
       if (fenster.isDestroyed()) return aufloesen(null)
       const artLabel = texte.vorschlag.artLabels[vorschlag.art] ?? vorschlag.art
-      const kartenTitel = vorschlag.alteKarte?.titel ?? vorschlag.titel ?? ''
+      const kartenTitel =
+        vorschlag.art === 'thema'
+          ? texte.vorschlag.themenAnzahl(vorschlag.eintraege?.length ?? 0)
+          : (vorschlag.alteKarte?.titel ?? vorschlag.titel ?? '')
       tickern(texte.ticker.kartenVorschlagGestellt(artLabel, kartenTitel))
       if (!fenster.isFocused() && Notification.isSupported())
         new Notification({
@@ -654,6 +748,7 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           body: `${artLabel}: ${kartenTitel}`
         }).show()
       const frageId = crypto.randomUUID()
+      const herkunft = vorschlagHerkunft(blockName)
       lauf.vorschlaege.set(frageId, (wahl, felder) => {
         function abschliessen(ergebnisFuerAgent) {
           lauf.vorschlaege.delete(frageId)
@@ -668,6 +763,35 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           abschliessen(null)
           return { ok: true }
         }
+        // Sammelform „thema" (BAUPLAN 30): felder.eintraege = die Zeilen, die
+        // der Nutzer übernimmt (ggf. mit geändertem Thema); alles andere gilt
+        // als abgelehnt. „Ablehnen" ohne Felder = alle abgelehnt.
+        if (vorschlag.art === 'thema') {
+          const gewollt =
+            wahl === 'ablehnen'
+              ? []
+              : Array.isArray(felder?.eintraege)
+                ? felder.eintraege
+                : vorschlag.eintraege
+          let uebernommen = 0
+          let letzteKarten = null
+          for (const zeile of gewollt) {
+            const ergebnis = karteThemaSetzen(projektPfad, zeile.kartenId, zeile.thema, herkunft)
+            // Eine unbrauchbare Zeile (z.B. zu langes Thema nach dem Bearbeiten)
+            // hält den ganzen Dialog offen — die Ansicht zeigt den Fehler.
+            if (!ergebnis.ok) return ergebnis
+            uebernommen++
+            letzteKarten = ergebnis.karten
+          }
+          if (letzteKarten) senden({ art: 'karten', karten: letzteKarten })
+          const abgelehnt = (vorschlag.eintraege?.length ?? 0) - uebernommen
+          bericht.kartenVorschlaege ??= { uebernommen: 0, bearbeitet: 0, abgelehnt: 0 }
+          bericht.kartenVorschlaege.uebernommen += uebernommen
+          bericht.kartenVorschlaege.abgelehnt += Math.max(0, abgelehnt)
+          tickern(texte.ticker.themenUebernommen(uebernommen, Math.max(0, abgelehnt)))
+          abschliessen({ wahl: 'thema', uebernommen, abgelehnt: Math.max(0, abgelehnt) })
+          return { ok: true }
+        }
         if (wahl === 'ablehnen') {
           bericht.kartenVorschlaege ??= { uebernommen: 0, bearbeitet: 0, abgelehnt: 0 }
           bericht.kartenVorschlaege.abgelehnt++
@@ -679,15 +803,17 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         const bearbeitet = felder != null
         const titel = bearbeitet ? String(felder.titel ?? vorschlag.titel ?? '') : vorschlag.titel
         const text = bearbeitet ? String(felder.text ?? vorschlag.text ?? '') : vorschlag.text
+        // Thema (BAUPLAN 30): bei „anlegen" das vorgeschlagene bzw. bearbeitete.
+        const thema = bearbeitet && felder.thema != null ? String(felder.thema) : vorschlag.thema
         let ergebnis
         if (vorschlag.art === 'aktualisieren')
-          ergebnis = karteAendern(projektPfad, vorschlag.kartenId, { titel, text })
+          ergebnis = karteAendern(projektPfad, vorschlag.kartenId, { titel, text }, herkunft)
         else if (vorschlag.art === 'erledigen')
-          ergebnis = karteErledigtSetzen(projektPfad, vorschlag.kartenId, true)
+          ergebnis = karteErledigtSetzen(projektPfad, vorschlag.kartenId, true, herkunft)
         else if (vorschlag.art === 'oeffnen')
-          ergebnis = karteErledigtSetzen(projektPfad, vorschlag.kartenId, false)
+          ergebnis = karteErledigtSetzen(projektPfad, vorschlag.kartenId, false, herkunft)
         else if (vorschlag.art === 'anlegen')
-          ergebnis = karteAnlegen(projektPfad, { sorte: 'aufgabe', titel, text })
+          ergebnis = karteAnlegen(projektPfad, { sorte: 'aufgabe', titel, text, thema }, herkunft)
         else if (vorschlag.art === 'loeschen')
           ergebnis = karteLoeschen(projektPfad, vorschlag.kartenId)
         else ergebnis = { ok: false, fehler: texte.fehler.unbekannt }
@@ -802,7 +928,7 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         eintrag.instanzId,
         {
           eintrag,
-          def: blockDefinition(eintrag.blockId),
+          def: defVon(eintrag.blockId),
           status: 'offen', // 'offen' | 'laeuft' | 'fertig'
           lieferung: null,
           rueckmeldung: '',
@@ -856,6 +982,44 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         for (const weiter of nachfolgerVon.get(id) ?? []) offen.push(weiter)
       }
       return namen
+    }
+
+    // Paket melden & Herkunft (BAUPLAN 30): Die Aufgaben-Karten, an denen
+    // dieser Lauf arbeitet — gemeldet von Paket schneiden/Diagnose über
+    // paket_melden (null = nicht gemeldet). Damit stempelt FlowForge jede im
+    // Lauf angelegte oder geänderte Karte: Aufgabe(n) · Block · Lauf.
+    let laufPaket = null
+    function herkunftFuerBlock(instanzId) {
+      const name = instanzId ? knoten.get(instanzId)?.def.name : null
+      return {
+        quelle: 'block',
+        block: name ?? texte.laufberichte.unbekannterBlock,
+        laufId: bericht.id,
+        laufStart: bericht.gestartetAm,
+        ...(laufPaket?.length ? { aufgaben: laufPaket } : {})
+      }
+    }
+    function paketMeldungAnnehmen({ instanzId, aufgabenIds }) {
+      const geladen = kartenLaden(projektPfad)
+      if (!geladen.ok) return { fehler: geladen.fehler }
+      const k = knoten.get(instanzId)
+      // Der Validator kennt die Feldwerte des Blocks: Ist das Wunsch-/
+      // Fehlerbild-Feld gefüllt, darf die Meldung leer sein.
+      const feldGefuellt = (k?.def.felder ?? []).some(
+        (feld) => feld.oderOffeneAufgaben && (k.eintrag.feldWerte?.[feld.id] ?? '').trim()
+      )
+      const urteil = paketMeldungPruefen({
+        aufgabenIds,
+        karten: geladen.karten,
+        ausgewaehlt,
+        feldGefuellt
+      })
+      if (urteil.fehler) return urteil
+      laufPaket = urteil.aufgaben
+      bericht.paket = urteil.aufgaben.map((a) => a.titel)
+      tickern(texte.ticker.paketGemeldet(urteil.aufgaben.map((a) => a.titel)))
+      standSpeichern()
+      return { ok: true, meldung: texte.agentenPaket.gemeldet(urteil.aufgaben.length) }
     }
 
     // Eine Motor-Session pro Lauf (BAUPLAN 19): Kennung und Füllstand der
@@ -927,6 +1091,12 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         // nach einer Wiederaufnahme arbeiten die Folgeblöcke weiter mit
         // ihrer Teilmenge.
         kartenZuteilung: [...kartenZuteilung],
+        // Paket (BAUPLAN 30): die gemeldeten Aufgaben-Karten wandern mit —
+        // die Herkunft stimmt auch nach einer Wiederaufnahme.
+        paket: laufPaket,
+        // Sonderlauf (BAUPLAN 30): die Wiederaufnahme baut denselben
+        // Ein-Block-Workflow wieder auf.
+        sonderlauf,
         rundenUebrig,
         uebertraege,
         startanleitungNachgefordert
@@ -969,13 +1139,18 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         : [])
         if (knoten.has(id) && Array.isArray(ids))
           kartenZuteilung.set(id, ids.filter((kartenId) => typeof kartenId === 'string'))
+      // Paket (BAUPLAN 30): tolerant gegenüber alten Laufständen.
+      if (Array.isArray(fortsetzung.paket))
+        laufPaket = fortsetzung.paket
+          .filter((a) => a && typeof a.id === 'string')
+          .map((a) => ({ id: a.id, titel: String(a.titel ?? '') }))
       const naechster = kette.find((eintrag) => knoten.get(eintrag.instanzId).status !== 'fertig')
       if (naechster)
         tickern(
           texte.ticker.wiederaufnahme(
             nummerVon.get(naechster.instanzId),
             kette.length,
-            blockDefinition(naechster.blockId).name
+            defVon(naechster.blockId).name
           )
         )
       bericht.ticker.push({ zeit: jetztIso(), text: texte.laufberichte.fortgesetztHinweis })
@@ -1106,9 +1281,12 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         },
         aufRechteFrage: rechteFrageStellen,
         aufMenschFrage: (daten) => menschFrageStellen(daten, holeName()),
-        aufKartenVorschlag: vorschlagStellen,
+        aufKartenVorschlag: (vorschlag) => vorschlagStellen(vorschlag, holeName()),
         aufLaufVorschlag: laufVorschlagAnnehmen,
-        aufKartenZuteilung: kartenZuteilungAnnehmen
+        aufKartenZuteilung: kartenZuteilungAnnehmen,
+        // Paket melden & Herkunft (BAUPLAN 30).
+        aufPaketMeldung: paketMeldungAnnehmen,
+        holeHerkunft: herkunftFuerBlock
       })
     }
 
@@ -1251,6 +1429,9 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         if (k.def.kartenZuteilung) {
           const namen = [...nachfahrenNamen(k.eintrag.instanzId).keys()]
           if (namen.length) auftrag += texte.agentenKartenZuteilung.auftragZusatz(namen)
+          // Paket melden (BAUPLAN 30): auch im Ein-Block-Lauf — die Herkunft
+          // der Karten hängt daran.
+          auftrag += texte.agentenPaket.auftragZusatz
         }
         // Prüfkarten (BAUPLAN 18): gezogene alte Prüfungen werden zusätzlich
         // zur Paket-Prüfung ausgeführt — der Zusatz gehört in jeden
@@ -1487,10 +1668,16 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           dateStyle: 'short',
           timeStyle: 'short'
         })
-        const angelegt = pruefkarteAnlegen(projektPfad, {
-          titel: roh.titel ?? texte.pruefkarten.ersatzTitel(zeitText),
-          text: roh.text ?? texte.pruefkarten.ersatzText
-        })
+        // Herkunft (BAUPLAN 30): Prüfkarten sind „von FlowForge" — mit dem
+        // Prüf-Block, dem Lauf und dem gemeldeten Paket.
+        const angelegt = pruefkarteAnlegen(
+          projektPfad,
+          {
+            titel: roh.titel ?? texte.pruefkarten.ersatzTitel(zeitText),
+            text: roh.text ?? texte.pruefkarten.ersatzText
+          },
+          { ...herkunftFuerBlock(instanzId), quelle: 'flowforge' }
+        )
         if (!angelegt.ok) return
         pruefungenArchivieren(projektPfad, angelegt.karte.id)
         senden({ art: 'karten', karten: angelegt.karten })
@@ -1985,10 +2172,15 @@ export function laufstandInfo(projektPfad) {
     ? stand.kettenIds.find((id) => !stand.fertigIds.includes(id))
     : stand.kettenIds[stand.index]
   let blockName = ''
-  const geladen = workflowLaden(projektPfad)
-  if (geladen.ok) {
-    const eintrag = geladen.workflow.bloecke.find((block) => block.instanzId === naechsteId)
-    if (eintrag) blockName = blockDefinition(eintrag.blockId)?.name ?? ''
+  // Sonderlauf (BAUPLAN 30): Der Block stand nie auf der Leinwand — sein Name
+  // kommt aus der Sonderlauf-Definition.
+  if (stand.sonderlauf?.art) blockName = sonderlaufDefinition(stand.sonderlauf)?.name ?? ''
+  else {
+    const geladen = workflowLaden(projektPfad)
+    if (geladen.ok) {
+      const eintrag = geladen.workflow.bloecke.find((block) => block.instanzId === naechsteId)
+      if (eintrag) blockName = blockDefinition(eintrag.blockId)?.name ?? ''
+    }
   }
   return { ok: true, vorhanden: true, gestartetAm: stand.gestartetAm, blockName }
 }
@@ -2013,7 +2205,27 @@ export async function laufFortsetzen(fenster, projektPfad, ausWarteschlange = fa
     return inWarteschlangeStellen(fenster, projektPfad, null, true)
   const zurueck = await aufLetztenPunktZuruecksetzen(projektPfad)
   if (!zurueck.ok) return zurueck
-  return laufStarten(fenster, projektPfad, stand.kartenIds, stand, ausWarteschlange)
+  // Sonderlauf (BAUPLAN 30): derselbe Ein-Block-Workflow wie beim Start.
+  const sonderlauf =
+    stand.sonderlauf && SONDERLAEUFE[stand.sonderlauf.art] && typeof stand.sonderlauf.instanzId === 'string'
+      ? { art: stand.sonderlauf.art, instanzId: stand.sonderlauf.instanzId }
+      : null
+  return laufStarten(fenster, projektPfad, stand.kartenIds, stand, ausWarteschlange, sonderlauf)
+}
+
+// Sonderlauf starten (BAUPLAN 30): Aufräum-Knöpfe der Karten-Seitenleiste.
+// Kartenauswahl = Standard-Vorauswahl (kartenIds null); die Leinwand bleibt
+// unangetastet. Läuft oder wartet das Projekt, wird ehrlich abgelehnt statt
+// eingereiht — Aufräumen ist kein Lauf, der „gleich drankommen" soll.
+export function sonderlaufStarten(fenster, projektPfad, art) {
+  if (!SONDERLAEUFE[art]) return { ok: false, fehler: texte.fehler.unbekannt }
+  const zustand = laufZustand(projektPfad)
+  if (zustand.aktiv || zustand.wartet)
+    return { ok: false, fehler: texte.karten.sonderlaufGesperrt }
+  return laufStarten(fenster, projektPfad, null, null, false, {
+    art,
+    instanzId: 'sonderlauf-' + crypto.randomUUID()
+  })
 }
 
 // Für die Oberfläche: Läuft in diesem Projekt gerade etwas — und wo steht es?
@@ -2040,6 +2252,8 @@ export function laufZustand(projektPfad) {
     entscheidung: lauf.offeneEntscheidung,
     menschFrage: lauf.offeneMenschFragen[0] ?? null,
     vorschlag: lauf.offeneVorschlaege[0] ?? null,
-    gespraech: lauf.gespraech
+    gespraech: lauf.gespraech,
+    // Sonderlauf (BAUPLAN 30): die Ansicht weiß, dass die Leinwand nicht beteiligt ist.
+    sonderlauf: lauf.sonderlauf ?? null
   }
 }

@@ -1,14 +1,22 @@
 import { Fragment, useState } from 'react'
 import { texte } from '../../shared/texte.js'
-import { bekannteEtiketten, blockKategorie } from '../../shared/blockKatalog.js'
+import {
+  bekannteEtiketten,
+  blockKategorie,
+  BEREICHE,
+  BEREICH_EIGENE,
+  freieBereiche
+} from '../../shared/blockKatalog.js'
 import {
   BLOCK_NAME_MAX,
   BLOCK_SYMBOL_MAX,
   BLOCK_BESCHREIBUNG_MAX,
   BLOCK_AUFTRAG_MAX,
-  ETIKETTEN_MAX
+  BEREICH_MAX,
+  ETIKETTEN_MAX,
+  pruefeBereich
 } from '../../shared/blockRegeln.js'
-import { BlockChips } from './Blockbibliothek.jsx'
+import { BlockChips, bereichName } from './Blockbibliothek.jsx'
 
 const t = texte.blockEditor
 const tf = texte.kartenFormular
@@ -79,6 +87,14 @@ function EtikettenFeld({ label, hinweis, etiketten, onAendern, datalistId, vorsc
   )
 }
 
+// Gespeicherter Bereich → Text im Kategorie-Feld: Katalog-Schlüssel werden
+// als Anzeigename gezeigt, „eigene"/leer bleibt leer, freie Namen wie sie sind.
+function bereichAnzeige(bereich) {
+  const wert = typeof bereich === 'string' ? bereich.trim() : ''
+  if (!wert || wert === BEREICH_EIGENE) return ''
+  return BEREICHE.includes(wert) ? bereichName(wert) : wert
+}
+
 // Block-Editor mit KI-Assistent (SPEC §4.5, BAUPLAN 14): Erstellungsassistent
 // in 4 Schritten entlang der Block-Anatomie — Was tun? → braucht/liefert →
 // Sperren → Probelauf-Vorschau. Bearbeiten nutzt denselben Assistenten,
@@ -96,9 +112,20 @@ export default function BlockEditor({ block, onSpeichern, onAbbrechen }) {
     auftrag: block?.auftrag ?? '',
     braucht: block?.braucht ?? [],
     liefert: block?.liefert ?? [],
+    // Kategorie (BAUPLAN 30): im Feld steht der Anzeigename bzw. der freie
+    // Name; „Eigene" bleibt leer (Platzhalter erklärt das). Beim Speichern
+    // macht pruefeBereich aus einem Anzeigenamen wieder den Schlüssel.
+    bereich: bereichAnzeige(block?.bereich),
     nurLesen: block?.nurLesen ?? true
   })
   const vorschlaege = bekannteEtiketten()
+  // Vorschläge fürs Kategorie-Feld: feste Klappen (Anzeigename), „Eigene" und
+  // die freien Kategorien vorhandener eigener Blöcke.
+  const bereichVorschlaege = [
+    ...BEREICHE.map(bereichName),
+    bereichName(BEREICH_EIGENE),
+    ...freieBereiche()
+  ]
 
   function setzen(feld, wert) {
     setWerte((alt) => ({ ...alt, [feld]: wert }))
@@ -111,7 +138,8 @@ export default function BlockEditor({ block, onSpeichern, onAbbrechen }) {
     const ergebnis = await window.flowforge.blockAssistent(wunsch)
     setKiLaeuft(false)
     if (!ergebnis.ok) return setFehler(ergebnis.fehler)
-    setWerte(ergebnis.vorschlag)
+    // Der Assistent liefert den Bereich als Schlüssel — im Feld steht der Name.
+    setWerte({ ...ergebnis.vorschlag, bereich: bereichAnzeige(ergebnis.vorschlag.bereich) })
   }
 
   async function speichern() {
@@ -125,6 +153,12 @@ export default function BlockEditor({ block, onSpeichern, onAbbrechen }) {
     symbol: werte.symbol.trim() || '🧱',
     prueft: false
   }
+  // Kategorie in der Vorschau: so, wie sie nach dem Speichern heißen wird
+  // (Anzeigename einer festen Klappe oder der freie Name; leer → „Eigene").
+  const bereichGeprueft = pruefeBereich(werte.bereich)
+  const vorschauBereich = bereichGeprueft.fehler
+    ? werte.bereich.trim()
+    : bereichName(bereichGeprueft.bereich)
 
   const titel = [t.schritt1Titel, t.schritt2Titel, t.schritt3Titel, t.schritt4Titel]
 
@@ -202,6 +236,24 @@ export default function BlockEditor({ block, onSpeichern, onAbbrechen }) {
                   />
                   <Zaehler wert={werte.beschreibung} max={BLOCK_BESCHREIBUNG_MAX} />
                 </label>
+                {/* Kategorie / Bibliotheks-Klappe (BAUPLAN 30): vorhandene
+                    wählen oder eine neue eintippen; leer = „Eigene". */}
+                <label className="feld">
+                  <span>{t.bereichFeld}</span>
+                  <input
+                    list="bereich-vorschlaege"
+                    value={werte.bereich}
+                    placeholder={t.bereichPlatzhalter}
+                    onChange={(e) => setzen('bereich', e.target.value)}
+                  />
+                  <datalist id="bereich-vorschlaege">
+                    {bereichVorschlaege.map((v) => (
+                      <option key={v} value={v} />
+                    ))}
+                  </datalist>
+                  <span className="feld-hinweis">{t.bereichHinweis}</span>
+                  <Zaehler wert={werte.bereich} max={BEREICH_MAX} />
+                </label>
                 <label className="feld">
                   <span>{t.auftragFeld}</span>
                   <textarea
@@ -271,6 +323,7 @@ export default function BlockEditor({ block, onSpeichern, onAbbrechen }) {
                 </p>
                 {werte.beschreibung && <p className="feld-hinweis">{werte.beschreibung}</p>}
                 <BlockChips def={vorschauDef} />
+                <p className="feld-hinweis vorschau-bereich">{t.bereichVorschau(vorschauBereich)}</p>
               </div>
             </div>
           </div>

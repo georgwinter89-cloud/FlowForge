@@ -2386,3 +2386,220 @@ body {
   text-transform: none;
   letter-spacing: normal;
 }
+
+/* Klappen (BAUPLAN 30): ausklappbare Gruppen mit Kopfzeile — generisch für
+   Blockbibliothek und Karten-Seitenleiste (klappen.jsx). Die Kopfzeile trägt
+   den Stil der bisherigen .bibliothek-gruppe-Überschrift. */
+
+.klappe {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.klappe + .klappe {
+  margin-top: 4px;
+}
+
+.klappe-kopf {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rand);
+}
+
+.klappe-schalter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  padding: 4px 0;
+  border: 0;
+  background: none;
+  color: var(--akzent-text);
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  text-align: left;
+  cursor: pointer;
+}
+
+.klappe-schalter:hover .klappe-titel {
+  color: var(--text);
+}
+
+.klappe-pfeil {
+  display: inline-block;
+  width: 10px;
+  color: var(--text-blass);
+  font-size: 11px;
+}
+
+.klappe-zu .klappe-pfeil {
+  color: var(--text-leise);
+}
+
+.klappe-titel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.klappe-anzahl {
+  padding: 1px 7px;
+  border-radius: var(--radius-pille);
+  background: var(--flaeche-hervor);
+  color: var(--text-gedimmt);
+  font-family: var(--schrift-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+/* Knöpfe rechts in der Kopfzeile erben sonst die Großschreibung. */
+.klappe-rechts {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.klappe-rechts button {
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.klappe-inhalt {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Kategorie-Zeile in der Vorschau des Block-Editors (BAUPLAN 30). */
+.vorschau-bereich {
+  color: var(--text-blass);
+  font-size: 11px;
+}
+
+/* Ordnung in der Karten-Seitenleiste (BAUPLAN 30): Aufräum-Knöpfe, Themen-
+   Klappen als Drop-Ziel, Herkunfts-Kopfzeile, Sammel-Dialog „Themen sortieren". */
+
+.aufraeum-zeile {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 6px 0 4px;
+}
+
+.karten-liste .klappe {
+  margin-bottom: 4px;
+}
+
+.karten-liste .klappe-inhalt {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.thema-klappe {
+  border-radius: var(--radius-karte);
+  transition: background 120ms ease;
+}
+
+.thema-klappe .klappe-kopf {
+  padding-left: 10px;
+}
+
+.thema-klappe .klappe-titel {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--text-zweit);
+}
+
+.karte-herkunft {
+  margin: 2px 0 6px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--text-leise);
+}
+
+.karte-herkunft-link {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--akzent-text);
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline dotted;
+}
+
+.karte-herkunft-link:hover {
+  color: var(--akzent-hell);
+}
+
+.bericht-hervorgehoben {
+  outline: 1.5px solid var(--akzent);
+  outline-offset: 1px;
+}
+
+.themen-tabelle-rahmen {
+  max-height: 340px;
+  overflow: auto;
+  border: 1px solid var(--rand-panel);
+  border-radius: var(--radius-karte);
+  background: var(--flaeche-tief);
+}
+
+.themen-tabelle {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.themen-tabelle th,
+.themen-tabelle td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--rand-panel);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.themen-tabelle th {
+  position: sticky;
+  top: 0;
+  background: var(--flaeche);
+  color: var(--text-leise);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.themen-tabelle input[type='text'],
+.themen-tabelle input:not([type]) {
+  width: 100%;
+  min-width: 120px;
+  padding: 4px 6px;
+  border: 1px solid var(--rand-kontrolle);
+  border-radius: 6px;
+  background: var(--flaeche);
+  color: var(--text);
+  font: inherit;
+}
+
+.themen-zeile-abgelehnt td {
+  opacity: 0.45;
+  text-decoration: line-through;
+}
+
+.themen-zeile-abgelehnt td:last-child {
+  opacity: 1;
+  text-decoration: none;
+}

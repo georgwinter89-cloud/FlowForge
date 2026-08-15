@@ -244,6 +244,13 @@ function motorBesorgen(chat) {
     laufKontext: fortsetzen ? '' : laufberichtKontext(chat.bericht),
     nurLesenBefehle: Boolean(einstellungen.nurLesenBefehle),
     holeReparieren: () => chat.reparieren,
+    // Herkunft (BAUPLAN 30): Karten aus dem Chat tragen „vom Chat" samt dem
+    // Lauf, zu dem der Chat gehört.
+    herkunft: {
+      quelle: 'chat',
+      laufId: chat.bericht.id,
+      laufStart: chat.bericht.gestartetAm
+    },
     // Sicherungspunkt vor der ersten Änderung (BAUPLAN 27) — einmal je Chat;
     // Reparaturen erscheinen damit in der Sicherungspunkt-Liste.
     vorErsterAenderung: async () => {

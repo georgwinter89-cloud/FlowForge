@@ -64,7 +64,17 @@ export const texte = {
     eigeneBloeckeHinweis:
       'Deine selbst gebauten Blöcke — sie stehen in allen Projekten zur Verfügung.',
     eigeneBloeckeLeer: 'Noch keine eigenen Blöcke. Bau dir einen mit dem Knopf oben.',
-    uebungsbloeckeTitel: 'Übungs-Blöcke'
+    uebungsbloeckeTitel: 'Übungs-Blöcke',
+    // Klappen der Blockbibliothek (BAUPLAN 30): Anzeigenamen der festen
+    // Bereiche aus blockKatalog.BEREICHE plus „Eigene" und „Übung".
+    bereiche: {
+      auftrag: 'Auftrag finden',
+      bauen: 'Bauen',
+      pruefen: 'Prüfen',
+      gedaechtnis: 'Gedächtnis',
+      eigene: 'Eigene',
+      uebung: 'Übung'
+    }
   },
   // Block-Editor mit KI-Assistent (SPEC §4.5, BAUPLAN 14).
   blockEditor: {
@@ -115,7 +125,13 @@ export const texte = {
       `Im Projekt „${name}" läuft oder wartet gerade ein Workflow mit diesem Block. Warte, bis er fertig ist — dann kannst du den Block ändern.`,
     fehlerBeschreibungFehlt: 'Beschreib zuerst in ein paar Worten, was der Block tun soll.',
     fehlerKeinVorschlag:
-      'Die KI hat kein brauchbares Formular geliefert. Versuch es noch einmal — oder füll die Felder von Hand aus.'
+      'Die KI hat kein brauchbares Formular geliefert. Versuch es noch einmal — oder füll die Felder von Hand aus.',
+    // Kategorie / Bereich des Blocks (BAUPLAN 30): Klappe in der Bibliothek.
+    bereichFeld: 'Kategorie in der Bibliothek',
+    bereichPlatzhalter: 'z.B. Prüfen — oder eine neue Kategorie eintippen',
+    bereichHinweis:
+      'Unter dieser Klappe liegt der Block in der Bibliothek. Wähle eine vorhandene Kategorie oder tipp eine neue ein — leer heißt „Eigene".',
+    bereichVorschau: (name) => `Kategorie: ${name}`
   },
   blockRegeln: {
     nameFehlt: 'Bitte gib dem Block einen Namen.',
@@ -126,7 +142,8 @@ export const texte = {
     auftragZuLang: (max) => `Der Arbeitsauftrag ist zu lang (höchstens ${max} Zeichen).`,
     etikettZuLang: (label, max) =>
       `Ein „${label}"-Etikett ist zu lang (höchstens ${max} Zeichen).`,
-    zuVieleEtiketten: (label, max) => `Höchstens ${max} Etiketten bei „${label}".`
+    zuVieleEtiketten: (label, max) => `Höchstens ${max} Etiketten bei „${label}".`,
+    bereichZuLang: (max) => `Der Kategorie-Name ist zu lang (höchstens ${max} Zeichen).`
   },
   kette: {
     starten: 'Workflow starten',
@@ -217,7 +234,49 @@ export const texte = {
     loeschenBestaetigung: 'Diese Karte wirklich löschen?',
     loeschenBestaetigungPruefung:
       'Diese Prüfkarte wirklich löschen? Ihre aufbewahrten Prüfdateien werden mitgelöscht — diese Prüfung lässt sich dann nicht mehr auf einen Prüfer ziehen.',
-    keineKarten: 'Keine Karten in dieser Ansicht.'
+    keineKarten: 'Keine Karten in dieser Ansicht.',
+    // Themen & Gruppen (BAUPLAN 30).
+    themaMarke: (thema) => `Thema: ${thema}`,
+    gruppen: {
+      arbeit: 'Arbeit',
+      wissen: 'Wissen',
+      geprueft: 'Geprüft',
+      erledigt: 'Erledigt'
+    },
+    sonstiges: 'Sonstiges',
+    themaUmbenennen: 'Thema umbenennen',
+    themaUmbenennenFrage: (thema) =>
+      `Neuer Name für das Thema „${thema}" — alle seine Karten wandern mit. Ein vorhandener Name legt die Themen zusammen.`,
+    themaUmbenennenKnopf: 'Umbenennen',
+    themaZielHinweis: 'Karte hierher ziehen, um sie in dieses Thema zu verschieben.',
+    // Aufräum-Knöpfe (Entscheidung Georg, 15.08.2026): Sonderläufe aus der
+    // Karten-Seitenleiste — Lauf-Tab, Ticker und Abnahme wie bei jedem Lauf,
+    // die Leinwand bleibt unangetastet.
+    aufraeumenTitel: 'Aufräumen',
+    kartenPruefenKnopf: 'Karten am Code prüfen',
+    kartenPruefenHinweis:
+      'Startet den Karten-Prüfer als Sonderlauf im Hintergrund: Er misst am Code nach, ob die Karten noch wahr sind, und schlägt Korrekturen vor — du entscheidest jede einzeln im Lauf-Tab. Die Leinwand bleibt unverändert.',
+    themenSortierenKnopf: 'Themen sortieren',
+    themenSortierenHinweis:
+      'Startet einen Sonderlauf, der alle Karten ohne oder mit offensichtlich falschem Thema einsortiert — ohne Code-Nachmessen. Du bekommst EINE Tabelle mit Vorschlägen im Lauf-Tab: je Zeile änderbar, „Alle übernehmen" oder einzeln ablehnen.',
+    sonderlaufGesperrt: 'Solange in diesem Projekt ein Lauf läuft oder wartet, ist Aufräumen gesperrt.',
+    // Herkunft je Karte (BAUPLAN 30): kompakte Kopfzeile unter dem Titel.
+    herkunft: {
+      angelegt: 'angelegt',
+      geaendert: 'zuletzt geändert',
+      vonDir: 'von dir',
+      vomChat: 'vom Chat',
+      vomKartenPruefer: 'vom Karten-Prüfer',
+      vonFlowForge: 'von FlowForge',
+      vonBlock: (block) => `von ${block}`,
+      bei: (aufgaben) => `bei „${aufgaben.join('“, „')}"`,
+      lauf: (zeit) => `Lauf ${zeit}`,
+      zumBericht: 'Zum Laufbericht springen',
+      geradeEben: 'gerade eben',
+      vorMinuten: (n) => `vor ${n} Min.`,
+      vorStunden: (n) => `vor ${n} Std.`,
+      vorTagen: (n) => `vor ${n} Tag${n === 1 ? '' : 'en'}`
+    }
   },
   kartenFormular: {
     ueberschriftNeu: 'Neue Karte',
@@ -225,6 +284,12 @@ export const texte = {
     sorteFeld: 'Sorte',
     titelFeld: 'Titel',
     textFeld: 'Inhalt',
+    // Themen (BAUPLAN 30).
+    themaFeld: 'Thema (Pflicht)',
+    themaFeldOptional: 'Thema (optional — alte Karte ohne Thema)',
+    themaPlatzhalter: 'z.B. Login, Datenbank, Oberfläche',
+    themaHinweis: (themen) => `Vorhandene Themen: ${themen.join(', ')} — ein neues nur, wenn keins passt.`,
+    themaHinweisLeer: 'Ein kurzes Schlagwort, unter dem die Karte in der Seitenleiste einsortiert wird.',
     zeichenUebrig: (n) => `noch ${n} Zeichen`,
     zeichenZuViel: (n) => `${n} Zeichen zu viel`,
     speichern: 'Speichern',
@@ -244,7 +309,18 @@ export const texte = {
     nurAufgabenErledigbar: 'Nur Aufgaben-Karten können erledigt werden.',
     // Prüfkarten (BAUPLAN 18): legt und pflegt ausschließlich FlowForge.
     pruefkarteNurFlowForge:
-      'Prüfkarten legt FlowForge selbst an — automatisch nach jeder bestandenen Prüfung. Sie lassen sich nicht anlegen oder über die Karten-Werkzeuge ändern.'
+      'Prüfkarten legt FlowForge selbst an — automatisch nach jeder bestandenen Prüfung. Sie lassen sich nicht anlegen oder über die Karten-Werkzeuge ändern.',
+    // Themen (BAUPLAN 30): Pflicht beim Anlegen — die Ablehnung nennt die
+    // vorhandenen Themen, damit auch ein Agent, der nichts vom Thema weiß,
+    // sofort einsortieren kann (Rettungsanker, kein Block darf daran scheitern).
+    themaFehlt: (vorhanden) =>
+      'Bitte gib der Karte ein Thema (ein kurzes Schlagwort, unter dem sie einsortiert wird). ' +
+      (vorhanden.length
+        ? `Vorhandene Themen: ${vorhanden.join(', ')} — nimm eins davon; ein neues Thema nur, wenn keines passt.`
+        : 'Es gibt noch keine Themen — wähle ein passendes Schlagwort.'),
+    themaZuLang: (max, ist) =>
+      `Das Thema ist zu lang: ${ist} von höchstens ${max} Zeichen — ein Schlagwort, kein Satz.`,
+    keinThemaFuerSorte: 'Status- und Prüfkarten tragen kein Thema.'
   },
   statusKarte: {
     titel: 'Status',
@@ -263,7 +339,10 @@ export const texte = {
       'Lädt Status-Karte, alle Entscheidungs- und Wissens-Karten und alle offenen Aufgaben in die Auswahl. Erledigte Aufgaben und Prüfkarten bleiben draußen. Paket schneiden bzw. Diagnose teilt den Folgeblöcken dann nur die Karten zu, die sie wirklich brauchen.',
     standardAuswahl: 'Standard-Auswahl',
     standardAuswahlHinweis:
-      'Springt zurück auf die übliche Vorauswahl: Status-Karte und offene Aufgaben.'
+      'Springt zurück auf die übliche Vorauswahl: Status-Karte und offene Aufgaben.',
+    // Prüfkarten per Drag & Drop (BAUPLAN 30, Kleinkram): freundlich abgelehnt.
+    pruefkarteAbgelehnt:
+      'Prüfkarten gehören nicht in die Kartenauswahl — zieh sie stattdessen auf einen Prüfer-Block im Schaubild, dann führt er die aufbewahrte Prüfung erneut aus.'
   },
   // Karten-Vorschlag fürs nächste Paket (BAUPLAN 28): die Vorschlags-Zeile an
   // der Kartenauswahl im Schaubild-Tab — eine Einladung, kein neuer Standard.
@@ -294,8 +373,22 @@ export const texte = {
       erledigen: 'Aufgabe abhaken',
       oeffnen: 'Aufgabe wieder öffnen',
       anlegen: 'Neue Aufgaben-Karte anlegen',
-      loeschen: 'Karte löschen'
+      loeschen: 'Karte löschen',
+      thema: 'Themen sortieren'
     },
+    // Sammel-Dialog „Themen sortieren" (BAUPLAN 30).
+    themenAnzahl: (n) => `${n} Karte${n === 1 ? '' : 'n'}`,
+    themenUeberschrift: 'Der Sortierer schlägt Themen vor',
+    themenHinweis:
+      'Je Zeile kannst du das Thema ändern oder die Zeile ablehnen. „Alle übernehmen" setzt alle nicht abgelehnten Themen auf einmal — nur das Thema ändert sich, kein Kartentext.',
+    themenSpalteKarte: 'Karte',
+    themenSpalteBisher: 'bisher',
+    themenSpalteNeu: 'Thema',
+    themenAblehnenZeile: 'ablehnen',
+    themenAlleUebernehmen: 'Alle übernehmen',
+    themenAlleAblehnen: 'Alle ablehnen',
+    themenKeins: '—',
+    themaFeld: 'Thema',
     bisher: 'So steht es auf der Karte:',
     neu: 'Vorschlag:',
     begruendungLabel: 'Begründung:',
@@ -422,7 +515,19 @@ export const texte = {
     bearbeitetUebernommen: (titel, text) =>
       'Der Nutzer hat den Vorschlag BEARBEITET übernommen. Angewendet wurde seine ' +
       `Fassung — Titel: „${titel ?? ''}", Inhalt: „${text ?? ''}". Diese Fassung gilt; ` +
-      'vermerke sie in deinem Kartenbericht.'
+      'vermerke sie in deinem Kartenbericht.',
+    // Sammelform „thema" (BAUPLAN 30).
+    themenLeer: 'Abgelehnt: Bei art "thema" muss das Feld themen mindestens einen Eintrag enthalten.',
+    themaDoppelt: (id) => `Abgelehnt: Die Karte ${id} kommt in themen mehrfach vor.`,
+    themaFalscheSorte: (titel) =>
+      `Abgelehnt: „${titel}" ist eine Status- oder Prüfkarte — die tragen kein Thema.`,
+    themaLeer: (titel) => `Abgelehnt: Für „${titel}" fehlt das Thema.`,
+    themaGleich: (titel) =>
+      `Abgelehnt: „${titel}" trägt dieses Thema schon — lass die Karte weg.`,
+    themenErgebnis: (uebernommen, abgelehnt) =>
+      `Der Nutzer hat entschieden: ${uebernommen} Thema-Vorschlag${uebernommen === 1 ? '' : 'e'} ` +
+      `übernommen (ggf. mit seinen Änderungen), ${abgelehnt} abgelehnt. FlowForge hat die ` +
+      'übernommenen angewendet — vermerke das in deinem Kartenbericht.'
   },
   // Karten-Vorschlag fürs nächste Paket (BAUPLAN 28): Texte an den
   // Sessionende-Agenten für naechster_lauf_vorschlagen.
@@ -480,11 +585,52 @@ export const texte = {
     gespeichert: (zeilen) =>
       `Zuteilung gespeichert: ${zeilen}. Nicht genannte Blöcke bekommen die volle Auswahl.`
   },
+  // Paket melden (BAUPLAN 30, Herkunft): Die Auftragsquellen-Blöcke melden,
+  // an welchen Aufgaben-Karten der Lauf arbeitet — FlowForge stempelt damit
+  // jede Karte, die im Lauf entsteht oder sich ändert.
+  agentenPaket: {
+    werkzeugBeschreibung:
+      'Meldet FlowForge, welche offenen Aufgaben-Karten dieses Arbeitspaket bearbeitet ' +
+      '(ids aus der Kartenauswahl). FlowForge vermerkt damit an jeder Karte, die in diesem ' +
+      'Lauf entsteht oder sich ändert, bei welcher Aufgabe das geschah. Leer, wenn der ' +
+      'Auftrag allein aus dem Wunsch- bzw. Fehlerbild-Feld kam.',
+    serverHinweis:
+      'Mit paket_melden benennst du die Aufgaben-Karten deines Pakets — ein erneuter Aufruf ersetzt die Meldung.',
+    auftragZusatz:
+      '\nSobald feststeht, welche Aufgaben-Karte(n) das Paket bearbeitet, melde sie mit dem ' +
+      'Werkzeug paket_melden (aufgabenIds = ids der offenen Aufgaben-Karten aus der ' +
+      'Kartenauswahl oben; leer, wenn dein Auftrag allein aus dem Feld kam). FlowForge ' +
+      'vermerkt damit an jeder Karte, die dieser Lauf anlegt oder ändert, aus welcher ' +
+      'Aufgabe sie entstand.',
+    leerOhneFeld:
+      'Abgelehnt: aufgabenIds ist leer, aber das Wunsch-/Fehlerbild-Feld dieses Blocks ist ' +
+      'auch leer — die offenen Aufgaben-Karten der Kartenauswahl sind dein Auftrag; nenne die, ' +
+      'die du dir vornimmst.',
+    unbekannteId: (id) => `Keine Karte mit der id ${id} — nimm nur ids aus der Kartenauswahl.`,
+    keineOffeneAufgabe: (titel) => `„${titel}" ist keine offene Aufgaben-Karte.`,
+    nichtInAuswahl: (titel) => `„${titel}" gehört nicht zur Kartenauswahl dieses Laufs.`,
+    gemeldet: (anzahl) =>
+      anzahl === 0
+        ? 'Gemeldet: Das Paket kommt allein aus dem Feld — keine Aufgaben-Karten.'
+        : `Gemeldet: ${anzahl} Aufgaben-Karte${anzahl === 1 ? '' : 'n'} für dieses Paket. FlowForge vermerkt sie als Herkunft.`
+  },
   agentenKarten: {
-    kontext: (liste) =>
+    kontext: (liste, themen = []) =>
       'Aktuelle Projektkarten (von FlowForge für diesen Lauf ausgewählt):\n' +
       liste +
-      '\n\nWeitere Karten kannst du über die karten-Werkzeuge lesen, anlegen, aktualisieren und erledigen.\n\n',
+      '\n\nWeitere Karten kannst du über die karten-Werkzeuge lesen, anlegen, aktualisieren und erledigen. ' +
+      texte.agentenKarten.themenRegel(themen) +
+      '\n\n',
+    // Themen (BAUPLAN 30): Die vorhandenen Themen stehen im Auftrag — bewusst
+    // NICHT in der Werkzeugbeschreibung (je Turn geänderte Beschreibungen
+    // brächen den Prompt-Cache).
+    themenRegel: (themen) =>
+      (themen.length
+        ? `Vorhandene Themen: ${themen.join(', ')}. `
+        : 'Es gibt noch keine Themen. ') +
+      'Jede neue Karte braucht ein thema: sortiere sie primär in ein vorhandenes Thema ein — ' +
+      'ein neues Thema nur, wenn wirklich keines passt.',
+    themenZeile: (themen) => `Vorhandene Themen: ${themen.join(', ')}.`,
     angelegt: (karte) => `Karte angelegt: „${karte.titel}" (${karte.sorte}, id ${karte.id}).`,
     aktualisiert: (karte) => `Karte aktualisiert: „${karte.titel}" (id ${karte.id}).`,
     erledigtGesetzt: (karte, erledigt) =>
@@ -854,7 +1000,14 @@ export const texte = {
       etiketten.join(', ') +
       '.\n' +
       '- nurLesen: true, wenn der Block nichts am Projekt verändern muss (ansehen, ' +
-      'prüfen, berichten) — im Zweifel die sichere Wahl.'
+      'prüfen, berichten) — im Zweifel die sichere Wahl.',
+    // Kategorie-Zusatz (BAUPLAN 30): wird an den Auftrag angehängt; die KI
+    // wählt eine der vorhandenen Bibliotheks-Klappen, Standard „eigene".
+    bereichZusatz: (bereiche) =>
+      '\n- Zusätzlich ein Feld "bereich": die Kategorie (Klappe) der Blockbibliothek, ' +
+      'in der der Block liegen soll. Erlaubte Werte, jeweils mit ihrer Bedeutung: ' +
+      bereiche.map((b) => `"${b.schluessel}" (${b.name})`).join(', ') +
+      '. Wähle die passende — passt keine wirklich, nimm "eigene". Erfinde keinen neuen Wert.'
   },
   // Startanleitung & „App starten"-Knopf (SPEC §8, BAUPLAN 10).
   startanleitung: {
@@ -1278,6 +1431,13 @@ export const texte = {
       `Vorschlag fürs nächste Paket: ${anzahl} Karte${anzahl === 1 ? '' : 'n'} — ${empfehlung}`,
     // Karten-Zuteilung (BAUPLAN 29): sichtbar im Ticker und damit im Laufbericht.
     kartenZuteilung: (zeilen) => `Karten verteilt: ${zeilen}`,
+    // Paket melden & Themen (BAUPLAN 30).
+    paketGemeldet: (titel) =>
+      titel.length
+        ? `Paket gemeldet: ${titel.length} Aufgabe${titel.length === 1 ? '' : 'n'} — „${titel.join('“, „')}". Karten aus diesem Lauf tragen das als Herkunft.`
+        : 'Paket gemeldet: allein aus dem Feld — keine Aufgaben-Karten.',
+    themenUebernommen: (uebernommen, abgelehnt) =>
+      `Themen sortiert: ${uebernommen} übernommen, ${abgelehnt} abgelehnt.`,
     // Audit (BAUPLAN 25): volle Lesetiefe, bewusst teuer — die Kosten-Folge
     // steht sichtbar am Start (Entscheidung Georg, 14.08.2026).
     auditKostenHinweis:
@@ -1411,9 +1571,43 @@ export const texte = {
     ersatzText:
       'Diese Prüfung wurde bestanden. Einzelheiten stehen im Laufbericht dieses Laufs.'
   },
+  // Sonderläufe (BAUPLAN 30): Aufräum-Knöpfe der Karten-Seitenleiste.
+  sonderlauf: {
+    themenSortierenName: 'Themen sortieren',
+    berichtMarke: 'Sonderlauf'
+  },
+  // Sortiermodus des Karten-Prüfers (BAUPLAN 30): klassifiziert alle Karten
+  // ohne oder mit offensichtlich falschem Thema — ohne Code-Nachmessen — und
+  // schlägt sie in EINEM Sammel-Dialog vor.
+  agentenThemenSortieren: {
+    auftrag:
+      'Du bist der Themen-Sortierer: Du bringst Ordnung in die Themen der Projektkarten — ' +
+      'ohne am Code nachzumessen und ohne Karten umzuformulieren. Antworte auf Deutsch. ' +
+      'Du selbst veränderst NICHTS: keine Dateien, keine Programme oder Tests, keine ' +
+      'direkten Kartenänderungen. Hol dir mit karten_uebersicht alle Karten samt ihren ' +
+      'Themen (Karten ohne Themen-Marke haben noch keins). Jede Aufgaben-, Entscheidungs- ' +
+      'und Wissens-Karte soll unter EINEM kurzen Thema stehen (Schlagwort, kein Satz). ' +
+      'Bevorzuge die vorhandenen Themen — ein neues Thema nur, wenn wirklich keines ' +
+      'passt; halte die Zahl der Themen klein (lieber sechs klare als zwanzig feine). ' +
+      'Nimm dir vor: (1) alle Karten OHNE Thema, (2) Karten, deren Thema offensichtlich ' +
+      'nicht zum Inhalt passt (nur bei klarem Fehlgriff, nicht bei Geschmacksfragen). ' +
+      'Status- und Prüfkarten tragen kein Thema — lass sie weg. Dateien im Projektordner ' +
+      'brauchst du dafür nicht zu lesen; die Kartentexte reichen. Schlage dann ALLE ' +
+      'betroffenen Karten in EINEM einzigen Aufruf von karte_vorschlagen mit art "thema" ' +
+      'vor (Feld themen: je Karte kartenId und thema; begruendung: nach welchem Muster du ' +
+      'sortiert hast). Der Nutzer bekommt eine Tabelle, ändert oder lehnt einzelne Zeilen ' +
+      'ab, und FlowForge wendet seine Entscheidung an. Gibt es nichts zu sortieren, machst ' +
+      'du keinen Vorschlag und sagst das ehrlich. ' +
+      'Dein Abschlusstext (3 bis 6 Sätze): welche Themen es jetzt gibt, wie viele Karten ' +
+      'du vorgeschlagen hast und was der Nutzer davon übernommen oder abgelehnt hat.'
+  },
   laufberichte: {
     ueberschrift: 'Laufberichte',
     keine: 'Noch keine Laufberichte.',
+    unbekannterBlock: 'Block',
+    // Paket & Sonderlauf (BAUPLAN 30).
+    paketZeile: (titel) => `Paket dieses Laufs: „${titel.join('“, „')}"`,
+    paketLeerZeile: 'Paket dieses Laufs: allein aus dem Feld — keine Aufgaben-Karten.',
     keineZumFilter: 'Kein Laufbericht mit diesem Ausgang.',
     filterAlle: 'Alle',
     dauerSekunden: (s) => `Dauer: ${s} Sekunden`,

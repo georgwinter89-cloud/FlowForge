@@ -56,14 +56,67 @@ export function kartenZuteilungPruefen({ zuteilung, karten, ausgewaehlt, nachfol
   return { ok: true, zuteilung: paare, jeBlock }
 }
 
+// Paket melden (BAUPLAN 30, Herkunft): Die Auftragsquellen-Blöcke melden
+// strukturiert, an welchen Aufgaben-Karten der Lauf arbeitet — FlowForge
+// stempelt damit jede im Lauf angelegte oder geänderte Karte. Reine
+// Prüf-Funktion, exportiert für die Regel-Prüfungen: nur offene
+// Aufgaben-Karten aus der Kartenauswahl; leer erlaubt, wenn das Wunsch-/
+// Fehlerbild-Feld des Blocks die Quelle war (feldGefuellt). Liefert
+// { fehler } oder { ok, aufgaben: [{ id, titel }] }.
+export function paketMeldungPruefen({ aufgabenIds, karten, ausgewaehlt, feldGefuellt }) {
+  const tp = texte.agentenPaket
+  const ids = [
+    ...new Set((Array.isArray(aufgabenIds) ? aufgabenIds : []).map((id) => String(id ?? '').trim()))
+  ].filter(Boolean)
+  if (ids.length === 0) {
+    if (feldGefuellt) return { ok: true, aufgaben: [] }
+    return { fehler: tp.leerOhneFeld }
+  }
+  const nachId = new Map((Array.isArray(karten) ? karten : []).map((k) => [k.id, k]))
+  const auswahl = new Set(Array.isArray(ausgewaehlt) ? ausgewaehlt : [])
+  const aufgaben = []
+  for (const id of ids) {
+    const karte = nachId.get(id)
+    if (!karte) return { fehler: tp.unbekannteId(id) }
+    if (karte.sorte !== 'aufgabe' || karte.erledigt) return { fehler: tp.keineOffeneAufgabe(karte.titel) }
+    if (!auswahl.has(id)) return { fehler: tp.nichtInAuswahl(karte.titel) }
+    aufgaben.push({ id, titel: karte.titel })
+  }
+  return { ok: true, aufgaben }
+}
+
 // Baut den In-Prozess-Werkzeugkasten „zuteilung" für einen Motor-Lauf.
 // aufKartenZuteilung({ zuteilung }) kommt aus der Lauf-Verwaltung (der Motor
 // reicht die Instanz-Kennung des rufenden Blocks mit hinein): Sie validiert,
 // merkt sich die Zuteilung und vermerkt sie in Ticker und Laufbericht —
 // zurück kommt { fehler } oder { ok, meldung } als Werkzeug-Ergebnis.
-export async function kartenZuteilungWerkzeugServer({ aufKartenZuteilung }) {
+// aufPaketMeldung({ aufgabenIds }) genauso für paket_melden (BAUPLAN 30).
+export async function kartenZuteilungWerkzeugServer({ aufKartenZuteilung, aufPaketMeldung = null }) {
   const { createSdkMcpServer, tool } = await import('@anthropic-ai/claude-agent-sdk')
   const tz = texte.agentenKartenZuteilung
+  const tp = texte.agentenPaket
+
+  const paketMelden = tool(
+    'paket_melden',
+    tp.werkzeugBeschreibung,
+    {
+      aufgabenIds: z
+        .array(z.string())
+        .describe(
+          'ids der offenen Aufgaben-Karten aus der Kartenauswahl, die dieses Paket bearbeitet — ' +
+            'leer, wenn der Auftrag allein aus dem Wunsch-/Fehlerbild-Feld kam'
+        )
+    },
+    async ({ aufgabenIds }) => {
+      if (!aufPaketMeldung)
+        return { content: [{ type: 'text', text: texte.fehler.unbekannt }], isError: true }
+      const ergebnis = aufPaketMeldung({ aufgabenIds })
+      if (ergebnis.fehler)
+        return { content: [{ type: 'text', text: ergebnis.fehler }], isError: true }
+      return { content: [{ type: 'text', text: ergebnis.meldung }] }
+    },
+    { alwaysLoad: true }
+  )
 
   const zuteilen = tool(
     'karten_zuteilen',
@@ -94,7 +147,7 @@ export async function kartenZuteilungWerkzeugServer({ aufKartenZuteilung }) {
   return createSdkMcpServer({
     name: 'zuteilung',
     version: '1.0.0',
-    instructions: tz.serverHinweis,
-    tools: [zuteilen]
+    instructions: tz.serverHinweis + ' ' + tp.serverHinweis,
+    tools: [zuteilen, paketMelden]
   })
 }

@@ -399,21 +399,119 @@ function NachlaufChat({ chat, verlauf, modus, onSenden, onReparieren, onAbbreche
 // den Vorschlag unverändert an, „Vorschlag bearbeiten" öffnet die Felder
 // (harte Längengrenzen, geprüft im Hauptprozess), „Ablehnen" lässt die Karte
 // in Ruhe. Angewendet wird immer von FlowForge, nie vom Agenten.
+// Sammel-Dialog „Themen sortieren" (BAUPLAN 30): eine Tabelle aller
+// betroffenen Karten mit vorgeschlagenem Thema — je Zeile änderbar oder
+// abgelehnt, „Alle übernehmen" / „Alle ablehnen". Angreifer-Fund: 60 Karten im
+// Einzeldialog wären 60 pausierende Dialoge.
+function ThemenVorschlag({ eintrag, onAntwort }) {
+  const tv = texte.vorschlag
+  const v = eintrag.vorschlag
+  const [zeilen, setZeilen] = useState([])
+  const [fehler, setFehler] = useState('')
+  useEffect(() => {
+    setZeilen((v?.eintraege ?? []).map((z) => ({ ...z, wert: z.thema, abgelehnt: false })))
+    setFehler('')
+  }, [eintrag.frageId])
+  if (!v) return null
+
+  function zeileSetzen(idx, aenderung) {
+    setZeilen((alt) => alt.map((z, i) => (i === idx ? { ...z, ...aenderung } : z)))
+  }
+
+  async function alleUebernehmen() {
+    const eintraege = zeilen
+      .filter((z) => !z.abgelehnt && z.wert.trim())
+      .map((z) => ({ kartenId: z.kartenId, thema: z.wert.trim() }))
+    const ergebnis = await onAntwort(
+      eintrag.frageId,
+      eintraege.length ? 'uebernehmen' : 'ablehnen',
+      eintraege.length ? { eintraege } : null
+    )
+    if (ergebnis && !ergebnis.ok) setFehler(ergebnis.fehler)
+  }
+
+  const themenBekannt = [...new Set(zeilen.map((z) => z.thema))]
+  return (
+    <div className="gespraech">
+      <p className="gespraech-titel">{tv.themenUeberschrift}</p>
+      <p className="feld-hinweis">{tv.themenHinweis}</p>
+      <div className="themen-tabelle-rahmen">
+        <table className="themen-tabelle">
+          <thead>
+            <tr>
+              <th>{tv.themenSpalteKarte}</th>
+              <th>{tv.themenSpalteBisher}</th>
+              <th>{tv.themenSpalteNeu}</th>
+              <th>{tv.themenAblehnenZeile}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {zeilen.map((z, idx) => (
+              <tr key={z.kartenId} className={z.abgelehnt ? 'themen-zeile-abgelehnt' : ''}>
+                <td>
+                  <span className="karte-sorte">{texte.karten.sorten[z.sorte] ?? z.sorte}</span>{' '}
+                  {z.titel}
+                </td>
+                <td>{z.altesThema ?? tv.themenKeins}</td>
+                <td>
+                  <input
+                    list="themen-vorschlag-liste"
+                    value={z.wert}
+                    disabled={z.abgelehnt}
+                    onChange={(e) => zeileSetzen(idx, { wert: e.target.value })}
+                  />
+                </td>
+                <td>
+                  <input
+                    type="checkbox"
+                    checked={z.abgelehnt}
+                    onChange={(e) => zeileSetzen(idx, { abgelehnt: e.target.checked })}
+                  />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <datalist id="themen-vorschlag-liste">
+          {themenBekannt.map((thema) => (
+            <option key={thema} value={thema} />
+          ))}
+        </datalist>
+      </div>
+      <p className="bericht-abschnitt">{tv.begruendungLabel}</p>
+      <p className="bericht-zeile">{v.begruendung}</p>
+      {fehler && <p className="fehlermeldung">{fehler}</p>}
+      <div className="gespraech-optionen">
+        <button className="gespraech-option" onClick={alleUebernehmen}>
+          <span className="option-empfohlen">{texte.gespraech.empfohlen}</span>
+          {tv.themenAlleUebernehmen}
+        </button>
+        <button className="gespraech-option" onClick={() => onAntwort(eintrag.frageId, 'ablehnen', null)}>
+          {tv.themenAlleAblehnen}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function KartenVorschlag({ eintrag, onAntwort }) {
   const tv = texte.vorschlag
   const v = eintrag.vorschlag
   const [bearbeiten, setBearbeiten] = useState(false)
   const [titel, setTitel] = useState('')
   const [text, setText] = useState('')
+  const [thema, setThema] = useState('')
   const [fehler, setFehler] = useState('')
   // Frischer Vorschlag → Bearbeitungszustand zurücksetzen.
   useEffect(() => {
     setBearbeiten(false)
     setTitel(v?.titel ?? '')
     setText(v?.text ?? '')
+    setThema(v?.thema ?? '')
     setFehler('')
   }, [eintrag.frageId])
   if (!v) return null
+  if (v.art === 'thema') return <ThemenVorschlag eintrag={eintrag} onAntwort={onAntwort} />
 
   const mitFeldern = v.art === 'aktualisieren' || v.art === 'anlegen'
   const titelFest = v.art === 'aktualisieren' && v.alteKarte?.sorte === 'status'
@@ -450,6 +548,9 @@ function KartenVorschlag({ eintrag, onAntwort }) {
                 <p className="bericht-zeile">„{v.titel}"</p>
               )}
               <p className="bericht-zeile">{v.text}</p>
+              {v.art === 'anlegen' && v.thema && (
+                <p className="bericht-zeile">{texte.karten.themaMarke(v.thema)}</p>
+              )}
             </>
           )}
           <p className="bericht-abschnitt">{tv.begruendungLabel}</p>
@@ -468,12 +569,20 @@ function KartenVorschlag({ eintrag, onAntwort }) {
             <span>{tv.textFeld}</span>
             <textarea rows={4} value={text} onChange={(e) => setText(e.target.value)} />
           </label>
+          {v.art === 'anlegen' && (
+            <label className="feld">
+              <span>{tv.themaFeld}</span>
+              <input list="themen-liste" value={thema} onChange={(e) => setThema(e.target.value)} />
+            </label>
+          )}
           {fehler && <p className="fehlermeldung">{fehler}</p>}
           <div className="gespraech-optionen">
             <button
               className="knopf-primaer knopf-klein"
               disabled={!text.trim() || (!titelFest && !titel.trim())}
-              onClick={() => antworten('uebernehmen', { titel, text })}
+              onClick={() =>
+                antworten('uebernehmen', v.art === 'anlegen' ? { titel, text, thema } : { titel, text })
+              }
             >
               {tv.soUebernehmen}
             </button>
@@ -549,8 +658,16 @@ function dauerText(bericht) {
   return tb.dauerMinuten(Math.round(sekunden / 60))
 }
 
-function Laufbericht({ bericht }) {
+// aufklappen (BAUPLAN 30): Sprung aus der Herkunfts-Kopfzeile einer Karte —
+// der Bericht öffnet sich und rollt ins Bild.
+function Laufbericht({ bericht, aufklappen = null }) {
   const [offen, setOffen] = useState(false)
+  const ref = useRef(null)
+  useEffect(() => {
+    if (!aufklappen) return
+    setOffen(true)
+    setTimeout(() => ref.current?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 0)
+  }, [aufklappen])
   const wahlLabels = {
     weitermachen: te.weitermachen,
     zurueckstellen: te.zurueckstellen,
@@ -558,16 +675,23 @@ function Laufbericht({ bericht }) {
   }
   const dauer = dauerText(bericht)
   return (
-    <div className="bericht">
+    <div className={'bericht' + (aufklappen ? ' bericht-hervorgehoben' : '')} ref={ref}>
       <button className="bericht-kopf" onClick={() => setOffen(!offen)}>
         <span className="bericht-kopf-text">
           {zeitText(bericht.gestartetAm)} · {bericht.workflow}
+          {bericht.sonderlauf && ` · ${texte.sonderlauf.berichtMarke}`}
         </span>
         <ZustandsMarke zustand={bericht.zustand} />
       </button>
       {offen && (
         <div className="bericht-details">
           {dauer && <p className="feld-hinweis">{dauer}</p>}
+          {/* Paket (BAUPLAN 30): die gemeldeten Aufgaben-Karten dieses Laufs. */}
+          {Array.isArray(bericht.paket) && (
+            <p className="feld-hinweis">
+              {bericht.paket.length ? tb.paketZeile(bericht.paket) : tb.paketLeerZeile}
+            </p>
+          )}
           <VerbrauchZeile verbrauch={bericht.verbrauch} modus={bericht.modus} />
           {/* Token-Aufschlüsselung & theoretische API-Kosten (Wunsch Georg,
               13.08.2026) — die Kosten rechnet der Motor aus den Preisen der
@@ -857,6 +981,8 @@ export default function Leinwand({
   pfad,
   initialTab,
   karten,
+  // Sprung zum Laufbericht (BAUPLAN 30): { laufId, n } aus der Herkunfts-Kopfzeile.
+  berichtSprung = null,
   kontingentVerhalten,
   onKontingentVerhalten,
   onWiederhergestellt
@@ -1126,6 +1252,14 @@ export default function Leinwand({
   useEffect(() => {
     tickerEnde.current?.scrollIntoView({ block: 'nearest' })
   }, [ticker])
+
+  // Sprung zum Laufbericht (BAUPLAN 30): Berichte-Tab vorn, Filter auf „alle",
+  // der Bericht klappt selbst auf (Laufbericht bekommt berichtSprung).
+  useEffect(() => {
+    if (!berichtSprung) return
+    setBerichtFilter('alle')
+    setTab('berichte')
+  }, [berichtSprung])
 
   useEffect(() => {
     denkEnde.current?.scrollIntoView({ block: 'nearest' })
@@ -1412,6 +1546,14 @@ export default function Leinwand({
     const id = e.dataTransfer.getData('text/flowforge-karte')
     if (!id) return
     e.preventDefault()
+    // Prüfkarten gehören nicht in die Kartenauswahl (BAUPLAN 30, Kleinkram):
+    // Sie haben ihren eigenen Weg über den Prüfer — freundlich ablehnen.
+    const karte = (karten ?? []).find((k) => k.id === id)
+    if (karte?.sorte === 'pruefung') {
+      setMeldung(texte.kartenAuswahl.pruefkarteAbgelehnt)
+      return
+    }
+    setMeldung('')
     setKontextZusatz((alt) => new Set(alt).add(id))
     setKontextRaus((alt) => {
       const neu = new Set(alt)
@@ -2083,7 +2225,11 @@ export default function Leinwand({
             if (berichte.length > 0 && gefiltert.length === 0)
               return <p className="feld-hinweis">{tb.keineZumFilter}</p>
             return gefiltert.map((bericht) => (
-              <Laufbericht key={bericht.id} bericht={bericht} />
+              <Laufbericht
+                key={bericht.id}
+                bericht={bericht}
+                aufklappen={berichtSprung?.laufId === bericht.id ? berichtSprung : null}
+              />
             ))
           })()}
         </div>

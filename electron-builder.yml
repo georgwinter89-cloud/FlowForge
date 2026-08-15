@@ -10,8 +10,16 @@ files:
 asarUnpack:
   - node_modules/@anthropic-ai/claude-agent-sdk-win32-x64/**
 npmRebuild: false
+# App-Icon (BAUPLAN 30): der Blitz aus build/icon.png (256 px, erzeugt von
+# tools/iconErzeugen.mjs). electron-builder macht daraus selbst die .ico für
+# exe und Installer. Als extraResource liegt die PNG verpackt unter
+# resources/icon.png — von dort holt sie index.js fürs Fenster/Taskleiste.
+extraResources:
+  - from: build/icon.png
+    to: icon.png
 win:
   target: nsis
+  icon: build/icon.png
 nsis:
   artifactName: FlowForge-Setup-${version}.${ext}
   shortcutName: FlowForge

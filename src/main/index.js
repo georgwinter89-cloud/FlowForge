@@ -11,12 +11,15 @@ import {
   karteAnlegen,
   karteAendern,
   karteErledigtSetzen,
-  karteLoeschen
+  karteLoeschen,
+  karteThemaSetzen,
+  themaUmbenennen
 } from './projekte.js'
 import { einstellungenLaden, einstellungenSpeichern } from './einstellungen.js'
 import { lokaleHelferPruefen } from './motor/lokaleHelfer.js'
 import {
   laufStarten,
+  sonderlaufStarten,
   laufFortsetzen,
   laufstandInfo,
   laufstandVerwerfen,
@@ -46,6 +49,7 @@ import {
   eigenenBlockLoeschen
 } from './eigeneBloecke.js'
 import { blockVorschlagErstellen } from './blockAssistent.js'
+import { klappenLaden, klappenSpeichern } from './klappen.js'
 import {
   chatZustand,
   chatSenden,
@@ -54,12 +58,22 @@ import {
   chatFrageAntworten
 } from './nachlaufChat.js'
 
+// App-Icon (BAUPLAN 30) für Fenster und Taskleiste: verpackt liegt die PNG
+// als extraResource neben der App (process.resourcesPath), im Dev im
+// Projektordner unter build/ (out/main → ../../build).
+function iconPfad() {
+  return app.isPackaged
+    ? path.join(process.resourcesPath, 'icon.png')
+    : path.join(__dirname, '../../build/icon.png')
+}
+
 function createWindow() {
   const fenster = new BrowserWindow({
     width: 1200,
     height: 800,
     minWidth: 800,
     minHeight: 600,
+    icon: iconPfad(),
     title: texte.fensterTitel,
     autoHideMenuBar: true,
     // Dunkle Werkbank (Mockup-Runden 3+4): das Fenster malt schon vor dem
@@ -104,6 +118,13 @@ function registriereIpc() {
     karteErledigtSetzen(pfad, id, erledigt)
   )
   ipcMain.handle('karte-loeschen', (_e, { pfad, id }) => karteLoeschen(pfad, id))
+  // Themen (BAUPLAN 30): Karte per Drag & Drop in ein anderes Thema, Thema umbenennen.
+  ipcMain.handle('karte-thema-setzen', (_e, { pfad, id, thema }) => karteThemaSetzen(pfad, id, thema))
+  ipcMain.handle('thema-umbenennen', (_e, { pfad, alt, neu }) => themaUmbenennen(pfad, alt, neu))
+  // Sonderläufe (BAUPLAN 30): Aufräum-Knöpfe der Karten-Seitenleiste.
+  ipcMain.handle('sonderlauf-starten', (ereignis, { pfad, art }) =>
+    sonderlaufStarten(BrowserWindow.fromWebContents(ereignis.sender), pfad, art)
+  )
 
   ipcMain.handle('einstellungen-laden', () => einstellungenLaden())
   ipcMain.handle('einstellungen-speichern', (_e, neu) => einstellungenSpeichern(neu))
@@ -117,6 +138,10 @@ function registriereIpc() {
   ipcMain.handle('eigener-block-speichern', (_e, block) => eigenenBlockSpeichern(block))
   ipcMain.handle('eigener-block-loeschen', (_e, id) => eigenenBlockLoeschen(id))
   ipcMain.handle('block-assistent', (_e, beschreibung) => blockVorschlagErstellen(beschreibung))
+  // Einklapp-Zustände je Projekt (BAUPLAN 30): Karten-Gruppen, Themen,
+  // Bibliotheks-Klappen — im Datenordner, nicht in projekt.json.
+  ipcMain.handle('klappen-laden', (_e, pfad) => klappenLaden(pfad))
+  ipcMain.handle('klappen-speichern', (_e, { pfad, zustaende }) => klappenSpeichern(pfad, zustaende))
 
   ipcMain.handle('workflow-laden', (_e, pfad) => workflowLaden(pfad))
   ipcMain.handle('workflow-speichern', (_e, { pfad, workflow }) => {

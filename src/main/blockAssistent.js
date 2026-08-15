@@ -4,7 +4,7 @@
 // änderbar; die harten Regeln greifen erst beim Speichern (eigeneBloecke.js).
 import { app } from 'electron'
 import { texte } from '../shared/texte.js'
-import { bekannteEtiketten } from '../shared/blockKatalog.js'
+import { bekannteEtiketten, BEREICHE, BEREICH_EIGENE } from '../shared/blockKatalog.js'
 import {
   BLOCK_NAME_MAX,
   BLOCK_BESCHREIBUNG_MAX,
@@ -45,8 +45,28 @@ function vorschlagSaeubern(roh) {
     auftrag: String(roh.auftrag ?? '').trim().slice(0, BLOCK_AUFTRAG_MAX),
     braucht: etiketten(roh.braucht),
     liefert: etiketten(roh.liefert),
+    // Bereich (BAUPLAN 30): nur bekannte Klappen-Schlüssel — alles andere
+    // fällt auf „eigene" zurück; einen freien Namen tippt der Nutzer selbst.
+    bereich: bereichSaeubern(roh.bereich),
     nurLesen: Boolean(roh.nurLesen)
   }
+}
+
+function bereichSaeubern(roh) {
+  const wert = String(roh ?? '')
+    .trim()
+    .toLowerCase()
+  return BEREICHE.includes(wert) ? wert : BEREICH_EIGENE
+}
+
+// Die Klappen der Bibliothek mit Anzeigename — so kennt der Assistent die
+// Bedeutung der Schlüssel (texte.projektansicht.bereiche).
+function bereicheFuerAssistent() {
+  const namen = texte.projektansicht.bereiche
+  return [...BEREICHE, BEREICH_EIGENE].map((schluessel) => ({
+    schluessel,
+    name: namen[schluessel] ?? schluessel
+  }))
 }
 
 export async function blockVorschlagErstellen(beschreibung) {
@@ -59,7 +79,9 @@ export async function blockVorschlagErstellen(beschreibung) {
     return { ok: false, fehler: texte.einstellungen.fehlerApiSchluesselFehlt }
 
   const antwort = await starteMotorFrage({
-    frage: texte.agentenBlockAssistent.auftrag(wunsch, bekannteEtiketten()),
+    frage:
+      texte.agentenBlockAssistent.auftrag(wunsch, bekannteEtiketten()) +
+      texte.agentenBlockAssistent.bereichZusatz(bereicheFuerAssistent()),
     modus: einstellungen.motorModus,
     apiSchluessel: einstellungen.apiSchluessel,
     ausgabenObergrenzeUsd: einstellungen.ausgabenObergrenzeUsd,

@@ -3,6 +3,7 @@
 // Hauptprozess. Ein eigener Block folgt der Block-Anatomie (SPEC §4.2):
 // Name · Symbol · Arbeitsauftrag · braucht/liefert · Sperre „darf nur lesen".
 import { texte } from './texte.js'
+import { BEREICHE, BEREICH_EIGENE } from './blockKatalog.js'
 
 export const BLOCK_NAME_MAX = 40
 export const BLOCK_SYMBOL_MAX = 8
@@ -11,6 +12,28 @@ export const BLOCK_AUFTRAG_MAX = 4000
 export const ETIKETT_MAX = 40
 export const ETIKETTEN_MAX = 5
 export const BLOCK_SYMBOL_STANDARD = '🧱'
+// Bereich (Bibliotheks-Klappe, BAUPLAN 30): Katalog-Schlüssel, „eigene" oder
+// ein frei eingetippter Name — die Länge gilt für den freien Namen.
+export const BEREICH_MAX = 30
+
+// Bereich normalisieren: trimmen, Mehrfach-Leerzeichen zusammenziehen;
+// leer/fehlend → BEREICH_EIGENE. Tippt der Nutzer den Anzeigenamen einer
+// festen Klappe („Prüfen", „Eigene"), wird daraus der Schlüssel — sonst gäbe
+// es zwei Klappen mit demselben Namen. Liefert { fehler } oder { bereich }.
+export function pruefeBereich(roh) {
+  const bereich = String(roh ?? '')
+    .trim()
+    .replace(/\s+/g, ' ')
+  if (!bereich) return { bereich: BEREICH_EIGENE }
+  if (bereich.length > BEREICH_MAX)
+    return { fehler: texte.blockRegeln.bereichZuLang(BEREICH_MAX) }
+  const klein = bereich.toLowerCase()
+  for (const schluessel of [...BEREICHE, BEREICH_EIGENE]) {
+    const name = texte.projektansicht.bereiche[schluessel] ?? schluessel
+    if (klein === schluessel || klein === name.toLowerCase()) return { bereich: schluessel }
+  }
+  return { bereich }
+}
 
 // Eine braucht/liefert-Liste säubern: Strings, getrimmt, ohne Doppelte.
 // Liefert { fehler } oder { etiketten }.
@@ -50,6 +73,9 @@ export function pruefeEigenenBlock(roh) {
   if (braucht.fehler) return { fehler: braucht.fehler }
   const liefert = pruefeEtiketten(roh?.liefert, texte.kette.liefertLabel)
   if (liefert.fehler) return { fehler: liefert.fehler }
+  // Bereich (BAUPLAN 30): Altbestand ohne Feld landet unter „Eigene".
+  const bereich = pruefeBereich(roh?.bereich)
+  if (bereich.fehler) return { fehler: bereich.fehler }
   return {
     block: {
       name,
@@ -58,6 +84,7 @@ export function pruefeEigenenBlock(roh) {
       auftrag,
       braucht: braucht.etiketten,
       liefert: liefert.etiketten,
+      bereich: bereich.bereich,
       nurLesen: Boolean(roh?.nurLesen),
       // Fest verdrahtet: kein Prüfer, keine Übung, keine Formularfelder —
       // viele Stellen (Leinwand, Regeln, Lauf) verlassen sich darauf.

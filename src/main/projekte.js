@@ -5,7 +5,17 @@ import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'node:crypto'
 import { texte } from '../shared/texte.js'
-import { pruefeKarteneingabe, TITEL_MAX, TEXT_MAX } from '../shared/kartenRegeln.js'
+import {
+  pruefeKarteneingabe,
+  pruefeThema,
+  themaNormalisieren,
+  themaSchluessel,
+  kanonischesThema,
+  THEMEN_SORTEN,
+  THEMA_MAX,
+  TITEL_MAX,
+  TEXT_MAX
+} from '../shared/kartenRegeln.js'
 import { sicherungspunktAnlegen } from './sicherungspunkte.js'
 import { pruefkartenArchivLoeschen } from './pruefkarten.js'
 
@@ -185,29 +195,75 @@ function mitKarten(projektPfad, aenderung) {
   return { ok: true, karten }
 }
 
-export function karteAnlegen(projektPfad, { sorte, titel, text }) {
+// Herkunft je Karte (BAUPLAN 30): Wer hat die Karte angelegt bzw. zuletzt
+// geändert — und aus welchem Zweck? quelle: 'nutzer' (Seitenleiste), 'chat'
+// (Nachlauf-Chat), 'kartenpruefer' (übernommener Vorschlag), 'flowforge'
+// (Prüfkarten) oder 'block' (ein Block-Agent im Lauf). Bei Läufen dazu Block,
+// Lauf-Kennung/-Start und die Aufgaben-Karten des Pakets (Titel als
+// Schnappschuss — die Aufgabe kann später gelöscht werden). Die Herkunft
+// wandert nie in Aufträge oder karten_uebersicht (Kontext).
+const HERKUNFT_QUELLEN = new Set(['nutzer', 'chat', 'kartenpruefer', 'flowforge', 'block'])
+export const HERKUNFT_NUTZER = Object.freeze({ quelle: 'nutzer' })
+
+function herkunftBereinigen(roh) {
+  const quelle = HERKUNFT_QUELLEN.has(roh?.quelle) ? roh.quelle : 'nutzer'
+  const sauber = { quelle }
+  if (typeof roh?.block === 'string' && roh.block.trim()) sauber.block = roh.block.trim().slice(0, 60)
+  if (typeof roh?.laufId === 'string' && roh.laufId) sauber.laufId = roh.laufId
+  if (typeof roh?.laufStart === 'string' && roh.laufStart) sauber.laufStart = roh.laufStart
+  if (Array.isArray(roh?.aufgaben)) {
+    const aufgaben = roh.aufgaben
+      .filter((a) => a && typeof a.id === 'string')
+      .map((a) => ({ id: a.id, titel: String(a.titel ?? '').slice(0, TITEL_MAX) }))
+      .slice(0, 20)
+    if (aufgaben.length) sauber.aufgaben = aufgaben
+  }
+  return sauber
+}
+
+function stempeln(karte, herkunft, jetzt, { neu = false } = {}) {
+  const h = herkunftBereinigen(herkunft)
+  karte.geaendertAm = jetzt
+  if (neu) {
+    karte.angelegtAm = jetzt
+    karte.angelegtVon = h
+  } else {
+    karte.geaendertVon = h
+  }
+}
+
+export function karteAnlegen(projektPfad, { sorte, titel, text, thema }, herkunft = HERKUNFT_NUTZER) {
   return mitKarten(projektPfad, (karten) => {
     // Prüfkarten legt nur FlowForge selbst an (BAUPLAN 18).
     if (sorte === 'pruefung')
       return { ok: false, fehler: texte.kartenRegeln.pruefkarteNurFlowForge }
-    if (sorte === 'status' || !['aufgabe', 'entscheidung', 'wissen'].includes(sorte))
+    if (sorte === 'status' || !THEMEN_SORTEN.includes(sorte))
       return { ok: false, fehler: texte.kartenRegeln.statusUnantastbar }
     const fehler = pruefeKarteneingabe({ titel, text })
     if (fehler) return { ok: false, fehler }
+    // Thema ist Pflicht beim Anlegen (BAUPLAN 30) — die Ablehnung nennt die
+    // vorhandenen Themen, damit auch ein Agent, der nichts vom Thema weiß,
+    // sofort einsortieren kann.
+    const themaUrteil = pruefeThema(karten, thema, { pflicht: true })
+    if (themaUrteil.fehler) return { ok: false, fehler: themaUrteil.fehler }
     const jetzt = new Date().toISOString()
-    karten.push({
+    const karte = {
       id: crypto.randomUUID(),
       sorte,
       titel: titel.trim(),
       text: text.trim(),
-      ...(sorte === 'aufgabe' ? { erledigt: false } : {}),
-      angelegtAm: jetzt,
-      geaendertAm: jetzt
-    })
+      thema: themaUrteil.thema,
+      ...(sorte === 'aufgabe' ? { erledigt: false } : {})
+    }
+    stempeln(karte, herkunft, jetzt, { neu: true })
+    karten.push(karte)
   })
 }
 
-export function karteAendern(projektPfad, id, { titel, text }) {
+// thema: undefined = unverändert lassen; '' = (nur bei Karten ohne Thema
+// erlaubt) leer lassen; sonst neues Thema. Alte Karten ohne Thema bleiben
+// bearbeitbar, ohne dass ein Thema erzwungen wird (BAUPLAN 30).
+export function karteAendern(projektPfad, id, { titel, text, thema }, herkunft = HERKUNFT_NUTZER) {
   return mitKarten(projektPfad, (karten) => {
     const karte = karten.find((k) => k.id === id)
     if (!karte) return { ok: false, fehler: texte.fehler.unbekannt }
@@ -215,20 +271,74 @@ export function karteAendern(projektPfad, id, { titel, text }) {
     const neuerTitel = karte.sorte === 'status' ? karte.titel : titel
     const fehler = pruefeKarteneingabe({ titel: neuerTitel, text })
     if (fehler) return { ok: false, fehler }
+    let neuesThema = null
+    if (thema !== undefined && THEMEN_SORTEN.includes(karte.sorte)) {
+      const urteil = pruefeThema(karten, thema, { pflicht: Boolean(karte.thema) })
+      if (urteil.fehler) return { ok: false, fehler: urteil.fehler }
+      neuesThema = urteil.thema
+    }
     karte.titel = neuerTitel.trim()
     karte.text = text.trim()
-    karte.geaendertAm = new Date().toISOString()
+    if (neuesThema !== null) {
+      if (neuesThema) karte.thema = neuesThema
+      else delete karte.thema
+    }
+    stempeln(karte, herkunft, new Date().toISOString())
   })
 }
 
-export function karteErledigtSetzen(projektPfad, id, erledigt) {
+export function karteErledigtSetzen(projektPfad, id, erledigt, herkunft = HERKUNFT_NUTZER) {
   return mitKarten(projektPfad, (karten) => {
     const karte = karten.find((k) => k.id === id)
     if (!karte) return { ok: false, fehler: texte.fehler.unbekannt }
     if (karte.sorte !== 'aufgabe')
       return { ok: false, fehler: texte.kartenRegeln.nurAufgabenErledigbar }
     karte.erledigt = Boolean(erledigt)
-    karte.geaendertAm = new Date().toISOString()
+    stempeln(karte, herkunft, new Date().toISOString())
+  })
+}
+
+// Nur das Thema einer Karte setzen (BAUPLAN 30): Drag & Drop in eine andere
+// Themengruppe, Sammel-Dialog „Themen sortieren". Status- und Prüfkarten
+// tragen kein Thema.
+export function karteThemaSetzen(projektPfad, id, thema, herkunft = HERKUNFT_NUTZER) {
+  return mitKarten(projektPfad, (karten) => {
+    const karte = karten.find((k) => k.id === id)
+    if (!karte) return { ok: false, fehler: texte.fehler.unbekannt }
+    if (!THEMEN_SORTEN.includes(karte.sorte))
+      return { ok: false, fehler: texte.kartenRegeln.keinThemaFuerSorte }
+    const urteil = pruefeThema(karten, thema, { pflicht: true })
+    if (urteil.fehler) return { ok: false, fehler: urteil.fehler }
+    if (karte.thema === urteil.thema) return { ok: true, karten }
+    karte.thema = urteil.thema
+    stempeln(karte, herkunft, new Date().toISOString())
+  })
+}
+
+// Thema umbenennen (BAUPLAN 30): alle Karten des Themas; Umbenennen auf einen
+// vorhandenen Namen legt die Themen zusammen. Die Karten gelten dabei nicht
+// als „geändert" — nur die Ordnung wechselt.
+export function themaUmbenennen(projektPfad, altesThema, neuesThema) {
+  return mitKarten(projektPfad, (karten) => {
+    const altSchluessel = themaSchluessel(altesThema)
+    if (!altSchluessel) return { ok: false, fehler: texte.fehler.unbekannt }
+    const eingabe = themaNormalisieren(neuesThema)
+    if (!eingabe) return { ok: false, fehler: texte.kartenRegeln.themaFehlt([]) }
+    if (eingabe.length > THEMA_MAX)
+      return { ok: false, fehler: texte.kartenRegeln.themaZuLang(THEMA_MAX, eingabe.length) }
+    // Ziel: vorhandene Schreibweise eines anderen Themas (Zusammenlegen) —
+    // oder die Eingabe selbst (auch reine Schreibweisen-Korrektur).
+    const zielSchluessel = themaSchluessel(eingabe)
+    const ziel =
+      zielSchluessel === altSchluessel
+        ? eingabe
+        : kanonischesThema(
+            karten.filter((k) => themaSchluessel(k.thema) !== altSchluessel),
+            eingabe
+          )
+    for (const karte of karten)
+      if (typeof karte.thema === 'string' && themaSchluessel(karte.thema) === altSchluessel)
+        karte.thema = ziel
   })
 }
 
@@ -257,18 +367,16 @@ function gekuerztAuf(wert, max) {
   return sauber.length > max ? sauber.slice(0, max - 2).trimEnd() + ' …' : sauber
 }
 
-export function pruefkarteAnlegen(projektPfad, { titel, text }) {
+export function pruefkarteAnlegen(projektPfad, { titel, text }, herkunft = { quelle: 'flowforge' }) {
   let karte = null
   const ergebnis = mitKarten(projektPfad, (karten) => {
-    const jetzt = new Date().toISOString()
     karte = {
       id: crypto.randomUUID(),
       sorte: 'pruefung',
       titel: gekuerztAuf(titel, TITEL_MAX),
-      text: gekuerztAuf(text, TEXT_MAX),
-      angelegtAm: jetzt,
-      geaendertAm: jetzt
+      text: gekuerztAuf(text, TEXT_MAX)
     }
+    stempeln(karte, herkunft, new Date().toISOString(), { neu: true })
     karten.push(karte)
   })
   return ergebnis.ok ? { ...ergebnis, karte } : ergebnis
