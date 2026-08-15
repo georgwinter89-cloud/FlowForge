@@ -955,6 +955,206 @@ Chat tut es (Sicherungspunkt, Ticker), die App läuft sichtbar im App-Tab.
 Nach einem Bau-Lauf fragt er „warum hat der Prüfer gemeckert?" — die Antwort
 kennt den Lauf; im Verlauf steht die Marke der neuen Lauf-Session.
 
+### 34 — Kanten-Ehrlichkeit: vollständige Prüferkritik, Vor-Fazit, Fan-out ohne Verlust
+(Erweiterungspaket 34–39, Planungs-Runde 15.08.2026: Auswertung des Videos „Die AI
+Bubble findet gerade Graphentheorie für sich" [The Morpheus Tutorials — Harness
+Engineering = Graphentheorie] durch 7 Bewertungs-Agents je Themenblock [Aufwand ×
+Nützlichkeit gegen Code + SPEC, Stichworte Parallelität und Agents], einen Thinking
+Agent [2 Alternativen je Punkt] und ein Interview mit Georg [7 Use-Case-Entscheidungen].
+Grundlage waren die 14 Original-Diagramme des Autors, der OpenAI-Artikel zu Retained
+Reasoning & Compaction und die Cline-Quelle — das Video hatte am 15.08. noch keine
+Untertitel. Kernbefund: FlowForge IST schon der Harness aus dem Video [Graph mit
+typisierten Kanten, frischer Agent je Block, harte Sperren, Versuchszähler, Follow-Up
+über Karten, Audit als Review-Panel]; bewusst NICHT gebaut werden if-Weichen,
+Verschachtelung, automatische Parallelisierung aus braucht/liefert, ein
+selbstverbessernder Harness und ein Mehrheits-Controller — Programmierer-Konstruktionen,
+teils gegen Georgs Entscheidung „Pfeile bestimmen die Reihenfolge". Reihenfolge des
+Pakets: Entscheidung Georg — erst Kanten-Ehrlichkeit, dann Tor, Metriken, Modelle,
+Runden-Ende, Audit.)
+Befund (dreimal unabhängig gefunden, im Code bestätigt): FlowForge steuert die
+Reihenfolge streng, ist aber an den KANTEN stumpf.
+- **Prüferkritik vollständig statt 600 Zeichen:** `prueferKritik()` (lauf.js) schneidet
+  heute den ganzen Prüfbeleg bei 600 Zeichen ab — die Beanstandungen stehen laut
+  Prüfer-Auftrag aber am ENDE (nach „was geprüft" und Rot-vor-Grün-Beleg). Der
+  Reparatur-Bauer, die Nachprüfung des Prüfers und die lokale Vorreparatur bekommen
+  damit oft einen Torso ohne Beanstandung — das Anti-Pattern „Runde je Beanstandung"
+  durch die Hintertür. Neu: FlowForge zieht **alle `BEANSTANDUNG (…)`-Zeilen**
+  vollständig heraus (großzügige Grenze, z.B. 3.000 Zeichen) und reicht genau die
+  weiter; ohne Marken Rückfall auf den bisherigen Text plus Ticker-Hinweis.
+- **Kanten-Gate mit Nachforderung:** Urteil FEHLGESCHLAGEN ohne eine einzige
+  Beanstandungs-Zeile → FlowForge fordert beim Prüfer kurz nach (dasselbe Muster wie
+  die Startanleitungs-Nachforderung), statt eine Reparatur-Runde zu verbrennen.
+- **Vor-Fazit in der Reparatur-Runde (Retained Reasoning light):** Der frische
+  Bauer der Runde 2 bekommt neben der Kritik sein eigenes Fazit aus Runde 1 in den
+  Auftrag („Dein Fazit aus der letzten Runde: was du wo gebaut hast und warum") —
+  er erkundet nicht neu und trifft keine anderen Entwurfsentscheidungen; das
+  Frische-Prinzip bleibt (kein Arbeitsgedächtnis, nur das Fazit). Ebenso für andere
+  Rückführungs-Ziele.
+- **Fan-out ohne Datenverlust:** Liefern mehrere parallele Vorfahren dasselbe
+  Etikett (zwei Angreifer, Prüfer neben Angreifer), gewinnt heute still der
+  nächstgelegene (`uebergabenText`). Neu (Entscheidung Georg): der Nachfolger bekommt
+  **alle** Lieferungen gleicher Distanz nummeriert („Angriffsliste (1 von 2) von
+  …"), der Ticker sagt es („2 Angriffslisten zusammengeführt"); die Regel „näherer
+  Vorfahre gewinnt" bleibt für ungleiche Distanz. Kein eigener Synthese-Block —
+  erst bei Bedarf.
+- **Kürzung sichtbar und schema-bewusst:** Reißt eine Übergabe die 8.000 Zeichen,
+  steht das im Ticker und Laufbericht („Übergabe von Prüfer gekürzt: 12.400 →
+  8.000 Zeichen"), und die Marker-Zeilen am Ende (BEANSTANDUNG, PRUEFKARTE,
+  PRUEFUNG) überleben — gekürzt wird in der Mitte, nicht hinten.
+- Nachzuziehen: SPEC §4.1 (Rückführung: was die Rückmeldung enthält), §4.3
+  (Übergaben: gleiche Etiketten, Kürzung), §5 (Reparatur-Runde mit Vor-Fazit).
+**Alltagstest:** Georg fährt „Feature hinzufügen" mit einem absichtlich lückenhaften
+Wunsch: Der Prüfer fällt durch, im Ticker steht „3 Beanstandungen an den Bauer
+übergeben", der Bauer der zweiten Runde nennt in seinem Fazit erkennbar seine
+Änderungen aus Runde 1; ein Prüfbeleg ohne Beanstandungs-Zeile löst eine sichtbare
+Nachforderung aus. Zwei Angreifer parallel vor dem Bauer: der Ticker meldet „2
+Angriffslisten zusammengeführt", der Bauer-Auftrag im Laufbericht enthält beide.
+
+### 35 — Tor ohne KI: Prüfbefehl abspielen, Rauchtest, Baseline (0 Tokens)
+(Entscheidung Georg: „von allein" — er trägt nichts ein; kein eigener Tor-Block auf
+der Leinwand.)
+- **Prüfbefehl je Lauf:** Der Prüfer hinterlässt neben seinen Tests einen
+  maschinenlesbaren Startbefehl für die Prüfmappe über ein neues Werkzeug
+  `pruefbefehl_setzen` (Vorbild `startanleitung_setzen`; Ablage als
+  Verwaltungsdatei je Lauf, in Sperrlisten und Sicherungspunkt-Ausnahmen; der
+  Prüfer-Auftrag verlangt es als Pflicht-Artefakt wie die Startanleitung beim Bauer).
+- **Deterministische Nachprüfung:** In jeder Reparatur-Runde und nach jeder lokalen
+  Vorreparatur führt FlowForge den Prüfbefehl **selbst** aus (Mechanik aus dem
+  App-Tab: Shell mit UTF-8, ohne Eingabe, Zeitlimit, Prozess-Hygiene), bevor ein
+  Prüfer-Agent startet: bleibt es rot, geht das Fehlerprotokoll sofort als
+  Rückmeldung an den Bauer (0 Tokens); erst bei grün startet der Prüfer-Agent für
+  die Nachprüfung der grundsätzlichen Beanstandungen (mechanische, testgedeckte
+  gelten mit grün als erledigt). Ticker: „Prüfbefehl abgespielt: rot (2 Tests) —
+  zurück zum Bauer ohne Prüfer-Agent".
+- **Rauchtest der Startanleitung:** Nach dem Bauer startet FlowForge die
+  Startanleitung einmal kurz (Befehl läuft an, Adresse antwortet — die Warte-Logik
+  aus §8) und stoppt sie wieder; scheitert das, geht die Ausgabe als Rückmeldung an
+  den Bauer, bevor der Prüfer eine Runde kostet.
+- **Baseline „vorher schon rot":** Gibt es aus einem früheren Lauf einen
+  aufbewahrten Prüfbefehl (analog Prüfkarten-Archiv), spielt FlowForge ihn vor dem
+  Sicherungspunkt „Stand vor Lauf" einmal ab und merkt sich das Ergebnis; Bauer und
+  Prüfer bekommen „vorher schon rot: …" als Übergabe, das Tor meldet nur NEU
+  Kaputtes als Fehlschlag — Altlasten werden Aufgaben-Karte (Herkunft FlowForge),
+  keine Reparatur-Runde.
+- Nachzuziehen: SPEC §4.1 (Rückführung: Tor vor dem Prüfer-Agenten), §4.3
+  (Prüfer-Artefakt Prüfbefehl, Baseline), §8 (Rauchtest), §3.1 (Dateiliste).
+**Alltagstest:** Ein Bau-Lauf mit absichtlichem Fehler: Nach dem Bauer der zweiten
+Runde steht im Ticker „Prüfbefehl abgespielt: grün — Prüfer prüft nur noch die
+grundsätzlichen Beanstandungen" (oder „rot — zurück zum Bauer ohne Prüfer-Agent");
+die Metriken zeigen weniger Wiederholungs-Tokens je Prüfer. Eine kaputte
+Startanleitung wird vom Rauchtest gemeldet, bevor der Prüfer läuft.
+
+### 36 — Sehen & Messen: Harness-Kennzahlen, Modell je Block, Sicht-Hilfen
+(Entscheidung Georg: Kennzahlen UND Sicht-Hilfen; die Metriken sind sein
+Messinstrument und die Voraussetzung für die Modell-Entscheidungen in Schritt 37.)
+- **Harness-Kennzahlen auf der Metriken-Seite** (Abschnitt „Motor", Rohdaten
+  liegen in den Laufberichten schon vor — rückwirkend auswertbar): Anteil der
+  Läufe, in denen der Prüfer beim ersten Mal bestand; Reparatur-Runden je Lauf und
+  je Kette; Rechte-Rückfragen und Folgen-Fragen je Lauf; Überträge je Lauf;
+  Lauf-Ausgang je Kette und Kalenderwoche. Wie im Video: Score UND Kosten messen,
+  nicht nur Kosten.
+- **Modell je Block:** Der Motor summiert modelUsage heute über alle Modelle —
+  künftig steht je Block das genutzte Modell im Laufbericht (Anteile bei
+  Mischung), und die Metriken zeigen **Blocktyp × Modell** (Anzahl, Ø Tokens, Ø
+  Kosten, Erstbestehen/Wiederholungen als „schafft es"-Signal) — dieselbe Tabelle
+  wie für die lokale KI (Modell × Bereich). Alte Berichte zählen ehrlich als „ohne
+  Modell".
+- **Compaction sichtbar (Kleinkram im selben Schritt):** Der Motor wertet die
+  Zusammenfassungs-Meldung des SDK (compact_boundary) aus — Ticker- und
+  Bericht-Zeile in Alltagssprache („Der Motor hat das Arbeitsgedächtnis des Bauers
+  zusammengefasst"), gezählt in den Kennzahlen; der Füllstand des gerade
+  arbeitenden Block-Agenten erscheint als Hinweis neben dem Koordinator-Balken.
+- **Sicht-Hilfen am Schaubild (kein Ablauf-Umbau):** die Fehlschlag-Rückführung
+  als gestrichelter Rückpfeil vom Prüfer zum Ziel („bei Fehlschlag, 2 Runden");
+  an den braucht-Chips „kommt von <Block>" bzw. „fehlt"; im Lauf der Warte-Grund
+  im Ticker („Angreifer wartet — Bauer schreibt gerade" / „wartet auf Audit").
+- Nachzuziehen: SPEC §3.2 (Modell je Block im Bericht), §3.4 (neue Schnitte),
+  §4.1/§9 (Sicht-Hilfen), §6 (Compaction-Zeile).
+**Alltagstest:** Georg öffnet „Metriken": Er sieht je Kette die Erstbestehen-Quote
+und Ø Reparatur-Runden, je Blocktyp das Modell mit Kosten; im Schaubild führt ein
+roter Rückpfeil vom Prüfer zum Bauer, am Bauer steht „Arbeitspaket ← Paket
+schneiden"; während eines Laufs mit parallelen Zweigen erklärt der Ticker, worauf
+ein Block wartet.
+
+### 37 — Modellklasse je Block: frei wählbar, Voreinstellung im Katalog
+(Entscheidung Georg: frei je Block wählbar — auch Bauer und Prüfer; Empfehlung
+war „nur Nebenrollen fest". Folge, sichtbar gemacht: bei falscher Wahl mehr
+Reparatur-Runden — die Kennzahlen aus Schritt 36 zeigen es.)
+- **Feld `modell` je Katalog-Block** mit Voreinstellung (Bauer, Prüfer, Diagnose,
+  Paket schneiden, Angreifer, Audit = Standard-Modell des Motors; Sessionende,
+  Frage an den Menschen, Karten-Prüfer inkl. Sortiermodus, Kontext laden = sparsam)
+  und **Auswahl an der Blockkarte** im Schaubild wie das Häkchen „lokale KI erlaubt"
+  („Modell: Standard / sparsam (Sonnet) / sehr sparsam (Haiku)"; gespeichert je Karte
+  in workflow.json neben lokaleKi); eigene Blöcke wählen ihre Klasse im Block-Editor
+  (Validierung in blockRegeln/eigeneBloecke, Stepper und KI-Assistent kennen das
+  Feld). FlowForge trägt die Wahl beim Agent-Aufruf ein (updatedInput.model im
+  PreToolUse-Hook; SDK-Werte sonnet/opus/haiku/fable). Ticker: „Bauer läuft
+  sparsam (Sonnet)"; Modell je Block im Laufbericht (Schritt 36).
+- **Unteraufgaben-Modell** als Einstellung („Unteraufgaben der Block-Agenten: wie
+  Block / sparsam"): Späher des Angreifers, Einlese-Helfer von Bauer/Prüfer/
+  Diagnose bekommen im Hook ein billigeres Modell eingetragen — der Motor-Zwilling
+  der lokalen Helfer-KI (Rückfall, wenn Ollama fehlt oder das Häkchen aus ist).
+  Die drei Audit-Blickwinkel folgen der Klasse des Audit-Blocks (Georgs
+  „bewusst teuer" betraf die Lesetiefe, das Modell wählt er jetzt selbst).
+- **Nebenrollen billigst:** Der Koordinator der Lauf-Session (schreibt nur
+  AUFTRAG/OK) läuft auf Haiku — dabei zwingend `agents.block.model` auf die
+  gewählte Blockklasse setzen, sonst erben alle Blöcke das Billigmodell; die
+  Fenster-Merk-Logik (kontextFensterFuerModell, modelUsage) muss das
+  Koordinator-Modell vom Block-Modell trennen. Die Einmal-Frage des Block-Editors
+  läuft auf Sonnet.
+- Grenzen ehrlich: Im Abo-Modus zählt Kontingent, keine Dollar — Sonnet/Haiku
+  entlasten es trotzdem; die lokale KI bleibt V2 als Vollmotor. Reihenfolge nach
+  Schritt 36, damit die Wirkung messbar ist.
+- Nachzuziehen: SPEC §2 (Modellwahl), §4.2 (Anatomie: Modell), §4.5 (Block-Editor),
+  §5 (Koordinator-Modell), §6 (Chat unverändert: Standard-Modell).
+**Alltagstest:** Georg stellt das Sessionende auf „sparsam", lässt einen Bau-Lauf
+laufen: Ticker nennt „Sessionende läuft sparsam (Sonnet)", der Laufbericht zeigt je
+Block das Modell, die Metriken zeigen Sessionende × Sonnet mit Kosten; ein eigener
+Block bekommt im Editor die Klasse „sparsam" und läuft so.
+
+### 38 — Runden-Ende: Follow-Up-Karten und „Paket zerlegen"
+(Entscheidung Georg: Karte + Paket zerlegen; die Kleinkram-Regel [Stil-Funde als
+Hinweis statt Runde] wurde nicht gewählt.)
+- **Follow-Up-Karten mechanisch:** Kommt nach verbrauchten Reparatur-Runden die
+  Folgen-Frage, legt FlowForge — ohne Agent — aus den offenen Beanstandungen
+  Aufgaben-Karten an (je Beanstandung eine, 400-Zeichen-Grenze, Herkunft „von
+  FlowForge", Thema aus dem gemeldeten Paket, Lauf-Verweis) — bei JEDER Wahl, auch
+  Zurückstellen und Wiederherstellen (heute läuft dort kein Sessionende, die
+  Beanstandungen stehen nur im Laufbericht, den nie eine Session liest). Der
+  Dialog sagt es („der Rest ist als Aufgaben gesichert") und empfiehlt Weitermachen,
+  wenn alle Rest-Beanstandungen mechanisch sind, sonst Zurückstellen.
+- **Vierte Wahl „Paket zerlegen":** FlowForge stellt den Stand von vor dem Lauf
+  wieder her und startet als **Sonderlauf** einen Paket-schneiden-Agenten mit
+  Zusatzauftrag: „Dieses Paket ist an diesen Beanstandungen N-mal gescheitert —
+  zerlege es in 2–4 unabhängige, einzeln prüfbare Aufgaben-Karten und lege sie an"
+  (Karten anlegen freigeschaltet wie beim Audit; Prüferkritik + Arbeitspaket als
+  Text im Auftrag; Reihenfolge: Lauf endet → wiederherstellen → Sonderlauf über
+  die Warteschlange). Die neuen Karten liegen für den nächsten „Feature
+  hinzufügen"-Lauf bereit; die Original-Aufgabe(n) werden mit Vermerk erledigt.
+- Nachzuziehen: SPEC §4.1 (Folgen-Frage mit vier Wahlen, Karten-Sicherung),
+  §3.1 (Herkunft FlowForge für Follow-Up-Karten), §4.3 (Sonderlauf paket-zerlegen).
+**Alltagstest:** Ein Lauf scheitert zweimal am Prüfer; Georg wählt „Paket
+zerlegen": Der Projektordner ist wieder wie vor dem Lauf, ein Sonderlauf legt 2–4
+kleinere Aufgaben an (Herkunft sichtbar), die alte Aufgabe ist erledigt vermerkt;
+wählt er stattdessen „Zurückstellen", stehen die offenen Beanstandungen als
+Aufgaben-Karten in „Arbeit".
+
+### 39 — Audit-Blickwinkel einzeln an/aus
+(Entscheidung Georg: Häkchen je Blickwinkel — günstiger auf Wunsch, aber weniger
+Rundumblick; die volle Lesetiefe je Blickwinkel bleibt.)
+- Die drei Blickwinkel-Prüfer des Audits (Fehler & Randfälle · Verständlichkeit &
+  Wildwuchs · Sicherheit & Datenverlust) sind heute fest im Auftragstext. Neu: **drei
+  Häkchen an der Audit-Blockkarte** (Standard: alle an; mindestens eines muss an
+  sein — Start-Prüfung), FlowForge setzt den Auftrag aus den gewählten Blickwinkeln
+  zusammen (Feld-Mechanik mit Platzhaltern), der Ticker nennt beim Start, welche
+  Blickwinkel laufen, und der Kosten-Hinweis am Start passt sich an; im
+  Laufbericht steht die Auswahl. Ankreuz-Felder sind eine neue Feld-Art (bisher nur
+  Text-Felder) — im Block-Editor nicht nötig (Katalog-Block).
+- Nachzuziehen: SPEC §4.3 (Audit), §4.2 (Feld-Arten).
+**Alltagstest:** Georg wählt am Audit nur „Sicherheit & Datenverlust" ab, startet:
+Ticker „Audit mit 2 Blickwinkeln: Fehler & Randfälle, Verständlichkeit & Wildwuchs",
+der Lauf ist sichtbar günstiger; mit allen drei Häkchen läuft es wie bisher.
+
 ## Reihenfolge-Begründung (kurz)
 Motor-Durchstich früh (3), weil dort das größte technische Risiko liegt — inklusive
 Rechte-Durchsetzung und Verbrauchs-Messung, den zwei größten Adapter-Risiken.
