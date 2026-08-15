@@ -1,6 +1,6 @@
 # FlowForge — Produkt-Spezifikation V1
 
-Stand: 15.08.2026 (Bauschritt 31) · Ursprung: Grilling-Session vom 07.08.2026 (von Georg freigegeben) ·
+Stand: 15.08.2026 (Bauschritt 33) · Ursprung: Grilling-Session vom 07.08.2026 (von Georg freigegeben) ·
 fortlaufend gepflegt — dieses Dokument beschreibt die Gegenwart, Verhaltensänderungen
 werden hier nachgezogen (Historie liefert git).
 
@@ -104,7 +104,7 @@ aller betroffenen Karten mit vorgeschlagenem Thema, je Zeile änderbar oder able
 Entscheidungs-Karten dürfen ein Thema vorgeschlagen bekommen.
 
 **Herkunft je Karte** (seit Bauschritt 30): FlowForge stempelt jede angelegte oder geänderte
-Karte mit ihrer Herkunft — vom Nutzer („von dir"), vom Nachlauf-Chat, vom Karten-Prüfer
+Karte mit ihrer Herkunft — vom Nutzer („von dir"), vom Co-Pilot (Chat), vom Karten-Prüfer
 (übernommener Vorschlag), von FlowForge (Prüfkarten) oder von einem Block-Agenten: dann
 **Aufgabe(n) · Block · Lauf**. Die Aufgaben sind die Aufgaben-Karten, an denen der Lauf
 gerade arbeitet — die Auftragsquellen-Blöcke (Paket schneiden, Diagnose) melden sie
@@ -120,8 +120,9 @@ zeigen nur das Datum. Die Herkunft wandert **nie** in Aufträge oder `karten_ueb
 Der Agent liest und schreibt Karten über eingebaute **Karten-Werkzeuge** (Übersicht, anlegen,
 aktualisieren, erledigen) — dieselben Regeln, hart durchgesetzt; abgelehnte Versuche sind im
 Liveticker sichtbar. FlowForges Verwaltungsdateien im Projektordner (projekt.json, karten.json,
-workflow.json, Laufberichte) sind für direkte Dateizugriffe des Agenten gesperrt (hartes Nein,
-keine Rückfrage) — sonst ließen sich die Kartenregeln umgehen.
+workflow.json, startanleitung.json, laufstand.json, naechster-lauf.json, chat.json — der
+Verlauf des Co-Piloten, §6 — und die Laufberichte) sind für direkte Schreibzugriffe des
+Agenten gesperrt (hartes Nein, keine Rückfrage) — sonst ließen sich die Kartenregeln umgehen.
 
 ### 3.2 Laufberichte
 
@@ -134,8 +135,8 @@ Der Verbrauch steht je Block und für den ganzen Lauf im Bericht — seit 13.08.
 **theoretischen API-Kosten**, die der Motor aus den Preisen der genutzten Modelle berechnet
 (im Abo-Modus nur zur Einordnung ausgewiesen). Die Lokale-Helfer-Zeile nennt seit
 Bauschritt 31 das **Modell** der lokalen KI. Seit Bauschritt 27 vermerkt der Bericht
-außerdem die **Session-Kennung des Laufs** (über sie setzt der Nachlauf-Chat die
-Lauf-Session fort, §6) und trägt den **Chat-Verlauf** des Nachlauf-Chats als eigenen
+außerdem die **Session-Kennung des Laufs** (über sie setzt der Co-Pilot die
+Lauf-Session fort, §6) und trägt den **Chat-Verlauf** des Co-Piloten (Abschnitt seit der letzten Marke) als eigenen
 Abschnitt nach (Bilder als Marker, nicht als Daten). Seit Bauschritt 28 steht auch der
 **Karten-Vorschlag fürs nächste Paket** (§5) samt Empfehlung und Begründung im Bericht
 des erzeugenden Laufs.
@@ -758,34 +759,74 @@ Angreifer durch die Diagnose.
   Abnahme-Dialog (alter Kartentext, Vorschlag, Begründung) mit „Übernehmen",
   „Vorschlag bearbeiten" und „Ablehnen" (§4.3). Ist das Fenster nicht im
   Vordergrund, kommt eine Windows-Benachrichtigung.
-- **Nachlauf-Chat** (seit Bauschritt 27): Nach dem Lauf zeigt der Lauf-Tab ein
-  Chat-Fenster mit dem Kontext des letzten Laufs — technisch die **fortgesetzte
-  Lauf-Session** (resume über die Session-Kennung, die dafür im Laufbericht
-  vermerkt wird): Der Agent kennt Blöcke, Fazite und Verlauf, ohne dass etwas
-  nacherzählt werden muss. Ist die Session weg, ihr Kontext über der
-  Wächter-Schwelle (§5) oder wurde der Lauf hart abgebrochen bzw.
-  wiederhergestellt (der Projektordner wurde zurückgesetzt — die Session
-  „erinnert" sich an Änderungen, die es nicht mehr gibt), startet stattdessen
-  eine **frische Session mit dem Laufbericht als Kontext** — ehrlich im Chat
-  vermerkt, kein stiller Ausweichpfad. **Eingaben:** mehrzeiliger Text (z.B.
-  eine ganze Fehlermeldung) und **Screenshots** — per Strg+V aus der
-  Zwischenablage oder über den Bild-Knopf (höchstens 4 Bilder à 5 MB je
-  Nachricht); Bilder gehen als Bild an den Motor, der sie selbst liest.
-  **Zwei Betriebsarten**, Schalter sichtbar über dem Eingabefeld, je Chat und
-  jederzeit umschaltbar: Standard ist **nur-lesend** (übliche Lese-Regeln;
-  Karten anlegen erlaubt — „leg das als Aufgabe an" ist der Normalweg, der
-  nächste Bau-Lauf arbeitet sie mit Sicherungspunkt und Prüfer ab). Mit
-  **„Chat darf reparieren"** schreibt der Chat wie ein Bauer: Sicherungspunkt
-  vor der ersten Änderung, übliche Rückfragen und Befehls-Einstufung (§7);
-  Git, Prüfmappe und Verwaltungsdateien bleiben tabu. **Ehrlichkeit:**
-  Chat-Nachrichten kosten Kontingent — der Verbrauch steht sichtbar am Chat
-  (dasselbe Muster wie im Lauf). Der Chat-Verlauf wandert als eigener
-  Abschnitt in den Laufbericht (§3.2); Werkzeug-Schritte und Reparaturen
-  erscheinen als „Chat · …"-Zeilen im Ticker, Chat-Sicherungspunkte in der
-  Sicherungspunkt-Liste. Läuft oder wartet ein Lauf im Projekt, ist der Chat
-  gesperrt; arbeitet der Chat gerade an einer Antwort, startet umgekehrt kein
-  Lauf (ein Schreiber pro Projekt, §5). Ein neuer Lauf schließt den alten
-  Chat — der nächste Chat gehört zum neuen Lauf.
+- **Co-Pilot** (seit Bauschritt 33; vorher Nachlauf-Chat, Bauschritt 27 —
+  Entscheidung Georg, 15.08.2026: Nachlauf-Chat und Co-Pilot sind **ein** Chat,
+  kein zweites Chat-Fenster): Der Knopf **„Co-Pilot" in der Titelleiste** öffnet ein
+  **seitliches Chat-Fenster** rechts neben der Ansicht (unter 1300 px Fensterbreite
+  als Überlagerung — drei Spalten plus Chat passen nicht in 800 px) — in der
+  Projektübersicht wie im Projekt; das Fenster überlebt den Ansichtswechsel.
+  **Im Projekt** kennt der Chat das offene Projekt (Karten über die
+  Karten-Werkzeuge, Dateien, Laufberichte, Startanleitung, die App-Ausgabe aus dem
+  App-Tab); liegt ein Laufbericht vor, **setzt er die Lauf-Session fort** —
+  technisch resume über die Session-Kennung, die dafür im Laufbericht vermerkt
+  wird („frisch" heißt: der jüngste Bericht des Projekts): Der Agent kennt Blöcke,
+  Fazite und Verlauf, ohne dass etwas nacherzählt werden muss. Ist die Session weg,
+  ihr Kontext über der Wächter-Schwelle (§5) oder wurde der Lauf hart abgebrochen
+  bzw. wiederhergestellt (der Projektordner wurde zurückgesetzt — die Session
+  „erinnert" sich an Änderungen, die es nicht mehr gibt), startet stattdessen eine
+  **frische Session mit dem Laufbericht als Kontext**; ohne jeden Lauf eine frische
+  Session mit Projekt- und FlowForge-Wissen — **welche Grundlage gilt, steht
+  ehrlich im Chat**, kein stiller Ausweichpfad. **In der Projektübersicht** (kein
+  Projekt offen) beantwortet er nur Bedienfragen; sein Arbeitsordner ist dann der
+  Datenordner, und der ist für seine Werkzeuge hart gesperrt (dort liegen die
+  Einstellungen samt API-Schlüssel) — lesen darf er nur die Produktbeschreibung,
+  Befehle und Schreiben sind gesperrt.
+  **Was er weiß:** (a) die **Bedienung von FlowForge** — diese SPEC.md wird mit der
+  App gebündelt (Extra-Ressource neben der App, nicht im Archiv) und dem Chat als
+  **lesbare Datei** bereitgestellt, nicht als Systemtext; sein Systemtext trägt
+  Kurzregeln und einen **Abschnitts-Index mit Zeilenbereichen** (beim Start des
+  Chats aus der gebündelten Datei erzeugt), damit er gezielt liest — kein zweites
+  Bedien-Dokument (Doku-Regel); (b) **das Projekt** (s.o.).
+  **Was er darf — zwei Betriebsarten**, Schalter sichtbar über dem Eingabefeld, je
+  Chat und jederzeit umschaltbar: Standard ist **nur-lesend** (übliche Lese-Regeln;
+  Karten anlegen erlaubt — „leg das als Aufgabe an" ist der Normalweg, der nächste
+  Bau-Lauf arbeitet sie mit Sicherungspunkt und Prüfer ab; Karten tragen die
+  Herkunft „vom Chat"). Mit **„Chat darf reparieren"** schreibt der Chat wie ein
+  Bauer und **führt Befehle für dich aus** (`npm install`, eine Erstanmeldung
+  anlegen …): Sicherungspunkt vor der ersten Änderung, übliche Rückfragen und
+  Befehls-Einstufung (§7); Git, Prüfmappe und Verwaltungsdateien bleiben tabu.
+  **Die App bedient er über eigene Werkzeuge** `app_starten` / `app_stoppen` /
+  `app_neustarten` / `app_ausgabe`, die den App-Tab (§8) benutzen — derselbe
+  Prozess, den du im Tab siehst (Entscheidung Georg): er überlebt das
+  Chat-Schließen und wird nicht von der Prozess-Hygiene der Läufe abgeräumt; die
+  Ausgabe lesen ist immer frei, Starten/Stoppen ist im Reparatur-Modus frei und
+  fragt sonst nach, einen fremden Port-Besitzer beenden fragt immer.
+  **Während ein Lauf läuft oder wartet:** lesend erlaubt (Bedienfragen, „was macht
+  der Bauer gerade") — wirklich lesend: die Einstellung „nur-lesende Blöcke dürfen
+  Befehle ausführen" gilt für den Chat dann NICHT, Karten anlegen und Reparieren
+  sind gesperrt (Schalter ausgegraut), es entsteht kein Sicherungspunkt mitten im
+  Lauf; die KI bekommt die Notiz „gerade läuft ein Lauf" mit. Ein Schreiber pro
+  Projekt (§5): arbeitet der Chat gerade an einer Antwort, startet kein Lauf; ein
+  Laufstart beendet den Chat-Motor (die nächste Nachricht setzt die Chat-Session
+  fort) und räumt ab, was der Chat gestartet hatte.
+  **Verlauf je Projekt gespeichert** (Verwaltungsdatei `chat.json` im Projektordner
+  — für Agenten-Schreibzugriffe gesperrt, von Sicherungspunkten ausgenommen; der
+  Übersichts-Chat im Datenordner) — überlebt Neustarts; Knopf **„Neues Gespräch"**
+  leert Verlauf und Session (nach Rückfrage). Nach jedem Lauf hängt der Chat an
+  der neuen Lauf-Session — der Verlauf zeigt eine **sichtbare Marke** („ab hier:
+  neue Lauf-Session vom 15.08., 14:32"; Entscheidung Georg): der ältere Teil
+  bleibt zum Nachlesen, die KI kennt ihn nicht mehr und sagt das ehrlich. Der
+  Abschnitt nach der Marke wandert zusätzlich in den Laufbericht (§3.2).
+  **Eingaben:** mehrzeiliger Text (z.B. eine ganze Fehlermeldung) und
+  **Screenshots** — per Strg+V aus der Zwischenablage oder über den Bild-Knopf
+  (höchstens 4 Bilder à 5 MB je Nachricht); Bilder gehen als Bild an den Motor,
+  der sie selbst liest. **Ehrlichkeit & Motor:** Chat-Nachrichten kosten Kontingent
+  — der Verbrauch steht sichtbar am Chat (dasselbe Muster wie im Lauf); es
+  antwortet das Standard-Modell des Motors (FlowForge setzt kein Modell), die
+  lokale KI bleibt draußen (V2). Werkzeug-Schritte und Reparaturen erscheinen als
+  „Chat · …"-Zeilen im Ticker des Projekts, Chat-Sicherungspunkte in der
+  Sicherungspunkt-Liste; Rechte-Rückfragen des Chats stellt das Chat-Fenster
+  selbst.
 
 ## 7. Rechte des Agenten (Standard, später pro Projekt verstellbar)
 
@@ -898,8 +939,8 @@ Design-Canvas): tiefdunkler Navy-Grund, Elektroblau als Marken- und Auswahlfarbe
 Signalrot für alles Lebendige (läuft, wartet auf Antwort, Lauf starten), Schrift
 Archivo (lokal gebündelt), Zahlen und Protokolle in JetBrains Mono. Das Fenster hat
 eine eigene dunkle Titelleiste (Blitz-Logo, „FlowForge WERKBANK", Brotkrume zum
-Zurückspringen, rechts die Knöpfe **„Metriken"** (§3.4) und „Einstellungen"); Windows
-zeichnet nur die drei Fensterknöpfe. Installer, Fenster und
+Zurückspringen, rechts die Knöpfe **„Co-Pilot"** (§6, öffnet das seitliche Chat-Fenster),
+**„Metriken"** (§3.4) und „Einstellungen"); Windows zeichnet nur die drei Fensterknöpfe. Installer, Fenster und
 Taskleiste tragen das **Blitz-Icon** (seit Bauschritt 30, aus dem Inline-SVG erzeugt). Der **Kontext-Füllstand**
 erscheint als Balken mit roter Marke an der Übertrags-Schwelle — in der Lauf-Ansicht
 und auf der Hero-Kachel.

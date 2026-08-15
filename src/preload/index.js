@@ -52,10 +52,13 @@ contextBridge.exposeInMainWorld('flowforge', {
   laufZustand: (pfad) => ipcRenderer.invoke('lauf-zustand', pfad),
   naechsterLaufLaden: (pfad) => ipcRenderer.invoke('naechster-lauf-laden', pfad),
   naechsterLaufVerwerfen: (pfad) => ipcRenderer.invoke('naechster-lauf-verwerfen', pfad),
-  chatZustand: (pfad) => ipcRenderer.invoke('chat-zustand', pfad),
-  chatSenden: (pfad, text, bilder) => ipcRenderer.invoke('chat-senden', { pfad, text, bilder }),
-  chatReparierenSetzen: (pfad, an) => ipcRenderer.invoke('chat-reparieren', { pfad, an }),
-  chatAbbrechen: (pfad) => ipcRenderer.invoke('chat-abbrechen', pfad),
+  // Co-Pilot (BAUPLAN 33): pfad null = Projektübersicht (nur Bedienfragen).
+  chatZustand: (pfad) => ipcRenderer.invoke('chat-zustand', pfad ?? null),
+  chatSenden: (pfad, text, bilder) =>
+    ipcRenderer.invoke('chat-senden', { pfad: pfad ?? null, text, bilder }),
+  chatReparierenSetzen: (pfad, an) => ipcRenderer.invoke('chat-reparieren', { pfad: pfad ?? null, an }),
+  chatAbbrechen: (pfad) => ipcRenderer.invoke('chat-abbrechen', pfad ?? null),
+  chatNeu: (pfad) => ipcRenderer.invoke('chat-neu', pfad ?? null),
   laufberichteLaden: (pfad) => ipcRenderer.invoke('laufberichte-laden', pfad),
   metrikenLaden: () => ipcRenderer.invoke('metriken-laden'),
   pruefmappeLesen: (pfad) => ipcRenderer.invoke('pruefmappe-lesen', pfad),

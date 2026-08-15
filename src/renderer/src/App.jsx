@@ -4,6 +4,7 @@ import Projektuebersicht from './Projektuebersicht.jsx'
 import Projektansicht from './Projektansicht.jsx'
 import Einstellungen from './Einstellungen.jsx'
 import Metriken from './Metriken.jsx'
+import Chat from './Chat.jsx'
 
 export default function App() {
   // null = Projektübersicht, sonst { pfad, name, tab } des geöffneten Projekts.
@@ -15,6 +16,9 @@ export default function App() {
   // der Titelleiste legt sie über die aktuelle Ansicht; die Brotkrume führt
   // zurück (das offene Projekt bleibt gemerkt).
   const [metrikenOffen, setMetrikenOffen] = useState(false)
+  // Co-Pilot (BAUPLAN 33): ein seitliches Chat-Fenster — in der Übersicht wie
+  // im Projekt; welcher Chat gemeint ist, entscheidet das offene Projekt.
+  const [chatOffen, setChatOffen] = useState(false)
 
   return (
     <div className="app">
@@ -54,6 +58,12 @@ export default function App() {
           )
         )}
         <button
+          className={'knopf-klein kopf-knopf' + (chatOffen ? ' kopf-knopf-aktiv' : '')}
+          onClick={() => setChatOffen((alt) => !alt)}
+        >
+          💬 {texte.kopfleiste.chatKnopf}
+        </button>
+        <button
           className={'knopf-klein kopf-knopf' + (metrikenOffen ? ' kopf-knopf-aktiv' : '')}
           onClick={() => setMetrikenOffen((alt) => !alt)}
         >
@@ -66,17 +76,26 @@ export default function App() {
           {texte.einstellungen.knopf}
         </button>
       </header>
-      <main className="inhalt">
-        {metrikenOffen ? (
-          <Metriken />
-        ) : offenesProjekt ? (
-          <Projektansicht pfad={offenesProjekt.pfad} initialTab={offenesProjekt.tab} />
-        ) : (
-          <Projektuebersicht
-            onOeffnen={(pfad, name, tab) => setOffenesProjekt({ pfad, name, tab })}
+      <div className="rumpf">
+        <main className="inhalt">
+          {metrikenOffen ? (
+            <Metriken />
+          ) : offenesProjekt ? (
+            <Projektansicht pfad={offenesProjekt.pfad} initialTab={offenesProjekt.tab} />
+          ) : (
+            <Projektuebersicht
+              onOeffnen={(pfad, name, tab) => setOffenesProjekt({ pfad, name, tab })}
+            />
+          )}
+        </main>
+        {chatOffen && (
+          <Chat
+            pfad={offenesProjekt?.pfad ?? null}
+            projektName={offenesProjekt?.name ?? ''}
+            onSchliessen={() => setChatOffen(false)}
           />
         )}
-      </main>
+      </div>
       {einstellungenOffen && <Einstellungen onSchliessen={() => setEinstellungenOffen(false)} />}
     </div>
   )

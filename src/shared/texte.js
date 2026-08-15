@@ -6,7 +6,9 @@ export const texte = {
     werkbank: 'WERKBANK',
     zuProjekten: 'Projekte',
     // Metriken (BAUPLAN 31): Knopf in der Titelleiste → globale Seite.
-    metrikenKnopf: 'Metriken'
+    metrikenKnopf: 'Metriken',
+    // Co-Pilot (BAUPLAN 33): Knopf in der Titelleiste → seitliches Chat-Fenster.
+    chatKnopf: 'Co-Pilot'
   },
   // Metriken (BAUPLAN 31): lokale KI und Motor über alle Läufe hinweg — nur
   // Nachschlagewerk; nichts davon wandert je in einen Auftrag.
@@ -474,21 +476,45 @@ export const texte = {
     titelFeld: 'Titel',
     textFeld: 'Inhalt'
   },
-  // Nachlauf-Chat (BAUPLAN 27): Gespräch mit der Lauf-Session nach dem Lauf —
-  // Standard nur-lesend (Karten anlegen erlaubt), auf Zuruf „Chat darf reparieren".
+  // Co-Pilot (BAUPLAN 33, vorher Nachlauf-Chat BAUPLAN 27): EIN Chat für
+  // Bedienung und Projekt — im Projekt hängt er an der Lauf-Session, in der
+  // Übersicht beantwortet er Bedienfragen. Standard nur-lesend (Karten
+  // anlegen erlaubt), auf Zuruf „Chat darf reparieren".
   chat: {
-    titel: 'Chat zur Lauf-Session',
+    titel: 'Co-Pilot',
+    untertitelProjekt: (name) => `Projekt „${name}"`,
+    untertitelUebersicht: 'Bedienung von FlowForge',
     einleitung:
-      'Frag den Agenten zum letzten Lauf — er kennt Blöcke, Fazite und Verlauf. Auf „leg das als Aufgabe an" legt er eine Karte an; der nächste Bau-Lauf arbeitet sie mit Sicherungspunkt und Prüfer ab.',
-    eingabePlatzhalter: 'Deine Frage zum letzten Lauf … (Strg+V fügt einen Screenshot ein)',
+      'Frag zum Projekt oder zur Bedienung von FlowForge — der Co-Pilot kennt die Karten, Laufberichte, die Startanleitung und die App-Ausgabe; nach einem Lauf kennt er auch dessen Blöcke, Fazite und Verlauf. Auf „leg das als Aufgabe an" legt er eine Karte an; der nächste Bau-Lauf arbeitet sie mit Sicherungspunkt und Prüfer ab.',
+    einleitungUebersicht:
+      'Frag, wie etwas in FlowForge geht — der Co-Pilot schlägt in der Produktbeschreibung nach. Für Fragen zu einem Projekt öffne das Projekt und frag dort.',
+    eingabePlatzhalter: 'Deine Frage … (Strg+V fügt einen Screenshot ein)',
     senden: 'Senden',
     stoppen: 'Antwort abbrechen',
+    schliessen: 'Chat schließen',
+    neuesGespraech: 'Neues Gespräch',
+    neuesGespraechHinweis:
+      'Leert den Verlauf und verwirft die Session — die nächste Frage startet frisch (im Projekt wieder an der jüngsten Lauf-Session).',
+    neuesGespraechFrage:
+      'Neues Gespräch beginnen? Der bisherige Verlauf wird geleert und die KI vergisst ihn — die nächste Frage startet frisch.',
     beschaeftigt: 'Der Chat arbeitet …',
+    arbeitetSchritt: (text) => `Der Chat arbeitet … ${text}`,
+    laufAktivHinweis:
+      'Im Projekt läuft (oder wartet) gerade ein Lauf — der Chat ist so lange nur lesend: Bedienfragen und „was macht der Bauer gerade" gehen, Reparieren ist gesperrt.',
     reparierenLabel: 'Chat darf reparieren',
     reparierenHinweis:
-      'Angeschaltet schreibt der Chat wie ein Bauer: Vor der ersten Änderung entsteht ein Sicherungspunkt; Git, Prüfmappe und Verwaltungsdateien bleiben tabu. Ausgeschaltet liest er nur und darf Karten anlegen.',
+      'Angeschaltet schreibt der Chat wie ein Bauer und führt Befehle für dich aus (z.B. npm install): Vor der ersten Änderung entsteht ein Sicherungspunkt; Git, Prüfmappe und Verwaltungsdateien bleiben tabu. Ausgeschaltet liest er nur und darf Karten anlegen.',
     reparierenAn: 'Chat darf jetzt reparieren — vor der ersten Änderung entsteht ein Sicherungspunkt.',
     reparierenAus: 'Chat ist wieder nur-lesend (Karten anlegen bleibt erlaubt).',
+    reparierenWaehrendLauf:
+      'Solange in diesem Projekt ein Lauf läuft oder wartet, darf der Chat nicht reparieren — pro Projekt schreibt nur ein Agent.',
+    reparierenUebersicht: 'In der Projektübersicht gibt es nichts zu reparieren — öffne dafür ein Projekt.',
+    // Marke im Verlauf (Entscheidung Georg): Nach jedem Lauf hängt der Chat an
+    // der neuen Lauf-Session — der ältere Teil bleibt zum Nachlesen, die KI
+    // kennt ihn nicht mehr.
+    marke: (datum, zeit) => `ab hier: neue Lauf-Session vom ${datum}, ${zeit}`,
+    markeOhneZeit: 'ab hier: neue Lauf-Session',
+    markeHinweis: 'Was darüber steht, kennt die KI nicht mehr — es bleibt zum Nachlesen.',
     bildKnopf: 'Bild anhängen',
     bildEntfernen: 'Bild entfernen',
     bildMarker: (n) => (n === 1 ? '[1 Bild angehängt]' : `[${n} Bilder angehängt]`),
@@ -502,12 +528,15 @@ export const texte = {
       'Die Lauf-Session ist nicht mehr nutzbar (weg oder Kontext zu voll) — dieser Chat ist eine frische Session mit dem Laufbericht als Kontext.',
     hinweisFortsetzungGescheitert:
       'Die Lauf-Session ließ sich nicht fortsetzen — der Chat läuft jetzt als frische Session mit dem Laufbericht als Kontext.',
-    gesperrtWaehrendLauf:
-      'Solange in diesem Projekt ein Lauf läuft oder wartet, ist der Chat gesperrt — pro Projekt schreibt nur ein Agent.',
+    hinweisChatSessionWeg:
+      'Die vorige Chat-Session ließ sich nicht fortsetzen — die KI kennt den älteren Verlauf nicht mehr (er bleibt hier zum Nachlesen).',
+    hinweisOhneLauf:
+      'Noch kein Lauf in diesem Projekt — dieser Chat ist eine frische Session mit Projekt- und FlowForge-Wissen (Karten, Dateien, Startanleitung, Produktbeschreibung).',
+    hinweisUebersicht:
+      'Kein Projekt offen — der Co-Pilot beantwortet hier nur Bedienfragen zu FlowForge (aus der Produktbeschreibung). Der Datenordner ist für ihn gesperrt.',
     verbrauchHinweis: 'Chat-Nachrichten kosten Kontingent.',
     fehlerLaufWaehrendChat:
       'Der Chat arbeitet gerade in diesem Projekt — warte, bis seine Antwort da ist (oder brich sie ab), bevor du einen Lauf startest.',
-    keinBericht: 'Noch kein Lauf — der Chat öffnet sich nach dem ersten Lauf.',
     antwortAbgebrochen: 'Antwort abgebrochen.',
     denkAbsender: 'Chat'
   },
@@ -814,27 +843,82 @@ export const texte = {
   // fortgesetzte Lauf-Session — der Koordinator-Drill („antworte nur mit OK")
   // steckt noch im Verlauf und wird hier ausdrücklich aufgehoben.
   agentenChat: {
-    system: (projektPfad, titelMax, textMax) =>
-      'Du bist jetzt der Nachlauf-Chat von FlowForge: Der Workflow-Lauf ist beendet, und der ' +
-      'Nutzer spricht direkt mit dir über diesen Lauf und das Projekt. Falls du vorher der ' +
-      'Koordinator dieses Laufs warst: Diese Rolle ist beendet — die Koordinator-Regeln ' +
-      '(nur delegieren, nur mit OK antworten) gelten NICHT mehr. Antworte frei, hilfreich ' +
-      'und auf Deutsch; deine Antwort geht direkt an den Nutzer, der kein Programmierer ist — ' +
-      'erkläre in Alltagssprache und fasse dich kompakt.\n' +
-      'Du darfst selbst Dateien lesen und suchen (auch über Unteraufgaben mit dem ' +
-      'Agent-Werkzeug). Standardmäßig bist du nur-lesend: Der Normalweg für Erkenntnisse ist ' +
-      'eine Aufgaben-Karte („leg das als Aufgabe an") — der nächste Bau-Lauf arbeitet sie mit ' +
-      'Sicherungspunkt und Prüfer ab. Nur wenn der Nutzer den Schalter „Chat darf reparieren" ' +
-      'anschaltet, darfst du Dateien ändern; FlowForge legt vor deiner ersten Änderung selbst ' +
-      'einen Sicherungspunkt an. Git, die Prüfmappe pruefung/ und FlowForges ' +
-      'Verwaltungsdateien sind immer tabu.\n' +
-      `Der Projektordner ist: ${projektPfad}\n` +
-      'Verwende bei Datei-Werkzeugen ausschließlich Pfade relativ zum Projektordner oder ' +
-      'diesen absoluten Windows-Pfad — niemals POSIX-Pfade wie /tmp/… oder /c/….\n' +
-      'Projektkarten liest und schreibst du ausschließlich über die karten-Werkzeuge ' +
-      '(karten_uebersicht, karte_anlegen, karte_aktualisieren, karte_erledigen) — niemals ' +
-      `über die Datei karten.json. Harte Regeln: Titel höchstens ${titelMax} Zeichen, Inhalt ` +
-      `höchstens ${textMax} Zeichen; wer mehr zu sagen hat, legt mehrere fokussierte Karten an.`,
+    // Kurzregeln der Bedienung (BAUPLAN 33): das Nötigste im Systemtext — für
+    // alles Weitere liest der Chat gezielt in der SPEC.md (Index unten).
+    kurzregeln:
+      'Kurzregeln von FlowForge: Ein Projekt = ein Ordner mit Karten (Aufgabe, Entscheidung, ' +
+      'Wissen, genau eine Status-Karte, Prüfkarten — höchstens 400 Zeichen Inhalt, Themen als ' +
+      'zweite Ebene), Workflows (Schaubild aus Block-Karten und Pfeilen), Laufberichten und ' +
+      'Sicherungspunkten (automatisch vor jedem Lauf und nach jedem schreibenden Block; ' +
+      'Wiederherstellen mit Vorschau). Die Projektansicht hat links die Karten-Seitenleiste ' +
+      '(Gruppen Arbeit · Wissen · Geprüft · Erledigt, Aufräum-Knöpfe „Karten am Code prüfen" ' +
+      'und „Themen sortieren"), in der Mitte Tabs (Schaubild · Lauf · Laufberichte · ' +
+      'Sicherungspunkte · Metriken · App) und rechts die Blockbibliothek in Kategorien ' +
+      '(Vorlagen · Auftrag finden · Bauen · Prüfen · Gedächtnis · Eigene · Übung). Blöcke zieht ' +
+      'man aufs Schaubild und verbindet sie mit Pfeilen; Prüfkarten zieht man auf einen ' +
+      'Prüfer-Block; Karten zieht man in die Kartenauswahl unter dem Schaubild; „Lauf starten" ' +
+      'wechselt in den Lauf-Tab (Liveticker, Denk-Bereich, Fragen des Agenten, Stopp in zwei ' +
+      'Stufen). Vorlagen: „Neue App starten" (nur Spec-Interview), „Feature hinzufügen" (Paket ' +
+      'schneiden → Angreifer → Bauer → Prüfer → Sessionende), „Bug jagen" (Diagnose → Bauer → ' +
+      'Prüfer → Sessionende). Der App-Tab startet die gebaute App über ihre Startanleitung und ' +
+      'zeigt die Ausgabe live. Titelleiste rechts: „Co-Pilot" (dieser Chat), „Metriken", ' +
+      '„Einstellungen" (Motor-Modus, Automodus, lokale Helfer-KI).',
+    system: ({ projektPfad, datenordner, titelMax, textMax, specPfad, specIndex }) =>
+      'Du bist der Co-Pilot von FlowForge — ein Chat, der dem Nutzer bei der Bedienung von ' +
+      'FlowForge und bei seinem Projekt hilft. Falls du vorher der Koordinator eines Laufs ' +
+      'warst: Diese Rolle ist beendet — die Koordinator-Regeln (nur delegieren, nur mit OK ' +
+      'antworten) gelten NICHT mehr. Antworte frei, hilfreich und auf Deutsch; deine Antwort ' +
+      'geht direkt an den Nutzer, der kein Programmierer ist — erkläre in Alltagssprache, ' +
+      'fasse dich kompakt. Die Antwort wird als reiner Text angezeigt: kein Markdown ' +
+      '(keine Überschriften, Tabellen oder Code-Blöcke; höchstens **fett** für Knopfnamen), ' +
+      'Absätze und einfache Listen mit „-" oder „1." sind gut.\n' +
+      texte.agentenChat.kurzregeln +
+      '\n' +
+      (specPfad
+        ? 'FlowForges Produktbeschreibung (SPEC.md) beschreibt die Gegenwart der App vollständig ' +
+          `— lies sie GEZIELT mit dem Read-Werkzeug (offset/limit) aus dieser Datei: ${specPfad}\n` +
+          'Abschnitts-Index (Zeilennummern):\n' +
+          specIndex +
+          '\nBei Bedienfragen: zuerst den passenden Abschnitt lesen, dann antworten — erfinde ' +
+          'keine Knöpfe oder Abläufe.\n'
+        : 'Die Produktbeschreibung liegt dieser Installation nicht bei — sag bei ' +
+          'Bedienfragen ehrlich, was du aus den Kurzregeln weißt und was nicht.\n') +
+      (projektPfad
+        ? `Das offene Projekt liegt in: ${projektPfad}\n` +
+          'Du darfst selbst Dateien lesen und suchen (auch über Unteraufgaben mit dem ' +
+          'Agent-Werkzeug). Standardmäßig bist du nur-lesend: Der Normalweg für Erkenntnisse ist ' +
+          'eine Aufgaben-Karte („leg das als Aufgabe an") — der nächste Bau-Lauf arbeitet sie mit ' +
+          'Sicherungspunkt und Prüfer ab. Nur wenn der Nutzer den Schalter „Chat darf reparieren" ' +
+          'anschaltet, darfst du Dateien ändern und Befehle für ihn ausführen (npm install, eine ' +
+          'Erstanmeldung anlegen …); FlowForge legt vor deiner ersten Änderung selbst einen ' +
+          'Sicherungspunkt an. Git, die Prüfmappe pruefung/ und FlowForges Verwaltungsdateien ' +
+          'sind immer tabu. Läuft im Projekt gerade ein Workflow-Lauf, bist du hart nur-lesend ' +
+          '(die Werkzeugantwort sagt es dir) — beantworte dann Fragen aus dem, was du lesen kannst.\n' +
+          'Verwende bei Datei-Werkzeugen ausschließlich Pfade relativ zum Projektordner oder ' +
+          'diesen absoluten Windows-Pfad — niemals POSIX-Pfade wie /tmp/… oder /c/….\n' +
+          'Projektkarten liest und schreibst du ausschließlich über die karten-Werkzeuge ' +
+          '(karten_uebersicht, karte_anlegen, karte_aktualisieren, karte_erledigen) — niemals ' +
+          `über die Datei karten.json. Harte Regeln: Titel höchstens ${titelMax} Zeichen, Inhalt ` +
+          `höchstens ${textMax} Zeichen; wer mehr zu sagen hat, legt mehrere fokussierte Karten an.\n` +
+          'Die gebaute App des Projekts bedienst du über die app-Werkzeuge (app_starten, ' +
+          'app_stoppen, app_neustarten, app_ausgabe) — derselbe Prozess, den der Nutzer im ' +
+          'App-Tab sieht. Starte Server NIE über einen Befehl (er würde deinen Aufruf blockieren ' +
+          'und beim nächsten Lauf sterben). Fragt der Nutzer, warum die App nicht startet: erst ' +
+          'app_ausgabe lesen, dann antworten — beziehe dich erkennbar auf die Ausgabe. ' +
+          'Laufberichte liegen im Ordner laufberichte/ (lesbar); die Startanleitung nennt Befehl ' +
+          'und Adresse (startanleitung.json ist lesbar, gesetzt wird sie nur über startanleitung_setzen).'
+        : 'Es ist KEIN Projekt offen (Projektübersicht): Du beantwortest nur Bedienfragen zu ' +
+          'FlowForge. Dein Arbeitsordner ist FlowForges Datenordner ' +
+          `(${datenordner}) — der ist für deine Werkzeuge gesperrt; Befehle und Schreiben ` +
+          'sind hier gesperrt. Lies bei Bedarf ausschließlich die Produktbeschreibung über ihren ' +
+          'absoluten Pfad. Fragt der Nutzer etwas zu einem konkreten Projekt, bitte ihn, das ' +
+          'Projekt zu öffnen und dort zu fragen.'),
+    // Während eines Laufs (BAUPLAN 33): Notiz vor der Nutzer-Nachricht — sonst
+    // weiß die KI nicht, dass sie gerade hart nur-lesend ist.
+    laufAktivNotiz:
+      '[Notiz von FlowForge: Im Projekt läuft (oder wartet) gerade ein Workflow-Lauf. Du bist ' +
+      'so lange hart nur-lesend — Karten anlegen, Dateien ändern, Befehle und Reparieren gehen ' +
+      'erst nach dem Lauf. Beantworte die Frage aus dem, was du lesen kannst.]',
     // Frische Session statt Fortsetzung: der Laufbericht ist der Kontext.
     laufKontext: (text) =>
       '\nDie ursprüngliche Lauf-Session ist nicht mehr verfügbar. Hier der Laufbericht des ' +
@@ -1165,6 +1249,38 @@ export const texte = {
     fehlerAdresse:
       'Die adresse muss mit http:// oder https:// beginnen — oder eine Datei im Projektordner sein (relativer Pfad, kein Ausbruch per „..").'
   },
+  // App-Werkzeuge des Co-Piloten (BAUPLAN 33): Texte an den Agenten.
+  agentenApp: {
+    anweisungen:
+      'Mit den app-Werkzeugen bedienst du die gebaute App des Projekts über FlowForges App-Tab: ' +
+      'app_starten / app_stoppen / app_neustarten steuern den Prozess, app_ausgabe liefert Zustand ' +
+      'und die letzte Ausgabe. Es ist derselbe Prozess, den der Nutzer im App-Tab sieht.',
+    startenBeschreibung:
+      'Startet die App des Projekts nach ihrer Startanleitung im App-Tab von FlowForge (sichtbar ' +
+      'für den Nutzer). Liefert Zustand und die ersten Zeilen der Ausgabe. Ist der Port belegt, ' +
+      'nennt die Antwort den Besitzer-Prozess — beenden lässt er sich nur mit port_freimachen ' +
+      '(löst eine Rückfrage beim Nutzer aus).',
+    portFreimachenParam:
+      'true = einen fremden Prozess, der den Port der Startanleitung belegt, vorher beenden (Rückfrage beim Nutzer)',
+    stoppenBeschreibung: 'Stoppt die im App-Tab laufende App (ganzer Prozessbaum).',
+    neustartenBeschreibung:
+      'Stoppt die App und startet sie neu nach ihrer Startanleitung; liefert Zustand und die ersten Zeilen der Ausgabe.',
+    ausgabeBeschreibung:
+      'Liest Zustand („läuft seit …", „beendet mit Code …") und die letzte Ausgabe der App aus dem ' +
+      'App-Tab (Standard- und Fehlerausgabe). Erst lesen, dann über Fehler sprechen.',
+    zeichenParam: (standard, max) =>
+      `Wie viele Zeichen vom Ende der Ausgabe (Standard ${standard}, höchstens ${max})`,
+    gestartet: 'App gestartet.',
+    neuGestartet: 'App neu gestartet.',
+    gestoppt: 'App gestoppt.',
+    zustand: (text) => `Zustand: ${text}`,
+    ausgabe: (text) => `Ausgabe (Ende):\n${text}`,
+    keineAusgabe: 'Noch keine Ausgabe.',
+    portBelegt: (port, name, pid, befehl) =>
+      `Port ${port} ist belegt — von „${name || 'unbekannt'}" (Prozess ${pid}${befehl ? `, Befehlszeile: ${befehl}` : ''}). ` +
+      'Meist ein Server, den ein früherer Lauf gestartet und nie beendet hat. Erkläre es dem Nutzer; ' +
+      'beenden kannst du ihn nur mit app_starten(port_freimachen: true) — das fragt den Nutzer.'
+  },
   // Eigener Bestätigungs-Dialog statt nativer Windows-Fenster (Bugfix 13.08.2026).
   bestaetigung: {
     abbrechen: 'Abbrechen',
@@ -1378,7 +1494,20 @@ export const texte = {
       'Diese Datei verwaltet FlowForge selbst — sie ist für direkte Änderungen gesperrt. Karten liest und schreibst du über die karten-Werkzeuge.',
     // Häkchen je Block (BAUPLAN 20): abgewählt = echte Sperre, kein Hinweis.
     lokaleKiGesperrtFuerAgent:
-      'Die lokale Helfer-KI ist für diesen Block abgeschaltet (Häkchen an der Block-Karte). Nutze für Unteraufgaben das Agent-Werkzeug.'
+      'Die lokale Helfer-KI ist für diesen Block abgeschaltet (Häkchen an der Block-Karte). Nutze für Unteraufgaben das Agent-Werkzeug.',
+    // Co-Pilot (BAUPLAN 33): App bedienen im nur-lesenden Chat fragt nach;
+    // einen fremden Port-Besitzer beenden fragt immer.
+    appBedienen:
+      'Der Chat möchte deine App starten oder stoppen (über den App-Tab). Im nur-lesenden Chat fragt er dafür — mit „Chat darf reparieren" ginge es ohne Rückfrage.',
+    appPortFreimachen:
+      'Der Chat möchte einen fremden Prozess beenden, der den Port deiner App belegt, und die App dann starten. Das geht sofort und ohne Rückfrage an das Programm.',
+    // Übersichts-Chat: Datenordner und alles außer Lesen gesperrt.
+    datenordnerGesperrtFuerAgent:
+      'FlowForges Datenordner ist für dich gesperrt (dort liegen Einstellungen und Schlüssel). Ohne offenes Projekt liest du nur die Produktbeschreibung über ihren absoluten Pfad.',
+    uebersichtGesperrtFuerAgent:
+      'Ohne offenes Projekt beantwortest du nur Bedienfragen zu FlowForge — Befehle, Schreiben und Projektzugriffe sind hier gesperrt. Bitte den Nutzer, das Projekt zu öffnen, wenn es um sein Projekt geht.',
+    chatWaehrendLaufFuerAgent:
+      'Im Projekt läuft gerade ein Workflow-Lauf — der Chat ist so lange hart nur-lesend (ein Schreiber pro Projekt). Beantworte die Frage aus dem, was du lesen kannst; Änderungen gehen erst nach dem Lauf.'
   },
   ticker: {
     // Eine Motor-Session pro Lauf (BAUPLAN 19): Der Motor startet einmal,
@@ -1618,7 +1747,15 @@ export const texte = {
       'Die Lauf-Session ließ sich nicht fortsetzen — es geht mit einer frischen Session weiter.',
     // Nachlauf-Chat (BAUPLAN 27): Chat-Zeilen im Ticker klar gekennzeichnet —
     // Reparaturen des Chats sind damit sichtbar wie jede Agenten-Arbeit.
-    chatZeile: (text) => `Chat · ${text}`
+    chatZeile: (text) => `Chat · ${text}`,
+    // Co-Pilot (BAUPLAN 33): App-Werkzeuge und Sperren des Übersichts-Chats.
+    appGestartet: 'App über den App-Tab gestartet.',
+    appNeuGestartet: 'App über den App-Tab neu gestartet.',
+    appGestoppt: 'App über den App-Tab gestoppt.',
+    appPortBelegt: (port) => `App nicht gestartet — Port ${port} ist belegt (siehe App-Tab).`,
+    appStartFehler: (grund) => `App nicht gestartet: ${grund}`,
+    datenordnerGesperrt: 'Zugriff auf den Datenordner gestoppt — er ist für den Chat gesperrt.',
+    uebersichtGesperrt: 'Werkzeug gestoppt — ohne offenes Projekt beantwortet der Chat nur Bedienfragen.'
   },
   sicherungen: {
     ueberschrift: 'Sicherungspunkte',

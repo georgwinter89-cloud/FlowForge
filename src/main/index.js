@@ -65,8 +65,9 @@ import {
   chatSenden,
   chatReparierenSetzen,
   chatAbbrechen,
+  chatNeu,
   chatFrageAntworten
-} from './nachlaufChat.js'
+} from './chat.js'
 
 // App-Icon (BAUPLAN 30) für Fenster und Taskleiste: verpackt liegt die PNG
 // als extraResource neben der App (process.resourcesPath), im Dev im
@@ -207,20 +208,18 @@ function registriereIpc() {
     laufVorschlagLoeschen(pfad)
     return { ok: true }
   })
-  // Nachlauf-Chat (BAUPLAN 27): Gespräch mit der Lauf-Session nach dem Lauf.
-  // Läuft oder wartet das Projekt, ist der Chat gesperrt (ein Schreiber pro
-  // Projekt, SPEC §5) — das Senden wird hier hart abgewiesen.
+  // Co-Pilot (BAUPLAN 27/33): ein Chat für Bedienung und Projekt — pfad null
+  // heißt Projektübersicht (nur Bedienfragen). Während eines Laufs ist der
+  // Chat nur lesend (entscheidet chat.js je Werkzeugaufruf), nicht gesperrt.
   ipcMain.handle('chat-zustand', (ereignis, pfad) =>
-    chatZustand(BrowserWindow.fromWebContents(ereignis.sender), pfad)
+    chatZustand(BrowserWindow.fromWebContents(ereignis.sender), pfad ?? null)
   )
-  ipcMain.handle('chat-senden', (ereignis, { pfad, text, bilder }) => {
-    const zustand = laufZustand(pfad)
-    if (zustand.aktiv || zustand.wartet)
-      return { ok: false, fehler: texte.chat.gesperrtWaehrendLauf }
-    return chatSenden(BrowserWindow.fromWebContents(ereignis.sender), pfad, text, bilder)
-  })
-  ipcMain.handle('chat-reparieren', (_e, { pfad, an }) => chatReparierenSetzen(pfad, an))
-  ipcMain.handle('chat-abbrechen', (_e, pfad) => chatAbbrechen(pfad))
+  ipcMain.handle('chat-senden', (ereignis, { pfad, text, bilder }) =>
+    chatSenden(BrowserWindow.fromWebContents(ereignis.sender), pfad ?? null, text, bilder)
+  )
+  ipcMain.handle('chat-reparieren', (_e, { pfad, an }) => chatReparierenSetzen(pfad ?? null, an))
+  ipcMain.handle('chat-abbrechen', (_e, pfad) => chatAbbrechen(pfad ?? null))
+  ipcMain.handle('chat-neu', (_e, pfad) => chatNeu(pfad ?? null))
   ipcMain.handle('laufberichte-laden', (_e, pfad) => laufberichteLaden(pfad))
   // Metriken (BAUPLAN 31): lokale KI und Motor über alle bekannten Projekte —
   // Extrakte und Urteile; die Schnitte rechnet die Oberfläche nach dem Filtern.

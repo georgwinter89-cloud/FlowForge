@@ -17,6 +17,7 @@ import { helferWerkzeugServer } from './helferWerkzeuge.js'
 import { menschWerkzeugServer } from './menschWerkzeuge.js'
 import { kontextFensterFuerModell, kontextFensterMerken } from './motorWissen.js'
 import { startWerkzeugServer } from './startWerkzeuge.js'
+import { appWerkzeugServer } from './appWerkzeuge.js'
 import { vorschlagWerkzeugServer } from './vorschlagWerkzeuge.js'
 import { laufVorschlagWerkzeugServer } from './laufVorschlagWerkzeuge.js'
 import { kartenZuteilungWerkzeugServer } from './kartenZuteilungWerkzeuge.js'
@@ -120,9 +121,19 @@ const VERWALTUNGS_DATEIEN = new Set([
   'workflow.json',
   'startanleitung.json',
   'laufstand.json',
-  'naechster-lauf.json'
+  'naechster-lauf.json',
+  // Verlauf des Co-Piloten (BAUPLAN 33): Verwaltungsdatei wie die anderen.
+  'chat.json'
 ])
 const BERICHTE_ORDNER = 'laufberichte'
+
+// App-Werkzeuge des Co-Piloten (BAUPLAN 33): app_starten / app_stoppen /
+// app_neustarten / app_ausgabe bedienen den App-Tab — derselbe Prozess, den
+// der Nutzer im Tab sieht. Die Ausgabe lesen ist rein lesend; Starten/Stoppen
+// ist im Reparatur-Modus frei und fragt sonst nach (Rückfrage statt Sperre);
+// einen fremden Port-Besitzer beenden fragt immer.
+const APP_PRAEFIX = 'mcp__app__'
+const APP_AUSGABE = APP_PRAEFIX + 'app_ausgabe'
 
 // Befehls-Einstufung (SPEC §7, seit Bauschritt 8): Befehle bekannter
 // Entwickler-Werkzeuge decken „Tests ausführen" und „Programmbibliotheken
@@ -369,6 +380,16 @@ export function pruefeWerkzeug(name, eingabe, projektPfad, nurLesen, darfPruefen
       return { gesperrt: texte.rechteFrage.nurLesenGesperrtFuerAgent, tickerText: texte.ticker.nurLesenGesperrt }
     return { erlaubt: true }
   }
+  // App-Werkzeuge des Co-Piloten (BAUPLAN 33): Ausgabe lesen ist frei; die
+  // App starten/stoppen ändert keine Projektdatei, greift aber in laufende
+  // Prozesse ein — im Reparatur-Modus frei, sonst Rückfrage; einen fremden
+  // Port-Besitzer beenden ist unumkehrbar und fragt immer.
+  if (name.startsWith(APP_PRAEFIX)) {
+    if (name === APP_AUSGABE) return { erlaubt: true }
+    if (eingabe.port_freimachen) return { frage: texte.rechteFrage.appPortFreimachen }
+    if (nurLesen) return { frage: texte.rechteFrage.appBedienen }
+    return { erlaubt: true }
+  }
   // Startanleitung setzen schreibt ins Projekt — validiert im Werkzeug selbst,
   // aber unter der Sperre „darf nur lesen" gesperrt.
   if (name.startsWith(START_PRAEFIX)) {
@@ -453,6 +474,30 @@ export function chatAenderung(name, eingabe) {
   return false
 }
 
+// Co-Pilot in der Projektübersicht (BAUPLAN 33): kein Projekt offen — er
+// beantwortet nur Bedienfragen. Sein Arbeitsordner ist der Datenordner, und
+// der ist für seine Werkzeuge hart gesperrt (dort liegen die Einstellungen
+// samt API-Schlüssel — Read wäre sonst rückfragefrei). Lesen darf er nur
+// absolute Pfade außerhalb des Datenordners (die gebündelte SPEC.md); Befehle,
+// Schreiben und alles Unbekannte sind gesperrt, Internet fragt wie üblich.
+// Exportiert, damit sich die Einstufung ohne laufenden Motor prüfen lässt.
+const UEBERSICHT_FREI = new Set(['TodoWrite', 'Task', 'Agent', 'ToolSearch'])
+const UEBERSICHT_LESEN = new Set(['Read', 'Glob', 'Grep', 'NotebookRead'])
+export function pruefeWerkzeugUebersicht(name, eingabe, datenordner) {
+  if (UEBERSICHT_FREI.has(name)) return { erlaubt: true }
+  if (UEBERSICHT_LESEN.has(name)) {
+    const pfad = eingabe?.file_path ?? eingabe?.path ?? eingabe?.notebook_path ?? ''
+    if (!pfad || !path.isAbsolute(String(pfad)))
+      return { gesperrt: texte.rechteFrage.datenordnerGesperrtFuerAgent, tickerText: texte.ticker.datenordnerGesperrt }
+    if (liegtImProjekt(pfad, datenordner))
+      return { gesperrt: texte.rechteFrage.datenordnerGesperrtFuerAgent, tickerText: texte.ticker.datenordnerGesperrt }
+    return { erlaubt: true }
+  }
+  if (name === 'WebFetch' || name === 'WebSearch')
+    return { frage: texte.rechteFrage.internet(String(eingabe?.url ?? eingabe?.query ?? '?')) }
+  return { gesperrt: texte.rechteFrage.uebersichtGesperrtFuerAgent, tickerText: texte.ticker.uebersichtGesperrt }
+}
+
 function kurzerPfad(datei, projektPfad) {
   if (!datei) return '?'
   const voll = path.resolve(projektPfad, String(datei))
@@ -513,6 +558,8 @@ function tickerZeilen(nachricht, projektPfad, blockTaskIds, mitHauptfaden = fals
     // Werkzeug meldet sein Ergebnis ebenfalls selbst (festgelegt/abgelehnt).
     if (block.name.startsWith(MENSCH_PRAEFIX)) continue
     if (block.name.startsWith(START_PRAEFIX)) continue
+    // App-Werkzeuge des Co-Piloten (BAUPLAN 33) melden ihr Ergebnis selbst.
+    if (block.name.startsWith(APP_PRAEFIX)) continue
     // Karten-Vorschläge melden sich aus der Lauf-Verwaltung heraus
     // (Vorschlag + Entscheidung stehen im Ticker) — keine doppelte Zeile.
     if (block.name.startsWith(VORSCHLAG_PRAEFIX)) continue
@@ -1401,25 +1448,40 @@ export function starteLaufMotor(optionen) {
 // und Verwaltungsdateien bleiben in beiden Betriebsarten tabu (pruefeWerkzeug).
 // Vor der ersten Änderung ruft der Motor vorErsterAenderung() auf — dort legt
 // FlowForge den Sicherungspunkt an.
+// Co-Pilot (BAUPLAN 33): Derselbe Motor trägt den Chat überall — im Projekt
+// (projektPfad gesetzt: Karten-, Start- und App-Werkzeuge, Lauf-Session oder
+// frisch) und in der Projektübersicht (projektPfad null: Arbeitsordner ist der
+// Datenordner, gesperrt für seine Werkzeuge, nur Bedienfragen). Das
+// FlowForge-Wissen kommt als lesbare Datei (SPEC.md) mit Abschnitts-Index im
+// Systemtext. Während ein Lauf läuft (holeLaufAktiv), gelten die Getter:
+// nur-lesend, keine Befehle über die „auf eigene Gefahr"-Einstellung.
 export function starteChatMotor(optionen) {
   const {
-    projektPfad,
+    projektPfad = null,
+    datenordner = '',
     modus,
     apiSchluessel,
     ausgabenObergrenzeUsd,
     fortsetzen = null,
     kontextFenster = KONTEXT_FENSTER_STANDARD,
     laufKontext = '',
-    nurLesenBefehle = false,
+    spec = null,
+    // Einstellung „nur-lesende Blöcke dürfen Befehle ausführen" — je
+    // Werkzeugaufruf frisch gelesen (während eines Laufs gilt sie NICHT).
+    holeNurLesenBefehle = () => false,
     // Schalter „Chat darf reparieren" — je Werkzeugaufruf frisch gelesen,
     // damit das Umschalten mitten im Chat sofort gilt.
     holeReparieren,
+    holeLaufAktiv = () => false,
     vorErsterAenderung,
     aufEreignis,
     aufRechteFrage,
     // Herkunft (BAUPLAN 30): Karten aus dem Chat tragen „vom Chat" samt Lauf.
     herkunft = null
   } = optionen
+  const uebersicht = !projektPfad
+  const arbeitsOrdner = projektPfad ?? datenordner
+  const prozessgruppe = 'chat:' + (projektPfad ?? '@uebersicht')
 
   let kindProzess = null
   let hartAngefordert = false
@@ -1500,23 +1562,32 @@ export function starteChatMotor(optionen) {
   // Sicherungspunkt vor der ersten Änderung (SPEC/BAUPLAN 27): einmalig,
   // BEVOR der erste verändernde Werkzeugaufruf durchgelassen wird.
   async function aenderungAnkuendigen(name, eingabeDaten) {
-    if (!chatAenderung(name, eingabeDaten)) return
+    if (uebersicht || !chatAenderung(name, eingabeDaten)) return
     await vorErsterAenderung?.()
   }
 
   function urteilFuer(name, eingabeDaten) {
+    if (uebersicht) return pruefeWerkzeugUebersicht(name, eingabeDaten, datenordner)
     const reparieren = Boolean(holeReparieren?.())
-    return pruefeWerkzeug(
+    const laufAktiv = Boolean(holeLaufAktiv?.())
+    const urteil = pruefeWerkzeug(
       name,
       eingabeDaten,
       projektPfad,
       !reparieren, // nur-lesend, solange „Chat darf reparieren" aus ist
       false, // die Prüfmappe gehört dem Prüfer — auch im Reparatur-Modus tabu
       true,
-      nurLesenBefehle,
-      true, // Karten anlegen ist der Normalweg des nur-lesenden Chats
+      Boolean(holeNurLesenBefehle?.()),
+      // Karten anlegen ist der Normalweg des nur-lesenden Chats — außer während
+      // eines Laufs: dann ist der Chat wirklich lesend (ein Schreiber pro Projekt).
+      !laufAktiv,
       false
     )
+    // Während ein Lauf läuft, sagt die Abweisung ehrlich, warum: nicht „dieser
+    // Block darf nur lesen", sondern „im Projekt läuft gerade ein Lauf".
+    if (urteil.gesperrt && laufAktiv)
+      return { ...urteil, gesperrt: texte.rechteFrage.chatWaehrendLaufFuerAgent }
+    return urteil
   }
 
   // Harte Sperren vor jedem Werkzeugaufruf — der Hauptfaden arbeitet hier
@@ -1546,15 +1617,20 @@ export function starteChatMotor(optionen) {
   const schleife = (async () => {
     const { query } = await import('@anthropic-ai/claude-agent-sdk')
 
-    // Karten-Werkzeuge wie im Lauf: „leg das als Aufgabe an" ist der Normalweg.
-    // Herkunft (BAUPLAN 30): Karten aus dem Chat tragen „vom Chat" samt Lauf.
-    const kartenServer = await kartenWerkzeugServer({
-      projektPfad,
-      aufEreignis,
-      holeHerkunft: herkunft ? () => herkunft : null
-    })
-    // Startanleitung: im Reparatur-Modus erlaubt, sonst von der Sperre gestoppt.
-    const startServer = await startWerkzeugServer({ projektPfad, aufEreignis })
+    // Werkzeug-Server nur im Projekt: Karten („leg das als Aufgabe an" ist der
+    // Normalweg; Herkunft „vom Chat" samt Lauf, BAUPLAN 30), Startanleitung
+    // (im Reparatur-Modus erlaubt, sonst von der Sperre gestoppt) und die
+    // App-Werkzeuge (BAUPLAN 33) — in der Übersicht gibt es kein Projekt.
+    const mcpServers = {}
+    if (!uebersicht) {
+      mcpServers.karten = await kartenWerkzeugServer({
+        projektPfad,
+        aufEreignis,
+        holeHerkunft: herkunft ? () => herkunft : null
+      })
+      mcpServers.start = await startWerkzeugServer({ projektPfad, aufEreignis })
+      mcpServers.app = await appWerkzeugServer({ projektPfad, aufEreignis })
+    }
 
     const umgebung = {}
     for (const [name, wert] of Object.entries(process.env)) {
@@ -1567,7 +1643,7 @@ export function starteChatMotor(optionen) {
     abfrage = query({
       prompt: eingabe(),
       options: {
-        cwd: projektPfad,
+        cwd: arbeitsOrdner,
         env: umgebung,
         abortController: abbruch,
         pathToClaudeCodeExecutable: claudeExePfad(),
@@ -1576,13 +1652,19 @@ export function starteChatMotor(optionen) {
         // kennt Blöcke, Fazite und Verlauf, ohne dass etwas nacherzählt wird.
         ...(fortsetzen ? { resume: fortsetzen } : {}),
         forwardSubagentText: true,
-        mcpServers: { karten: kartenServer, start: startServer },
+        mcpServers,
         // Der Chat-Systemtext hebt die Koordinator-Regeln der Lauf-Session
-        // ausdrücklich auf; bei einer frischen Session hängt der Laufbericht
-        // als Kontext dahinter.
+        // ausdrücklich auf, trägt den SPEC-Index und die Kurzregeln; bei einer
+        // frischen Session hängt der Laufbericht als Kontext dahinter.
         systemPrompt:
-          texte.agentenChat.system(projektPfad, TITEL_MAX, TEXT_MAX) +
-          (laufKontext ? texte.agentenChat.laufKontext(laufKontext) : ''),
+          texte.agentenChat.system({
+            projektPfad,
+            datenordner,
+            titelMax: TITEL_MAX,
+            textMax: TEXT_MAX,
+            specPfad: spec?.vorhanden ? spec.pfad : '',
+            specIndex: spec?.vorhanden ? spec.indexText : ''
+          }) + (laufKontext ? texte.agentenChat.laufKontext(laufKontext) : ''),
         maxTurns: 1000,
         ...(modus === 'api' && ausgabenObergrenzeUsd > 0
           ? { maxBudgetUsd: ausgabenObergrenzeUsd }
@@ -1599,7 +1681,7 @@ export function starteChatMotor(optionen) {
             windowsHide: true
           })
           // Prozess-Hygiene (BAUPLAN 32): auch der Chat-Prozess ist eine Wurzel.
-          if (kindProzess.pid) prozessWurzelMelden('chat:' + projektPfad, projektPfad, kindProzess.pid)
+          if (kindProzess.pid) prozessWurzelMelden(prozessgruppe, projektPfad, kindProzess.pid)
           return kindProzess
         },
         hooks: { PreToolUse: [{ hooks: [vorWerkzeug] }] },
@@ -1633,7 +1715,7 @@ export function starteChatMotor(optionen) {
         nachrichtEmpfangen = true
         if (typeof nachricht.session_id === 'string' && nachricht.session_id)
           sessionKennung = nachricht.session_id
-        for (const zeile of tickerZeilen(nachricht, projektPfad, null, true))
+        for (const zeile of tickerZeilen(nachricht, arbeitsOrdner, null, true))
           aufEreignis({ art: 'ticker', text: zeile })
 
         // Denk-Bereich (BAUPLAN 24): auch das Denken des Chats ist sichtbar.

@@ -69,7 +69,7 @@ import { workflowLaden } from './workflow.js'
 import { laufstandSpeichern, laufstandLaden, laufstandLoeschen } from './laufstand.js'
 import { laufVorschlagSpeichern, laufVorschlagLoeschen } from './naechsterLauf.js'
 import { kartenZuteilungPruefen, paketMeldungPruefen } from './motor/kartenZuteilungWerkzeuge.js'
-import { chatBeschaeftigt, chatSchliessen } from './nachlaufChat.js'
+import { chatBeschaeftigt, chatLaufBeginnt, laufZustandQuelleSetzen } from './chat.js'
 import { metrikUrteilSchreiben } from './metriken.js'
 import { prozessgruppeAnlegen, prozessgruppeAbraeumen } from './prozesse.js'
 
@@ -473,13 +473,13 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
   if (!ausWarteschlange && plaetzeBelegt() >= MAX_PARALLEL_LAEUFE)
     return inWarteschlangeStellen(fenster, projektPfad, kartenIds, Boolean(fortsetzung), sonderlauf)
 
-  // Nachlauf-Chat (BAUPLAN 27): Arbeitet der Chat gerade in diesem Projekt,
+  // Co-Pilot (BAUPLAN 27/33): Arbeitet der Chat gerade in diesem Projekt,
   // startet kein Lauf — ein Schreiber pro Projekt (SPEC §5). Ein untätiger
-  // Chat wird geschlossen: Er gehört zum vorigen Lauf, der neue bringt einen
-  // neuen Chat mit frischem Kontext.
+  // Chat bleibt, ist ab jetzt nur lesend und räumt ab, was er gestartet hat;
+  // nach dem Lauf hängt er an der neuen Lauf-Session (sichtbare Marke).
   if (chatBeschaeftigt(projektPfad))
     return { ok: false, fehler: texte.chat.fehlerLaufWaehrendChat }
-  chatSchliessen(projektPfad)
+  chatLaufBeginnt(projektPfad)
 
   // Projekt sofort belegen, damit ein Doppelklick auf „Starten" während der
   // Sicherung keinen zweiten Lauf startet.
@@ -2326,3 +2326,11 @@ export function laufZustand(projektPfad) {
     sonderlauf: lauf.sonderlauf ?? null
   }
 }
+
+// Co-Pilot (BAUPLAN 33): Der Chat fragt je Werkzeugaufruf, ob im Projekt ein
+// Lauf läuft oder wartet (dann nur lesend) — eingehängt statt importiert,
+// weil chat.js sonst lauf.js und lauf.js chat.js importieren würde.
+laufZustandQuelleSetzen((projektPfad) => {
+  const z = laufZustand(projektPfad)
+  return { aktiv: z.aktiv, wartet: z.wartet }
+})

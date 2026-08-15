@@ -17,6 +17,10 @@ npmRebuild: false
 extraResources:
   - from: build/icon.png
     to: icon.png
+  # Co-Pilot (BAUPLAN 33): Die SPEC.md ist sein Bedien-Wissen — als lesbare
+  # Datei neben der App (resources/SPEC.md), nicht als Systemtext.
+  - from: SPEC.md
+    to: SPEC.md
 win:
   target: nsis
   icon: build/icon.png

@@ -17,7 +17,9 @@ import { texte } from '../shared/texte.js'
 // arbeitsablage: Wegwerf-Fläche der Agenten — wird am Lauf-Ende ohnehin geleert.
 // naechster-lauf.json (Karten-Vorschlag fürs nächste Paket, BAUPLAN 28): eine
 // Wiederherstellung würde sonst abgeräumte alte Vorschläge zurückholen.
-const AUSGESCHLOSSEN = new Set(['.git', 'laufberichte', 'node_modules', 'laufstand.json', 'arbeitsablage', 'naechster-lauf.json'])
+// chat.json (Verlauf des Co-Piloten, BAUPLAN 33): Gesprächsverlauf ist kein
+// Projektstand — eine Wiederherstellung soll ihn nicht zurückdrehen.
+const AUSGESCHLOSSEN = new Set(['.git', 'laufberichte', 'node_modules', 'laufstand.json', 'arbeitsablage', 'naechster-lauf.json', 'chat.json'])
 const ZWEIG = 'haupt'
 const AUTOR = { name: 'FlowForge', email: 'flowforge@lokal' }
 
