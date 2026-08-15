@@ -676,6 +676,285 @@ und die Folgeblöcke arbeiten mit ihrer Teilmenge. Ein Gegenlauf ohne den
 Knopf verhält sich exakt wie vor diesem Bauschritt; „Standard-Auswahl"
 springt jederzeit auf die alte Vorauswahl zurück.
 
+### 30 — Ordnung: Karten-Gruppen & Themen, Herkunft, Blockbibliothek
+(Erweiterungspaket 30–33, Planungs-Runde 15.08.2026 [Grilling + Angreifer-
+Agent gegen den Entwurf, 25 Funde eingearbeitet]. Georgs Befund: Die
+Karten-Seitenleiste ist bei echten Projekten zum endlosen Scrollen geworden —
+keine Übersicht mehr; dasselbe droht der Blockbibliothek. Und man sieht einer
+Karte nicht an, warum sie da ist. Entscheidung Georg: V1 wird weiter für den
+Eigengebrauch vertieft; V2 kommt später als sauberer Neubau.)
+- **Feste Karten-Gruppen, ausklappbar:** „Arbeit" (Status-Karte + offene
+  Aufgaben) · „Wissen" (Entscheidungen + Wissen) · „Geprüft" (Prüfkarten) ·
+  „Erledigt" (erledigte Aufgaben, standardmäßig eingeklappt). Ergibt sich aus
+  der Sorte — kein neues Feld, nichts zu pflegen. Der bisherige Sorten-Filter
+  bleibt.
+- **Themen als zweite Ebene** in „Arbeit" und „Wissen": ein freies Schlagwort
+  je Karte (**Pflicht** beim Anlegen — für den Nutzer im Formular, für den
+  Agenten als Parameter `thema` von `karte_anlegen`, hart durchgesetzt;
+  Längengrenze in kartenRegeln.js; Status- und Prüfkarten tragen kein Thema;
+  das Bearbeiten alter Karten ohne Thema bleibt möglich). Die **vorhandenen
+  Themen** stehen im Blockauftrag und in der Ablehnungsmeldung („thema fehlt
+  — vorhanden: …") — bewusst NICHT in der Werkzeugbeschreibung (die ist je
+  Motor statisch, und je Turn geänderte Beschreibungen brächen den
+  Prompt-Cache). Regel für alle Agenten: primär einsortieren, ein neues Thema
+  nur, wenn keines passt (Entscheidung Georg: kein 20. Thema); das
+  Spec-Interview, das die ersten Karten anlegt, bekommt den Deckel „3–6
+  Themen". Neue Karten aus dem Karten-Prüfer (Vorschlagsart „anlegen") und
+  aus dem Chat tragen ebenfalls ein Thema. FlowForge normalisiert Groß-/
+  Kleinschreibung und Leerzeichen (kanonische Schreibweise = die zuerst
+  angelegte). Bestandskarten ohne Thema landen unter „Sonstiges". Der Nutzer
+  kann ein **Thema umbenennen** (alle Karten des Themas; Umbenennen auf einen
+  vorhandenen Namen legt zusammen) und eine **Karte per Drag & Drop** in eine
+  andere Themengruppe ziehen. Angreifer-Fund: Themen-Pflicht trifft auch
+  Agenten, die nichts davon wissen (Sessionende, Audit, eigene Blöcke) — die
+  Ablehnungsmeldung mit Themenliste ist der Rettungsanker, kein Block darf
+  daran scheitern.
+- **Aufräum-Knöpfe in der Karten-Seitenleiste** (Entscheidung Georg,
+  15.08.2026: Aufräumen gehört zu den Karten, nicht aufs Schaubild): zwei
+  Knöpfe starten je einen **Sonderlauf** mit einem festen Ein-Block-Workflow
+  im Hintergrund — Lauf-Tab, Ticker, Abnahme-Dialog, Sperren wie bei jedem
+  Lauf, aber die Leinwand bleibt unangetastet. (1) **„Karten am Code
+  prüfen"** = der Karten-Prüfer aus Schritt 26 (Einzeldialog je Vorschlag —
+  Inhalts-Korrekturen entscheidet man einzeln). (2) **„Themen sortieren"** =
+  neuer nur-lesender Sortiermodus des Karten-Prüfers (Kennzeichen am
+  Sonderlauf): klassifiziert alle Karten ohne oder mit offensichtlich
+  falschem Thema **ohne Code-Nachmessen** (bevorzugt vorhandene Themen) und
+  schlägt sie in **einem Sammel-Dialog** vor: Tabelle aller betroffenen
+  Karten mit vorgeschlagenem Thema, je Zeile änderbar, „Alle übernehmen" /
+  je Zeile ablehnen — Angreifer-Fund: 60 Karten im Einzeldialog wären 60
+  Recherchen und 60 pausierende Dialoge. Neue Vorschlagsart „thema" für
+  `karte_vorschlagen` (Sammelform); Leitplanke ausdrücklich: **Thema setzen
+  ist kein Umformulieren** — auch Entscheidungs-Karten dürfen ein Thema
+  vorgeschlagen bekommen (SPEC §4.3 klarstellen; vorschlagWerkzeuge.js weist
+  heute alles außer erledigen/öffnen für Entscheidungen ab). Der
+  Karten-Prüfer-Block bleibt in der Bibliothek für Ketten. Notiz: Dieselbe
+  Sonderlauf-Mechanik könnte später Audit und Gesamtprüfung als Knopf dienen.
+- **Herkunft je Karte** (Wunsch Georg: „aus welchem Zweck ist sie
+  entstanden"): FlowForge stempelt jede über die Karten-Werkzeuge angelegte
+  oder geänderte Karte mit **Aufgabe(n) · Block · Lauf** — die Aufgaben sind
+  die Aufgaben-Karten, an denen der Lauf gerade arbeitet (ein Paket kann
+  mehrere umfassen → Liste; Titel als Schnappschuss gespeichert, falls die
+  Aufgabe später gelöscht wird). Woher FlowForge das weiß: Die
+  Auftragsquellen-Blöcke (Paket schneiden, Diagnose) **melden die
+  Aufgaben-Karten ihres Pakets strukturiert** über ein kleines Werkzeug
+  `paket_melden` (nur dort rückfragefrei — Freischalt-Muster aus Schritt
+  28/29, im selben Werkzeug-Server wie `karten_zuteilen`; hart validiert: nur
+  offene Aufgaben-Karten der Kartenauswahl; leer erlaubt, wenn das Wunsch-/
+  Fehlerbild-Feld die Quelle war — der Validator kennt dafür die Feldwerte
+  des Blocks), FlowForge merkt sie am Lauf und im **Laufstand** (Wiederaufnahme
+  wie die Karten-Zuteilung). Der Karten-Server braucht dafür eine
+  Hol-Funktion für den laufenden Block (wie der Zuteilungs-Server). Vom Nutzer
+  angelegte Karten tragen „von dir", Karten aus dem Chat „vom Chat",
+  übernommene Vorschläge „vom Karten-Prüfer", Prüfkarten „von FlowForge".
+  Anzeige als **kompakte Kopfzeile** unter dem Titel: „geändert vor 2 Std. ·
+  angelegt von Sessionende bei ‚Login bauen' (Lauf 14.08., 11:08)", klickbar
+  zum Laufbericht; Änderungen zeigen „zuletzt geändert von …". Bei
+  Ein-Block-Läufen ohne Paket steht nur Block + Lauf; alte Karten ohne
+  Herkunft zeigen nur das Datum (angelegtAm/geaendertAm gibt es schon). Die
+  Herkunft wandert **nie** in Aufträge oder karten_uebersicht (Kontext).
+- **Blockbibliothek in Kategorien**, ausklappbar, nach der Aufgabe im Ablauf:
+  Vorlagen · **Auftrag finden** (Spec-Interview, Paket schneiden, Diagnose,
+  Frage an den Menschen) · **Bauen** (Bauer, Kontext laden) · **Prüfen**
+  (Angreifer, Prüfer, Gesamtprüfung, Audit) · **Gedächtnis** (Sessionende,
+  Karten-Prüfer) · Eigene · Übung (standardmäßig eingeklappt). Katalog-Blöcke
+  sitzen fest in ihrer Kategorie (neues Feld am Katalog — nicht `kategorie`,
+  das ist schon die Farbkategorie in blockKategorie()); **eigene Blöcke
+  wählen im Block-Editor eine Kategorie** — eine vorhandene oder eine neue,
+  global gespeichert wie die eigenen Blöcke (blockRegeln.js validiert und
+  normalisiert das Feld; Altbestand ohne Feld → „Eigene"; Stepper und
+  KI-Assistent kennen es); eigene Kategorien erscheinen als eigene Klappen.
+- **Einklapp-Zustände** (Karten-Gruppen, Themen, Bibliotheks-Klappen) werden
+  **je Projekt** gemerkt — im Datenordner je Projektpfad, NICHT in
+  projekt.json (die ist Teil der Sicherungspunkte: jedes Auf-/Zuklappen machte
+  sonst die Wiederherstellen-Vorschau schmutzig); Standard: „Erledigt" und
+  „Übung" zu.
+- **Kleinkram im selben Schritt:** (1) eigenes App-Icon (Blitz) statt des
+  Electron-Standard-Icons — der Blitz existiert nur als Inline-SVG, also
+  256-px-PNG erzeugen, `icon:` in electron-builder.yml, dazu BrowserWindow-Icon
+  für die Taskleiste; (2) Prüfkarten per Drag & Drop in die Kartenauswahl
+  werden freundlich abgelehnt (kontextAufnehmen prüft heute die Sorte nicht).
+  Der automatische Übertrag hat in 47 Läufen nie ausgelöst — bewusst so
+  gelassen; Georg testet ihn selbst per Test-Schalter.
+- **Kein FlowForge-Fehler, aber ein Befund für die Testpraxis** (Angreifer,
+  15.08.2026, verifiziert): Der vermeintliche Einstellungs-Verlust war ein
+  Phantom — Claude-Code-Sessions laufen im Container der Claude-Desktop-App
+  und sehen nur eine eingefrorene Kopie von Georgs Datenordner (Stand 13.08.).
+  Georgs echte Einstellungen waren aktuell. Folge: Alles, was aus einer Session
+  heraus gestartet wird (dev, CDP-Test, installierte exe), schreibt in einen
+  Schatten-Datenordner — Alltagstests der Session und Georgs Welt sind getrennt.
+  Für Schritt 31 (globale Metrik-Datei) heißt das: Georgs Zahlen entstehen nur
+  in Georgs Instanz.
+**Alltagstest:** Georg öffnet den Zugsimulator: Die Karten stehen in vier
+Klappen, „Erledigt" ist zu; er klickt „Themen sortieren", bekommt die Tabelle
+mit Vorschlägen, ändert eine Zeile und übernimmt alle — die Karten sortieren
+sich unter Themen ein; er benennt ein Thema um und zieht eine Karte in ein
+anderes. Nach einem Bau-Lauf zeigt jede neue Karte in der Kopfzeile, bei
+welcher Aufgabe und welchem Block sie entstand, und der Klick springt zum
+Laufbericht. Die Bibliothek zeigt die Blöcke in Klappen; ein eigener Block
+bekommt eine neue Kategorie. Der Installer trägt das Blitz-Icon.
+
+### 31 — Metriken: lokale KI und Motor über alle Läufe hinweg
+(Idee Georg, 15.08.2026: Die Annahmequoten der lokalen KI je Modell und
+Bereich sichtbar machen — als Grundlage für die Hardware- und Modellfrage —
+und gleich dazu, was der Motor kostet. Befund 15.08.: 47 Läufe in 8 Tagen,
+~13 Mio. Tokens, ~332 $ theoretische Kosten; lokale KI in 8 Läufen, null
+Entwürfe, null Vorreparaturen — die Datenlage ist zu dünn für Entscheidungen.)
+- **Metrik-Datei statt Karten:** FlowForge schreibt jedes Urteil über lokale
+  Arbeit strukturiert in eine **globale Metrik-Datei im verwalteten Bereich**
+  (nicht im Projektordner; Anhänge-Format, weil bis zu 3 Läufe parallel
+  schreiben): Zeitpunkt, Projekt, Lauf, **Modell**, **Bereich** (Recherche ·
+  Entwurf · Reparatur · Bauen), Ausgang (übernommen/verworfen, gehalten/nicht
+  gehalten, gescheitert), Schritte. Die Urteile fallen ohnehin mechanisch
+  (`recherche_bewerten`, `entwurf_abnehmen`, `teilstueck_abnehmen`,
+  Nachprüfung) — Karten wären der falsche Ort (400 Zeichen, projektgebunden).
+  Der Laufbericht bekommt zusätzlich das Modell in seiner Lokale-Helfer-Zeile.
+  **Erst ab diesem Schritt** gezählt (Entscheidung Georg — keine Rückrechnung
+  aus Ticker-Texten alter Berichte).
+- **Motor-Auswertung** liest die Laufberichte aller bekannten Projekte (die
+  Daten liegen dort exakt vor, auch für alte Läufe) — im Hauptprozess mit
+  Zwischenspeicher (allein der Zugsimulator hat ~4 MB Berichte); Projekte,
+  deren Ordner fehlt, werden mit Hinweis übersprungen („nur bekannte
+  Projekte"). Schnitte: je **Blocktyp** (Anzahl, Ø Tokens, Ø theoretische
+  Kosten — Reparatur-Runden und Nachprüfungen getrennt gezählt, sonst
+  verzerrt der Durchschnitt), je **Workflow-Kette**, je **Projekt**, dazu ein
+  **Zeitverlauf je Woche** als einfache Balken („wird es billiger?"). Berichte
+  vor dem 13.08. haben keine Kostenangabe → ehrlich als „ohne Kosten"
+  ausgewiesen. Im Abo-Modus als theoretische Kosten wie überall.
+- **Zugang:** Knopf **„Metriken" in der Titelleiste** → globale Seite über
+  alle Projekte (Filter nach Projekt); im Projekt ein **Tab „Metriken"**, der
+  dieselbe Seite vorgefiltert zeigt — als eigener Baustein, nicht in
+  Leinwand.jsx. Abschnitt 1: lokale KI (Tabelle Modell × Bereich → Anzahl,
+  Quote, Schritte, Fehlschläge, Zeitraum). Abschnitt 2: Motor. Nur
+  Nachschlagewerk — nichts davon wandert je in einen Auftrag. **SPEC §10
+  klarstellen:** „keine Prozess-Selbstvermessung" meint das Life-OS-Übel im
+  Agentenprozess (Bestandslisten, Nachweis-Register), nicht das
+  Messinstrument des Nutzers.
+**Alltagstest:** Georg fährt zwei Läufe mit lokaler KI (verschiedene Modelle)
+und öffnet „Metriken": Die Tabelle zeigt je Modell und Bereich die Quote; der
+Motor-Abschnitt zeigt, was ein „Feature hinzufügen"-Lauf im Schnitt kostet
+und wie sich der Wochenverbrauch seit dem 07.08. entwickelt hat.
+
+### 32 — App-Tab: Ausgabe in FlowForge und Prozess-Hygiene
+(Befund Georg, 15.08.2026, Projekt Smarthome-Zentrale: Beim Serverstart
+über „App starten" zeigte das Konsolenfenster Zeichensalat [kein UTF-8], und
+der Port war belegt, weil ein Prüfer-Lauf einen Server gestartet und nie
+beendet hatte — der lief unsichtbar weiter. Georg fühlte sich aufgeschmissen.
+Dieser Schritt ist zugleich die Voraussetzung für den Co-Pilot [33], der die
+Ausgabe der App lesen und die App bedienen können muss.)
+- **Tab „App"** im Projekt (neben Schaubild · Lauf · Laufberichte ·
+  Sicherungspunkte; eigener Baustein, nicht in Leinwand.jsx): zeigt die
+  Startanleitung, **Start/Stopp/Neustart**, die **Ausgabe der laufenden App
+  live** (Standard- und Fehlerausgabe; ANSI-Farbcodes gestrippt), Zustand
+  (läuft seit … / beendet mit Code …), „Adresse im Browser öffnen" (mit dem
+  heutigen Warten, bis die Adresse antwortet). Der „App starten"-Knopf im
+  Kopf springt in den Tab und startet. Das externe Konsolenfenster entfällt
+  (Entscheidung Georg) — damit auch die Eingabe für interaktive Programme:
+  Startanleitungen müssen ohne Tastatureingabe auskommen (SPEC §8
+  nachziehen). UTF-8-Realität (Angreifer): Node schreibt im Tab von selbst
+  richtig; FlowForge setzt für den Kind-Prozess `PYTHONUTF8=1`/
+  `PYTHONIOENCODING=utf-8` und startet Befehle über eine Shell mit `chcp
+  65001`. Stopp immer per `taskkill /PID /T /F` (ein einfaches Beenden trifft
+  nur die Shell, nicht den Server). **Port-Prüfung vor dem Start** (direkter
+  Treffer fürs Symptom): Ist der Port der Startanleitungs-Adresse belegt,
+  nennt FlowForge den Besitzer-Prozess und bietet an, ihn zu beenden.
+- **Prozess-Hygiene nach Läufen:** Am Ende jedes Laufs — erfolgreich, sanft
+  gestoppt oder hart abgebrochen — beendet FlowForge alle noch lebenden
+  Prozesse, die aus dem Lauf heraus gestartet wurden, und vermerkt es ehrlich
+  im Ticker („2 verwaiste Prozesse aus dem Lauf beendet"). Mechanik
+  (Angreifer-Fund: ein Baumlauf ab dem Motor-Prozess reicht unter Windows
+  nicht — die Bash-Shell des Agenten stirbt sofort nach `npm start &`, der
+  Server behält nur eine tote Eltern-Kennung, und je Lauf gibt es mehrere
+  Motor-Prozesse [Zweige, Übertrag]): FlowForge fragt **während des Laufs
+  alle paar Sekunden** die Prozessliste ab und merkt sich transitiv jeden
+  Prozess, dessen Elternteil zur bekannten Menge gehört — auch wenn der
+  Elternteil längst tot ist —, je Prozess PID + Startzeit (gegen
+  PID-Wiederverwendung); Rückfall-Heuristik: Befehlszeile enthält den
+  Projektpfad. Dasselbe für den Chat (Schritt 33) bei „Neues Gespräch",
+  Laufstart und App-Ende. **FlowForge-Ende räumt ab** (heute gibt es keinen
+  before-quit-Handler; Node beendet unter Windows keine Kinder): laufende
+  Motoren, Chats, die gestartete App und die Verwaisten-Liste werden beim
+  normalen Beenden mit beendet — „nichts läuft unsichtbar weiter" gilt fürs
+  normale Beenden, nicht für einen Absturz.
+- **Sichtbarkeit als Rückfall:** Im App-Tab eine Liste „noch laufende Prozesse
+  aus Läufen" (Name, Befehl, gestartet wann) mit Beenden-Knopf (Abgleich
+  PID + Startzeit) — falls doch einmal etwas hängen bleibt. Die per „App
+  starten" gestartete App steht dort nicht (sie hat ihren eigenen Stopp-Knopf).
+**Alltagstest:** Georg startet die Smarthome-Zentrale über den App-Tab, liest
+die Ausgabe mit korrekten Umlauten, öffnet die Adresse im Browser und stoppt
+sie. Dann fährt er einen Lauf, in dem der Prüfer einen Server startet: Am
+Lauf-Ende steht im Ticker, dass der Prozess beendet wurde, und der Port ist
+frei — „App starten" funktioniert sofort danach. Beendet er FlowForge, während
+die App läuft, ist danach kein FlowForge-Prozess mehr da.
+
+### 33 — Co-Pilot: ein Chat für Bedienung und Projekt
+(Wunsch Georg, 15.08.2026: „Einen Co-Pilot, den man immer fragen kann und der
+darauf spezialisiert ist, dem Nutzer bei der Bedienung von FlowForge und
+kleineren Problemen zu helfen." Entscheidung Georg: Der Nachlauf-Chat [27]
+und der Co-Pilot werden **ein** Chat — kein zweites Chat-Fenster, kein
+Code-Rattenschwanz.)
+- **Ein Chat-Ort, überall:** Knopf in der Titelleiste öffnet ein seitliches
+  Chat-Fenster (bei schmalem Fenster als Überlagerung — drei Spalten plus
+  Chat passen nicht in 800 px) — in der Projektübersicht wie im Projekt. Im
+  Projekt kennt er das offene Projekt; liegt ein Laufbericht vor, **setzt er
+  die Lauf-Session fort** (heutiges Nachlauf-Verhalten samt aller
+  Ausweichregeln aus Schritt 27; „frisch" heißt: der jüngste Bericht des
+  Projekts), sonst startet er eine frische Session mit Projekt- und
+  FlowForge-Wissen — welche Grundlage gilt, steht ehrlich im Chat. In der
+  Projektübersicht (kein Projekt offen) beantwortet er nur Bedienfragen; sein
+  Arbeitsordner ist dann der Datenordner, und der ist für seine Werkzeuge
+  gesperrt (dort liegen die Einstellungen samt API-Schlüssel — heute wäre
+  `Read` darauf rückfragefrei).
+- **Was er weiß:** (a) **FlowForge-Bedienung** — die SPEC.md wird mit der App
+  gebündelt (sie ist heute nicht im Build; als Extra-Ressource außerhalb des
+  asar, Pfad je nach Paketierung) und dem Chat als **lesbare Datei**
+  bereitgestellt — nicht als Systemtext (28.000 Tokens je frischer Session
+  wären Verschwendung); der Systemtext trägt einen **beim Bauen erzeugten
+  Abschnitts-Index mit Zeilenbereichen** und die Kurzregeln, damit er gezielt
+  liest; kein zweites Bedien-Dokument (Doku-Regel). (b) **Das Projekt** —
+  Dateien, Karten, Laufberichte, Startanleitung und die **App-Ausgabe aus dem
+  App-Tab**; zur Not forscht er im Projektordner nach.
+- **Was er darf:** dieselben zwei Betriebsarten wie der Nachlauf-Chat —
+  Standard **nur lesen + Karten anlegen** (mit Thema, Herkunft „vom Chat");
+  mit **„Chat darf reparieren"** schreibt er wie ein Bauer und **führt Befehle
+  für dich aus** (`npm install`, eine Erstanmeldung anlegen …) —
+  Sicherungspunkt vor der ersten Änderung, übliche Befehls-Einstufung und
+  Rückfragen; Git, Prüfmappe und Verwaltungsdateien bleiben tabu. **Die App
+  bedient er über eigene Werkzeuge** `app_starten` / `app_stoppen` /
+  `app_ausgabe`, die den App-Tab aus Schritt 32 benutzen (Entscheidung Georg:
+  derselbe Prozess, den du im Tab siehst — er überlebt das Chat-Schließen und
+  wird nicht von der Prozess-Hygiene abgeräumt; ein per Befehl gestarteter
+  Server würde den Aufruf zwei Minuten blockieren und beim nächsten Lauf
+  sterben). **Während ein Lauf läuft:** lesend erlaubt (Bedienfragen, „was
+  macht der Bauer gerade") — wirklich lesend: die Einstellung „nur-lesende
+  Blöcke dürfen Befehle ausführen" gilt für den Chat dann NICHT, und es
+  entsteht kein Sicherungspunkt mitten im Lauf (der fröre halbfertige
+  Bauer-Änderungen ein); Reparieren gesperrt — ein Schreiber pro Projekt. Die
+  heutige harte Chat-Sperre bei laufendem/wartendem Lauf und das Schließen
+  des Chats beim Laufstart werden entsprechend umgebaut.
+- **Verlauf je Projekt gespeichert** (eigene Verwaltungsdatei: in die
+  Sperrliste des Motors und die Sicherungspunkt-Ausnahmen aufnehmen),
+  überlebt Neustarts; Knopf „Neues Gespräch". Nach jedem Lauf hängt der Chat
+  an einer neuen Lauf-Session — der Verlauf zeigt dann eine **sichtbare Marke**
+  („ab hier: neue Lauf-Session vom 15.08., 14:32"; Entscheidung Georg): der
+  ältere Teil bleibt zum Nachlesen, die KI kennt ihn nicht mehr und sagt das
+  ehrlich, wenn man danach fragt. Gespräche nach einem Lauf wandern zusätzlich
+  wie heute in den Laufbericht. Bilder per Strg+V/Knopf wie in Schritt 27.
+- **Ehrlichkeit & Motor:** Chat-Nachrichten kosten Kontingent — Verbrauch
+  sichtbar am Chat. Es antwortet das **Standard-Modell des Motors** (FlowForge
+  setzt kein Modell — „Opus" wäre eine Behauptung); die lokale KI bleibt
+  draußen (sie führt Werkzeuge nicht zuverlässig, Befund 14.08.2026) — V2.
+- Nachzuziehen: SPEC §3.1 (Dateiliste), §6 (Chat-Ort, Sperre während Lauf),
+  §9 (Titelleiste, Tabs); pruefungen/nachlaufChat.test.js.
+**Alltagstest:** Georg öffnet in der Projektübersicht den Chat und fragt „Wie
+ziehe ich eine Prüfkarte auf den Prüfer?" — die Antwort stimmt mit der
+Oberfläche überein. Im Smarthome-Projekt startet er die App im App-Tab, sie
+meldet einen Fehler; er fragt den Chat „warum startet das nicht?" — die
+Antwort bezieht sich erkennbar auf die Ausgabe. Er schaltet „Chat darf
+reparieren" ein und sagt „leg mir die Erstanmeldung an und starte neu" — der
+Chat tut es (Sicherungspunkt, Ticker), die App läuft sichtbar im App-Tab.
+Nach einem Bau-Lauf fragt er „warum hat der Prüfer gemeckert?" — die Antwort
+kennt den Lauf; im Verlauf steht die Marke der neuen Lauf-Session.
+
 ## Reihenfolge-Begründung (kurz)
 Motor-Durchstich früh (3), weil dort das größte technische Risiko liegt — inklusive
 Rechte-Durchsetzung und Verbrauchs-Messung, den zwei größten Adapter-Risiken.
