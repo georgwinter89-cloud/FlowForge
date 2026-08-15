@@ -57,6 +57,7 @@ contextBridge.exposeInMainWorld('flowforge', {
   chatReparierenSetzen: (pfad, an) => ipcRenderer.invoke('chat-reparieren', { pfad, an }),
   chatAbbrechen: (pfad) => ipcRenderer.invoke('chat-abbrechen', pfad),
   laufberichteLaden: (pfad) => ipcRenderer.invoke('laufberichte-laden', pfad),
+  metrikenLaden: () => ipcRenderer.invoke('metriken-laden'),
   pruefmappeLesen: (pfad) => ipcRenderer.invoke('pruefmappe-lesen', pfad),
   startanleitungLaden: (pfad) => ipcRenderer.invoke('startanleitung-laden', pfad),
   appStarten: (pfad) => ipcRenderer.invoke('app-starten', pfad),

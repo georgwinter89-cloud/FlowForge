@@ -11,6 +11,7 @@ import { schaubildReihenfolge, vorfahrenSortiert } from '../../shared/kettenRege
 import { BlockChips } from './Blockbibliothek.jsx'
 import Bestaetigung from './Bestaetigung.jsx'
 import KontextAnzeige from './KontextAnzeige.jsx'
+import Metriken from './Metriken.jsx'
 
 const t = texte.lauf
 const tk = texte.kette
@@ -1035,7 +1036,7 @@ export default function Leinwand({
   // initialTab: „Zum Gespräch"/„Zum Lauf" auf der Projektübersicht öffnen
   // das Projekt direkt mit dem Lauf-Tab vorn.
   const [tab, setTab] = useState(
-    ['schaubild', 'lauf', 'berichte', 'punkte'].includes(initialTab) ? initialTab : 'schaubild'
+    ['schaubild', 'lauf', 'berichte', 'punkte', 'metriken'].includes(initialTab) ? initialTab : 'schaubild'
   )
   // Eigener Bestätigungs-Dialog statt window.confirm (Bugfix 13.08.2026):
   // null = zu, sonst { frage, knopf, gefahr, aktion }.
@@ -1742,7 +1743,10 @@ export default function Leinwand({
     ['schaubild', texte.projektansicht.tabSchaubild],
     ['lauf', texte.projektansicht.tabLauf],
     ['berichte', `${texte.projektansicht.tabBerichte} (${berichte.length})`],
-    ['punkte', `${texte.projektansicht.tabPunkte} (${punkte.length})`]
+    ['punkte', `${texte.projektansicht.tabPunkte} (${punkte.length})`],
+    // Metriken (BAUPLAN 31): dieselbe Seite wie in der Titelleiste, aufs
+    // Projekt vorgefiltert — eigener Baustein (Metriken.jsx).
+    ['metriken', texte.projektansicht.tabMetriken]
   ]
 
   return (
@@ -2259,6 +2263,12 @@ export default function Leinwand({
               </button>
             </div>
           ))}
+        </div>
+      )}
+
+      {tab === 'metriken' && (
+        <div className="berichte-bereich">
+          <Metriken projektPfad={pfad} />
         </div>
       )}
 

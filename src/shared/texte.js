@@ -4,7 +4,74 @@ export const texte = {
   // Kopfleiste = Titelleiste der dunklen Werkbank (Mockup-Runden 3+4).
   kopfleiste: {
     werkbank: 'WERKBANK',
-    zuProjekten: 'Projekte'
+    zuProjekten: 'Projekte',
+    // Metriken (BAUPLAN 31): Knopf in der Titelleiste → globale Seite.
+    metrikenKnopf: 'Metriken'
+  },
+  // Metriken (BAUPLAN 31): lokale KI und Motor über alle Läufe hinweg — nur
+  // Nachschlagewerk; nichts davon wandert je in einen Auftrag.
+  metriken: {
+    ueberschrift: 'Metriken',
+    untertitel:
+      'Was die lokale KI taugt und was der Motor kostet — über alle Läufe hinweg. Nur zum Nachschlagen; kein Agent bekommt diese Zahlen zu sehen.',
+    aktualisieren: 'Aktualisieren',
+    laedt: 'Metriken werden gelesen …',
+    filterAlle: 'Alle Projekte',
+    fehlendeProjekte: (pfade) =>
+      `Nur bekannte Projekte: ${pfade.length} ${pfade.length === 1 ? 'Projekt fehlt' : 'Projekte fehlen'} (Ordner nicht gefunden) — ${pfade.join(' · ')}`,
+    // Abschnitt 1: lokale KI.
+    lokaleUeberschrift: 'Lokale KI',
+    lokaleErklaerung:
+      'Jedes Urteil über lokale Arbeit zählt: Recherche-Fazit übernommen oder verworfen, Entwurf übernommen oder verworfen, Reparatur gehalten oder nicht, Teilstück gehalten oder nicht — dazu Kreisläufe, die ohne Ergebnis gescheitert sind. Gezählt seit Bauschritt 31; ältere Läufe stehen hier nicht.',
+    lokaleLeer: 'Noch keine Urteile — die lokale KI war seit Bauschritt 31 noch nicht im Einsatz.',
+    lokaleLeerGefiltert: 'Für dieses Projekt gibt es noch keine Urteile über die lokale KI.',
+    spalteModell: 'Modell',
+    spalteBereich: 'Bereich',
+    spalteAnzahl: 'Urteile',
+    spalteQuote: 'Quote',
+    spaltePositiv: 'übernommen / gehalten',
+    spalteNegativ: 'verworfen / nicht gehalten',
+    spalteGescheitert: 'gescheitert',
+    spalteSchritte: 'Ø Schritte',
+    spalteZeitraum: 'Zeitraum',
+    bereiche: { recherche: 'Recherche', entwurf: 'Entwurf', reparatur: 'Reparatur', bauen: 'Bauen' },
+    keineQuote: '—',
+    quoteHinweis: 'Quote = Anteil übernommen/gehalten an allen beurteilten (gescheiterte Kreisläufe zählen nicht mit).',
+    // Abschnitt 2: Motor.
+    motorUeberschrift: 'Motor',
+    motorErklaerung:
+      'Aus den Laufberichten aller bekannten Projekte — die Zahlen liegen dort exakt vor, auch für alte Läufe. Kosten sind theoretische API-Kosten; im Abo-Modus nur zur Einordnung.',
+    motorLeer: 'Noch keine Laufberichte.',
+    gesamtZeile: (g) =>
+      `${g.anzahl} ${g.anzahl === 1 ? 'Lauf' : 'Läufe'} · ${g.tokens.toLocaleString('de-DE')} Tokens` +
+      (g.mitKosten > 0 ? ` · ${g.kostenUsd.toFixed(2).replace('.', ',')} $ theoretische Kosten` : '') +
+      (g.ohneKosten > 0 ? ` (${g.ohneKosten} ${g.ohneKosten === 1 ? 'Lauf' : 'Läufe'} ohne Kostenangabe)` : ''),
+    ohneKosten: 'ohne Kosten',
+    ohneVerbrauch: 'ohne Verbrauch',
+    ohneAngabe: (n, was) => `${n} ${was}`,
+    jeBlockUeberschrift: 'Je Blocktyp',
+    jeBlockErklaerung:
+      'Erstlauf = der erste Anlauf eines Blocks im Lauf. Wiederholungen (Reparatur-Runden, Nachprüfungen, Nachforderungen) stehen getrennt — sonst verzerren sie den Durchschnitt.',
+    spalteBlock: 'Block',
+    spalteErstlaeufe: 'Erstläufe',
+    spalteTokensDurchschnitt: 'Ø Tokens',
+    spalteKostenDurchschnitt: 'Ø Kosten',
+    spalteWiederholungen: 'Wiederholungen',
+    jeKetteUeberschrift: 'Je Workflow-Kette',
+    spalteKette: 'Kette',
+    spalteLaeufe: 'Läufe',
+    spalteTokensGesamt: 'Tokens gesamt',
+    spalteKostenGesamt: 'Kosten gesamt',
+    jeProjektUeberschrift: 'Je Projekt',
+    spalteProjekt: 'Projekt',
+    jeWocheUeberschrift: 'Zeitverlauf je Woche',
+    jeWocheErklaerung: 'Wird es billiger? Tokens je Kalenderwoche als Balken; darunter Läufe und Kosten.',
+    wocheLabel: (nummer, von, bis) => `KW ${nummer} (${von}–${bis})`,
+    wocheZeile: (w) =>
+      `${w.anzahl} ${w.anzahl === 1 ? 'Lauf' : 'Läufe'} · ${w.tokens.toLocaleString('de-DE')} Tokens` +
+      (w.mitKosten > 0 ? ` · ${w.kostenUsd.toFixed(2).replace('.', ',')} $` : '') +
+      (w.ohneKosten > 0 ? ` (${w.ohneKosten} ohne Kosten)` : ''),
+    sonderlaufMarke: 'Sonderlauf'
   },
   projektuebersicht: {
     ueberschrift: 'Projekte',
@@ -53,6 +120,8 @@ export const texte = {
     tabLauf: 'Lauf',
     tabBerichte: 'Laufberichte',
     tabPunkte: 'Sicherungspunkte',
+    // Metriken (BAUPLAN 31): dieselbe Seite wie in der Titelleiste, aufs Projekt vorgefiltert.
+    tabMetriken: 'Metriken',
     tabLaufLeer: 'Noch kein Lauf in dieser Sitzung. Starte den Workflow im Schaubild-Tab.',
     einstellungenKnopf: 'Projekt-Einstellungen',
     bibliothekTitel: 'Blockbibliothek',
@@ -1652,8 +1721,9 @@ export const texte = {
     // Lokale Helfer-KI (Wunsch Georg, 13.08.2026): ihr Anteil im Bericht.
     // Seit BAUPLAN 20 zählen auch die Vorreparatur-Versuche mit — samt der
     // Frage, wie viele davon die Nachprüfung bestanden haben.
+    // Seit BAUPLAN 31 mit dem Modell — die Zahlen gehören zu einem Modell.
     lokaleHelferZeile: (l) =>
-      `Lokale Helfer-KI: ${l.recherchen} ${l.recherchen === 1 ? 'Recherche' : 'Recherchen'} · ` +
+      `Lokale Helfer-KI${l.modell ? ` (${l.modell})` : ''}: ${l.recherchen} ${l.recherchen === 1 ? 'Recherche' : 'Recherchen'} · ` +
       `${l.schritte} ${l.schritte === 1 ? 'Schritt' : 'Schritte'} übernommen — ohne Kontingent` +
       (l.gescheitert > 0 ? ` (${l.gescheitert} davon gescheitert)` : '') +
       // Trefferquote (BAUPLAN 23): wie viele Recherche-Fazite der Agent

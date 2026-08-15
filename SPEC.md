@@ -1,6 +1,6 @@
 # FlowForge — Produkt-Spezifikation V1
 
-Stand: 15.08.2026 · Ursprung: Grilling-Session vom 07.08.2026 (von Georg freigegeben) ·
+Stand: 15.08.2026 (Bauschritt 31) · Ursprung: Grilling-Session vom 07.08.2026 (von Georg freigegeben) ·
 fortlaufend gepflegt — dieses Dokument beschreibt die Gegenwart, Verhaltensänderungen
 werden hier nachgezogen (Historie liefert git).
 
@@ -132,7 +132,8 @@ Ergebnis des letzten Laufs direkt an jeder Block-Karte auf der Leinwand aufklapp
 Der Verbrauch steht je Block und für den ganzen Lauf im Bericht — seit 13.08.2026 mit
 **Token-Aufschlüsselung** (Eingabe, Ausgabe, Cache gelesen, Cache geschrieben) und den
 **theoretischen API-Kosten**, die der Motor aus den Preisen der genutzten Modelle berechnet
-(im Abo-Modus nur zur Einordnung ausgewiesen). Seit Bauschritt 27 vermerkt der Bericht
+(im Abo-Modus nur zur Einordnung ausgewiesen). Die Lokale-Helfer-Zeile nennt seit
+Bauschritt 31 das **Modell** der lokalen KI. Seit Bauschritt 27 vermerkt der Bericht
 außerdem die **Session-Kennung des Laufs** (über sie setzt der Nachlauf-Chat die
 Lauf-Session fort, §6) und trägt den **Chat-Verlauf** des Nachlauf-Chats als eigenen
 Abschnitt nach (Bilder als Marker, nicht als Daten). Seit Bauschritt 28 steht auch der
@@ -160,6 +161,40 @@ des erzeugenden Laufs.
   Stand automatisch gesichert — eine Wiederherstellung ist selbst wieder rückgängig machbar.
   Während ein Lauf aktiv ist, ist Wiederherstellen gesperrt.
 - Rechner-Neustart mitten im Lauf → App bietet an, am letzten Sicherungspunkt weiterzumachen.
+
+### 3.4 Metriken (seit Bauschritt 31)
+
+Das Messinstrument des Nutzers — nur Nachschlagewerk, **nichts davon wandert je in einen
+Auftrag** (das Verbot der Prozess-Selbstvermessung in §10 meint den Agentenprozess, nicht
+dieses Instrument). Zugang: Knopf **„Metriken" in der Titelleiste** → globale Seite über alle
+bekannten Projekte (Filter nach Projekt); im Projekt ein **Tab „Metriken"**, der dieselbe
+Seite aufs Projekt vorgefiltert zeigt (eigener Baustein, nicht Teil der Leinwand).
+
+- **Abschnitt 1 — Lokale KI:** FlowForge schreibt **jedes Urteil über lokale Arbeit**
+  strukturiert in eine **globale Metrik-Datei im verwalteten Bereich** (Datenordner,
+  `metriken/lokale-ki.jsonl` — Anhänge-Format, weil bis zu 3 Läufe parallel schreiben;
+  nicht im Projektordner, keine Karten): Zeitpunkt, Projekt, Lauf, Block, **Modell**,
+  **Bereich** (Recherche · Entwurf · Reparatur · Bauen), **Ausgang** (übernommen/verworfen
+  bei Recherche-Fazit und Entwurf, gehalten/nicht gehalten bei Reparatur-Nachprüfung und
+  Teilstück, gescheitert bei Kreisläufen ohne Ergebnis) und die **Schritte** des
+  Kreislaufs. Die Urteile fallen ohnehin mechanisch (`recherche_bewerten`,
+  `entwurf_abnehmen`, `teilstueck_abnehmen`, Nachprüfung der Vorreparatur). Anzeige als
+  Tabelle **Modell × Bereich**: Urteile, Quote (Anteil übernommen/gehalten an allen
+  beurteilten — gescheiterte zählen nicht in die Quote), Ø Schritte, Fehlschläge, Zeitraum.
+  **Erst ab Bauschritt 31 gezählt** (Entscheidung Georg) — keine Rückrechnung aus
+  Ticker-Texten alter Berichte. Ohne Trefferquoten-Schalter (§4.3) gibt es für Recherchen
+  kein Urteil und damit keinen Eintrag; Entwürfe und Teilstücke werden immer abgenommen.
+- **Abschnitt 2 — Motor:** liest die **Laufberichte aller bekannten Projekte** (die Daten
+  liegen dort exakt vor, auch für alte Läufe) — im Hauptprozess mit Zwischenspeicher je
+  Datei; Projekte, deren Ordner fehlt, werden mit Hinweis übersprungen („nur bekannte
+  Projekte"). Schnitte: **je Blocktyp** (Erstläufe: Anzahl, Ø Tokens, Ø theoretische
+  Kosten — **Wiederholungen** desselben Blocks im Lauf, also Reparatur-Runden,
+  Nachprüfungen und Nachforderungen, stehen getrennt daneben, sonst verzerren sie den
+  Durchschnitt), **je Workflow-Kette**, **je Projekt** (nur ungefiltert) und ein
+  **Zeitverlauf je Kalenderwoche** als einfache Balken („wird es billiger?"). Ehrlichkeit:
+  Berichte ohne Kostenangabe und Block-Einträge ohne Verbrauch (ältere Läufe) werden als
+  „ohne Kosten"/„ohne Verbrauch" gezählt und fallen aus den Durchschnitten heraus, statt
+  sie zu verfälschen. Im Abo-Modus sind es theoretische Kosten wie überall.
 
 ## 4. Workflows & Blöcke
 
@@ -814,7 +849,8 @@ Design-Canvas): tiefdunkler Navy-Grund, Elektroblau als Marken- und Auswahlfarbe
 Signalrot für alles Lebendige (läuft, wartet auf Antwort, Lauf starten), Schrift
 Archivo (lokal gebündelt), Zahlen und Protokolle in JetBrains Mono. Das Fenster hat
 eine eigene dunkle Titelleiste (Blitz-Logo, „FlowForge WERKBANK", Brotkrume zum
-Zurückspringen); Windows zeichnet nur die drei Fensterknöpfe. Installer, Fenster und
+Zurückspringen, rechts die Knöpfe **„Metriken"** (§3.4) und „Einstellungen"); Windows
+zeichnet nur die drei Fensterknöpfe. Installer, Fenster und
 Taskleiste tragen das **Blitz-Icon** (seit Bauschritt 30, aus dem Inline-SVG erzeugt). Der **Kontext-Füllstand**
 erscheint als Balken mit roter Marke an der Übertrags-Schwelle — in der Lauf-Ansicht
 und auf der Hero-Kachel.
@@ -833,7 +869,8 @@ und auf der Hero-Kachel.
   alles mit Scrollleisten): **Schaubild** (Workflow bearbeiten, Start,
   Kartenauswahl) · **Lauf** (Verbrauch, Stopp, Gespräch, Liveticker, Denk-Bereich,
   Ergebnis) · **Laufberichte** (seit Bauschritt 15 filterbar nach Ausgang; Details je
-  Bericht mit Dauer und den Ergebnissen jedes Blocks) · **Sicherungspunkte**. Beim Lauf-Start wechselt
+  Bericht mit Dauer und den Ergebnissen jedes Blocks) · **Sicherungspunkte** ·
+  **Metriken** (seit Bauschritt 31, §3.4 — aufs Projekt vorgefiltert). Beim Lauf-Start wechselt
   die Ansicht automatisch zum Lauf-Tab; wartet dort eine Frage, zeigt der Tab
   einen roten Punkt. Die laufende Block-Karte bleibt im Schaubild-Tab hervorgehoben.
 
@@ -845,4 +882,6 @@ und auf der Hero-Kachel.
 - Englische Oberfläche (→ V2, durch zentrale Texte vorbereitet)
 - Import/Export von Blöcken, Mehrbenutzer/Accounts, Auto-Update-Mechanismus
 - Umbau eines Workflows, während er läuft
-- Jede Form von Prozess-Selbstvermessung (Bestandslisten, Nachweis-Register o.ä.)
+- Jede Form von Prozess-Selbstvermessung **im Agentenprozess** (Bestandslisten,
+  Nachweis-Register o.ä. — das Life-OS-Übel). Nicht gemeint ist das Messinstrument des
+  Nutzers: die Metriken-Seite (§3.4) ist Nachschlagewerk, das kein Agent je sieht.

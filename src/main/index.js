@@ -50,6 +50,7 @@ import {
 } from './eigeneBloecke.js'
 import { blockVorschlagErstellen } from './blockAssistent.js'
 import { klappenLaden, klappenSpeichern } from './klappen.js'
+import { metrikenLaden } from './metriken.js'
 import {
   chatZustand,
   chatSenden,
@@ -212,6 +213,9 @@ function registriereIpc() {
   ipcMain.handle('chat-reparieren', (_e, { pfad, an }) => chatReparierenSetzen(pfad, an))
   ipcMain.handle('chat-abbrechen', (_e, pfad) => chatAbbrechen(pfad))
   ipcMain.handle('laufberichte-laden', (_e, pfad) => laufberichteLaden(pfad))
+  // Metriken (BAUPLAN 31): lokale KI und Motor über alle bekannten Projekte —
+  // Extrakte und Urteile; die Schnitte rechnet die Oberfläche nach dem Filtern.
+  ipcMain.handle('metriken-laden', () => metrikenLaden())
   // Prüfmappen-Ansicht an der Prüferkarte (BAUPLAN 17) — nur zum Nachlesen.
   ipcMain.handle('pruefmappe-lesen', (_e, pfad) => pruefmappeUebersicht(pfad))
   // Zustände für die Kacheln der Projektübersicht (SPEC §9, BAUPLAN 15).

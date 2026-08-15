@@ -3,6 +3,7 @@ import { texte } from '../../shared/texte.js'
 import Projektuebersicht from './Projektuebersicht.jsx'
 import Projektansicht from './Projektansicht.jsx'
 import Einstellungen from './Einstellungen.jsx'
+import Metriken from './Metriken.jsx'
 
 export default function App() {
   // null = Projektübersicht, sonst { pfad, name, tab } des geöffneten Projekts.
@@ -10,6 +11,10 @@ export default function App() {
   // auf der Übersicht springt direkt in den Lauf).
   const [offenesProjekt, setOffenesProjekt] = useState(null)
   const [einstellungenOffen, setEinstellungenOffen] = useState(false)
+  // Metriken (BAUPLAN 31): globale Seite über alle Projekte — der Knopf in
+  // der Titelleiste legt sie über die aktuelle Ansicht; die Brotkrume führt
+  // zurück (das offene Projekt bleibt gemerkt).
+  const [metrikenOffen, setMetrikenOffen] = useState(false)
 
   return (
     <div className="app">
@@ -34,12 +39,26 @@ export default function App() {
           </span>
           <span className="kopf-werkbank">{texte.kopfleiste.werkbank}</span>
         </span>
-        {offenesProjekt && (
-          <button className="kopf-brotkrume" onClick={() => setOffenesProjekt(null)}>
-            ← {texte.kopfleiste.zuProjekten}&nbsp;&nbsp;/&nbsp;&nbsp;
-            <b>{offenesProjekt.name}</b>
+        {metrikenOffen ? (
+          <button className="kopf-brotkrume" onClick={() => setMetrikenOffen(false)}>
+            ← {offenesProjekt ? offenesProjekt.name : texte.kopfleiste.zuProjekten}
+            &nbsp;&nbsp;/&nbsp;&nbsp;
+            <b>{texte.metriken.ueberschrift}</b>
           </button>
+        ) : (
+          offenesProjekt && (
+            <button className="kopf-brotkrume" onClick={() => setOffenesProjekt(null)}>
+              ← {texte.kopfleiste.zuProjekten}&nbsp;&nbsp;/&nbsp;&nbsp;
+              <b>{offenesProjekt.name}</b>
+            </button>
+          )
         )}
+        <button
+          className={'knopf-klein kopf-knopf' + (metrikenOffen ? ' kopf-knopf-aktiv' : '')}
+          onClick={() => setMetrikenOffen((alt) => !alt)}
+        >
+          {texte.kopfleiste.metrikenKnopf}
+        </button>
         <button
           className="knopf-klein kopf-knopf"
           onClick={() => setEinstellungenOffen(true)}
@@ -48,7 +67,9 @@ export default function App() {
         </button>
       </header>
       <main className="inhalt">
-        {offenesProjekt ? (
+        {metrikenOffen ? (
+          <Metriken />
+        ) : offenesProjekt ? (
           <Projektansicht pfad={offenesProjekt.pfad} initialTab={offenesProjekt.tab} />
         ) : (
           <Projektuebersicht

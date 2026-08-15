@@ -1292,6 +1292,17 @@ body {
   margin-left: auto;
 }
 
+/* Zwei Knöpfe rechts in der Kopfleiste (Metriken + Einstellungen, BAUPLAN 31):
+   nur der erste schiebt nach rechts, der zweite hängt sich dicht daneben. */
+.kopf-knopf + .kopf-knopf {
+  margin-left: 8px;
+}
+
+.kopf-knopf-aktiv {
+  border-color: var(--akzent);
+  color: var(--akzent-text);
+}
+
 /* Kette auf der Leinwand (Bauschritt 5) */
 
 .kette-kopf {
@@ -2111,6 +2122,10 @@ body {
    Pillen-Leiste (Mockup 3b/3c): dunkler Container, der aktive Tab glüht rot. */
 .tab-leiste {
   display: inline-flex;
+  /* Fünf Tabs seit BAUPLAN 31 — in schmalen Fenstern bricht die Leiste um,
+     statt die Mittelspalte seitlich zu sprengen. */
+  flex-wrap: wrap;
+  max-width: 100%;
   gap: 4px;
   align-self: flex-start;
   padding: 4px;
@@ -2123,7 +2138,7 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  padding: 7px 16px;
+  padding: 7px 13px;
   border: none;
   border-radius: var(--radius-pille);
   background: none;
@@ -2602,4 +2617,138 @@ body {
 .themen-zeile-abgelehnt td:last-child {
   opacity: 1;
   text-decoration: none;
+}
+
+/* Metriken (BAUPLAN 31): globale Seite und Projekt-Tab — Tabellen im
+   Themen-Tabellen-Stil, Wochen-Balken für den Zeitverlauf. */
+
+.metriken {
+  max-width: 1100px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.metriken-eingebettet {
+  max-width: none;
+  margin: 0;
+}
+
+.metriken-kopf {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.metriken-kopf h1 {
+  font-weight: 900;
+  font-size: 34px;
+  line-height: 0.95;
+  text-transform: uppercase;
+  letter-spacing: 0.01em;
+  margin-bottom: 8px;
+}
+
+.metrik-abschnitt {
+  margin-top: 18px;
+  padding-top: 12px;
+  border-top: 1px solid var(--rand);
+  font-size: 18px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.metrik-unterabschnitt {
+  margin-top: 12px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-zweit);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.metrik-gesamt {
+  font-family: var(--schrift-mono);
+  font-size: 13px;
+  color: var(--text);
+}
+
+.metrik-leer {
+  padding: 10px 12px;
+  border: 1px dashed var(--rand-kontrolle);
+  border-radius: var(--radius-karte);
+}
+
+.metrik-tabelle-rahmen {
+  max-height: none;
+}
+
+.metrik-tabelle td.zahl,
+.metrik-tabelle th.zahl {
+  text-align: right;
+  font-family: var(--schrift-mono);
+  white-space: nowrap;
+}
+
+.metrik-tabelle td.mono {
+  font-family: var(--schrift-mono);
+}
+
+.metrik-quote {
+  color: var(--akzent-text);
+  font-weight: 700;
+}
+
+.metrik-luecke {
+  color: var(--text-blass);
+  font-family: var(--schrift);
+  font-size: 11px;
+}
+
+.metrik-wochen {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--rand-panel);
+  border-radius: var(--radius-karte);
+  background: var(--flaeche-tief);
+}
+
+.metrik-woche {
+  display: grid;
+  grid-template-columns: 170px 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 12px;
+  row-gap: 2px;
+  align-items: center;
+  font-size: 12px;
+}
+
+.metrik-woche-label {
+  grid-row: 1 / span 2;
+  color: var(--text-zweit);
+  font-weight: 700;
+}
+
+.metrik-woche-balken-spur {
+  height: 10px;
+  border-radius: var(--radius-pille);
+  background: var(--flaeche-hervor);
+  overflow: hidden;
+}
+
+.metrik-woche-balken {
+  height: 100%;
+  border-radius: var(--radius-pille);
+  background: var(--akzent);
+  box-shadow: 0 0 10px var(--akzent-glut);
+}
+
+.metrik-woche-werte {
+  color: var(--text-leise);
+  font-family: var(--schrift-mono);
 }

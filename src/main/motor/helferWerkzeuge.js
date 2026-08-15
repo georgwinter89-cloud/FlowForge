@@ -46,6 +46,13 @@ export async function helferWerkzeugServer({ projektPfad, modell, adresse, bewer
     }
   }
 
+  // Metriken (BAUPLAN 31): Die Urteile (bewerten/abnehmen) fallen nach dem
+  // Kreislauf — sie tragen die Schritte des jeweils letzten Kreislaufs ihrer
+  // Art mit, damit die Metrik-Datei Urteil und Aufwand zusammen sieht.
+  let letzteRechercheSchritte = 0
+  let letzteEntwurfSchritte = 0
+  let letzteBauSchritte = 0
+
   const recherchieren = tool(
     'lokal_recherchieren',
     texte.agentenLokaleHelfer.werkzeugBeschreibung,
@@ -73,6 +80,7 @@ export async function helferWerkzeugServer({ projektPfad, modell, adresse, bewer
       })
       // Zähl-Ereignis für den Laufbericht (Wunsch Georg, 13.08.2026): So steht
       // der Anteil der lokalen KI schwarz auf weiß im Bericht.
+      letzteRechercheSchritte = ergebnis.schritte ?? 0
       aufEreignis({
         art: 'lokale-helfer',
         schritte: ergebnis.schritte ?? 0,
@@ -114,7 +122,11 @@ export async function helferWerkzeugServer({ projektPfad, modell, adresse, bewer
       begruendung: z.string().describe('Ein Satz: warum übernommen oder verworfen.')
     },
     async ({ uebernommen, begruendung }) => {
-      aufEreignis({ art: 'lokale-helfer-recherche-urteil', uebernommen: Boolean(uebernommen) })
+      aufEreignis({
+        art: 'lokale-helfer-recherche-urteil',
+        uebernommen: Boolean(uebernommen),
+        schritte: letzteRechercheSchritte
+      })
       const satz = String(begruendung ?? '').replace(/\s+/g, ' ').trim().slice(0, 200)
       aufEreignis({
         art: 'ticker',
@@ -159,6 +171,7 @@ export async function helferWerkzeugServer({ projektPfad, modell, adresse, bewer
           aufEreignis({ art: 'denken', absender: texte.lauf.denkenLokaleKi, text })
       })
       const dateien = ergebnis.dateien ?? []
+      letzteEntwurfSchritte = ergebnis.schritte ?? 0
       // Zähl-Ereignis für die Lokale-Helfer-Zeile des Laufberichts (BAUPLAN 21):
       // ein Entwurf zählt nur, wenn wirklich eine Entwurfsdatei entstand.
       aufEreignis({
@@ -207,7 +220,11 @@ export async function helferWerkzeugServer({ projektPfad, modell, adresse, bewer
         .describe('true = gegengelesen und selbst an den Zielort übernommen; false = verworfen.')
     },
     async ({ entwurf, uebernommen }) => {
-      aufEreignis({ art: 'lokale-helfer-entwurf-urteil', uebernommen: Boolean(uebernommen) })
+      aufEreignis({
+        art: 'lokale-helfer-entwurf-urteil',
+        uebernommen: Boolean(uebernommen),
+        schritte: letzteEntwurfSchritte
+      })
       aufEreignis({
         art: 'ticker',
         text: uebernommen
@@ -279,6 +296,7 @@ export async function helferWerkzeugServer({ projektPfad, modell, adresse, bewer
           aufEreignis({ art: 'denken', absender: texte.lauf.denkenLokaleKi, text })
       })
       const aenderungen = (ergebnis.ersetzungen ?? 0) + (ergebnis.dateien?.length ?? 0)
+      letzteBauSchritte = ergebnis.schritte ?? 0
       // Zähl-Ereignis für die Lokale-Helfer-Zeile des Laufberichts (BAUPLAN 22).
       aufEreignis({
         art: 'lokale-helfer-bauen',
@@ -349,7 +367,11 @@ export async function helferWerkzeugServer({ projektPfad, modell, adresse, bewer
           content: [{ type: 'text', text: texte.agentenLokaleHelfer.teilstueckOhneOffenes }]
         }
       offenesTeilstueck = null
-      aufEreignis({ art: 'lokale-helfer-teilstueck-urteil', gehalten: Boolean(gehalten) })
+      aufEreignis({
+        art: 'lokale-helfer-teilstueck-urteil',
+        gehalten: Boolean(gehalten),
+        schritte: letzteBauSchritte
+      })
       if (!gehalten) {
         await aufLetztenPunktZuruecksetzen(projektPfad)
         aufEreignis({ art: 'ticker', text: texte.ticker.teilstueckVerworfen(teilstueck) })

@@ -70,6 +70,7 @@ import { laufstandSpeichern, laufstandLaden, laufstandLoeschen } from './laufsta
 import { laufVorschlagSpeichern, laufVorschlagLoeschen } from './naechsterLauf.js'
 import { kartenZuteilungPruefen, paketMeldungPruefen } from './motor/kartenZuteilungWerkzeuge.js'
 import { chatBeschaeftigt, chatSchliessen } from './nachlaufChat.js'
+import { metrikUrteilSchreiben } from './metriken.js'
 
 const BERICHTE_ORDNER = 'laufberichte'
 
@@ -902,6 +903,30 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       lokaleHelferHinweis = texte.ticker.lokaleHelferNichtErreichbar
     }
   }
+  // Die Lokale-Helfer-Zeile des Berichts — seit BAUPLAN 31 mit dem Modell,
+  // damit die Zahlen einem Modell zuzuordnen sind.
+  function helferZaehler() {
+    bericht.lokaleHelfer ??= {
+      recherchen: 0,
+      schritte: 0,
+      gescheitert: 0,
+      ...(lokaleHelfer ? { modell: lokaleHelfer.modell } : {})
+    }
+    return bericht.lokaleHelfer
+  }
+  // Metriken (BAUPLAN 31): jedes Urteil über lokale Arbeit in die globale
+  // Metrik-Datei — Projekt, Lauf, Block, Modell, Bereich, Ausgang, Schritte.
+  function metrikUrteil(block, bereich, ausgang, schritte) {
+    metrikUrteilSchreiben({
+      projektPfad,
+      laufId: bericht.id,
+      block: block ?? '',
+      modell: lokaleHelfer?.modell ?? '',
+      bereich,
+      ausgang,
+      schritte: schritte ?? 0
+    })
+  }
 
   // Lauf-Start sofort melden — noch vor der ersten Ticker-Zeile, damit die
   // Ansicht die Anzeige des vorigen Laufs sauber leeren kann.
@@ -945,7 +970,11 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           // Prüfers die Nachprüfung eines lokalen Versuchs ist.
           lokaleVersuche: 0,
           lokaleKritik: null,
-          lokaleNachpruefung: false
+          lokaleNachpruefung: false,
+          // Metriken (BAUPLAN 31): Aufwand und Ziel-Block des laufenden
+          // lokalen Reparatur-Versuchs — das Urteil fällt erst in der Nachprüfung.
+          lokaleReparaturSchritte: 0,
+          lokaleReparaturBlock: null
         }
       ])
     )
@@ -1209,11 +1238,17 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           // Lokale Helfer-KI: Recherchen und Schritte für den Laufbericht
           // zählen (Wunsch Georg, 13.08.2026) — der Effekt steht damit
           // schwarz auf weiß im Bericht statt nur verstreut im Ticker.
+          // Metriken (BAUPLAN 31): Jedes Urteil (und jeder gescheiterte
+          // Kreislauf) geht zusätzlich in die globale Metrik-Datei — je Modell
+          // und Bereich, über alle Läufe hinweg auswertbar.
           if (daten.art === 'lokale-helfer') {
-            bericht.lokaleHelfer ??= { recherchen: 0, schritte: 0, gescheitert: 0 }
-            bericht.lokaleHelfer.recherchen++
-            bericht.lokaleHelfer.schritte += daten.schritte ?? 0
-            if (daten.gescheitert) bericht.lokaleHelfer.gescheitert++
+            const l = helferZaehler()
+            l.recherchen++
+            l.schritte += daten.schritte ?? 0
+            if (daten.gescheitert) {
+              l.gescheitert++
+              metrikUrteil(holeName(), 'recherche', 'gescheitert', daten.schritte)
+            }
             return
           }
           // Lokale Entwürfe (BAUPLAN 21): Entwürfe und ihre Abnahme
@@ -1221,53 +1256,60 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           // Trefferquote (BAUPLAN 23): je Recherche-Fazit, ob der Agent es
           // übernommen oder verworfen hat — die Quote steht im Bericht.
           if (daten.art === 'lokale-helfer-recherche-urteil') {
-            bericht.lokaleHelfer ??= { recherchen: 0, schritte: 0, gescheitert: 0 }
-            if (daten.uebernommen)
-              bericht.lokaleHelfer.recherchenUebernommen =
-                (bericht.lokaleHelfer.recherchenUebernommen ?? 0) + 1
-            else
-              bericht.lokaleHelfer.recherchenVerworfen =
-                (bericht.lokaleHelfer.recherchenVerworfen ?? 0) + 1
+            const l = helferZaehler()
+            if (daten.uebernommen) l.recherchenUebernommen = (l.recherchenUebernommen ?? 0) + 1
+            else l.recherchenVerworfen = (l.recherchenVerworfen ?? 0) + 1
+            metrikUrteil(
+              holeName(),
+              'recherche',
+              daten.uebernommen ? 'uebernommen' : 'verworfen',
+              daten.schritte
+            )
             return
           }
           if (daten.art === 'lokale-helfer-entwurf') {
-            bericht.lokaleHelfer ??= { recherchen: 0, schritte: 0, gescheitert: 0 }
-            bericht.lokaleHelfer.schritte += daten.schritte ?? 0
-            if (daten.entwurf)
-              bericht.lokaleHelfer.entwuerfe = (bericht.lokaleHelfer.entwuerfe ?? 0) + 1
-            else
-              bericht.lokaleHelfer.entwuerfeGescheitert =
-                (bericht.lokaleHelfer.entwuerfeGescheitert ?? 0) + 1
+            const l = helferZaehler()
+            l.schritte += daten.schritte ?? 0
+            if (daten.entwurf) l.entwuerfe = (l.entwuerfe ?? 0) + 1
+            else {
+              l.entwuerfeGescheitert = (l.entwuerfeGescheitert ?? 0) + 1
+              metrikUrteil(holeName(), 'entwurf', 'gescheitert', daten.schritte)
+            }
             return
           }
           if (daten.art === 'lokale-helfer-entwurf-urteil') {
-            bericht.lokaleHelfer ??= { recherchen: 0, schritte: 0, gescheitert: 0 }
-            if (daten.uebernommen)
-              bericht.lokaleHelfer.entwuerfeUebernommen =
-                (bericht.lokaleHelfer.entwuerfeUebernommen ?? 0) + 1
-            else
-              bericht.lokaleHelfer.entwuerfeVerworfen =
-                (bericht.lokaleHelfer.entwuerfeVerworfen ?? 0) + 1
+            const l = helferZaehler()
+            if (daten.uebernommen) l.entwuerfeUebernommen = (l.entwuerfeUebernommen ?? 0) + 1
+            else l.entwuerfeVerworfen = (l.entwuerfeVerworfen ?? 0) + 1
+            metrikUrteil(
+              holeName(),
+              'entwurf',
+              daten.uebernommen ? 'uebernommen' : 'verworfen',
+              daten.schritte
+            )
             return
           }
           // Lokaler Bauer (BAUPLAN 22): Bau-Versuche und die Abnahme je
           // Teilstück (gehalten / vom Agenten selbst gebaut) in der Helfer-Zeile.
           if (daten.art === 'lokale-helfer-bauen') {
-            bericht.lokaleHelfer ??= { recherchen: 0, schritte: 0, gescheitert: 0 }
-            bericht.lokaleHelfer.schritte += daten.schritte ?? 0
-            if (daten.gescheitert)
-              bericht.lokaleHelfer.teilstueckeGescheitert =
-                (bericht.lokaleHelfer.teilstueckeGescheitert ?? 0) + 1
+            const l = helferZaehler()
+            l.schritte += daten.schritte ?? 0
+            if (daten.gescheitert) {
+              l.teilstueckeGescheitert = (l.teilstueckeGescheitert ?? 0) + 1
+              metrikUrteil(holeName(), 'bauen', 'gescheitert', daten.schritte)
+            }
             return
           }
           if (daten.art === 'lokale-helfer-teilstueck-urteil') {
-            bericht.lokaleHelfer ??= { recherchen: 0, schritte: 0, gescheitert: 0 }
-            if (daten.gehalten)
-              bericht.lokaleHelfer.teilstueckeGehalten =
-                (bericht.lokaleHelfer.teilstueckeGehalten ?? 0) + 1
-            else
-              bericht.lokaleHelfer.teilstueckeVerworfen =
-                (bericht.lokaleHelfer.teilstueckeVerworfen ?? 0) + 1
+            const l = helferZaehler()
+            if (daten.gehalten) l.teilstueckeGehalten = (l.teilstueckeGehalten ?? 0) + 1
+            else l.teilstueckeVerworfen = (l.teilstueckeVerworfen ?? 0) + 1
+            metrikUrteil(
+              holeName(),
+              'bauen',
+              daten.gehalten ? 'gehalten' : 'nicht-gehalten',
+              daten.schritte
+            )
             return
           }
           // Letzter Kontext-Stand am Lauf gespiegelt — der Kontext-Balken der
@@ -1804,9 +1846,9 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
             k.lokaleNachpruefung = false
             k.lokaleVersuche = 0
             k.lokaleKritik = null
-            bericht.lokaleHelfer ??= { recherchen: 0, schritte: 0, gescheitert: 0 }
-            bericht.lokaleHelfer.reparaturenGehalten =
-              (bericht.lokaleHelfer.reparaturenGehalten ?? 0) + 1
+            const l = helferZaehler()
+            l.reparaturenGehalten = (l.reparaturenGehalten ?? 0) + 1
+            metrikUrteil(k.lokaleReparaturBlock, 'reparatur', 'gehalten', k.lokaleReparaturSchritte)
             tickern(texte.ticker.lokaleReparaturGehalten)
           }
           tickern(texte.ticker.pruefungBestanden)
@@ -1833,6 +1875,7 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
               texte.ticker.lokaleReparaturZurueckgerollt(k.lokaleVersuche, LOKALE_REPARATUR_VERSUCHE)
             )
             await aufLetztenPunktZuruecksetzen(projektPfad)
+            metrikUrteil(k.lokaleReparaturBlock, 'reparatur', 'nicht-gehalten', k.lokaleReparaturSchritte)
             eskalationsKritik = k.lokaleKritik
           }
           const zielK = zielId ? knoten.get(zielId) : null
@@ -1897,20 +1940,25 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
                 aufDenken: (text) =>
                   senden({ art: 'denken', absender: texte.lauf.denkenLokaleKi, text })
               })
-              bericht.lokaleHelfer ??= { recherchen: 0, schritte: 0, gescheitert: 0 }
-              bericht.lokaleHelfer.reparaturen = (bericht.lokaleHelfer.reparaturen ?? 0) + 1
-              bericht.lokaleHelfer.schritte += reparatur.schritte ?? 0
+              const l = helferZaehler()
+              l.reparaturen = (l.reparaturen ?? 0) + 1
+              l.schritte += reparatur.schritte ?? 0
               if (reparatur.ok && reparatur.ersetzungen > 0) {
                 // Die Nachprüfung des Prüfers ist der Schiedsrichter: nur die
                 // Beanstandungen, als frischer Agent in der Lauf-Session.
                 tickern(texte.ticker.lokaleReparaturFertig(reparatur.ersetzungen))
                 k.nachpruefung = k.lokaleKritik
                 k.lokaleNachpruefung = true
+                // Metriken (BAUPLAN 31): Das Urteil fällt erst mit der
+                // Nachprüfung — Aufwand und Ziel-Block bis dahin am Knoten merken.
+                k.lokaleReparaturSchritte = reparatur.schritte ?? 0
+                k.lokaleReparaturBlock = zielK.def.name
                 k.status = 'offen'
                 return
               }
               // Nichts ersetzt (oder Ollama gescheitert): nichts zurückzurollen
               // und keine Nachprüfung nötig — der Versuch ist trotzdem verbraucht.
+              metrikUrteil(zielK.def.name, 'reparatur', 'gescheitert', reparatur.schritte)
               tickern(
                 reparatur.ok
                   ? texte.ticker.lokaleReparaturNichtsErsetzt
