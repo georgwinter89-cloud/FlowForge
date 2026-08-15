@@ -984,12 +984,28 @@ Reihenfolge streng, ist aber an den KANTEN stumpf.
 - **Kanten-Gate mit Nachforderung:** Urteil FEHLGESCHLAGEN ohne eine einzige
   Beanstandungs-Zeile → FlowForge fordert beim Prüfer kurz nach (dasselbe Muster wie
   die Startanleitungs-Nachforderung), statt eine Reparatur-Runde zu verbrennen.
-- **Vor-Fazit in der Reparatur-Runde (Retained Reasoning light):** Der frische
-  Bauer der Runde 2 bekommt neben der Kritik sein eigenes Fazit aus Runde 1 in den
-  Auftrag („Dein Fazit aus der letzten Runde: was du wo gebaut hast und warum") —
-  er erkundet nicht neu und trifft keine anderen Entwurfsentscheidungen; das
-  Frische-Prinzip bleibt (kein Arbeitsgedächtnis, nur das Fazit). Ebenso für andere
-  Rückführungs-Ziele.
+- **Diff der bisherigen Runden + Vor-Fazit (Retained Reasoning light; Entscheidung
+  Georg 15.08.2026 für die Diff-Alternative, geprüft am Code):** Der frische Bauer
+  einer Reparatur-Runde bekommt neben der Kritik den **exakten Unterschied** „Das
+  hast du in diesem Lauf bisher geändert" — von FlowForge aus den Sicherungspunkten
+  gerechnet (Punkt beim ersten Start des Bauers ↔ Punkt „nach Bauer" der letzten
+  Runde; `git.walk` mit zwei TREE-Bäumen wie die Wiederherstellen-Vorschau, dazu ein
+  eigener kleiner Zeilen-Vergleich; kein git.exe nötig): Dateiliste (neu/geändert/
+  gelöscht, +n/−m Zeilen) plus Ausschnitte der geänderten Stellen mit Umgebung,
+  gedeckelt (~6.000 Zeichen; große Dateien nur „geändert ab Zeile N"), kumulativ
+  über alle Runden des Laufs. `pruefung/` und `arbeitsablage/` bleiben draußen —
+  die Prüfer-Tests liegen beim Rückführen uncommittet im Ordner (die Rückführung
+  kehrt vor dem „nach Prüfer"-Punkt zurück, lauf.js) und wanderten sonst als
+  „Bauer-Änderung" in den Diff. Dazu das **eigene Fazit aus der letzten Runde**
+  (liegt als k.lieferung vor) als das „warum". Der Bauer erkundet nicht neu und
+  trifft keine anderen Entwurfsentscheidungen; das Frische-Prinzip bleibt (kein
+  Arbeitsgedächtnis). Ticker: „Änderungen der letzten Runde an den Bauer
+  übergeben: 4 Dateien, 120 Zeilen"; bei Überlänge sichtbar gekürzt. Ehrliche
+  Grenze: hat vorher ein nur-lesender Block per Befehl Dateien verändert
+  (Einstellung „darf Befehle ausführen"), zählt das im Diff mit — FlowForge
+  vermerkt „Ordner war beim Start des Bauers schon verändert". Ebenso für andere
+  Rückführungs-Ziele; der Prüfer bekommt in der Nachprüfung denselben Diff
+  (was sich seit seinem Urteil geändert hat).
 - **Fan-out ohne Datenverlust:** Liefern mehrere parallele Vorfahren dasselbe
   Etikett (zwei Angreifer, Prüfer neben Angreifer), gewinnt heute still der
   nächstgelegene (`uebergabenText`). Neu (Entscheidung Georg): der Nachfolger bekommt
@@ -1002,11 +1018,14 @@ Reihenfolge streng, ist aber an den KANTEN stumpf.
   8.000 Zeichen"), und die Marker-Zeilen am Ende (BEANSTANDUNG, PRUEFKARTE,
   PRUEFUNG) überleben — gekürzt wird in der Mitte, nicht hinten.
 - Nachzuziehen: SPEC §4.1 (Rückführung: was die Rückmeldung enthält), §4.3
-  (Übergaben: gleiche Etiketten, Kürzung), §5 (Reparatur-Runde mit Vor-Fazit).
+  (Übergaben: gleiche Etiketten, Kürzung), §5 (Reparatur-Runde mit Diff + Vor-Fazit),
+  §3.3 (Sicherungspunkte liefern den Diff).
 **Alltagstest:** Georg fährt „Feature hinzufügen" mit einem absichtlich lückenhaften
 Wunsch: Der Prüfer fällt durch, im Ticker steht „3 Beanstandungen an den Bauer
-übergeben", der Bauer der zweiten Runde nennt in seinem Fazit erkennbar seine
-Änderungen aus Runde 1; ein Prüfbeleg ohne Beanstandungs-Zeile löst eine sichtbare
+übergeben" und „Änderungen der letzten Runde an den Bauer übergeben: N Dateien";
+im Laufbericht enthält der Auftrag der zweiten Runde die Dateiliste mit Ausschnitten
+(ohne pruefung/) und das Vor-Fazit, und der Bauer bezieht sich erkennbar darauf,
+statt neu zu erkunden; ein Prüfbeleg ohne Beanstandungs-Zeile löst eine sichtbare
 Nachforderung aus. Zwei Angreifer parallel vor dem Bauer: der Ticker meldet „2
 Angriffslisten zusammengeführt", der Bauer-Auftrag im Laufbericht enthält beide.
 
