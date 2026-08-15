@@ -161,6 +161,13 @@ des erzeugenden Laufs.
   zurück): Projektstand von jedem Sicherungspunkt zurückholen. Vorher wird der jetzige
   Stand automatisch gesichert — eine Wiederherstellung ist selbst wieder rückgängig machbar.
   Während ein Lauf aktiv ist, ist Wiederherstellen gesperrt.
+- **Die Sicherungspunkte liefern den Diff** (seit Bauschritt 34): Aus zwei Punkten rechnet
+  FlowForge den exakten Unterschied — Dateiliste (neu/geändert/gelöscht, +n/−m Zeilen) plus
+  Ausschnitte der geänderten Stellen mit Umgebung. Dieselbe Technik wie die
+  Wiederherstellen-Vorschau (zwei Bäume plus ein eigener kleiner Zeilen-Vergleich, kein
+  externes Git nötig). Das speist die Reparatur-Runde (§5). Ausgenommen sind zusätzlich
+  `pruefung/` (die Prüfer-Tests liegen beim Rückführen uncommittet im Ordner und wären
+  sonst „Bauer-Änderungen") und `arbeitsablage/`.
 - Rechner-Neustart mitten im Lauf → App bietet an, am letzten Sicherungspunkt weiterzumachen.
 
 ### 3.4 Metriken (seit Bauschritt 31)
@@ -224,6 +231,13 @@ Seite aufs Projekt vorgefiltert zeigt (eigener Baustein, nicht Teil der Leinwand
   sie nacheinander (jede Unteraufgabe steht sichtbar im Ticker, seit Bauschritt 25
   samt ihrem Ziel), das Ergebnis ist dasselbe.
 - **Fehlschlag-Rückführung:** „bei Fehlschlag zurück zu Block X" (braucht der Prüfer sofort).
+  Die Rückmeldung an den Zielblock enthält seit Bauschritt 34 **alle Beanstandungs-Zeilen
+  vollständig** (großzügig gedeckelt; passt eine nicht mehr hinein, steht das sichtbar
+  dabei) statt eines abgeschnittenen Belegs — die Beanstandungen stehen im Prüfbeleg am
+  Ende und fielen vorher regelmäßig weg. Urteilt ein Prüfer „nicht bestanden", **ohne
+  eine einzige Beanstandungs-Zeile** zu liefern, fordert FlowForge sie einmal bei ihm
+  nach (wie die Startanleitungs-Nachforderung, ohne Reparatur-Runde zu verbrauchen);
+  bleibt sie aus, wandert ehrlich vermerkt der ganze Prüfbeleg weiter.
   Sind alle Beanstandungen mechanisch, versucht zuerst die lokale Vorreparatur (§4.3) —
   ohne reguläre Runden zu verbrauchen.
   Standard **2 Reparatur-Runden** (pro Workflow verstellbar); danach hält der Lauf an und stellt
@@ -284,8 +298,14 @@ und Empfehlung über das Gespräch (§6) und liefert die Antwort an die Folgebl�
 **Übergaben:** braucht/liefert ist nicht nur eine Steck-Regel, sondern die
 Datenweitergabe im Lauf — der Abschlusstext eines Blocks wird unter seinen
 liefert-Etiketten gespeichert und jedem Nachfahren entlang der Pfeile mit
-passendem braucht in den Auftrag gereicht (gekürzt auf 8.000 Zeichen je
-Übergabe; liefern mehrere Vorfahren dasselbe Etikett, gewinnt der nächstgelegene). Daneben gibt es
+passendem braucht in den Auftrag gereicht. Liefern mehrere Vorfahren dasselbe
+Etikett, gewinnt der nächstgelegene — liegen mehrere **gleich nah** (zwei Angreifer
+vor dem Bauer), bekommt der Nachfolger seit Bauschritt 34 **alle** nummeriert
+(„Angriffsliste (1 von 2) von …"), und der Ticker sagt es; früher gewann still einer
+und die andere Arbeit war bezahlt und weg. Gekürzt wird auf 8.000 Zeichen je
+Übergabe — seit Bauschritt 34 **in der Mitte statt hinten**, damit die Marker-Zeilen
+am Ende (BEANSTANDUNG, PRUEFKARTE, PRUEFUNG) überleben; jede Kürzung steht sichtbar
+im Ticker und damit im Laufbericht. Daneben gibt es
 **optionale Bedarfe** („falls da"): Der Bauer verlangt nur das Arbeitspaket;
 eine Angriffsliste wird mitgereicht und muss eingearbeitet werden, wenn ein
 Block davor eine liefert — so kommt „Bug jagen" ohne Angreifer aus.
@@ -637,6 +657,16 @@ Angreifer durch die Diagnose.
   ausschließlich delegieren. Reparatur-Runden laufen als neuer Agent mit der
   Prüferkritik im Auftrag. **Parallele Zweige** laufen als eigene Sessions, weil die
   Lauf-Session einen Block nach dem anderen verarbeitet — ehrlich im Ticker vermerkt.
+- **Reparatur-Runde mit Diff und Vor-Fazit** (seit Bauschritt 34): Der frische Agent einer
+  Reparatur-Runde bekommt neben der Prüferkritik zwei von FlowForge gerechnete Tatsachen —
+  den **exakten Unterschied** „Das hast du in diesem Lauf bisher geändert" aus den
+  Sicherungspunkten (§3.3; kumulativ über alle Runden, gedeckelt, große Dateien nur mit
+  Zeilenbilanz) und sein **eigenes Fazit der letzten Runde** als das „warum". Der Prüfer
+  bekommt in der Nachprüfung denselben Dienst: was sich seit seinem Urteil geändert hat.
+  Damit erkundet der Bauer nicht neu und trifft keine anderen Entwurfsentscheidungen —
+  das Frische-Prinzip bleibt unangetastet, er erbt kein Arbeitsgedächtnis. Ehrliche
+  Grenze: War der Projektordner beim ersten Start des Blocks schon verändert (ein
+  nur-lesender Block mit Befehlsrecht, §7), steht das als Hinweis im Auftrag.
 - **Session = ein Workflow-Lauf.** Das **Sessionende** (Karten aktualisieren,
   Laufbericht schreiben) ist fest eingebaut, kein optionaler Block.
 - **Automatischer Übertrag** (seit Bauschritt 11): Die App misst den echten

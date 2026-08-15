@@ -745,6 +745,11 @@ export const texte = {
   agentenUebergabe: {
     ueberschrift: 'Übergaben aus den vorherigen Blöcken dieses Laufs:\n\n',
     eintrag: (etikett, blockName, text) => `### ${etikett} — von Block „${blockName}"\n${text}\n\n`,
+    // Fan-out ohne Datenverlust (BAUPLAN 34): Liefern mehrere gleich nahe
+    // Vorfahren dasselbe Etikett (zwei Angreifer vor dem Bauer), bekommt der
+    // Nachfolger alle nummeriert — früher gewann still einer.
+    eintragMehrfach: (etikett, nummer, gesamt, blockName, text) =>
+      `### ${etikett} (${nummer} von ${gesamt}) — von Block „${blockName}"\n${text}\n\n`,
     auftragEinleitung: 'Dein Arbeitsauftrag:\n',
     // Einstellung „Nur-lesende Blöcke dürfen Befehle ausführen" (Zweit-Audit
     // D-01): Die Blockaufträge verbieten Befehle kategorisch — ohne diesen
@@ -772,6 +777,37 @@ export const texte = {
       'NUR diese Beanstandungen nach — keine erneute Vollprüfung, keine neuen Prüffelder. ' +
       'Sei streng: Ein kleines Modell macht Fehler, übernimm nichts ungeprüft. ' +
       'Deine Beanstandungen von letzter Runde:\n' + kritik,
+    // Diff der bisherigen Runden (BAUPLAN 34, Retained Reasoning light): Der
+    // frische Bauer soll nicht neu erkunden, sondern dort weitermachen, wo er
+    // aufgehört hat — FlowForge rechnet den Unterschied aus den Sicherungspunkten.
+    eigeneAenderungen: (diff) =>
+      '\n\nDas hast du (derselbe Block) in diesem Lauf bisher am Projekt geändert — von ' +
+      'FlowForge aus den Sicherungspunkten gerechnet, nicht von dir erzählt. Nimm es als ' +
+      'gegeben: Erkunde diese Stellen nicht neu und triff keine anderen ' +
+      'Entwurfsentscheidungen als beim letzten Mal — behebe nur die Beanstandungen.\n' +
+      diff,
+    // Diff für den Prüfer in der Nachprüfung: was sich seit seinem Urteil getan hat.
+    aenderungenSeitUrteil: (diff) =>
+      '\n\nDas hat sich am Projekt geändert, seit du dein Urteil gefällt hast — von ' +
+      'FlowForge aus den Sicherungspunkten gerechnet (die Prüfmappe pruefung/ ist ' +
+      'ausgenommen, deine eigenen Tests stehen also nicht darin):\n' + diff,
+    // Das eigene Fazit der letzten Runde ist das „warum" zum Diff.
+    vorFazit: (fazit) =>
+      '\n\nDein eigenes Fazit aus der letzten Runde (so hast du es damals begründet):\n' + fazit,
+    // Kanten-Gate (BAUPLAN 34): Ein Urteil FEHLGESCHLAGEN ohne eine einzige
+    // Beanstandungs-Zeile ist wertlos — der Bauer wüsste nicht, was zu tun ist.
+    // FlowForge fordert kurz nach, statt eine Reparatur-Runde zu verbrennen.
+    beanstandungNachforderung: (belegVorher) =>
+      '\n\nNachforderung von FlowForge: Du hast in diesem Lauf schon geprüft und mit ' +
+      '„PRUEFUNG: FEHLGESCHLAGEN" geurteilt — aber dein Prüfbeleg enthält keine einzige ' +
+      'Zeile im Muster „BEANSTANDUNG (mechanisch): …" oder „BEANSTANDUNG ' +
+      '(grundsätzlich): …". Ohne diese Zeilen weiß der Bauer nicht, was er beheben soll. ' +
+      'Prüfe jetzt NICHTS neu und führe keine Tests erneut aus: Formuliere allein aus ' +
+      'deinem Beleg unten jede Beanstandung als eigene Zeile in genau diesem Muster ' +
+      '(mit Fundort; im Zweifel „grundsätzlich"), und wiederhole danach unverändert die ' +
+      'Prüfkarten-Zeilen und als allerletzte Zeile PRUEFUNG: FEHLGESCHLAGEN. Findest du ' +
+      'beim Lesen, dass es in Wahrheit nichts zu beanstanden gibt, urteile ehrlich ' +
+      'PRUEFUNG: BESTANDEN. Dein Prüfbeleg von eben:\n' + belegVorher,
     startanleitungNachforderung:
       '\n\nNachforderung von FlowForge: Dieser Auftrag ist schon umgesetzt, aber die ' +
       'Startanleitung des Projekts fehlt noch. Lege sie jetzt mit dem Werkzeug ' +
@@ -1719,6 +1755,29 @@ export const texte = {
       'Der Prüfer hat kein eindeutiges Ergebnis geliefert — das gilt als nicht bestanden.',
     rueckfuehrung: (name, runde, gesamt) =>
       `Zurück zu „${name}" — Reparatur-Runde ${runde} von ${gesamt}.`,
+    // Kanten-Ehrlichkeit (BAUPLAN 34): Was an den Kanten passiert, steht im
+    // Ticker — und damit im Laufbericht.
+    beanstandungenUebergeben: (anzahl, name) =>
+      `${anzahl} ${anzahl === 1 ? 'Beanstandung' : 'Beanstandungen'} an „${name}" übergeben.`,
+    beanstandungenNachgefordert: (name) =>
+      `Urteil „nicht bestanden" ohne eine einzige Beanstandungs-Zeile — „${name}" liefert sie ` +
+      'nach, bevor eine Reparatur-Runde verbraucht wird.',
+    beanstandungenOhneMarken: (name) =>
+      `„${name}" hat auch nach der Nachforderung keine Beanstandungs-Zeilen geliefert — ` +
+      'weitergereicht wird der ganze Prüfbeleg.',
+    beanstandungenTeilweise: (weggelassen) =>
+      `${weggelassen} ${weggelassen === 1 ? 'Beanstandung passte' : 'Beanstandungen passten'} ` +
+      'nicht mehr in die Rückmeldung — sie kommen in der nächsten Runde dran.',
+    diffUebergeben: (name, dateien, zeilen) =>
+      `Änderungen der letzten Runde an „${name}" übergeben: ${dateien} ` +
+      `${dateien === 1 ? 'Datei' : 'Dateien'}, ${zeilen} ${zeilen === 1 ? 'Zeile' : 'Zeilen'}.`,
+    diffGekuerzt: 'Der Änderungs-Überblick war zu lang — FlowForge hat ihn sichtbar gekürzt.',
+    uebergabenZusammengefuehrt: (anzahl, etikett) =>
+      `${anzahl} Lieferungen „${etikett}" zusammengeführt — der Block bekommt alle, ` +
+      'keine geht still verloren.',
+    uebergabeGekuerzt: (name, von, auf) =>
+      `Übergabe von „${name}" gekürzt: ${von.toLocaleString('de-DE')} → ` +
+      `${auf.toLocaleString('de-DE')} Zeichen (in der Mitte, das Ende bleibt vollständig).`,
     entscheidungGestellt: 'Folgen-Frage an dich — bitte im Fenster beantworten.',
     menschFrageGestellt: 'Frage an dich — bitte im Gespräch antworten.',
     menschGeantwortet: 'Deine Antwort ist beim Agenten.',

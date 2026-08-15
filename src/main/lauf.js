@@ -24,9 +24,12 @@ import {
   pruefePflichtfelder,
   auftragMitFeldern,
   vorfahrenSortiert,
+  vorfahrenDistanzen,
   rueckfuehrungsZiel,
   zwischenBloecke
 } from '../shared/kettenRegeln.js'
+import { prueferKritik, mitteGekuerzt } from '../shared/kantenRegeln.js'
+import { diffTextBauen, diffBilanz } from '../shared/laufDiff.js'
 import { einstellungenLaden, ABO_MODUS_ERLAUBT } from './einstellungen.js'
 import {
   kartenLaden,
@@ -63,7 +66,10 @@ import { kartenZeile } from './motor/kartenWerkzeuge.js'
 import {
   sicherungspunktAnlegen,
   aufLetztenPunktZuruecksetzen,
-  wiederherstellen
+  wiederherstellen,
+  letzterPunktId,
+  standWeichtAb,
+  punkteVergleichen
 } from './sicherungspunkte.js'
 import { workflowLaden } from './workflow.js'
 import { laufstandSpeichern, laufstandLaden, laufstandLoeschen } from './laufstand.js'
@@ -299,14 +305,11 @@ function pruefUrteil(ergebnisText) {
   return treffer[treffer.length - 1][1].toUpperCase() === 'BESTANDEN'
 }
 
-// Die Begründung des Prüfers (ohne die Urteils-Marke) — geht als Rückmeldung
-// an den Block, zu dem die Reparatur-Runde zurückspringt.
-function prueferKritik(ergebnisText) {
-  const ohneMarke = String(ergebnisText)
-    .replace(/PR(?:UE|Ü)FUNG:?\s*(BESTANDEN|FEHLGESCHLAGEN)/gi, '')
-    .trim()
-  return ohneMarke.length > 600 ? ohneMarke.slice(0, 600) + ' …' : ohneMarke
-}
+// Die Begründung des Prüfers geht als Rückmeldung an den Block, zu dem die
+// Reparatur-Runde zurückspringt — seit BAUPLAN 34 als vollständige
+// Beanstandungs-Zeilen statt als 600-Zeichen-Torso (die Beanstandungen stehen
+// laut Prüfer-Auftrag am ENDE des Belegs und fielen darum regelmäßig weg).
+// Die Regel selbst steht in kantenRegeln.js und ist einzeln geprüft.
 
 // Kartenvorauswahl (BAUPLAN 7, SPEC §5): Status-Karte immer + die beim Start
 // gewählten Karten. Wird vor jedem Block frisch gelesen — der Agent kann Karten
@@ -348,10 +351,13 @@ function projektwissenFuerHelfer(projektPfad, kartenIds) {
 // Abschlusstext — Nachfahren entlang der Pfeile mit passendem „braucht"
 // bekommen ihn in den Auftrag. Gekürzt, damit ein ausufernder Abschlusstext
 // den Kontext des nächsten Blocks nicht flutet.
+// Seit BAUPLAN 34 wird schema-bewusst gekürzt: in der MITTE, nicht hinten —
+// die Marker-Zeilen am Ende (BEANSTANDUNG, PRUEFKARTE, PRUEFUNG) überleben,
+// und die Kürzung steht sichtbar im Ticker (also auch im Laufbericht).
 const LIEFERUNG_MAX = 8000
 
 function gekuerzt(text) {
-  return text.length > LIEFERUNG_MAX ? text.slice(0, LIEFERUNG_MAX) + ' …' : text
+  return mitteGekuerzt(text, LIEFERUNG_MAX).text
 }
 
 // fortsetzung (BAUPLAN 11): gespeicherter Laufstand einer Unterbrechung — die
@@ -980,7 +986,25 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           // Metriken (BAUPLAN 31): Aufwand und Ziel-Block des laufenden
           // lokalen Reparatur-Versuchs — das Urteil fällt erst in der Nachprüfung.
           lokaleReparaturSchritte: 0,
-          lokaleReparaturBlock: null
+          lokaleReparaturBlock: null,
+          // Kanten-Ehrlichkeit (BAUPLAN 34):
+          // diffBasis — Sicherungspunkt, ab dem „das hast du bisher geändert"
+          //   gerechnet wird (beim ersten Start des Blocks gemerkt; beim Prüfer
+          //   bei jeder Rückführung neu, denn für ihn zählt „seit meinem Urteil");
+          // diffBasisVerschmutzt — der Ordner wich beim ersten Start schon ab;
+          // diffAnfordern/diffText — der Diff für den nächsten Anlauf;
+          // vorFazit — das eigene Fazit der letzten Runde als das „warum";
+          // beanstandungNachforderung — der Prüfbeleg ohne Beanstandungs-Zeilen,
+          //   den der Prüfer in der Nachforderung nachbessern soll;
+          // fanOutGemeldet — je Etikett nur einmal „zusammengeführt" tickern.
+          diffBasis: undefined,
+          diffBasisVerschmutzt: false,
+          diffAnfordern: false,
+          diffText: '',
+          vorFazit: '',
+          beanstandungNachforderung: '',
+          beanstandungNachgefordert: false,
+          fanOutGemeldet: new Set()
         }
       ])
     )
@@ -989,6 +1013,11 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     for (const pfeil of workflow.pfeile) vorgaengerVon.get(pfeil.nach)?.push(pfeil.von)
     const vorfahrenVon = new Map(
       kettenIds.map((id) => [id, vorfahrenSortiert(workflow.bloecke, workflow.pfeile, id)])
+    )
+    // Kürzeste Distanz jedes Vorfahren (BAUPLAN 34) — entscheidet bei
+    // gleichem Etikett, wer übergibt: der nähere allein, gleich nahe alle.
+    const distanzVon = new Map(
+      kettenIds.map((id) => [id, vorfahrenDistanzen(workflow.bloecke, workflow.pfeile, id)])
     )
 
     // Karten-Zuteilung (BAUPLAN 29): instanzId → Karten-IDs, gefüllt vom
@@ -1110,6 +1139,34 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           .filter((id) => knoten.get(id).nachpruefung)
           .map((id) => [id, knoten.get(id).nachpruefung]),
         nachforderungen: kettenIds.filter((id) => knoten.get(id).startanleitungNachforderung),
+        // Kanten-Ehrlichkeit (BAUPLAN 34): Diff-Basis, Vor-Fazit und eine
+        // offene Beanstandungs-Nachforderung wandern mit — sonst stünde der
+        // Bauer nach einem App-Neustart wieder ohne sie da. Der Diff-TEXT
+        // selbst nicht: Er wird beim nächsten Anlauf ohnehin frisch gerechnet.
+        kanten: kettenIds
+          .filter((id) => {
+            const nk = knoten.get(id)
+            return (
+              nk.diffBasis !== undefined ||
+              nk.vorFazit ||
+              nk.beanstandungNachforderung ||
+              nk.beanstandungNachgefordert
+            )
+          })
+          .map((id) => {
+            const nk = knoten.get(id)
+            return [
+              id,
+              {
+                diffBasis: nk.diffBasis ?? null,
+                diffBasisVerschmutzt: nk.diffBasisVerschmutzt,
+                diffAnfordern: nk.diffAnfordern || Boolean(nk.diffText),
+                vorFazit: nk.vorFazit,
+                beanstandungNachforderung: nk.beanstandungNachforderung,
+                beanstandungNachgefordert: nk.beanstandungNachgefordert
+              }
+            ]
+          }),
         uebergaben: kettenIds
           .filter((id) => knoten.get(id).uebergabe || knoten.get(id).uebergabeVerloren)
           .map((id) => [
@@ -1159,6 +1216,19 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         if (knoten.has(id) && typeof text === 'string') knoten.get(id).nachpruefung = text
       for (const id of Array.isArray(fortsetzung.nachforderungen) ? fortsetzung.nachforderungen : [])
         if (knoten.has(id)) knoten.get(id).startanleitungNachforderung = true
+      // Kanten-Ehrlichkeit (BAUPLAN 34): tolerant gegenüber alten Laufständen —
+      // ohne Eintrag läuft alles wie vor diesem Schritt, nur ohne Diff.
+      for (const [id, kante] of Array.isArray(fortsetzung.kanten) ? fortsetzung.kanten : [])
+        if (knoten.has(id) && kante && typeof kante === 'object') {
+          const nk = knoten.get(id)
+          if (typeof kante.diffBasis === 'string') nk.diffBasis = kante.diffBasis
+          nk.diffBasisVerschmutzt = Boolean(kante.diffBasisVerschmutzt)
+          nk.diffAnfordern = Boolean(kante.diffAnfordern)
+          if (typeof kante.vorFazit === 'string') nk.vorFazit = kante.vorFazit
+          if (typeof kante.beanstandungNachforderung === 'string')
+            nk.beanstandungNachforderung = kante.beanstandungNachforderung
+          nk.beanstandungNachgefordert = Boolean(kante.beanstandungNachgefordert)
+        }
       for (const [id, u] of Array.isArray(fortsetzung.uebergaben) ? fortsetzung.uebergaben : [])
         if (knoten.has(id)) {
           knoten.get(id).uebergabe = typeof u?.text === 'string' ? u.text : ''
@@ -1448,6 +1518,22 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       let blockKosten = null
       const blockAufschluesselung = { eingabe: 0, ausgabe: 0, cacheLesen: 0, cacheSchreiben: 0 }
       let blockHatAufschluesselung = false
+      // Diff der Reparatur-Runden (BAUPLAN 34): Beim ERSTEN Start eines
+      // schreibenden Blocks halten wir fest, auf welchem Sicherungspunkt der
+      // Projektordner steht — daraus rechnet FlowForge später „das hast du in
+      // diesem Lauf bisher geändert" (kumulativ über alle Runden).
+      if (!k.def.nurLesen && k.diffBasis === undefined) {
+        k.diffBasis = await letzterPunktId(projektPfad)
+        // Ehrliche Grenze: Hat vorher ein nur-lesender Block per Befehl Dateien
+        // verändert, steckt das mit im Diff — dann sagt der Auftrag es dazu.
+        // Nachsehen lohnt nur, wenn das überhaupt möglich war: Ohne die
+        // Einstellung „Nur-lesende Blöcke dürfen Befehle ausführen" ändert kein
+        // nur-lesender Block etwas, und der Blick über den ganzen Ordner entfällt.
+        k.diffBasisVerschmutzt =
+          Boolean(k.diffBasis) && einstellungen.nurLesenBefehle
+            ? await standWeichtAb(projektPfad)
+            : false
+      }
       // Hängt die Verbrauchs-Summen dieses Blocks an ein endgültiges Ergebnis.
       function mitBlockVerbrauch(ergebnis) {
         return {
@@ -1459,6 +1545,12 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       }
       while (true) {
         standSpeichern()
+        // Diff für diesen Anlauf rechnen (BAUPLAN 34) — erst jetzt, denn beim
+        // Prüfer zählt der Stand NACH der Reparatur-Runde des Bauers.
+        if (k.diffAnfordern) {
+          k.diffAnfordern = false
+          k.diffText = await diffTextFuer(k)
+        }
         // Jeder Anlauf ist ein frischer Agent in der Lauf-Session (BAUPLAN 19):
         // Auch Reparatur-Runden bekommen den vollen Auftrag samt Zusatz —
         // Rückmeldung, Nachforderung und Übergabe bleiben am Knoten, bis der
@@ -1502,6 +1594,19 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           auftrag += k.lokaleNachpruefung
             ? texte.agentenUebergabe.lokaleNachpruefung(k.nachpruefung)
             : texte.agentenUebergabe.prueferNachpruefung(k.nachpruefung)
+        // Diff + Vor-Fazit (BAUPLAN 34, Retained Reasoning light): Der frische
+        // Agent erkundet nicht neu — er weiß, was in diesem Lauf schon
+        // geschehen ist und warum. Das Frische-Prinzip bleibt: Er erbt kein
+        // Arbeitsgedächtnis, nur diese von FlowForge gerechneten Tatsachen.
+        if (k.diffText)
+          auftrag += k.def.prueft
+            ? texte.agentenUebergabe.aenderungenSeitUrteil(k.diffText)
+            : texte.agentenUebergabe.eigeneAenderungen(k.diffText)
+        if (k.vorFazit) auftrag += texte.agentenUebergabe.vorFazit(k.vorFazit)
+        // Kanten-Gate (BAUPLAN 34): Urteil ohne Beanstandungs-Zeile — der
+        // Prüfer liefert sie nach, statt eine Reparatur-Runde zu verbrennen.
+        if (k.beanstandungNachforderung)
+          auftrag += texte.agentenUebergabe.beanstandungNachforderung(k.beanstandungNachforderung)
         if (k.startanleitungNachforderung)
           auftrag += texte.agentenUebergabe.startanleitungNachforderung
         if (k.uebergabe) auftrag += texte.agentenUebergabe.uebertragFortsetzung(k.uebergabe)
@@ -1639,24 +1744,77 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       }
     }
 
+    // Diff der bisherigen Runden (BAUPLAN 34): Was hat sich seit der
+    // Diff-Basis dieses Blocks am Projekt geändert? Gerechnet aus zwei
+    // Sicherungspunkten (kein git.exe nötig), ohne pruefung/ und
+    // arbeitsablage/ — die Prüfer-Tests liegen beim Rückführen uncommittet im
+    // Ordner und wanderten sonst als „Bauer-Änderung" mit.
+    async function diffTextFuer(k) {
+      const bis = await letzterPunktId(projektPfad)
+      if (!k.diffBasis || !bis || k.diffBasis === bis) return ''
+      const vergleich = await punkteVergleichen(projektPfad, k.diffBasis, bis)
+      if (!vergleich.ok || vergleich.dateien.length === 0) return ''
+      const text = diffTextBauen(vergleich.dateien, { verschmutzt: k.diffBasisVerschmutzt })
+      tickern(
+        texte.ticker.diffUebergeben(
+          k.def.name,
+          vergleich.dateien.length,
+          diffBilanz(vergleich.dateien)
+        )
+      )
+      if (vergleich.dateien.some((datei) => datei.zuGross)) tickern(texte.ticker.diffGekuerzt)
+      return text
+    }
+
     // Übergaben aus den Lieferungen der Vorfahren einsammeln — deterministisch
-    // in topologischer Reihenfolge (bei gleichem Etikett gewinnt der spätere,
-    // also nähere Vorfahre).
+    // in topologischer Reihenfolge. Fan-out ohne Datenverlust (BAUPLAN 34):
+    // Bei ungleicher Distanz gewinnt weiter der nähere Vorfahre; liefern
+    // mehrere GLEICH nahe Vorfahren dasselbe Etikett (zwei Angreifer vor dem
+    // Bauer, Prüfer neben Angreifer), bekommt der Nachfolger alle nummeriert —
+    // früher gewann still einer, und die andere Arbeit war bezahlt und weg.
     function uebergabenText(k) {
+      const distanz = distanzVon.get(k.eintrag.instanzId)
       const geliefert = new Map()
       for (const vorfahre of vorfahrenVon.get(k.eintrag.instanzId)) {
         const vk = knoten.get(vorfahre.instanzId)
         if (vk.lieferung == null) continue
-        for (const etikett of vk.def.liefert)
-          geliefert.set(etikett, { block: vk.def.name, text: vk.lieferung })
+        const naehe = distanz.get(vorfahre.instanzId) ?? Number.MAX_SAFE_INTEGER
+        for (const etikett of vk.def.liefert) {
+          const bisher = geliefert.get(etikett)
+          if (!bisher || naehe < bisher.naehe)
+            geliefert.set(etikett, { naehe, liste: [{ block: vk.def.name, text: vk.lieferung }] })
+          else if (naehe === bisher.naehe)
+            bisher.liste.push({ block: vk.def.name, text: vk.lieferung })
+        }
       }
       const eintraege = []
       // Optionale Bedarfe (z.B. Angriffsliste beim Bauer) werden mitgereicht,
       // wenn ein Vorfahre sie geliefert hat — verlangt werden sie nicht.
       for (const etikett of [...k.def.braucht, ...(k.def.brauchtOptional ?? [])]) {
-        const lieferung = geliefert.get(etikett)
-        if (lieferung)
-          eintraege.push(texte.agentenUebergabe.eintrag(etikett, lieferung.block, lieferung.text))
+        const treffer = geliefert.get(etikett)
+        if (!treffer) continue
+        if (treffer.liste.length === 1) {
+          eintraege.push(
+            texte.agentenUebergabe.eintrag(etikett, treffer.liste[0].block, treffer.liste[0].text)
+          )
+          continue
+        }
+        treffer.liste.forEach((lieferung, index) =>
+          eintraege.push(
+            texte.agentenUebergabe.eintragMehrfach(
+              etikett,
+              index + 1,
+              treffer.liste.length,
+              lieferung.block,
+              lieferung.text
+            )
+          )
+        )
+        // Einmal je Block ehrlich im Ticker — nicht bei jedem Anlauf erneut.
+        if (!k.fanOutGemeldet.has(etikett)) {
+          k.fanOutGemeldet.add(etikett)
+          tickern(texte.ticker.uebergabenZusammengefuehrt(treffer.liste.length, etikett))
+        }
       }
       if (eintraege.length === 0) return ''
       return texte.agentenUebergabe.ueberschrift + eintraege.join('')
@@ -1792,11 +1950,21 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       k.startanleitungNachforderung = false
       k.uebergabe = ''
       k.uebergabeVerloren = false
+      // Kanten-Zusätze dieses Anlaufs (BAUPLAN 34) sind damit ebenfalls erledigt.
+      k.diffText = ''
+      k.diffAnfordern = false
+      k.vorFazit = ''
+      k.beanstandungNachforderung = ''
 
       // Abschlusstext als Lieferung für die Nachfahren ablegen und für die
       // Karten-Anzeige merken.
       const abschlusstext = String(ergebnis.ergebnisText ?? '')
-      k.lieferung = gekuerzt(abschlusstext)
+      const lieferung = mitteGekuerzt(abschlusstext, LIEFERUNG_MAX)
+      k.lieferung = lieferung.text
+      // Kürzung sichtbar (BAUPLAN 34): Eine stillschweigend gestutzte Übergabe
+      // ist genau die Art Kanten-Verlust, die dieser Schritt abstellt.
+      if (lieferung.gekuerzt)
+        tickern(texte.ticker.uebergabeGekuerzt(k.def.name, lieferung.von, lieferung.auf))
       const blockErgebnis = {
         instanzId: id,
         block: k.def.name,
@@ -1861,6 +2029,29 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           pruefkarteNachBestandenerPruefung(id, ergebnis.ergebnisText)
         } else {
           tickern(bestanden === false ? texte.ticker.pruefungNichtBestanden : texte.ticker.pruefungOhneErgebnis)
+          // Kanten-Gate (BAUPLAN 34): Ein Urteil FEHLGESCHLAGEN ohne eine
+          // einzige Beanstandungs-Zeile ist für den Bauer wertlos — FlowForge
+          // fordert einmal beim Prüfer nach (kostet KEINE Reparatur-Runde),
+          // statt eine zu verbrennen. Bewusst nur bei einem eindeutigen
+          // Fehlurteil: Ein Prüfer ganz ohne Urteils-Marke ist abgebrochen
+          // oder verunglückt — da hilft Nachfordern nicht.
+          const belegKritik = prueferKritik(ergebnis.ergebnisText)
+          if (
+            bestanden === false &&
+            belegKritik.anzahl === 0 &&
+            !k.beanstandungNachgefordert &&
+            !lauf.sanft &&
+            !lauf.hart &&
+            !endZustand
+          ) {
+            k.beanstandungNachgefordert = true
+            k.beanstandungNachforderung = gekuerzt(String(ergebnis.ergebnisText ?? ''))
+            k.status = 'offen'
+            tickern(texte.ticker.beanstandungenNachgefordert(k.def.name))
+            return
+          }
+          if (belegKritik.anzahl === 0 && k.beanstandungNachgefordert)
+            tickern(texte.ticker.beanstandungenOhneMarken(k.def.name))
           const zielId = rueckfuehrungsZiel(workflow.bloecke, workflow.pfeile, id)
 
           // Lokale Vorreparatur (BAUPLAN 20): Mechanische Beanstandungen
@@ -1900,7 +2091,7 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
             k.lokaleVersuche = 0
             k.lokaleKritik =
               beanstandungenEinstufen(ergebnis.ergebnisText) === 'mechanisch'
-                ? prueferKritik(ergebnis.ergebnisText)
+                ? belegKritik.text
                 : null
             if (!k.lokaleKritik) tickern(texte.ticker.lokaleReparaturNichtMechanisch(zielK.def.name))
           }
@@ -1980,7 +2171,7 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
             k.lokaleKritik = null
           }
 
-          const kritik = eskalationsKritik ?? prueferKritik(ergebnis.ergebnisText)
+          const kritik = eskalationsKritik ?? belegKritik.text
           if (rundenUebrig > 0 && zielId && !lauf.sanft && !lauf.hart && !endZustand) {
             rundenUebrig--
             const genutzt = workflow.reparaturRunden - rundenUebrig
@@ -1990,12 +2181,26 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
               const nk = knoten.get(nochmalId)
               if (nk.status === 'fertig') nk.status = 'offen'
             }
-            knoten.get(zielId).rueckmeldung = kritik
+            const ziel = knoten.get(zielId)
+            ziel.rueckmeldung = kritik
+            // Diff + Vor-Fazit (BAUPLAN 34): Der frische Bauer bekommt neben
+            // der Kritik den exakten Unterschied „das hast du in diesem Lauf
+            // bisher geändert" und sein eigenes Fazit der letzten Runde als
+            // das „warum" — er erkundet nicht neu und entscheidet nicht anders.
+            ziel.diffAnfordern = true
+            ziel.vorFazit = ziel.lieferung ?? ''
+            // Für den Prüfer zählt ab jetzt „was sich seit meinem Urteil
+            // geändert hat" — seine Nachprüfung bekommt denselben Dienst.
+            k.diffBasis = await letzterPunktId(projektPfad)
+            k.diffAnfordern = true
             // Der Prüfer selbst prüft in der nächsten Runde nur seine
             // Beanstandungen nach — keine erneute Vollprüfung.
             k.nachpruefung = kritik
-            const zielName = knoten.get(zielId).def.name
-            tickern(texte.ticker.rueckfuehrung(zielName, genutzt, workflow.reparaturRunden))
+            tickern(texte.ticker.rueckfuehrung(ziel.def.name, genutzt, workflow.reparaturRunden))
+            if (belegKritik.anzahl > 0)
+              tickern(texte.ticker.beanstandungenUebergeben(belegKritik.anzahl, ziel.def.name))
+            if (belegKritik.weggelassen > 0)
+              tickern(texte.ticker.beanstandungenTeilweise(belegKritik.weggelassen))
             return
           }
           const wahl = await entscheidungStellen(k.def.name, workflow.reparaturRunden)

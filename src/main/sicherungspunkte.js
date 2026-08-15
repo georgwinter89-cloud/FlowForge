@@ -8,6 +8,7 @@ import path from 'node:path'
 import crypto from 'node:crypto'
 import git, { TREE, WORKDIR } from 'isomorphic-git'
 import { texte } from '../shared/texte.js'
+import { dateiUnterschied } from '../shared/laufDiff.js'
 
 // Diese Ordner gehören nicht in Sicherungspunkte: .git (eigenes Repo des Projekts),
 // laufberichte (reines Nachschlagewerk — bleibt von Wiederherstellungen unberührt),
@@ -219,6 +220,94 @@ export async function wiederherstellen(projektPfad, punktId) {
     return { ok: true }
   } catch {
     return { ok: false, fehler: texte.sicherungen.fehlerWiederherstellen }
+  }
+}
+
+// ——— Diff für Reparatur-Runden (BAUPLAN 34) ————————————————————————————————
+// Zusätzlich zu den ohnehin ausgeschlossenen Ordnern bleibt die Prüfmappe
+// draußen: Die Prüfer-Tests liegen beim Rückführen uncommittet im Ordner (die
+// Rückführung kehrt vor dem „nach Prüfer"-Punkt zurück) und wanderten sonst
+// als „Bauer-Änderung" in den Diff.
+const DIFF_AUSGESCHLOSSEN = new Set(['pruefung'])
+
+function diffAusgeschlossen(dateipfad) {
+  const erstes = dateipfad.split('/')[0]
+  return AUSGESCHLOSSEN.has(erstes) || DIFF_AUSGESCHLOSSEN.has(erstes)
+}
+
+// Auf welchem Sicherungspunkt steht der Projektordner gerade? Grundlage für
+// „Das hast du in diesem Lauf bisher geändert" — null, wenn es noch keinen gibt.
+export async function letzterPunktId(projektPfad) {
+  try {
+    const gitdir = gitVerzeichnis(projektPfad)
+    if (!fs.existsSync(path.join(gitdir, 'HEAD'))) return null
+    return (await neuesterPunkt(gitdir))?.oid ?? null
+  } catch {
+    return null
+  }
+}
+
+// Weicht der Projektordner schon vom letzten Sicherungspunkt ab? Ehrliche
+// Grenze des Diffs: Hat vorher ein nur-lesender Block per Befehl Dateien
+// verändert, zählt das mit — dann steht das als Hinweis im Auftrag.
+export async function standWeichtAb(projektPfad) {
+  try {
+    const gitdir = gitVerzeichnis(projektPfad)
+    if (!fs.existsSync(path.join(gitdir, 'HEAD'))) return false
+    const kopf = await neuesterPunkt(gitdir)
+    if (!kopf) return false
+    const liste = await unterschiede(projektPfad, gitdir, kopf.oid)
+    return liste.some((eintrag) => !diffAusgeschlossen(eintrag.pfad))
+  } catch {
+    return false
+  }
+}
+
+// Bis hierhin gilt eine Datei als Text — darüber (oder bei einem NUL-Byte)
+// gibt es nur die Zeilenbilanz, keinen Ausschnitt.
+const TEXT_MAX_BYTES = 400_000
+
+async function inhaltVonBlob(gitdir, oid) {
+  const { blob } = await git.readBlob({ fs, gitdir, oid })
+  if (blob.length > TEXT_MAX_BYTES) return { binaer: true }
+  if (blob.includes(0)) return { binaer: true }
+  return { text: Buffer.from(blob).toString('utf8') }
+}
+
+// Unterschied zwischen zwei Sicherungspunkten: Dateiliste mit Zeilenbilanz und
+// Ausschnitten der geänderten Stellen. Zwei TREE-Bäume wie die
+// Wiederherstellen-Vorschau — kein git.exe nötig.
+export async function punkteVergleichen(projektPfad, vonId, bisId) {
+  try {
+    const gitdir = gitVerzeichnis(projektPfad)
+    if (!fs.existsSync(path.join(gitdir, 'HEAD'))) return { ok: false, dateien: [] }
+    const roh = await git.walk({
+      fs,
+      dir: projektPfad,
+      gitdir,
+      trees: [TREE({ ref: vonId }), TREE({ ref: bisId })],
+      map: async (dateipfad, [vorher, nachher]) => {
+        if (dateipfad === '.') return undefined
+        if (diffAusgeschlossen(dateipfad)) return null
+        const vorherTyp = vorher ? await vorher.type() : null
+        const nachherTyp = nachher ? await nachher.type() : null
+        if (vorherTyp !== 'blob' && nachherTyp !== 'blob') return undefined
+        const vorherOid = vorherTyp === 'blob' ? await vorher.oid() : null
+        const nachherOid = nachherTyp === 'blob' ? await nachher.oid() : null
+        if (vorherOid && nachherOid && vorherOid === nachherOid) return undefined
+        return { pfad: dateipfad, vorherOid, nachherOid }
+      }
+    })
+    const dateien = []
+    for (const eintrag of roh ?? []) {
+      const alt = eintrag.vorherOid ? await inhaltVonBlob(gitdir, eintrag.vorherOid) : null
+      const neu = eintrag.nachherOid ? await inhaltVonBlob(gitdir, eintrag.nachherOid) : null
+      dateien.push(dateiUnterschied(eintrag.pfad, alt, neu))
+    }
+    dateien.sort((a, b) => a.pfad.localeCompare(b.pfad, 'de'))
+    return { ok: true, dateien }
+  } catch {
+    return { ok: false, dateien: [] }
   }
 }
 

@@ -83,6 +83,29 @@ export function vorfahrenSortiert(bloecke, pfeile, instanzId) {
   return topologisch(bloecke, pfeile).filter((b) => gefunden.has(b.instanzId))
 }
 
+// Kürzeste Distanz jedes Vorfahren zu dieser Karte entlang der Pfeile
+// (BAUPLAN 34): 1 = direkter Vorgänger. Grundlage für Übergaben — liefern
+// mehrere Vorfahren GLEICHER Distanz dasselbe Etikett (zwei Angreifer vor dem
+// Bauer), gewinnt keiner still, alle werden übergeben; bei ungleicher Distanz
+// gilt weiter „näherer Vorfahre gewinnt".
+export function vorfahrenDistanzen(bloecke, pfeile, instanzId) {
+  const { vorgaenger } = nachbarn(bloecke, pfeile)
+  const distanz = new Map()
+  let welle = [...(vorgaenger.get(instanzId) ?? [])]
+  let stufe = 1
+  while (welle.length) {
+    const naechste = []
+    for (const id of welle) {
+      if (distanz.has(id)) continue
+      distanz.set(id, stufe)
+      naechste.push(...(vorgaenger.get(id) ?? []))
+    }
+    welle = naechste
+    stufe++
+  }
+  return distanz
+}
+
 // Schaubild-Regeln beim Bearbeiten — liefert null oder eine Fehlermeldung.
 // Parallele Zweige (SPEC §4.1, seit Bauschritt 13): Aus einer Karte dürfen
 // mehrere Pfeile ausgehen, und mehrere dürfen an einer ankommen (Zusammenführen).
