@@ -1,6 +1,6 @@
 # FlowForge — Produkt-Spezifikation V1
 
-Stand: 16.08.2026 (Bauschritt 37) · Ursprung: Grilling-Session vom 07.08.2026 (von Georg freigegeben) ·
+Stand: 16.08.2026 (Bauschritt 40) · Ursprung: Grilling-Session vom 07.08.2026 (von Georg freigegeben) ·
 fortlaufend gepflegt — dieses Dokument beschreibt die Gegenwart, Verhaltensänderungen
 werden hier nachgezogen (Historie liefert git).
 
@@ -373,7 +373,17 @@ passendem braucht in den Auftrag gereicht. Liefern mehrere Vorfahren dasselbe
 Etikett, gewinnt der nächstgelegene — liegen mehrere **gleich nah** (zwei Angreifer
 vor dem Bauer), bekommt der Nachfolger seit Bauschritt 34 **alle** nummeriert
 („Angriffsliste (1 von 2) von …"), und der Ticker sagt es; früher gewann still einer
-und die andere Arbeit war bezahlt und weg. Gekürzt wird auf 8.000 Zeichen je
+und die andere Arbeit war bezahlt und weg. Seit Bauschritt 40 gilt dasselbe für die
+**ungleiche** Distanz: Der nähere Vorfahre gewinnt weiter, aber die verdrängte
+Lieferung steht im Ticker („‚Angriffsliste' für Block 5 ‚Bauer' kommt von Block 4
+‚Angreifer' — näher im Schaubild. Verdrängt: Block 2 ‚Angreifer'; diese Arbeit geht
+nicht in den Auftrag.") — je Block und Etikett einmal. Vorher verschwand sie
+wortlos, egal in welcher Reihenfolge die Zweige fertig wurden. Gemeldet wird nur,
+was der Block überhaupt braucht. Ausgenommen von der Distanz-Regel sind Blöcke mit
+dem Kennzeichen **„führt zusammen"**: Sie bekommen **alle** Vorfahren mit passendem
+Etikett nummeriert, denn Zusammenführen ist ihre Aufgabe (Blöcke dafür gibt es mit
+Bauschritt 47). Dieselbe Entscheidung speist die braucht-Chips am Schaubild (§4.1) —
+sie zeigen nie einen anderen Lieferanten, als der Lauf nimmt. Gekürzt wird auf 8.000 Zeichen je
 Übergabe — seit Bauschritt 34 **in der Mitte statt hinten**, damit die Marker-Zeilen
 am Ende (BEANSTANDUNG, PRUEFKARTE, PRUEFUNG) überleben; jede Kürzung steht sichtbar
 im Ticker und damit im Laufbericht. Daneben gibt es

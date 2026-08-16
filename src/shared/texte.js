@@ -2024,6 +2024,13 @@ export const texte = {
     uebergabenZusammengefuehrt: (anzahl, etikett) =>
       `${anzahl} Lieferungen „${etikett}" zusammengeführt — der Block bekommt alle, ` +
       'keine geht still verloren.',
+    // Fan-in ohne stillen Verlust (BAUPLAN 40): Liefern zwei verschieden weit
+    // entfernte Vorfahren dasselbe Etikett, gewinnt weiter der nähere — aber
+    // die verdrängte Arbeit war bezahlt und verschwand bisher wortlos.
+    blockBezeichnung: (nummer, name) => (nummer ? `Block ${nummer} „${name}"` : `„${name}"`),
+    uebergabeVerdraengt: (etikett, empfaenger, gewinner, verdraengt) =>
+      `„${etikett}" für ${empfaenger} kommt von ${gewinner} — näher im Schaubild. ` +
+      `Verdrängt: ${verdraengt}; diese Arbeit geht nicht in den Auftrag.`,
     uebergabeGekuerzt: (name, von, auf) =>
       `Übergabe von „${name}" gekürzt: ${von.toLocaleString('de-DE')} → ` +
       `${auf.toLocaleString('de-DE')} Zeichen (in der Mitte, das Ende bleibt vollständig).`,

@@ -106,33 +106,86 @@ export function vorfahrenDistanzen(bloecke, pfeile, instanzId) {
   return distanz
 }
 
+// Welche Lieferungen der Vorfahren kommen im Auftrag dieses Blocks an?
+// (BAUPLAN 34/40) Die eine Stelle, an der über Ankommen und Verdrängen
+// entschieden wird — Lauf (Übergabe-Text) und Schaubild (braucht-Chips) fragen
+// beide hier, sonst zeigen die Chips etwas anderes, als der Lauf tut.
+//
+// `lieferungen` sind die Vorfahren mit Abschlusstext, topologisch sortiert:
+//   { name, nummer, naehe, liefert: [etikett], text }
+// Regel: Der nähere Vorfahre gewinnt; mehrere GLEICH nahe kommen alle an
+// (BAUPLAN 34 — früher gewann still einer). Neu in BAUPLAN 40: Was dabei
+// verdrängt wird, verschwindet nicht mehr wortlos, sondern steht als
+// `verdraengt` in der Gruppe — der Lauf tickert es. Blöcke mit dem Kennzeichen
+// `fuehrtZusammen` (BAUPLAN 47) nehmen alles: Für sie gilt die Distanz-Regel
+// gar nicht, denn Zusammenführen ist ihre Aufgabe.
+//
+// Gruppen entstehen nur für Etiketten, die dieser Block wirklich braucht
+// (braucht + brauchtOptional) — Lieferungen, die ihn nichts angehen, sind
+// keine Verdrängung, sondern Lärm im Ticker.
+export function uebergabenAuswahl(def, lieferungen) {
+  const fuehrtZusammen = Boolean(def?.fuehrtZusammen)
+  const gesammelt = new Map()
+  for (const lieferung of lieferungen) {
+    for (const etikett of lieferung.liefert ?? []) {
+      const bisher = gesammelt.get(etikett)
+      if (!bisher) {
+        gesammelt.set(etikett, {
+          naehe: lieferung.naehe,
+          angekommen: [lieferung],
+          verdraengt: []
+        })
+        continue
+      }
+      if (fuehrtZusammen || lieferung.naehe === bisher.naehe) {
+        bisher.angekommen.push(lieferung)
+        continue
+      }
+      // Beide Richtungen zählen: Der spätere nähere verdrängt die bisherigen
+      // (unten), der frühere nähere schluckt den späteren entfernteren
+      // (else-Zweig) — genau dieser zweite Fall lief bisher ohne jede Spur.
+      if (lieferung.naehe < bisher.naehe) {
+        bisher.verdraengt.push(...bisher.angekommen)
+        bisher.angekommen = [lieferung]
+        bisher.naehe = lieferung.naehe
+      } else bisher.verdraengt.push(lieferung)
+    }
+  }
+  const gruppen = []
+  for (const etikett of [...(def?.braucht ?? []), ...(def?.brauchtOptional ?? [])]) {
+    const treffer = gesammelt.get(etikett)
+    if (!treffer) continue
+    gruppen.push({ etikett, angekommen: treffer.angekommen, verdraengt: treffer.verdraengt })
+  }
+  return { gruppen }
+}
+
 // Sicht-Hilfe am Schaubild (BAUPLAN 36): Woher bekommt dieser Block, was er
 // braucht? Für jedes Etikett (braucht und brauchtOptional) die Namen der
-// liefernden Vorfahren — leer heißt „fehlt". Dieselbe Logik wie die Übergabe
-// im Lauf: Der nächste Vorfahre gewinnt; liefern mehrere GLEICH nahe dasselbe
-// Etikett (BAUPLAN 34), stehen alle da.
+// liefernden Vorfahren — leer heißt „fehlt". Dieselbe Entscheidung wie im Lauf
+// (uebergabenAuswahl), damit die Chips nicht etwas anderes behaupten.
 export function brauchtHerkunft(bloecke, pfeile, instanzId) {
   const eintrag = bloecke.find((b) => b.instanzId === instanzId)
   const def = blockDefinition(eintrag?.blockId)
   const herkunft = new Map()
   if (!def) return herkunft
   const distanz = vorfahrenDistanzen(bloecke, pfeile, instanzId)
-  const vorfahren = vorfahrenSortiert(bloecke, pfeile, instanzId)
-  for (const etikett of [...def.braucht, ...(def.brauchtOptional ?? [])]) {
-    let naechste = null
-    const namen = []
-    for (const vorfahre of vorfahren) {
-      const vDef = blockDefinition(vorfahre.blockId)
-      if (!vDef?.liefert.includes(etikett)) continue
-      const d = distanz.get(vorfahre.instanzId) ?? Infinity
-      if (naechste == null || d < naechste) {
-        naechste = d
-        namen.length = 0
-      }
-      if (d === naechste) namen.push(vDef.name)
-    }
-    herkunft.set(etikett, namen)
+  const lieferungen = []
+  for (const vorfahre of vorfahrenSortiert(bloecke, pfeile, instanzId)) {
+    const vDef = blockDefinition(vorfahre.blockId)
+    if (!vDef) continue
+    lieferungen.push({
+      name: vDef.name,
+      naehe: distanz.get(vorfahre.instanzId) ?? Number.MAX_SAFE_INTEGER,
+      liefert: vDef.liefert
+    })
   }
+  for (const etikett of [...def.braucht, ...(def.brauchtOptional ?? [])]) herkunft.set(etikett, [])
+  for (const gruppe of uebergabenAuswahl(def, lieferungen).gruppen)
+    herkunft.set(
+      gruppe.etikett,
+      gruppe.angekommen.map((l) => l.name)
+    )
   return herkunft
 }
 

@@ -1171,21 +1171,12 @@ kleinere Aufgaben an (Herkunft sichtbar), die alte Aufgabe ist erledigt vermerkt
 wählt er stattdessen „Zurückstellen", stehen die offenen Beanstandungen als
 Aufgaben-Karten in „Arbeit".
 
-### 39 — Audit-Blickwinkel einzeln an/aus
-(Entscheidung Georg: Häkchen je Blickwinkel — günstiger auf Wunsch, aber weniger
-Rundumblick; die volle Lesetiefe je Blickwinkel bleibt.)
-- Die drei Blickwinkel-Prüfer des Audits (Fehler & Randfälle · Verständlichkeit &
-  Wildwuchs · Sicherheit & Datenverlust) sind heute fest im Auftragstext. Neu: **drei
-  Häkchen an der Audit-Blockkarte** (Standard: alle an; mindestens eines muss an
-  sein — Start-Prüfung), FlowForge setzt den Auftrag aus den gewählten Blickwinkeln
-  zusammen (Feld-Mechanik mit Platzhaltern), der Ticker nennt beim Start, welche
-  Blickwinkel laufen, und der Kosten-Hinweis am Start passt sich an; im
-  Laufbericht steht die Auswahl. Ankreuz-Felder sind eine neue Feld-Art (bisher nur
-  Text-Felder) — im Block-Editor nicht nötig (Katalog-Block).
-- Nachzuziehen: SPEC §4.3 (Audit), §4.2 (Feld-Arten).
-**Alltagstest:** Georg wählt am Audit nur „Sicherheit & Datenverlust" ab, startet:
-Ticker „Audit mit 2 Blickwinkeln: Fehler & Randfälle, Verständlichkeit & Wildwuchs",
-der Lauf ist sichtbar günstiger; mit allen drei Häkchen läuft es wie bisher.
+### 39 — gestrichen (Entscheidung Georg, 16.08.2026)
+Geplant waren Häkchen, mit denen sich die drei Blickwinkel des Audits einzeln
+abwählen lassen. Wird nicht gebaut: Wer einen Teil-Blickwinkel will, stellt sich
+mehrere Prüf-Blöcke parallel ins Schaubild — das Paket 40–48 macht genau das
+tragfähig. Die Nummer bleibt vergeben (Versionen sind an Bauschritte gekoppelt);
+Version 0.39.0 gibt es nicht.
 
 ## Erweiterungspaket 40–48: Feste Form, Zuschnitt, Parallelität
 

@@ -31,6 +31,7 @@ import {
   auftragMitFeldern,
   vorfahrenSortiert,
   vorfahrenDistanzen,
+  uebergabenAuswahl,
   rueckfuehrungsZiel,
   zwischenBloecke
 } from '../shared/kettenRegeln.js'
@@ -1129,7 +1130,9 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           // vorFazit — das eigene Fazit der letzten Runde als das „warum";
           // beanstandungNachforderung — der Prüfbeleg ohne Beanstandungs-Zeilen,
           //   den der Prüfer in der Nachforderung nachbessern soll;
-          // fanOutGemeldet — je Etikett nur einmal „zusammengeführt" tickern.
+          // fanOutGemeldet — je Etikett nur einmal „zusammengeführt" tickern;
+          // verdraengungGemeldet — dasselbe für die verdrängte Lieferung
+          //   (BAUPLAN 40).
           diffBasis: undefined,
           diffBasisVerschmutzt: false,
           diffAnfordern: false,
@@ -1138,6 +1141,7 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           beanstandungNachforderung: '',
           beanstandungNachgefordert: false,
           fanOutGemeldet: new Set(),
+          verdraengungGemeldet: new Set(),
           // Tor ohne KI (BAUPLAN 35):
           // torProtokoll — die Ausgabe eines roten Prüfbefehls, die dieser
           //   Block im nächsten Anlauf als Tatsache in den Auftrag bekommt;
@@ -2105,53 +2109,66 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     }
 
     // Übergaben aus den Lieferungen der Vorfahren einsammeln — deterministisch
-    // in topologischer Reihenfolge. Fan-out ohne Datenverlust (BAUPLAN 34):
-    // Bei ungleicher Distanz gewinnt weiter der nähere Vorfahre; liefern
-    // mehrere GLEICH nahe Vorfahren dasselbe Etikett (zwei Angreifer vor dem
-    // Bauer, Prüfer neben Angreifer), bekommt der Nachfolger alle nummeriert —
-    // früher gewann still einer, und die andere Arbeit war bezahlt und weg.
+    // in topologischer Reihenfolge; entschieden wird in uebergabenAuswahl
+    // (kettenRegeln), damit die braucht-Chips am Schaubild dasselbe zeigen.
+    // Fan-out ohne Datenverlust (BAUPLAN 34): mehrere GLEICH nahe Vorfahren
+    // kommen alle nummeriert an. Fan-in ohne stillen Verlust (BAUPLAN 40): Bei
+    // ungleicher Distanz gewinnt weiter der nähere — die verdrängte Lieferung
+    // steht jetzt aber im Ticker, statt wortlos zu verschwinden.
     function uebergabenText(k) {
       const distanz = distanzVon.get(k.eintrag.instanzId)
-      const geliefert = new Map()
+      const lieferungen = []
       for (const vorfahre of vorfahrenVon.get(k.eintrag.instanzId)) {
         const vk = knoten.get(vorfahre.instanzId)
         if (vk.lieferung == null) continue
-        const naehe = distanz.get(vorfahre.instanzId) ?? Number.MAX_SAFE_INTEGER
-        for (const etikett of vk.def.liefert) {
-          const bisher = geliefert.get(etikett)
-          if (!bisher || naehe < bisher.naehe)
-            geliefert.set(etikett, { naehe, liste: [{ block: vk.def.name, text: vk.lieferung }] })
-          else if (naehe === bisher.naehe)
-            bisher.liste.push({ block: vk.def.name, text: vk.lieferung })
-        }
+        lieferungen.push({
+          name: vk.def.name,
+          nummer: nummerVon.get(vorfahre.instanzId),
+          naehe: distanz.get(vorfahre.instanzId) ?? Number.MAX_SAFE_INTEGER,
+          liefert: vk.def.liefert,
+          text: vk.lieferung
+        })
       }
+      // Optionale Bedarfe (z.B. Angriffsliste beim Bauer) sind in den Gruppen
+      // enthalten, wenn ein Vorfahre sie geliefert hat — verlangt werden sie nicht.
+      const { gruppen } = uebergabenAuswahl(k.def, lieferungen)
+      const bezeichnung = (l) => texte.ticker.blockBezeichnung(l.nummer, l.name)
       const eintraege = []
-      // Optionale Bedarfe (z.B. Angriffsliste beim Bauer) werden mitgereicht,
-      // wenn ein Vorfahre sie geliefert hat — verlangt werden sie nicht.
-      for (const etikett of [...k.def.braucht, ...(k.def.brauchtOptional ?? [])]) {
-        const treffer = geliefert.get(etikett)
-        if (!treffer) continue
-        if (treffer.liste.length === 1) {
+      for (const gruppe of gruppen) {
+        gruppe.angekommen.forEach((lieferung, index) =>
           eintraege.push(
-            texte.agentenUebergabe.eintrag(etikett, treffer.liste[0].block, treffer.liste[0].text)
-          )
-          continue
-        }
-        treffer.liste.forEach((lieferung, index) =>
-          eintraege.push(
-            texte.agentenUebergabe.eintragMehrfach(
-              etikett,
-              index + 1,
-              treffer.liste.length,
-              lieferung.block,
-              lieferung.text
-            )
+            gruppe.angekommen.length === 1
+              ? texte.agentenUebergabe.eintrag(gruppe.etikett, lieferung.name, lieferung.text)
+              : texte.agentenUebergabe.eintragMehrfach(
+                  gruppe.etikett,
+                  index + 1,
+                  gruppe.angekommen.length,
+                  lieferung.name,
+                  lieferung.text
+                )
           )
         )
-        // Einmal je Block ehrlich im Ticker — nicht bei jedem Anlauf erneut.
-        if (!k.fanOutGemeldet.has(etikett)) {
-          k.fanOutGemeldet.add(etikett)
-          tickern(texte.ticker.uebergabenZusammengefuehrt(treffer.liste.length, etikett))
+        // Beide Meldungen einmal je Block und Etikett — uebergabenText läuft in
+        // jeder Reparatur-Runde erneut und würde den Ticker sonst fluten.
+        if (gruppe.angekommen.length > 1 && !k.fanOutGemeldet.has(gruppe.etikett)) {
+          k.fanOutGemeldet.add(gruppe.etikett)
+          tickern(
+            texte.ticker.uebergabenZusammengefuehrt(gruppe.angekommen.length, gruppe.etikett)
+          )
+        }
+        if (gruppe.verdraengt.length && !k.verdraengungGemeldet.has(gruppe.etikett)) {
+          k.verdraengungGemeldet.add(gruppe.etikett)
+          tickern(
+            texte.ticker.uebergabeVerdraengt(
+              gruppe.etikett,
+              texte.ticker.blockBezeichnung(
+                nummerVon.get(k.eintrag.instanzId),
+                k.def.name
+              ),
+              gruppe.angekommen.map(bezeichnung).join(' und '),
+              gruppe.verdraengt.map(bezeichnung).join(', ')
+            )
+          )
         }
       }
       if (eintraege.length === 0) return ''
