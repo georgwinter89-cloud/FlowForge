@@ -14,7 +14,20 @@ const t = texte.kette
 const tp = texte.projektansicht
 
 // Chips für braucht/liefert/Sperren — dieselbe Anzeige nutzt auch die Leinwand.
-export function BlockChips({ def }) {
+// herkunft (BAUPLAN 36): Nur im Schaubild gesetzt — Etikett → Namen der
+// liefernden Vorfahren (leer = fehlt). In der Bibliothek gibt es keine Pfeile
+// und damit keine Herkunft; die Chips bleiben dort wie bisher.
+export function BlockChips({ def, herkunft = null }) {
+  // „kommt von Paket schneiden" bzw. „fehlt" an den braucht-Chips.
+  function herkunftZusatz(bedarf, optional) {
+    if (!herkunft) return null
+    const namen = herkunft.get(bedarf) ?? []
+    if (namen.length > 0)
+      return <span className="chip-herkunft"> {t.kommtVon(namen)}</span>
+    // Ein optionales Etikett, das keiner liefert, ist kein Mangel — der Block
+    // arbeitet dann ohne. Ein fehlendes Pflicht-Etikett ist einer.
+    return <span className={optional ? 'chip-herkunft' : 'chip-herkunft chip-fehlt'}> {optional ? t.kommtNichtAn : t.fehltMarke}</span>
+  }
   return (
     <div className="chip-zeile">
       {def.nurLesen && <span className="block-chip chip-sperre">{t.nurLesenMarke}</span>}
@@ -22,11 +35,13 @@ export function BlockChips({ def }) {
       {def.braucht.map((bedarf) => (
         <span key={bedarf} className="block-chip chip-braucht">
           {t.brauchtLabel}: {bedarf}
+          {herkunftZusatz(bedarf, false)}
         </span>
       ))}
       {(def.brauchtOptional ?? []).map((bedarf) => (
         <span key={bedarf} className="block-chip chip-braucht chip-optional">
           {t.brauchtLabel}: {bedarf} ({t.fallsDaZusatz})
+          {herkunftZusatz(bedarf, true)}
         </span>
       ))}
       {def.liefert.map((gabe) => (

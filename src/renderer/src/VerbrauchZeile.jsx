@@ -28,6 +28,15 @@ export default function VerbrauchZeile({ verbrauch, modus, label, mitBalken }) {
           label={label}
         />
       )}
+      {/* Füllstand des gerade arbeitenden Block-Agenten (BAUPLAN 36): Der
+          Balken misst die Lauf-Session (den Koordinator) — der Agent, der die
+          eigentliche Arbeit macht, hat sein eigenes Fenster. Nur ein Hinweis:
+          Der Übertrag hängt weiter am Koordinator. */}
+      {mitBalken && verbrauch.agentProzentBis != null && (
+        <p className="verbrauch-zeile verbrauch-agent">
+          {t.verbrauchAgent(verbrauch.agentProzentVon, verbrauch.agentProzentBis)}
+        </p>
+      )}
       <p className="verbrauch-zeile">
         {label && !mitBalken ? `„${label}": ` : ''}
         {teile.join(' · ')}

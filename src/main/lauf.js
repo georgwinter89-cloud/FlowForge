@@ -707,6 +707,11 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     gespraech: [],
     // Übertrags-Protokoll in Alltagssprache (SPEC §5, BAUPLAN 11).
     uebertraege: [],
+    // Zusammenfassungen des Motors (BAUPLAN 36): Wann hat der Motor selbst ein
+    // Arbeitsgedächtnis eingedampft? Erklärt Gedächtnislücken und zählt in den
+    // Harness-Kennzahlen mit. Alte Berichte haben das Feld nicht — sie zählen
+    // dort ehrlich als „ohne Angabe", nicht als null Zusammenfassungen.
+    zusammenfassungen: [],
     // Wiederaufnahme nach Unterbrechung (BAUPLAN 11).
     fortgesetzt: Boolean(fortsetzung),
     // Sonderlauf (BAUPLAN 30): Kennzeichen für Bericht und Ansicht — die
@@ -1562,6 +1567,16 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
             )
             return
           }
+          // Compaction sichtbar (BAUPLAN 36): Der Motor hat ein Arbeits-
+          // gedächtnis zusammengefasst — Ticker-Zeile in Alltagssprache und
+          // ein Eintrag im Laufbericht, damit spätere Gedächtnislücken
+          // erklärbar bleiben.
+          if (daten.art === 'zusammenfassung') {
+            const zeile = texte.ticker.zusammengefasst(daten)
+            bericht.zusammenfassungen.push({ zeit: jetztIso(), wer: daten.wer, text: zeile })
+            tickern(zeile)
+            return
+          }
           // Letzter Kontext-Stand am Lauf gespiegelt — der Kontext-Balken der
           // Projektübersicht braucht ihn außerhalb der Lauf-Ansicht.
           if (daten.art === 'verbrauch' && daten.verbrauch?.kontextProzentBis != null)
@@ -1692,6 +1707,9 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       let blockKosten = null
       const blockAufschluesselung = { eingabe: 0, ausgabe: 0, cacheLesen: 0, cacheSchreiben: 0 }
       let blockHatAufschluesselung = false
+      // Modell je Block (BAUPLAN 36): über alle Anläufe dieses Block-Anlaufs
+      // hinweg (Übertrag, Kontingent-Pausen) — Modellkennung → Tokens.
+      const blockModellTokens = new Map()
       // Diff der Reparatur-Runden (BAUPLAN 34): Beim ERSTEN Start eines
       // schreibenden Blocks halten wir fest, auf welchem Sicherungspunkt der
       // Projektordner steht — daraus rechnet FlowForge später „das hast du in
@@ -1717,11 +1735,20 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       }
       // Hängt die Verbrauchs-Summen dieses Blocks an ein endgültiges Ergebnis.
       function mitBlockVerbrauch(ergebnis) {
+        const summe = [...blockModellTokens.values()].reduce((a, b) => a + b, 0)
         return {
           ...ergebnis,
           blockTokens,
           blockKosten,
-          blockAufschluesselung: blockHatAufschluesselung ? { ...blockAufschluesselung } : null
+          blockAufschluesselung: blockHatAufschluesselung ? { ...blockAufschluesselung } : null,
+          // Modell je Block (BAUPLAN 36): null = kein Modell gemessen (alte
+          // Berichte, Tor ohne KI) — das ist etwas anderes als „0 Tokens".
+          blockModelle:
+            summe > 0
+              ? [...blockModellTokens]
+                  .map(([modell, tokens]) => ({ modell, tokens, anteil: tokens / summe }))
+                  .sort((a, b) => b.tokens - a.tokens)
+              : null
         }
       }
       while (true) {
@@ -1860,6 +1887,13 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
               gesamtVerbrauch.aufschluesselung[feld] += auf[feld] ?? 0
             }
           }
+          // Modell je Block (BAUPLAN 36): der Motor meldet die Anteile dieses
+          // Anlaufs — über mehrere Anläufe (Übertrag) wird aufaddiert.
+          for (const eintrag of ergebnis.verbrauch.modelle ?? [])
+            blockModellTokens.set(
+              eintrag.modell,
+              (blockModellTokens.get(eintrag.modell) ?? 0) + (eintrag.tokens ?? 0)
+            )
           if (ergebnis.verbrauch.kontextFenster > 0)
             bekanntesKontextFenster = ergebnis.verbrauch.kontextFenster
         }
@@ -2042,7 +2076,10 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         verbrauch: null,
         blockTokens: 0,
         blockKosten: null,
-        blockAufschluesselung: null
+        blockAufschluesselung: null,
+        // Kein Modell hat gearbeitet — ehrlich „ohne Modell", nicht „0 Tokens
+        // auf Opus" (BAUPLAN 36).
+        blockModelle: null
       }
     }
 
@@ -2100,6 +2137,23 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       return texte.agentenUebergabe.ueberschrift + eintraege.join('')
     }
 
+    // Warte-Grund im Ticker (BAUPLAN 36): „Angreifer wartet — Bauer schreibt
+    // gerade" statt einer stillen Pause. Je Block und Grund genau einmal —
+    // bereiteStarten läuft nach jedem fertigen Block erneut und würde den
+    // Ticker sonst mit derselben Zeile fluten.
+    function warteGrundMelden(k, grund, worauf) {
+      if (!worauf.length) return
+      k.warteGemeldet ??= new Set()
+      const schluessel = grund + ':' + worauf.join('|')
+      if (k.warteGemeldet.has(schluessel)) return
+      k.warteGemeldet.add(schluessel)
+      tickern(
+        grund === 'schreiber'
+          ? texte.ticker.warteAufSchreiber(k.def.name, worauf[0])
+          : texte.ticker.warteAufZweig(k.def.name, worauf)
+      )
+    }
+
     // Startet alle Blöcke, deren Vorgänger fertig sind — unter der Regel:
     // beliebig viele nur-lesende gleichzeitig, höchstens ein schreibender.
     function bereiteStarten() {
@@ -2108,11 +2162,31 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         const k = knoten.get(eintrag.instanzId)
         if (k.status !== 'offen') continue
         const vorgaenger = vorgaengerVon.get(eintrag.instanzId)
-        if (!vorgaenger.every((id) => knoten.get(id).status === 'fertig')) continue
-        if (!k.def.nurLesen) {
-          const schreiberLaeuft = [...laufende.keys()].some((id) => !knoten.get(id).def.nurLesen)
-          if (schreiberLaeuft) continue // pro Projekt schreibt nur ein Agent (SPEC §5)
+        if (!vorgaenger.every((id) => knoten.get(id).status === 'fertig')) {
+          // Warte-Grund im Ticker (BAUPLAN 36): Nur an echten Zusammen-
+          // führungen — ein Zweig ist fertig, der andere läuft noch. In der
+          // geraden Kette ist „wartet auf den Vorgänger" keine Nachricht,
+          // sondern der Normalfall, und würde den Ticker zuschütten.
+          if (vorgaenger.length > 1 && vorgaenger.some((id) => knoten.get(id).status === 'fertig'))
+            warteGrundMelden(
+              k,
+              'zweig',
+              vorgaenger
+                .filter((id) => knoten.get(id).status !== 'fertig')
+                .map((id) => knoten.get(id).def.name)
+            )
+          continue
         }
+        if (!k.def.nurLesen) {
+          const schreiber = [...laufende.keys()].find((id) => !knoten.get(id).def.nurLesen)
+          if (schreiber) {
+            // pro Projekt schreibt nur ein Agent (SPEC §5) — und jetzt steht
+            // auch im Ticker, auf wen dieser Block deshalb wartet.
+            warteGrundMelden(k, 'schreiber', [knoten.get(schreiber).def.name])
+            continue
+          }
+        }
+        k.warteGemeldet?.clear()
         k.status = 'laeuft'
         lauf.aktiveInstanzen.add(eintrag.instanzId)
         senden({ art: 'block', instanzId: eintrag.instanzId })
@@ -2213,7 +2287,8 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           ergebnisText: String(ergebnis.fehlertext ?? '').slice(0, 4000),
           tokens: ergebnis.blockTokens ?? null,
           aufschluesselung: ergebnis.blockAufschluesselung ?? null,
-          kostenUsd: ergebnis.blockKosten ?? null
+          kostenUsd: ergebnis.blockKosten ?? null,
+          modelle: ergebnis.blockModelle ?? null
         })
         if (!endZustand) {
           endZustand = 'fehlgeschlagen'
@@ -2263,7 +2338,10 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         // (Wunsch Georg, 13.08.2026) — die Kosten rechnet der Motor selbst
         // aus den Preisen der genutzten Modelle.
         aufschluesselung: ergebnis.blockAufschluesselung ?? null,
-        kostenUsd: ergebnis.blockKosten ?? null
+        kostenUsd: ergebnis.blockKosten ?? null,
+        // Modell je Block (BAUPLAN 36): welches Modell diesen Anlauf gearbeitet
+        // hat (bei Mischung mit Anteilen) — Grundlage der Metrik Blocktyp × Modell.
+        modelle: ergebnis.blockModelle ?? null
       }
       bericht.blockErgebnisse.push(blockErgebnis)
 

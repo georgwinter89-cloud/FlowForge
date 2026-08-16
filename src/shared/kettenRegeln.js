@@ -106,6 +106,36 @@ export function vorfahrenDistanzen(bloecke, pfeile, instanzId) {
   return distanz
 }
 
+// Sicht-Hilfe am Schaubild (BAUPLAN 36): Woher bekommt dieser Block, was er
+// braucht? Für jedes Etikett (braucht und brauchtOptional) die Namen der
+// liefernden Vorfahren — leer heißt „fehlt". Dieselbe Logik wie die Übergabe
+// im Lauf: Der nächste Vorfahre gewinnt; liefern mehrere GLEICH nahe dasselbe
+// Etikett (BAUPLAN 34), stehen alle da.
+export function brauchtHerkunft(bloecke, pfeile, instanzId) {
+  const eintrag = bloecke.find((b) => b.instanzId === instanzId)
+  const def = blockDefinition(eintrag?.blockId)
+  const herkunft = new Map()
+  if (!def) return herkunft
+  const distanz = vorfahrenDistanzen(bloecke, pfeile, instanzId)
+  const vorfahren = vorfahrenSortiert(bloecke, pfeile, instanzId)
+  for (const etikett of [...def.braucht, ...(def.brauchtOptional ?? [])]) {
+    let naechste = null
+    const namen = []
+    for (const vorfahre of vorfahren) {
+      const vDef = blockDefinition(vorfahre.blockId)
+      if (!vDef?.liefert.includes(etikett)) continue
+      const d = distanz.get(vorfahre.instanzId) ?? Infinity
+      if (naechste == null || d < naechste) {
+        naechste = d
+        namen.length = 0
+      }
+      if (d === naechste) namen.push(vDef.name)
+    }
+    herkunft.set(etikett, namen)
+  }
+  return herkunft
+}
+
 // Schaubild-Regeln beim Bearbeiten — liefert null oder eine Fehlermeldung.
 // Parallele Zweige (SPEC §4.1, seit Bauschritt 13): Aus einer Karte dürfen
 // mehrere Pfeile ausgehen, und mehrere dürfen an einer ankommen (Zusammenführen).

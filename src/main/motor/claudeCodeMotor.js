@@ -815,6 +815,13 @@ export function starteLaufMotor(optionen) {
   let bekanntesFenster = kontextFenster > 0 ? kontextFenster : KONTEXT_FENSTER_STANDARD
   let kostenStand = null
   const aufschlStand = { eingabe: 0, ausgabe: 0, cacheLesen: 0, cacheSchreiben: 0 }
+  // Modell je Block (BAUPLAN 36): Die CLI meldet modelUsage als kumulierte
+  // Stände des Prozesses, je Modellkennung. Gemerkt wird der Stand je Modell,
+  // damit jeder Block nur seinen eigenen Zuwachs zugeschrieben bekommt — bei
+  // Mischung (Block-Agent und Unteraufgabe auf verschiedenen Modellen) als
+  // Anteile. Stände gehören zum Motor: Ein neuer Motor (paralleler Zweig,
+  // frische Session nach Übertrag) fängt ehrlich wieder bei null an.
+  const modellStand = new Map()
 
   // Der gerade laufende Block-Dispatch — es läuft höchstens einer zugleich.
   // Parallele Zweige bekommen eigene Motoren (lauf.js).
@@ -822,6 +829,28 @@ export function starteLaufMotor(optionen) {
 
   function unterSumme() {
     return block ? [...block.unterVerbrauch.values()].reduce((a, b) => a + b, 0) : 0
+  }
+
+  // Füllstand des gerade arbeitenden Block-Agenten (BAUPLAN 36): sein eigener
+  // kumulierter Stand — NICHT die Summe seiner Helfer (die tragen ihren
+  // eigenen Kontext). Steuert nichts, ist nur Hinweis neben dem
+  // Koordinator-Balken; der Übertrag misst weiter die Lauf-Session.
+  function agentTokens() {
+    if (!block) return 0
+    let groesster = 0
+    for (const id of block.blockTaskIds)
+      groesster = Math.max(groesster, block.unterVerbrauch.get(id) ?? 0)
+    return groesster
+  }
+
+  // Anteile je Modell an diesem Block, größter zuerst.
+  function modellAnteile() {
+    if (!block?.modellTokens?.size) return null
+    const summe = [...block.modellTokens.values()].reduce((a, b) => a + b, 0)
+    if (summe <= 0) return null
+    return [...block.modellTokens]
+      .map(([modell, tokens]) => ({ modell, tokens, anteil: tokens / summe }))
+      .sort((a, b) => b.tokens - a.tokens)
   }
 
   function blockVerbrauch() {
@@ -839,7 +868,15 @@ export function starteLaufMotor(optionen) {
       kostenUsd: block?.kosten ?? null,
       aufschluesselung: block?.aufschluesselung ?? null,
       kontextFenster: bekanntesFenster,
-      uebertragBand: block?.uebertragBand ?? null
+      uebertragBand: block?.uebertragBand ?? null,
+      // Modell je Block und Füllstand des Block-Agenten (BAUPLAN 36).
+      modelle: modellAnteile(),
+      ...(() => {
+        const eigene = agentTokens()
+        if (!eigene) return { agentTokens: 0, agentProzentVon: null, agentProzentBis: null }
+        const agentBand = kontextBand(eigene, bekanntesFenster)
+        return { agentTokens: eigene, agentProzentVon: agentBand.von, agentProzentBis: agentBand.bis }
+      })()
     }
   }
 
@@ -1177,6 +1214,29 @@ export function starteLaufMotor(optionen) {
           }
         }
 
+        // Compaction sichtbar (BAUPLAN 36): Fasst der Motor sein Arbeits-
+        // gedächtnis zusammen, meldet das SDK eine compact_boundary. Kein
+        // Fehler, aber ein wichtiges Ereignis — es erklärt, warum ein Agent
+        // plötzlich weniger gefüllt ist und Details vergessen haben kann.
+        // Wer zusammengefasst wurde, sagt die Herkunft der Nachricht: der
+        // Block-Agent (Unteraufgaben-Kennung) oder der Koordinator.
+        if (nachricht.type === 'system' && nachricht.subtype === 'compact_boundary') {
+          const daten = nachricht.compact_metadata ?? {}
+          const wer = !nachricht.parent_tool_use_id
+            ? texte.lauf.denkenKoordinator
+            : block?.blockTaskIds.has(nachricht.parent_tool_use_id)
+              ? block.blockName
+              : texte.lauf.denkenUnteraufgabe
+          aufEreignis({
+            art: 'zusammenfassung',
+            wer,
+            istKoordinator: !nachricht.parent_tool_use_id,
+            automatisch: daten.trigger !== 'manual',
+            vorher: Number.isFinite(daten.pre_tokens) ? daten.pre_tokens : null,
+            nachher: Number.isFinite(daten.post_tokens) ? daten.post_tokens : null
+          })
+        }
+
         if (nachricht.type === 'system' && nachricht.subtype === 'init') {
           // Der Motor startet einmal pro Lauf — sichtbar im Ticker (BAUPLAN 19).
           // Die CLI meldet init bei JEDEM Turn erneut (gleiche Session-Kennung,
@@ -1302,6 +1362,20 @@ export function starteLaufMotor(optionen) {
             summe.ausgabe += m.outputTokens ?? 0
             summe.cacheLesen += m.cacheReadInputTokens ?? 0
             summe.cacheSchreiben += m.cacheCreationInputTokens ?? 0
+            // Modell je Block (BAUPLAN 36): Zuwachs dieses Modells seit dem
+            // letzten Stand — gemessen an allen Tokens (Eingabe, Ausgabe,
+            // Cache), damit die Anteile zur Verbrauchszeile des Blocks passen.
+            const stand =
+              (m.inputTokens ?? 0) +
+              (m.outputTokens ?? 0) +
+              (m.cacheReadInputTokens ?? 0) +
+              (m.cacheCreationInputTokens ?? 0)
+            const zuwachs = Math.max(0, stand - (modellStand.get(modell) ?? 0))
+            modellStand.set(modell, stand)
+            if (block && zuwachs > 0) {
+              block.modellTokens ??= new Map()
+              block.modellTokens.set(modell, (block.modellTokens.get(modell) ?? 0) + zuwachs)
+            }
           }
           if (hatModelUsage) {
             if (block) {
@@ -1424,6 +1498,8 @@ export function starteLaufMotor(optionen) {
           startZeit: Date.now(),
           kosten: null,
           aufschluesselung: null,
+          // Modell je Block (BAUPLAN 36): Modellkennung → Tokens dieses Blocks.
+          modellTokens: new Map(),
           unterVerbrauch: new Map()
         }
         eingabeNachschieben(texte.agentenLaufSession.dispatch(blockName))

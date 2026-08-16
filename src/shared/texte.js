@@ -73,7 +73,42 @@ export const texte = {
       `${w.anzahl} ${w.anzahl === 1 ? 'Lauf' : 'Läufe'} · ${w.tokens.toLocaleString('de-DE')} Tokens` +
       (w.mitKosten > 0 ? ` · ${w.kostenUsd.toFixed(2).replace('.', ',')} $` : '') +
       (w.ohneKosten > 0 ? ` (${w.ohneKosten} ohne Kosten)` : ''),
-    sonderlaufMarke: 'Sonderlauf'
+    sonderlaufMarke: 'Sonderlauf',
+    // Harness-Kennzahlen (BAUPLAN 36): Wie gut trägt das Gerüst? Score UND
+    // Kosten messen. Alles rückwirkend aus den Laufberichten gerechnet.
+    harnessUeberschrift: 'Wie gut trägt das Gerüst',
+    harnessErklaerung:
+      'Nicht was es kostet, sondern was es taugt: Wie oft besteht der Prüfer beim ersten Mal, wie viele Reparatur-Runden braucht ein Lauf, wie oft muss FlowForge dich fragen. Aus denselben Laufberichten wie oben — auch rückwirkend.',
+    harnessErstbestehen: 'Prüfer besteht beim ersten Mal',
+    harnessErstbestehenHinweis: (mit, gesamt) =>
+      `Anteil der Läufe, in denen jede Prüfung ihr erstes Urteil bestanden hat — gezählt über ${mit} von ${gesamt} ${gesamt === 1 ? 'Lauf' : 'Läufen'} mit Prüfung.`,
+    harnessReparatur: 'Ø Reparatur-Runden je Lauf',
+    harnessReparaturHinweis:
+      'Gezählt als Prüf-Urteile „nicht bestanden" — jedes schickt den Lauf zurück zum Bauer oder löst die Folgen-Frage aus.',
+    harnessRechte: 'Ø Rechte-Rückfragen je Lauf',
+    harnessFolgen: 'Ø Folgen-Fragen je Lauf',
+    harnessUebertraege: 'Ø Überträge je Lauf',
+    harnessZusammenfassungen: 'Ø Zusammenfassungen je Lauf',
+    harnessZusammenfassungenHinweis: (ohne) =>
+      ohne > 0
+        ? `Der Motor dampft sein Arbeitsgedächtnis selbst ein — erst seit Bauschritt 36 im Bericht; ${ohne} ältere ${ohne === 1 ? 'Lauf zählt' : 'Läufe zählen'} nicht mit.`
+        : 'Der Motor dampft sein Arbeitsgedächtnis selbst ein — gezählt seit Bauschritt 36.',
+    harnessJeKetteUeberschrift: 'Je Kette',
+    harnessJeWocheUeberschrift: 'Je Kalenderwoche',
+    spalteErstbestehen: 'Erstbestehen',
+    spalteWoche: 'Woche',
+    spalteReparaturRunden: 'Ø Reparatur-Runden',
+    spalteFragen: 'Ø Fragen an dich',
+    spalteAusgang: 'Ausgang',
+    ausgangZeile: (ausgaenge, label) =>
+      ausgaenge.length === 0 ? '—' : ausgaenge.map((a) => `${label(a.zustand)} ${a.anzahl}`).join(' · '),
+    // Modell je Block (BAUPLAN 36).
+    jeModellUeberschrift: 'Je Blocktyp × Modell',
+    jeModellErklaerung:
+      'Welches Modell hat den Block wirklich gearbeitet — und schafft es die Arbeit? Wiederholungen und Erstbestehen sind das „schafft es"-Signal. Läufe vor Bauschritt 36 (und Prüf-Runden, die FlowForge ohne Motor entschieden hat) stehen ehrlich als „ohne Modell".',
+    keinModellHinweis: 'ohne Modell',
+    // Compaction sichtbar (BAUPLAN 36).
+    zusammenfassungenLabel: 'Zusammenfassungen des Motors'
   },
   projektuebersicht: {
     ueberschrift: 'Projekte',
@@ -244,6 +279,14 @@ export const texte = {
     nurLesenMarke: 'darf nur lesen',
     prueftMarke: 'Prüfer',
     fallsDaZusatz: 'falls da',
+    // Sicht-Hilfen am Schaubild (BAUPLAN 36): Woher kommt, was der Block
+    // braucht — und was fehlt.
+    kommtVon: (namen) => `← ${namen.join(' + ')}`,
+    fehltMarke: '← fehlt',
+    kommtNichtAn: '← liefert keiner',
+    rueckpfeilLabel: (runden) =>
+      `bei Fehlschlag, ${runden} ${runden === 1 ? 'Runde' : 'Runden'}`,
+    rueckpfeilOhneRunden: 'bei Fehlschlag: keine Runde — es folgt sofort die Folgen-Frage',
     fehlerBraucht: (blockName, bedarf) =>
       `„${blockName}" braucht „${bedarf}" — aber keiner seiner Vorgänger entlang der Pfeile liefert das.`,
     fehlerLeereKette: 'Die Kette ist noch leer. Zieh zuerst Blöcke aus der Bibliothek auf die Leinwand.',
@@ -1543,6 +1586,10 @@ export const texte = {
     denkenUnteraufgabe: 'Unteraufgabe',
     denkenLokaleKi: 'lokale KI',
     verbrauchKontext: (von, bis) => `Kontext: etwa ${von}–${bis} % gefüllt`,
+    // Füllstand des Block-Agenten (BAUPLAN 36): der Balken misst den
+    // Koordinator, gearbeitet wird aber im Agenten.
+    verbrauchAgent: (von, bis) =>
+      `Der arbeitende Block-Agent hat sein eigenes Fenster: etwa ${von}–${bis} % gefüllt.`,
     verbrauchTokens: (tokens) => `${tokens.toLocaleString('de-DE')} Tokens`,
     verbrauchKosten: (usd) => `Kosten bisher: ${usd.toFixed(2).replace('.', ',')} $`,
     verbrauchKostenAbo: 'im Abo enthalten',
@@ -1901,6 +1948,20 @@ export const texte = {
       'Rundum-Blick mit voller Lesetiefe: Die drei Blickwinkel-Prüfer lesen das ganze Projekt — ein Audit-Lauf kann mehrere hunderttausend Tokens kosten.',
     zweigeZusammengefuehrt: (name, anzahl) =>
       `„${name}" führt ${anzahl} Zweige zusammen — alle Vorgänger sind fertig.`,
+    // Warte-Grund (BAUPLAN 36): Eine stille Pause im Verzweigten sieht aus wie
+    // ein Hänger — hier steht, worauf gewartet wird.
+    warteAufSchreiber: (name, schreiber) =>
+      `„${name}" wartet — „${schreiber}" schreibt gerade (im Projekt schreibt immer nur einer).`,
+    warteAufZweig: (name, offene) =>
+      `„${name}" wartet auf ${offene.map((n) => `„${n}"`).join(' und ')} — der andere Zweig ist schon fertig.`,
+    // Compaction sichtbar (BAUPLAN 36): Der Motor dampft sein Arbeitsgedächtnis
+    // selbst ein — das erklärt später, warum ein Agent Details vergessen hat.
+    zusammengefasst: ({ wer, istKoordinator, vorher, nachher, automatisch }) =>
+      `Der Motor hat das Arbeitsgedächtnis ${istKoordinator ? 'des Koordinators' : `von „${wer}"`} zusammengefasst` +
+      (automatisch ? ' (der Kontext lief voll)' : '') +
+      (vorher != null
+        ? ` — vorher ${vorher.toLocaleString('de-DE')} Tokens${nachher != null ? `, danach ${nachher.toLocaleString('de-DE')}` : ''}.`
+        : '.'),
     pruefungBestanden: 'Prüfung bestanden.',
     pruefungNichtBestanden: 'Prüfung nicht bestanden.',
     pruefungOhneErgebnis:
@@ -2178,6 +2239,19 @@ export const texte = {
       `Cache gelesen ${a.cacheLesen.toLocaleString('de-DE')} · Cache geschrieben ${a.cacheSchreiben.toLocaleString('de-DE')}`,
     apiKosten: (usd) => `Theoretische API-Kosten: ${usd.toFixed(2).replace('.', ',')} $`,
     apiKostenAboZusatz: ' — bei dir im Abo enthalten, nur zur Einordnung',
+    // Modell je Block (BAUPLAN 36): welches Modell diesen Anlauf gearbeitet hat
+    // — bei Mischung mit Anteilen, sonst schlicht der Name.
+    modellZeile: (modelle) =>
+      'Modell: ' +
+      (modelle.length === 1
+        ? modelle[0].modell
+        : modelle
+            .map((m) => `${m.modell} ${Math.round(m.anteil * 100)} %`)
+            .join(' · ')),
+    modellUnbekannt:
+      'Modell: nicht vermerkt — ein Lauf vor Bauschritt 36 oder ein Anlauf ganz ohne Motor (Tor ohne KI).',
+    // Compaction sichtbar (BAUPLAN 36): eigener Abschnitt im Bericht.
+    zusammenfassungenLabel: 'Zusammenfassungen des Motors',
     erlaubt: 'erlaubt',
     abgelehnt: 'abgelehnt',
     automatischErlaubt: 'automatisch erlaubt (Automodus)',

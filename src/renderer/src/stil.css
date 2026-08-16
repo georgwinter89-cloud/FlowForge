@@ -942,6 +942,12 @@ body {
   font-size: 11.5px;
 }
 
+/* Füllstand des Block-Agenten (BAUPLAN 36): Hinweis neben dem Koordinator-
+   Balken — bewusst blasser, er steuert nichts. */
+.verbrauch-agent {
+  color: var(--text-blass);
+}
+
 /* Kontext-Füllstand als Balken (Mockup 3a/3c): blauer Verlauf, rote Marke
    an der Übertrags-Schwelle. */
 .kontext-balken-bereich {
@@ -1524,6 +1530,27 @@ body {
   stroke-dasharray: 6 4;
 }
 
+/* Fehlschlag-Rückführung sichtbar (BAUPLAN 36): gestrichelter Bogen vom Prüfer
+   zurück zum Ziel — Signalrot wie alles, was einen Lauf umlenkt. */
+.rueck-linie {
+  stroke: var(--signal-text);
+  stroke-width: 1.4;
+  stroke-dasharray: 7 5;
+  fill: none;
+  opacity: 0.75;
+}
+
+.rueck-beschriftung {
+  fill: var(--text-blass);
+  font-size: 10px;
+  text-anchor: middle;
+  dominant-baseline: middle;
+  paint-order: stroke;
+  stroke: var(--flaeche-tief);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+}
+
 .schaubild-karte {
   position: absolute;
   display: flex;
@@ -1799,6 +1826,17 @@ body {
 .chip-liefert {
   border-color: var(--gut-rand);
   color: var(--gut-text);
+}
+
+/* Sicht-Hilfe am Schaubild (BAUPLAN 36): „← Paket schneiden" bzw. „← fehlt"
+   direkt am braucht-Chip. */
+.chip-herkunft {
+  color: var(--text-blass);
+}
+
+.chip-fehlt {
+  color: var(--signal-text);
+  font-weight: 700;
 }
 
 .chip-sperre {
@@ -2867,6 +2905,45 @@ body {
 .metrik-woche-werte {
   color: var(--text-leise);
   font-family: var(--schrift-mono);
+}
+
+/* Harness-Kennzahlen (BAUPLAN 36): eine große Zahl je Kachel — „wie gut trägt
+   das Gerüst" soll man auf einen Blick sehen, nicht in einer Tabelle suchen. */
+.kennzahl-reihe {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 8px 0 4px;
+}
+
+.kennzahl-kachel {
+  flex: 1 1 180px;
+  min-width: 180px;
+  padding: 10px 12px;
+  border: 1px solid var(--rand-panel);
+  border-radius: var(--radius-karte);
+  background: var(--flaeche-tief);
+}
+
+.kennzahl-wert {
+  font-family: var(--schrift-mono);
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--akzent-text);
+  line-height: 1.1;
+}
+
+.kennzahl-titel {
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-zweit);
+}
+
+.kennzahl-hinweis {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--text-blass);
 }
 
 /* App-Tab (BAUPLAN 32): Startanleitung, Zustand, Ausgabe der laufenden App

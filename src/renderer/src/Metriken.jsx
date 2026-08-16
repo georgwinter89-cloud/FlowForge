@@ -7,9 +7,16 @@
 // keinen Roundtrip. Nur Nachschlagewerk: nichts davon wandert in einen Auftrag.
 import { useEffect, useMemo, useState } from 'react'
 import { texte } from '../../shared/texte.js'
-import { lokaleKiAuswerten, motorAuswerten } from '../../shared/metrikRegeln.js'
+import {
+  blockModellAuswerten,
+  harnessAuswerten,
+  lokaleKiAuswerten,
+  motorAuswerten
+} from '../../shared/metrikRegeln.js'
 
 const t = texte.metriken
+// Lauf-Ausgänge heißen in den Kennzahlen genauso wie im Laufbericht.
+const zustandLabel = (zustand) => texte.lauf.zustandLabels[zustand] ?? zustand
 
 function tokensText(n) {
   return n == null ? '—' : Math.round(n).toLocaleString('de-DE')
@@ -19,6 +26,10 @@ function kostenText(usd) {
 }
 function quoteText(q) {
   return q == null ? t.keineQuote : Math.round(q * 100) + ' %'
+}
+// Kennzahlen mit einer Nachkommastelle — „0,7 Reparatur-Runden je Lauf".
+function zahlText(n) {
+  return n == null ? '—' : n.toFixed(1).replace('.', ',')
 }
 function datumKurz(iso) {
   const d = new Date(iso)
@@ -127,6 +138,93 @@ function BlockTabelle({ zeilen }) {
   )
 }
 
+// Blocktyp × Modell (BAUPLAN 36): dieselbe Tabellen-Idee wie Modell × Bereich
+// bei der lokalen KI — plus das „schafft es"-Signal (Wiederholungen, und bei
+// Prüf-Blöcken die Erstbestehen-Quote).
+function BlockModellTabelle({ zeilen }) {
+  return (
+    <div className="themen-tabelle-rahmen metrik-tabelle-rahmen">
+      <table className="themen-tabelle metrik-tabelle">
+        <thead>
+          <tr>
+            <th>{t.spalteBlock}</th>
+            <th>{t.spalteModell}</th>
+            <th className="zahl">{t.spalteErstlaeufe}</th>
+            <th className="zahl">{t.spalteTokensDurchschnitt}</th>
+            <th className="zahl">{t.spalteKostenDurchschnitt}</th>
+            <th className="zahl">{t.spalteWiederholungen}</th>
+            <th className="zahl">{t.spalteErstbestehen}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {zeilen.map((z) => (
+            <tr key={`${z.block} ${z.modell}`}>
+              <td>{z.block}</td>
+              <td className="mono">{z.modell}</td>
+              <td className="zahl">{z.erstlauf.anzahl}</td>
+              <td className="zahl">
+                {durchschnittZelle(z.erstlauf.tokensDurchschnitt, z.erstlauf.ohneTokens, t.ohneVerbrauch, tokensText)}
+              </td>
+              <td className="zahl">
+                {durchschnittZelle(z.erstlauf.kostenDurchschnitt, z.erstlauf.ohneKosten, t.ohneKosten, kostenText)}
+              </td>
+              <td className="zahl">{z.wiederholung.anzahl || '—'}</td>
+              <td className="zahl metrik-quote">
+                {z.erstbestehenQuote == null
+                  ? '—'
+                  : `${quoteText(z.erstbestehenQuote)} (${z.erstBestanden}/${z.ersteUrteile})`}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+// Harness-Kennzahlen als Kacheln: eine große Zahl mit ihrer Erklärung darunter.
+function KennzahlKachel({ titel, wert, hinweis }) {
+  return (
+    <div className="kennzahl-kachel">
+      <div className="kennzahl-wert">{wert}</div>
+      <div className="kennzahl-titel">{titel}</div>
+      {hinweis && <div className="kennzahl-hinweis">{hinweis}</div>}
+    </div>
+  )
+}
+
+// Harness je Kette bzw. je Woche — dieselben Spalten, andere erste Spalte.
+function HarnessTabelle({ zeilen, ersteSpalte, beschriftung }) {
+  return (
+    <div className="themen-tabelle-rahmen metrik-tabelle-rahmen">
+      <table className="themen-tabelle metrik-tabelle">
+        <thead>
+          <tr>
+            <th>{ersteSpalte}</th>
+            <th className="zahl">{t.spalteLaeufe}</th>
+            <th className="zahl">{t.spalteErstbestehen}</th>
+            <th className="zahl">{t.spalteReparaturRunden}</th>
+            <th className="zahl">{t.spalteFragen}</th>
+            <th>{t.spalteAusgang}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {zeilen.map((z, i) => (
+            <tr key={i}>
+              <td>{beschriftung(z)}</td>
+              <td className="zahl">{z.laeufe}</td>
+              <td className="zahl metrik-quote">{quoteText(z.erstbestehenQuote)}</td>
+              <td className="zahl">{zahlText(z.reparaturJeLauf)}</td>
+              <td className="zahl">{zahlText((z.rechteJeLauf ?? 0) + (z.folgenJeLauf ?? 0))}</td>
+              <td>{t.ausgangZeile(z.ausgaenge, zustandLabel)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 // Ketten und Projekte teilen sich die Spalten: Läufe · Ø Tokens · Ø Kosten ·
 // Tokens gesamt · Kosten gesamt.
 function SummenTabelle({ zeilen, ersteSpalte, beschriftung }) {
@@ -204,7 +302,15 @@ export default function Metriken({ projektPfad = null }) {
     if (!daten) return null
     const laeufe = filter === 'alle' ? daten.laeufe : daten.laeufe.filter((l) => l.projektPfad === filter)
     const urteile = filter === 'alle' ? daten.urteile : daten.urteile.filter((u) => u.projektPfad === filter)
-    return { motor: motorAuswerten(laeufe), lokal: lokaleKiAuswerten(urteile), laeufe: laeufe.length }
+    return {
+      motor: motorAuswerten(laeufe),
+      lokal: lokaleKiAuswerten(urteile),
+      // Harness-Kennzahlen und Blocktyp × Modell (BAUPLAN 36) — dieselben
+      // Extrakte, andere Schnitte; deshalb kostet auch das keinen Roundtrip.
+      harness: harnessAuswerten(laeufe),
+      jeModell: blockModellAuswerten(laeufe),
+      laeufe: laeufe.length
+    }
   }, [daten, filter])
 
   return (
@@ -262,9 +368,64 @@ export default function Metriken({ projektPfad = null }) {
             <>
               <p className="metrik-gesamt">{t.gesamtZeile(auswertung.motor.gesamt)}</p>
 
+              {/* Harness-Kennzahlen (BAUPLAN 36): Score UND Kosten messen. */}
+              <h3 className="metrik-unterabschnitt">{t.harnessUeberschrift}</h3>
+              <p className="feld-hinweis">{t.harnessErklaerung}</p>
+              <div className="kennzahl-reihe">
+                <KennzahlKachel
+                  titel={t.harnessErstbestehen}
+                  wert={quoteText(auswertung.harness.gesamt.erstbestehenQuote)}
+                  hinweis={t.harnessErstbestehenHinweis(
+                    auswertung.harness.gesamt.mitPruefung,
+                    auswertung.harness.gesamt.laeufe
+                  )}
+                />
+                <KennzahlKachel
+                  titel={t.harnessReparatur}
+                  wert={zahlText(auswertung.harness.gesamt.reparaturJeLauf)}
+                  hinweis={t.harnessReparaturHinweis}
+                />
+                <KennzahlKachel
+                  titel={t.harnessRechte}
+                  wert={zahlText(auswertung.harness.gesamt.rechteJeLauf)}
+                />
+                <KennzahlKachel
+                  titel={t.harnessFolgen}
+                  wert={zahlText(auswertung.harness.gesamt.folgenJeLauf)}
+                />
+                <KennzahlKachel
+                  titel={t.harnessUebertraege}
+                  wert={zahlText(auswertung.harness.gesamt.uebertraegeJeLauf)}
+                />
+                <KennzahlKachel
+                  titel={t.harnessZusammenfassungen}
+                  wert={zahlText(auswertung.harness.gesamt.zusammenfassungenJeLauf)}
+                  hinweis={t.harnessZusammenfassungenHinweis(
+                    auswertung.harness.gesamt.ohneZusammenfassungsAngabe
+                  )}
+                />
+              </div>
+              <h4 className="metrik-unterabschnitt">{t.harnessJeKetteUeberschrift}</h4>
+              <HarnessTabelle
+                zeilen={auswertung.harness.jeKette}
+                ersteSpalte={t.spalteKette}
+                beschriftung={(z) => z.kette}
+              />
+              <h4 className="metrik-unterabschnitt">{t.harnessJeWocheUeberschrift}</h4>
+              <HarnessTabelle
+                zeilen={auswertung.harness.jeWoche}
+                ersteSpalte={t.spalteWoche}
+                beschriftung={(z) => t.wocheLabel(z.nummer, datumKurz(z.montag), datumKurz(z.sonntag))}
+              />
+
               <h3 className="metrik-unterabschnitt">{t.jeBlockUeberschrift}</h3>
               <p className="feld-hinweis">{t.jeBlockErklaerung}</p>
               <BlockTabelle zeilen={auswertung.motor.jeBlock} />
+
+              {/* Modell je Block (BAUPLAN 36): Wer hat wirklich gearbeitet? */}
+              <h3 className="metrik-unterabschnitt">{t.jeModellUeberschrift}</h3>
+              <p className="feld-hinweis">{t.jeModellErklaerung}</p>
+              <BlockModellTabelle zeilen={auswertung.jeModell} />
 
               <h3 className="metrik-unterabschnitt">{t.jeKetteUeberschrift}</h3>
               <SummenTabelle

@@ -7,7 +7,12 @@ import {
   REPARATUR_RUNDEN_MAX,
   UEBERTRAG_GRENZE_MAX
 } from '../../shared/blockKatalog.js'
-import { schaubildReihenfolge, vorfahrenSortiert } from '../../shared/kettenRegeln.js'
+import {
+  brauchtHerkunft,
+  rueckfuehrungsZiel,
+  schaubildReihenfolge,
+  vorfahrenSortiert
+} from '../../shared/kettenRegeln.js'
 import { BlockChips } from './Blockbibliothek.jsx'
 import Bestaetigung from './Bestaetigung.jsx'
 import VerbrauchZeile from './VerbrauchZeile.jsx'
@@ -440,6 +445,12 @@ function BlockErgebnisZeile({ eintrag }) {
             {zeitText(eintrag.zeit)}
             {eintrag.tokens != null && ` · ${tb.blockTokens(eintrag.tokens)}`}
           </p>
+          {/* Modell je Block (BAUPLAN 36): Wer hat diesen Anlauf gearbeitet? */}
+          <p className="feld-hinweis">
+            {(eintrag.modelle ?? []).length > 0
+              ? tb.modellZeile(eintrag.modelle)
+              : tb.modellUnbekannt}
+          </p>
           {eintrag.aufschluesselung && (
             <p className="feld-hinweis">{tb.aufschluesselungZeile(eintrag.aufschluesselung)}</p>
           )}
@@ -594,6 +605,18 @@ function Laufbericht({ bericht, aufklappen = null }) {
               ))}
             </div>
           )}
+          {/* Compaction sichtbar (BAUPLAN 36): Der Motor hat selbst ein
+              Arbeitsgedächtnis eingedampft — das erklärt Gedächtnislücken. */}
+          {(bericht.zusammenfassungen ?? []).length > 0 && (
+            <div>
+              <p className="bericht-abschnitt">{tb.zusammenfassungenLabel}</p>
+              {bericht.zusammenfassungen.map((eintrag, i) => (
+                <p key={i} className="bericht-zeile">
+                  {new Date(eintrag.zeit).toLocaleTimeString('de-DE')} — {eintrag.text}
+                </p>
+              ))}
+            </div>
+          )}
           {bericht.fortgesetzt && <p className="bericht-zeile">{tb.fortgesetztHinweis}</p>}
           {(bericht.entscheidungen ?? []).length > 0 && (
             <div>
@@ -626,6 +649,7 @@ function SchaubildKarte({
   bearbeitbar,
   aktiv,
   letztesErgebnis,
+  herkunft,
   pfad,
   pruefKarten,
   zeigePruefkartenTipp,
@@ -682,7 +706,9 @@ function SchaubildKarte({
           </button>
         )}
       </div>
-      <BlockChips def={def} />
+      {/* Sicht-Hilfe (BAUPLAN 36): An den braucht-Chips steht, welcher Vorfahre
+          das liefert — oder dass es fehlt. */}
+      <BlockChips def={def} herkunft={herkunft} />
       {/* Häkchen je Block (BAUPLAN 20): „lokale KI erlaubt" — Standard an,
           erbt den globalen Schalter. Abgewählt ist eine echte Sperre:
           kein lokal_recherchieren, keine lokale Vorreparatur für diesen Block. */}
@@ -1520,6 +1546,34 @@ export default function Leinwand({
     flaecheHoehe = Math.max(flaecheHoehe, block.position.y + g.h + 80)
   }
 
+  // Sicht-Hilfe (BAUPLAN 36): Die Fehlschlag-Rückführung ist bisher nur ein
+  // Auswahlfeld an der Prüferkarte — im Schaubild war der Weg zurück unsichtbar.
+  // Jetzt zieht ein gestrichelter Bogen vom Prüfer zu seinem Ziel. Als Bogen,
+  // damit er den Vorwärtspfeil nicht überdeckt, wenn das Ziel direkt davor liegt.
+  const rueckLinien = bloecke
+    .map((eintrag) => {
+      const def = blockDefinition(eintrag.blockId)
+      if (!def?.prueft) return null
+      const zielId = rueckfuehrungsZiel(bloecke, pfeile, eintrag.instanzId)
+      if (!zielId) return null
+      const von = karteRect(eintrag.instanzId)
+      const nach = karteRect(zielId)
+      if (!von || !nach) return null
+      const start = randSchnitt(von, { x: nach.x + nach.w / 2, y: nach.y + nach.h / 2 })
+      const ende = randSchnitt(nach, { x: von.x + von.w / 2, y: von.y + von.h / 2 })
+      // Der Bogen weicht senkrecht zur Verbindungslinie aus.
+      const dx = ende.x - start.x
+      const dy = ende.y - start.y
+      const laenge = Math.hypot(dx, dy) || 1
+      const bogen = Math.min(90, Math.max(40, laenge / 3))
+      const mitte = {
+        x: (start.x + ende.x) / 2 - (dy / laenge) * bogen,
+        y: (start.y + ende.y) / 2 + (dx / laenge) * bogen
+      }
+      return { id: eintrag.instanzId, start, ende, mitte }
+    })
+    .filter(Boolean)
+
   const zugStart = pfeilZug && karteRect(pfeilZug.von)
 
   // Offene Fragen ziehen den Blick auf den Lauf-Tab, auch wenn Georg gerade
@@ -1736,7 +1790,34 @@ export default function Leinwand({
                 {/* Vorschau-Pfeilspitze = .pfeil-vorschau (--akzent-text). */}
                 <path d="M0,0 L10,4 L0,8 z" fill="#7db0ff" />
               </marker>
+              <marker
+                id="pfeilspitze-rueck"
+                markerWidth="10"
+                markerHeight="8"
+                refX="9"
+                refY="4"
+                orient="auto"
+              >
+                {/* Rückführungs-Pfeilspitze = .rueck-linie (--signal-text);
+                    marker-fill kann keine CSS-Variablen aus Klassen erben. */}
+                <path d="M0,0 L10,4 L0,8 z" fill="#f4606e" />
+              </marker>
             </defs>
+            {/* Fehlschlag-Rückführung sichtbar (BAUPLAN 36). */}
+            {rueckLinien.map((linie) => (
+              <g key={'rueck-' + linie.id}>
+                <path
+                  d={`M ${linie.start.x} ${linie.start.y} Q ${linie.mitte.x} ${linie.mitte.y} ${linie.ende.x} ${linie.ende.y}`}
+                  className="rueck-linie"
+                  markerEnd="url(#pfeilspitze-rueck)"
+                />
+                <text x={linie.mitte.x} y={linie.mitte.y} className="rueck-beschriftung">
+                  {workflow.reparaturRunden > 0
+                    ? tk.rueckpfeilLabel(workflow.reparaturRunden)
+                    : tk.rueckpfeilOhneRunden}
+                </text>
+              </g>
+            ))}
             {pfeilLinien.map((linie, i) => (
               <line
                 key={i}
@@ -1773,6 +1854,7 @@ export default function Leinwand({
                 bearbeitbar={bearbeitbar}
                 aktiv={aktiveInstanzen.has(eintrag.instanzId)}
                 letztesErgebnis={letzteErgebnisse.get(eintrag.instanzId) ?? null}
+                herkunft={brauchtHerkunft(bloecke, pfeile, eintrag.instanzId)}
                 pfad={pfad}
                 pruefKarten={(eintrag.pruefKarten ?? [])
                   .map((id) => pruefungsKarten.find((k) => k.id === id))

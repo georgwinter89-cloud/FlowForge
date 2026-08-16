@@ -135,7 +135,13 @@ Der Verbrauch steht je Block und für den ganzen Lauf im Bericht — seit 13.08.
 **Token-Aufschlüsselung** (Eingabe, Ausgabe, Cache gelesen, Cache geschrieben) und den
 **theoretischen API-Kosten**, die der Motor aus den Preisen der genutzten Modelle berechnet
 (im Abo-Modus nur zur Einordnung ausgewiesen). Die Lokale-Helfer-Zeile nennt seit
-Bauschritt 31 das **Modell** der lokalen KI. Seit Bauschritt 27 vermerkt der Bericht
+Bauschritt 31 das **Modell** der lokalen KI. Seit Bauschritt 36 steht **je Block das
+Modell des Motors**, das diesen Anlauf gearbeitet hat (bei Mischung mit Anteilen);
+Anläufe ohne Motor (Tor ohne KI, §4.1) und Läufe von vor Bauschritt 36 stehen ehrlich
+als „Modell: nicht vermerkt". Ebenfalls seit Bauschritt 36 führt der Bericht die
+**Zusammenfassungen des Motors** als eigenen Abschnitt (der Motor dampft ein volles
+Arbeitsgedächtnis selbst ein — das erklärt später, warum ein Agent Details vergessen
+hat). Seit Bauschritt 27 vermerkt der Bericht
 außerdem die **Session-Kennung des Laufs** (über sie setzt der Co-Pilot die
 Lauf-Session fort, §6) und trägt den **Chat-Verlauf** des Co-Piloten (Abschnitt seit der letzten Marke) als eigenen
 Abschnitt nach (Bilder als Marker, nicht als Daten). Seit Bauschritt 28 steht auch der
@@ -207,6 +213,21 @@ Seite aufs Projekt vorgefiltert zeigt (eigener Baustein, nicht Teil der Leinwand
   Berichte ohne Kostenangabe und Block-Einträge ohne Verbrauch (ältere Läufe) werden als
   „ohne Kosten"/„ohne Verbrauch" gezählt und fallen aus den Durchschnitten heraus, statt
   sie zu verfälschen. Im Abo-Modus sind es theoretische Kosten wie überall.
+- **Abschnitt 3 — Wie gut trägt das Gerüst** (Harness-Kennzahlen, seit Bauschritt 36):
+  Nicht nur Kosten messen, sondern auch, was das Gerüst taugt. Als Kacheln: Anteil der
+  Läufe, in denen **jede Prüfung ihr erstes Urteil bestanden** hat · Ø **Reparatur-Runden**
+  je Lauf (gezählt als Prüf-Urteile „nicht bestanden" — jedes schickt den Lauf zurück zum
+  Bauer oder löst die Folgen-Frage aus) · Ø **Rechte-Rückfragen**, **Folgen-Fragen** und
+  **Überträge** je Lauf · Ø **Zusammenfassungen** des Motors je Lauf. Dazu dieselben
+  Kennzahlen samt **Lauf-Ausgang je Kette und je Kalenderwoche**. Alles rückwirkend aus
+  denselben Laufberichten gerechnet — nur die Zusammenfassungen gibt es erst ab
+  Bauschritt 36 (ältere Läufe zählen dort sichtbar als „ohne Angabe"). Feinheit: Der erste
+  Anlauf eines Prüfers ist nicht immer sein erstes Urteil (eine Prüfbefehl-Nachforderung
+  trägt keines) — gezählt wird das erste echte Urteil.
+- **Blocktyp × Modell** (seit Bauschritt 36): dieselbe Tabellen-Idee wie Modell × Bereich
+  bei der lokalen KI, nur für den Motor — Erstläufe, Ø Tokens, Ø Kosten, Wiederholungen
+  und bei Prüf-Blöcken die Erstbestehen-Quote als „schafft es"-Signal. Einträge ohne
+  Modell (Läufe vor Bauschritt 36, Anläufe ohne Motor) stehen als „(ohne Modell)".
 
 ## 4. Workflows & Blöcke
 
@@ -223,8 +244,15 @@ Seite aufs Projekt vorgefiltert zeigt (eigener Baustein, nicht Teil der Leinwand
   „Nur-lesende Blöcke dürfen Befehle ausführen" (§7) an, kann auch ein „lesender"
   Block über ausgeführte Skripte Dateien verändern; die Parallel-Regel bleibt dann
   bewusst auf eigene Gefahr. Ein sichtbarer Hinweis im
-  Ticker warnt, dass parallele Blöcke den Verbrauch vervielfachen. braucht/liefert
+  Ticker warnt, dass parallele Blöcke den Verbrauch vervielfachen. Seit Bauschritt 36
+  sagt der Ticker auch, **worauf ein Block gerade wartet** („Angreifer wartet — Bauer
+  schreibt gerade", „Prüfer wartet auf Audit") — je Block und Grund genau einmal, und
+  nur dort, wo es etwas erklärt: an Zusammenführungen, deren einer Zweig schon fertig
+  ist, und wenn die Ein-Schreiber-Regel bremst. braucht/liefert
   gilt entlang der Pfeile: Was ein Block braucht, muss einer seiner Vorfahren liefern.
+  Seit Bauschritt 36 steht das **an den braucht-Chips der Blockkarte**: „← Paket
+  schneiden" (bei mehreren gleich nahen Lieferanten alle), „← fehlt" bzw. bei
+  optionalen Etiketten „← liefert keiner".
   **Zwischenstände beim Umbauen sind erlaubt:** Beim Bearbeiten darf das Schaubild
   vorübergehend in Stücke zerfallen (z.B. um einen Block herauszunehmen); die
   braucht/liefert-Steck-Prüfung greift, sobald die Pfeile wieder alle Karten zu einem
@@ -258,6 +286,9 @@ Seite aufs Projekt vorgefiltert zeigt (eigener Baustein, nicht Teil der Leinwand
   eine Folgen-Frage („Weitermachen, zurückstellen oder Stand wiederherstellen?"). Im
   Verzweigten laufen genau die Blöcke auf den Wegen von X zum Prüfer erneut — parallele
   Zweige daneben behalten ihr Ergebnis; als Ziel wählbar sind alle Vorfahren des Prüfers.
+  Seit Bauschritt 36 ist der Weg zurück **im Schaubild sichtbar**: ein gestrichelter,
+  roter Bogen vom Prüfer zu seinem Ziel, beschriftet mit „bei Fehlschlag, 2 Runden"
+  (bei 0 Runden: „es folgt sofort die Folgen-Frage").
 
 ### 4.2 Anatomie eines Blocks
 
@@ -821,6 +852,15 @@ Angreifer durch die Diagnose.
   Ollama-Antwort, bei Modellen ohne Denkfeld ihr Antworttext vor den
   Werkzeugaufrufen (das „laute Denken" kleiner Modelle). Nur live, nicht im
   Laufbericht.
+- **Zusammenfassungen des Motors sichtbar** (seit Bauschritt 36): Dampft der Motor ein
+  volles Arbeitsgedächtnis selbst ein, steht das in Alltagssprache im Ticker („Der Motor
+  hat das Arbeitsgedächtnis von „Bauer" zusammengefasst — vorher 180.000 Tokens, danach
+  40.000") und als eigener Abschnitt im Laufbericht (§3.2); die Metriken zählen es (§3.4).
+  Ohne diese Zeile wäre unerklärlich, warum ein Agent plötzlich Details vergessen hat.
+- **Zwei Füllstände** (seit Bauschritt 36): Der Balken misst die **Lauf-Session** (den
+  Koordinator) — er steuert den Übertrag. Daneben steht als Hinweis der Füllstand des
+  **gerade arbeitenden Block-Agenten**, der die eigentliche Arbeit macht und sein eigenes
+  Fenster hat. Der Hinweis steuert nichts.
 - **Stopp in zwei Stufen:** „Sanft anhalten" (laufender Block macht fertig, Halt am
   Sicherungspunkt) und „Sofort abbrechen" (Block gilt als nicht gelaufen; der Projektordner
   springt automatisch auf den letzten Sicherungspunkt zurück).
@@ -1033,7 +1073,8 @@ Zurückspringen, rechts die Knöpfe **„Co-Pilot"** (§6, öffnet das seitliche
 **„Metriken"** (§3.4) und „Einstellungen"); Windows zeichnet nur die drei Fensterknöpfe. Installer, Fenster und
 Taskleiste tragen das **Blitz-Icon** (seit Bauschritt 30, aus dem Inline-SVG erzeugt). Der **Kontext-Füllstand**
 erscheint als Balken mit roter Marke an der Übertrags-Schwelle — in der Lauf-Ansicht
-und auf der Hero-Kachel.
+und auf der Hero-Kachel; seit Bauschritt 36 steht der Füllstand des arbeitenden
+Block-Agenten als Hinweis daneben (§6).
 
 - **Projektübersicht** beim Start: Läuft gerade ein Lauf, liegt er als große
   **Hero-Kachel** obenauf (Pulspunkt, Workflow, letzte Tickerzeile, Kontext-Balken,
