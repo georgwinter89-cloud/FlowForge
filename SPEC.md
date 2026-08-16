@@ -135,7 +135,11 @@ strukturiert über das Werkzeug `paket_melden` (nur dort rückfragefrei — dass
 Freischalt-Muster wie `karten_zuteilen`, im selben Werkzeug-Server; hart validiert: nur
 offene Aufgaben-Karten der Kartenauswahl, leer erlaubt, wenn das Wunsch-/Fehlerbild-Feld die
 Quelle war); Titel als Schnappschuss, falls die Aufgabe später gelöscht wird; die Meldung
-wandert in Laufstand, Ticker und Laufbericht („Paket dieses Laufs: …"). Anzeige als kompakte
+wandert in Laufstand, Ticker und Laufbericht („Paket von Block 1 ‚Paket schneiden': …").
+Seit Bauschritt 44 wird sie **je Auftragsquelle** geführt statt einmal je Lauf: Liegen
+zwei Auftragsquellen im Schaubild, überschrieben sie sich vorher wortlos, und jede Karte
+trug nur das zuletzt gemeldete Paket als Herkunft. Gestempelt wird jetzt mit dem Paket des
+nächstgelegenen Auftragsquellen-Vorfahren des Blocks, der die Karte anfasst. Anzeige als kompakte
 Kopfzeile unter dem Titel („zuletzt geändert vor 2 Std. · angelegt von Sessionende bei
 ‚Login bauen' (Lauf 14.08., 11:08)"), klickbar zum Laufbericht; alte Karten ohne Herkunft
 zeigen nur das Datum. Die Herkunft wandert **nie** in Aufträge oder `karten_uebersicht`.
@@ -302,6 +306,48 @@ Seite aufs Projekt vorgefiltert zeigt (eigener Baustein, nicht Teil der Leinwand
   Seit Bauschritt 36 steht das **an den braucht-Chips der Blockkarte**: „← Paket
   schneiden" (bei mehreren gleich nahen Lieferanten alle), „← fehlt" bzw. bei
   optionalen Etiketten „← liefert keiner".
+  **Zustellung adressierter Arbeitspakete** (seit Bauschritt 44): Trägt eine
+  Lieferung mehrere Zuschnitte mit je eigener Zieladresse (§4.3 „Zuschnitt je
+  benanntem Ziel"), entscheidet eine Regel, welcher bei welchem Block ankommt —
+  dieselbe Regel für Auftrag, Vorspann und Lauf: Ein an Block X adressierter
+  Zuschnitt geht an X **und** an dessen Nachfahren, solange dort kein näher
+  adressierter Zuschnitt liegt (so bekommt ein Prüfer das Paket genau des
+  Blocks, dessen Arbeit er prüft, statt irgendeines). Ein Zuschnitt **ohne**
+  Adresse gilt für alle — er kommt **zusätzlich** zum adressierten an, nicht
+  ersatzweise. Ein Block, für den weder er selbst noch ein Vorfahre
+  adressiert ist — der Angreifer sitzt vor allen Umsetzern —, bekommt **alle**
+  adressierten Zuschnitte: Er soll alles angreifen, was gebaut wird. Bekommt ein Block auf
+  diese Weise mehrere Zuschnitte, gelten sie **alle**: Ihre Dateilisten
+  zusammen beschreiben seinen Arbeitsbereich, nicht eine davon.
+  **Vollständigkeit des Zuschnitts** (seit Bauschritt 44): Bevor ein
+  Auftragsquellen-Block (Paket schneiden, Diagnose) als fertig gilt, rechnet
+  FlowForge nach, ob **jede Aufgabe des gemeldeten Pakets** (`paket_melden`) in
+  mindestens einem Zuschnitt vorkommt und ob **jedes benannte Ziel** eines
+  bekommen hat. Gemessen wird über die Aufgaben-Kennungen im Zuschnitt
+  (`aufgabenIds`, §4.3) — eine Rechnung, kein Textvergleich; eine erfundene
+  Kennung weist FlowForge schon am Melde-Werkzeug ab. Fehlt etwas, greift das
+  erprobte Nachforderungs-Muster: Der Block läuft **genau einmal** kurz erneut
+  und trägt nur nach; die Nachforderung nennt die übergangenen Aufgaben und die
+  leer ausgegangenen Ziele **namentlich**, und seine eigene Meldung von eben
+  liegt als Vorlage bei. Danach macht der Lauf ehrlich vermerkt weiter — ein zu
+  enger Zuschnitt ist kein fehlendes Ergebnis und lässt den Lauf, anders als
+  eine fehlende Meldung, nicht scheitern. Die verbrauchte Runde wandert in den
+  Laufstand und wird nach einem App-Neustart nicht erneut gewährt. Die
+  **Paket-Meldung ist damit Pflicht** für diese Blöcke: Ohne sie liefe die
+  Prüfung still leer und ein grüner Lauf sähe aus wie eine bestandene Prüfung —
+  fehlt sie, wird sie auf demselben Weg einmal nachgefordert. Jede dieser
+  Ticker-Zeilen nennt den Block mit **Blocknummer und Namen** („Block 1 ‚Paket
+  schneiden'"): Zwei Auftragsquellen gleichen Namens ergäben sonst im
+  Laufbericht zwei Zeilen, die niemand auseinanderhalten kann.
+  **Zwei ehrliche Grenzen**, beide sichtbar im Ticker: (1) Kommt der Auftrag
+  allein aus dem Wunsch- bzw. Fehlerbild-Feld, gibt es gar keine
+  Aufgaben-Karten — dann wird nur die Ziel-Abdeckung gemessen, und der Ticker
+  sagt das. (2) Gemessen wird gegen die **erste** Paket-Meldung des Blocks: Ein
+  zweiter Aufruf mit weniger Aufgaben besteht die Prüfung nicht, sondern steht
+  als eigene Zeile im Ticker — sonst wäre die Prüfung eine Selbstauskunft.
+  **Rückfall ohne Bruch:** Bei höchstens einem benannten Ziel bedient ein
+  Zuschnitt ohne Adresse alles; erst ab zwei Zielen ist ein Paket ohne Adresse
+  eine Lücke.
   **Zwischenstände beim Umbauen sind erlaubt:** Beim Bearbeiten darf das Schaubild
   vorübergehend in Stücke zerfallen (z.B. um einen Block herauszunehmen); die
   braucht/liefert-Steck-Prüfung greift, sobald die Pfeile wieder alle Karten zu einem
@@ -379,6 +425,72 @@ Paket gebündelt werden (Fertig-Kriterien je Teilstück); kleiner geschnitten wi
 nur bei wirklich unabhängigen Baustellen oder wenn mittendrin eine Entscheidung
 des Nutzers nötig wäre.
 
+**Zuschnitt je benanntem Ziel** (seit Bauschritt 44): Paket schneiden und
+Diagnose liefern nicht mehr ein Arbeitspaket für alle, sondern **je benanntem
+Ziel eines** — mit eigenem Ziel-Satz, eigenen Fertig-Kriterien und eigenem
+Datenvertrag. Ein **benanntes Ziel** ist nicht jeder, der das Etikett
+„Arbeitspaket" bekommt, sondern nur der Block, der das Paket **umsetzt** (weder
+nur-lesend noch prüfend — in der Bibliothek genau der Bauer). Grund
+(Entscheidung Georg, 16.08.2026): Bekäme der Prüfer ein eigenes Paket, misst er
+die Arbeit an anderen Fertig-Kriterien, als der umsetzende Block sie gebaut hat
+— ein stiller Maßstab-Bruch, den niemand bemerkt. **Prüfer und Angreifer
+bekommen deshalb kein eigenes Paket**, sondern das ihres nächstgelegenen
+Umsetzer-Vorfahren (Zustellung: §4.1 „Übergaben"). Adressiert wird über die
+**Blocknummer** (`zielBlock: "3"`), nicht über den Zusatznamen: Zwei Bauer ohne
+Zusatznamen wären über den Namen nicht auseinanderzuhalten, und eine
+Zusatznamen-Pflicht hielte jedes schon gespeicherte Schaubild an. Der Auftrag
+nennt die Ziele mit ihrer Adresse — je Zeile eine, denn Zusatznamen dürfen
+Kommas enthalten. Dieser Auftragszusatz ist **zweigeteilt**: Ziel-Adressierung
+und `erlaubteDateien` bekommt **jeder** Block, der ein Arbeitspaket liefert —
+der Zuschnitt je Ziel ist auch ohne Aufgaben-Karten sinnvoll. Die Sätze zu
+`aufgabenIds` und zur Nachforderung bekommen nur **Auftragsquellen** (Paket
+schneiden, Diagnose): Nur sie dürfen `paket_melden` rufen, und nur sie werden
+auf Vollständigkeit geprüft (§4.1). In der Bibliothek fällt beides zusammen;
+ein im Block-Editor **selbstgebauter** Block darf „Arbeitspaket" als freien Text
+liefern und bekam sonst ein Versprechen, das er nicht einlösen kann — zu
+`aufgabenIds` aufgefordert, an der Rechte-Rückfrage von `paket_melden`
+hängengeblieben und für den Gehorsam abgewiesen. **Alle** Pakete gehen in
+**einem** Aufruf von
+`melde_arbeitspaket` (Feld `pakete`); ein zweiter Aufruf ersetzt den ersten, wie
+bei jeder Meldung. Zwei Pakete für dasselbe Ziel weist FlowForge ab.
+**Rückfall ohne Bruch:** Gibt es kein benanntes Ziel oder lässt der Agent die
+Adresse leer, ist es genau ein Paket, das für alle gilt — Läufe und Laufstände
+von vor Bauschritt 44 laufen unverändert weiter.
+
+**Datenvertrag im Paket** (seit Bauschritt 44): Je Zuschnitt nennt das
+Arbeitspaket **welche Dateien angefasst werden dürfen** (`erlaubteDateien`,
+auch die, die erst entstehen), **welche Bausteine entstehen** (`bausteine`) und
+**was rein- und rausgeht** (`schnittstellen`). Dateilisten werden als Pfade und
+Ordner genannt — **Glob-Muster** (`src/**/*.js`) weist FlowForge mit Beispiel
+ab, denn es gibt keinen Abgleicher dafür und die Sperre träfe später ins Leere.
+Aus demselben Grund weist es einen Eintrag ab, der **aus dem Projektordner
+hinausführt** (`..`, Laufwerksbuchstabe, UNC-Freigabe): Er stünde sichtbar im
+Vertrag, träfe aber nie eine Datei. Ebenso einen Eintrag, der auf den
+**Projektordner selbst** zeigt (`.`, `./`, `.\`, `/` allein — und jede
+Schreibweise, die sich darauf zusammenkürzen lässt, etwa `.//`, `.\\` oder
+`./././`: Gekürzt wird so lange, bis nichts mehr wegzukürzen ist, sonst bliebe
+ein Schrägstrich stehen, den erst das Wegkürzen des Punkt-Vorsatzes freilegt):
+Ein Vertrag, der
+alles erlaubt, ist kein Vertrag — und als Schreibsperre (§7) träfe der Eintrag
+keine einzige Datei, während die Liste als „nicht leer" gälte und damit den
+Bauer an jedem Schreibversuch stoppte. Die Abweisung nennt den Ist-Wert und den
+sauberen Weg für diesen Fall: `erlaubteDateien` ganz weglassen, dann gilt „keine
+Liste = keine Sperre". Schreibweisen, die dasselbe meinen, gelten
+als dasselbe — Schrägstriche in beide Richtungen, `./` davor und ein führender
+`/` („relativ zum Projektordner"); Melden und Schreibsperre (§7) rechnen dabei
+mit **derselben** Normalisierung, sonst sperrte die Liste eine Datei, die
+sichtbar in ihr steht.
+Die Liste hat eine eigene, großzügige Obergrenze (60 Einträge) statt der
+Listen-Grenze der übrigen Felder: Sie **ist** die Schreibsperre (§7), und eine
+zu enge Grenze wäre kein gekürzter Text, sondern ein blockierter Bauer.
+Zieladresse und Datenvertrag stehen sichtbar im übergebenen Lieferschein und im
+Laufbericht. Je Zuschnitt nennt `aufgabenIds` außerdem die Aufgaben-Karten aus
+der `paket_melden`-Meldung, die dieses Paket abdeckt — daraus rechnet FlowForge
+die Vollständigkeit (§4.1); erfundene Kennungen weist es am Werkzeug ab. Auch
+`aufgabenIds` hat eine eigene Obergrenze (200 Kennungen), und **dieselbe** gilt
+für `paket_melden` selbst: Wären die beiden Enden derselben Rechnung verschieden
+weit, entstünde ein Paket, dessen Vollständigkeit niemand mehr erfüllen kann.
+
 **Spec-Interview:** grillt den Nutzer über das Gespräch (§6) nach der
 Entscheidungsbaum-Methode (Entscheidung Georg, 07.08.2026: originalgetreu nach
 Matt Pococks Grilling-Vorgehen): Jede Festlegung verzweigt in Folge-Entscheidungen;
@@ -414,6 +526,13 @@ deine Arbeit an den Fertig-Kriterien — schreib den Bericht so, dass er jedes b
 dir findet"), nie als „danach kommt noch wer"; Kette und Position sind reine
 Ortsangaben ohne Erzählung. Die Aufträge anderer Blöcke werden **nie**
 mitgegeben.
+Mehrere Empfänger, die in **Etikett, Verbindlichkeit und „wozu" übereinstimmen**,
+stehen seit Bauschritt 44 in **einer** Zeile („Block 2 ‚Bauer · UI', Block 3
+‚Bauer · Motor' bekommen deine Lieferung …") — der lange „wozu"-Satz steht dann
+einmal statt dreimal, und zwar in jedem Anlauf. Gebündelt wird nur der Satz:
+**Weggelassen wird nie ein Empfänger**, denn sie tragen die
+Verantwortungssprache. Bei genau einem Empfänger je Gruppe bleibt der Wortlaut
+unverändert.
 Empfänger ist nur, wer die Lieferung wirklich bekommt: Verdrängt die
 Distanz-Regel (unten, „Übergaben") die Lieferung, steht genau das im Vorspann
 statt eines Empfängers. Kommt niemand, steht „geht an niemanden — du bist der
@@ -481,7 +600,9 @@ selbstgebaute Blöcke, deren Autor das Werkzeug nicht kennen kann.
 Datenweitergabe im Lauf — der Lieferschein eines Blocks wird unter seinen
 liefert-Etiketten gespeichert und jedem Nachfahren entlang der Pfeile mit
 passendem braucht in den Auftrag gereicht (seit Bauschritt 42 je Etikett der
-passende Teil, nicht mehr ein Text für alle). Liefern mehrere Vorfahren dasselbe
+passende Teil, nicht mehr ein Text für alle; seit Bauschritt 44 beim
+Arbeitspaket zusätzlich je Ziel der für diesen Empfänger geschnittene Zuschnitt
+— die Zustellregel steht in §4.1). Liefern mehrere Vorfahren dasselbe
 Etikett, gewinnt der nächstgelegene — liegen mehrere **gleich nah** (zwei Angreifer
 vor dem Bauer), bekommt der Nachfolger seit Bauschritt 34 **alle** nummeriert
 („Angriffsliste (1 von 2) von …"), und der Ticker sagt es; früher gewann still einer
@@ -988,17 +1109,25 @@ Angreifer durch die Diagnose.
   Werkzeug `karten_zuteilen` je nachfolgendem Block die Karten zu, die er wirklich
   braucht (nur dort rückfragefrei — dasselbe Freischalt-Muster wie
   `naechster_lauf_vorschlagen`, durchgesetzt am Werkzeugaufruf; andere Blöcke lösen
-  eine Rückfrage aus). Ihr Auftrag nennt die Namen der Nachfahren im Schaubild und
-  verlangt sparsame Zuteilung — Kontext ist der teuerste Teil des Laufs. FlowForge
+  eine Rückfrage aus). Ihr Auftrag nennt die Nachfahren im Schaubild — seit
+  Bauschritt 44 **je Zeile eine Adresse** aus Blocknummer und Anzeigename
+  („Block 3 ‚Bauer · UI'") — und verlangt sparsame Zuteilung; Kontext ist der
+  teuerste Teil des Laufs. **Adressiert wird über die Blocknummer**, und eine
+  Adresse trifft **genau eine** Blockkarte: Vorher war der Schlüssel der
+  Anzeigename, und zwei gleichnamige Instanzen bekamen beide dieselbe Zuteilung.
+  FlowForge
   validiert hart: nur Karten-IDs aus der Kartenauswahl des Laufs, nur echte Nachfahren
-  im Schaubild — Fantasie-IDs und fremde Blöcke werden mit klarer Meldung abgewiesen,
+  im Schaubild — Fantasie-IDs und fremde Adressen werden mit klarer Meldung abgewiesen
+  (die Abweisung listet die gültigen Adressen),
   die Status-Karte fällt still heraus (sie ist immer dabei). Ab der Zuteilung bekommt
   jeder genannte Block nur noch seine Teilmenge in den Auftrag; dasselbe gilt fürs
   Projektwissen der lokalen Helfer-KI (das 32k-Fenster kleiner Modelle verträgt keine
   Kartenflut). **Rückfall ohne Bruch:** Wird das Werkzeug nicht benutzt oder ein Block
   nicht genannt, bekommt er wie bisher die volle Auswahl. Die Zuteilung wandert in den
   Laufstand (Wiederaufnahme nach Neustart) und steht mit Kartenzahl je Block im Ticker
-  und im Laufbericht („Karten verteilt: Bauer 4, Prüfer 2 …").
+  und im Laufbericht — seit Bauschritt 44 mit der Blocknummer („Karten verteilt:
+  Block 3 ‚Bauer · UI' 4 | Block 4 ‚Prüfer · UI' 2 …"), sonst ergäben zwei
+  gleichnamige Ziele zwei identische Zeilen.
 - **Karten-Vorschlag fürs nächste Paket** (seit Bauschritt 28): Das Sessionende benennt
   über das Werkzeug `naechster_lauf_vorschlagen` (nur dort rückfragefrei — dasselbe
   Freischalt-Muster wie `karte_vorschlagen`, durchgesetzt am Werkzeugaufruf; andere
@@ -1175,13 +1304,24 @@ der Zuweisung ein Befehl, wird genau der eingestuft. Bash-Umgebungsvorsilben
 außer bei gefährlichen Variablen (PATH, NODE_OPTIONS …), die den Befehl umleiten
 oder Code einschleusen könnten. Eine Datei-Umleitung (`>`/`>>`) auf ein Ziel
 **außerhalb des Projektordners** löst dieselbe Rückfrage aus wie ein
-Schreib-Werkzeug außerhalb der Projektgrenze. Alle anderen
+Schreib-Werkzeug außerhalb der Projektgrenze — sofern für den Block **keine**
+Dateiliste gilt; gilt eine, hat sie vorher schon hart gesperrt (siehe unten).
+Alle anderen
 Befehle lösen eine Rückfrage aus; Git bleibt hart gesperrt (§3.3), und die Prüfmappe
 `pruefung/` dürfen nur Prüf-Blöcke verändern (§4.3 — hartes Nein, auch für Befehle,
-die erkennbar hineinschreiben). Die Sperre „darf nur lesen" (§4.2) steht darüber:
+die erkennbar hineinschreiben). „Erkennbar hineinschreiben" heißt: ein
+veränderndes Werkzeug (`sed -i`, `rm`, `copy` …) **oder** eine echte
+Datei-Umleitung. Ein Pfeil im Suchmuster oder Testfilter
+(`grep -n "a => b" pruefung/x.test.js`, `npx vitest run pruefung/x.test.js -t "a > b"`)
+schreibt nicht und läuft durch — auch der Prüflauf, den §4.3 dem Bauer einmal am
+Ende erlaubt. Die Sperre „darf nur lesen" (§4.2) steht darüber:
 Sie stoppt jeden nicht rein lesenden Werkzeugaufruf hart, ohne Rückfrage. **Rein
 lesende Befehle laufen auch unter der Sperre durch** (seit 12.08.2026 — vorher war
-jeder Befehl gesperrt und die Abweisung hieß irreführend „Schreib-Versuch"); auch
+jeder Befehl gesperrt und die Abweisung hieß irreführend „Schreib-Versuch");
+schreibend wird ein Lesebefehl erst durch eine echte Datei-Umleitung
+(`grep x > out.txt`), nicht durch ein `>` im Suchmuster (`grep -rn "=>" src/`) —
+nach Pfeilfunktionen und Vergleichen zu suchen ist die Alltagsarbeit genau der
+Blöcke, die diese Sperre trifft. Auch
 Lese-Schleifen („für jede Datei: zeig den Anfang") gelten als lesend, solange jeder
 Befehl darin ein Lese-Werkzeug ist. Programme oder Tests auszuführen zählt nicht
 als Lesen und bleibt gesperrt — **außer** die Einstellung **„Nur-lesende Blöcke
@@ -1196,6 +1336,60 @@ Zweit-Audit vom 14.08.2026). Die Schreib-Werkzeuge (Dateien, Karten,
 Startanleitung) bleiben für diese Blöcke gesperrt; ein ausgeführtes Skript kann
 aber Dateien verändern — deshalb steht die aktive Einstellung sichtbar am
 Laufstart im Ticker.
+
+**Datenvertrag als Schreibsperre** (§4.3, seit Bauschritt 44): Die Dateiliste
+(`erlaubteDateien`) des Arbeitspakets, das bei einem Block ankommt, ist eine
+**harte Sperre** — kein Hinweis und keine Rückfrage, denn im Automodus wäre eine
+Rückfrage wirkungslos. Ein Schreibversuch daneben wird abgelehnt; die Abweisung
+sagt dem Agenten, was er stattdessen tun soll (die fehlende Datei im Feld
+`anmerkung` melden, statt es erneut zu versuchen), und der Ticker sagt Georg in
+Alltagssprache, was gestoppt wurde. Gilt die Sperre für einen Block, steht das
+**einmal** im Ticker, mit der Zahl der erlaubten Dateien. Der **Auftrag des
+Bauers sagt die Sperre vorher an** — dasselbe Muster wie bei der Prüfmappe: Er
+erfährt vor der Arbeit, dass die erlaubten Dateien sein Arbeitsbereich sind,
+dass `arbeitsablage/` frei bleibt und dass eine fehlende Datei ins Feld
+`anmerkung` gehört, statt in einen zweiten Schreibversuch.
+Vier Festlegungen, die sie brauchbar halten:
+**(1)** Sie gilt nur für Blöcke, die ein Paket **umsetzen** (weder nur-lesend
+noch prüfend) — ein Prüfer bekommt das Paket seines Bauers mitgeliefert und
+stünde sonst bei seiner eigenen Arbeit.
+**(2) Keine Dateiliste heißt keine Sperre.** Ein Paket ohne Liste (alte
+Laufstände, ein Agent, der das Feld leer lässt) sperrt nichts — sonst hielte ein
+wiederaufgenommener Lauf jeden Schreibversuch an.
+**(3)** Bekommt ein Block **mehrere** Arbeitspakete, gilt die **Vereinigung**
+ihrer Listen (§4.1). Ein Paket ohne Liste trägt dabei nichts bei und setzt die
+Sperre auch nicht aus — sonst schaltete ein einziges listenloses Paket die ganze
+Sperre lautlos ab.
+**(4)** Ausdrücklich **frei** bleiben die Wegwerf-Fläche `arbeitsablage/` (der
+Auftrag schreibt sie dem Bauer vor, und kein Zuschnitt listet sie auf) und der
+eigene Prüfordner. Die spezifischeren Sperren gehen vor: Verwaltungsdateien und
+die Prüfmappe melden weiterhin ihren eigenen Grund.
+**Ehrliche Grenze, die zu dieser Zusage gehört:** Die Sperre greift an den
+**Schreib-Werkzeugen** (Write, Edit, MultiEdit, NotebookEdit) und an
+**Datei-Umleitungen** (`>`/`>>`) in Befehlen. Als Umleitung zählt dabei nur ein
+Pfeil, der wirklich einer ist: Ein `>` **innerhalb von Anführungszeichen**
+(`npm test -- --grep "a > b"`, `node -e "if (a > b) …"`), ein Pfeil aus Code
+(`=>`, `>=`), eine Kanal-Umleitung (`2>&1`) und Wegwerf-Ziele (`NUL`,
+`/dev/null`) fassen keine Datei an. Ein zitierter Abschnitt **nach** dem Pfeil
+ist dagegen ein gültiges Ziel (`echo x > "src/mit leerzeichen.js"`), und ein
+Bindestrich davor schützt nicht (`echo hallo -> ../draussen.txt` ist eine echte
+Umleitung). Im Zweifel erkennt FlowForge lieber eine Umleitung zu viel — an
+dieser Stelle hängt auch die Projektgrenze. **Dieselbe Rechnung** entscheidet
+überall, wo FlowForge nach einer Umleitung fragt: Dateiliste, Projektgrenze,
+Prüfmappe und „darf nur lesen". Zwei verschiedene Antworten auf dieselbe Frage
+im selben Modul wären die nächste stille Fehlerquelle. Bei einer Umleitung wird **zuerst**
+die Dateiliste geprüft und **erst danach** die Projektgrenze: Ein Ziel außerhalb
+des Projekts steht per Definition in keiner Dateiliste und ist damit ebenfalls
+hart gesperrt — sonst wäre ausgerechnet der gefährlichere Schreibvorgang nur
+eine Rückfrage, die der Automodus durchwinkt. Sie greift **nicht** an sonst
+ausgeführten Befehlen (`npm run build` schreibt, wohin es will), nicht an
+Umbenennen, Verschieben und Löschen — die tragen keinen Pfad in einem
+Schreib-Werkzeug — und nicht am eigenen Schreibpfad der lokalen Helfer-KI: Was
+der Agent über `lokal_bauen` delegiert, schreibt mit echtem Schreibrecht im
+ganzen Projektordner an der Dateiliste vorbei (§4.3, nur die harten Sperren
+gelten dort); allein die Entwürfe aus `lokal_entwerfen` bleiben auf
+`arbeitsablage/` begrenzt. **Bauschritt 46 schließt diese Lücke**; bis dahin ist
+die Dateiliste eine wirksame Leitplanke, keine Mauer.
 
 **Melde-Werkzeuge** (Lieferschein, §4.3, seit Bauschritt 42): Sein Ergebnis zu
 melden ändert nichts am Projekt — FlowForge nimmt nur entgegen. Das Werkzeug zum

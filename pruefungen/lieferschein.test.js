@@ -29,7 +29,9 @@ import {
 } from '../src/shared/lieferschein.js'
 import { blockDefinition, BLOCK_KATALOG } from '../src/shared/blockKatalog.js'
 import { pruefeWerkzeug } from '../src/main/motor/claudeCodeMotor.js'
+import { texte } from '../src/shared/texte.js'
 
+const tl = texte.lieferschein
 const rahmen = { fazit: 'Alles erledigt.', getan: ['Datei angelegt'], offen: [], anmerkung: '' }
 
 describe('BAUPLAN 42 · Ein Werkzeug je liefert-Etikett', () => {
@@ -137,19 +139,23 @@ describe('BAUPLAN 42 · Ebene 2: FlowForge prüft im Code', () => {
     expect(ergebnis.fehler).toBeTruthy()
   })
 
+  // Seit BAUPLAN 44 trägt EIN Aufruf alle Zuschnitte (Feld pakete) — die
+  // Fertig-Kriterien sind je Zuschnitt Pflicht, und die Abweisung sagt, welches
+  // Paket gemeint ist.
   it('weist ein Arbeitspaket ohne Fertig-Kriterien ab (Kanten-Prüfung)', () => {
     const ohne = meldungPruefen(
       'arbeitspaket',
-      { ...rahmen, ziel: 'Etwas bauen', fertigKriterien: [] },
+      { ...rahmen, pakete: [{ ziel: 'Etwas bauen', fertigKriterien: [] }] },
       'Arbeitspaket'
     )
-    expect(ohne.fehler).toBeTruthy()
+    expect(ohne.fehler).toBe(tl.paketFehler(1, tl.arbeitspaketOhneKriterien))
     const mit = meldungPruefen(
       'arbeitspaket',
-      { ...rahmen, ziel: 'Etwas bauen', fertigKriterien: ['Die Datei existiert.'] },
+      { ...rahmen, pakete: [{ ziel: 'Etwas bauen', fertigKriterien: ['Die Datei existiert.'] }] },
       'Arbeitspaket'
     )
-    expect(mit.meldung.fertigKriterien).toHaveLength(1)
+    expect(mit.meldung.pakete).toHaveLength(1)
+    expect(mit.meldung.pakete[0].fertigKriterien).toHaveLength(1)
   })
 
   // Claudes strenger Schema-Modus kennt KEINE Längengrenzen — deshalb muss

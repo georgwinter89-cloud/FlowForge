@@ -734,19 +734,23 @@ export const texte = {
   agentenKartenZuteilung: {
     werkzeugBeschreibung:
       'Teilt den nachfolgenden Blöcken dieses Laufs die Karten zu, die sie wirklich ' +
-      'brauchen — je Eintrag ein Blockname und die Karten-IDs aus der Kartenauswahl. ' +
-      'Nicht genannte Blöcke bekommen wie bisher die volle Kartenauswahl; die ' +
-      'Status-Karte ist immer dabei.',
+      'brauchen — je Eintrag eine Blocknummer und die Karten-IDs aus der Kartenauswahl. ' +
+      'Adressiert wird über die Blocknummer, denn zwei Blöcke können gleich heißen; jede ' +
+      'Nummer trifft genau einen Block. Nicht genannte Blöcke bekommen wie bisher die volle ' +
+      'Kartenauswahl; die Status-Karte ist immer dabei.',
     serverHinweis:
       'Mit karten_zuteilen bekommt jeder nachfolgende Block nur die Karten in den ' +
       'Auftrag, die er wirklich braucht — Kontext ist der teuerste Teil des Laufs. ' +
       'Ein erneuter Aufruf ersetzt die Zuteilung der erneut genannten Blöcke.',
-    auftragZusatz: (namen) =>
+    // Adressen statt einer Komma-Liste (BAUPLAN 44): Zusatznamen dürfen Kommas
+    // enthalten, und zwei Blöcke ohne Zusatznamen erschienen als einer. Je Zeile
+    // eine Adresse — dieselbe Bezeichnung, die Vorspann und Ticker nennen.
+    auftragZusatz: (bezeichnungen) =>
       '\nZum Schluss: Teil mit dem Werkzeug karten_zuteilen den nachfolgenden Blöcken ' +
       'dieses Laufs die Karten aus der Kartenauswahl zu, die sie für ihre Arbeit ' +
-      'wirklich brauchen (je Eintrag: block = Blockname, kartenIds = ids aus der ' +
-      'Kartenauswahl oben). Die nachfolgenden Blöcke sind: ' +
-      namen.join(', ') +
+      'wirklich brauchen (je Eintrag: block = die Blocknummer, kartenIds = ids aus der ' +
+      'Kartenauswahl oben). Die nachfolgenden Blöcke sind:\n' +
+      bezeichnungen.map((b) => '- ' + b).join('\n') +
       // Empfänger im Auftrag (BAUPLAN 43): Dieser Auftrag trägt zwei Blocklisten
       // — diese hier (alle Nachfahren, denn Karten kann jeder brauchen) und die
       // Empfänger-Zeilen des Vorspanns (nur wer wirklich etwas von dir bekommt).
@@ -755,19 +759,19 @@ export const texte = {
       // Überschrift der anderen Liste WÖRTLICH (agentenVorspann.
       // empfaengerUeberschrift) — ein Wort wie „Vorspann" kennt nur FlowForge,
       // im Prompt des Agenten steht es nirgends, und er kann es nicht auflösen.
-      '. Das sind alle Blöcke hinter dir im Schaubild — nicht nur die, die oben unter ' +
+      '\nDas sind alle Blöcke hinter dir im Schaubild — nicht nur die, die oben unter ' +
       '„Wer bekommt, was du lieferst" stehen; Karten kann auch jemand brauchen, dem du ' +
       'nichts lieferst. Sei sparsam — Kontext ist der teuerste Teil des Laufs: Jeder Block bekommt ' +
       'nur, was er wirklich braucht (die Status-Karte ist immer dabei; eine leere ' +
       'Liste heißt „nur die Status-Karte"). Blöcke, die du nicht nennst, bekommen ' +
       'wie bisher die volle Auswahl.',
     leereZuteilung:
-      'Abgelehnt: zuteilung muss mindestens einen Eintrag mit Blockname enthalten.',
+      'Abgelehnt: zuteilung muss mindestens einen Eintrag mit Blocknummer enthalten.',
     keineNachfolger:
       'Dieser Block hat keine nachfolgenden Blöcke im Schaubild — es gibt nichts zuzuteilen.',
     unbekannteBloecke: (namen, gueltig) =>
-      `Keine nachfolgenden Blöcke mit diesen Namen: ${namen}. ` +
-      `Zuteilen kannst du an: ${gueltig}.`,
+      `Keine nachfolgenden Blöcke unter dieser Adresse: ${namen}. ` +
+      `Zuteilen kannst du an: ${gueltig} — trage im Feld block die Blocknummer ein.`,
     fremdeKarten: (ids) =>
       `Diese Karten gehören nicht zur Kartenauswahl dieses Laufs: ${ids} — ` +
       'zuteilen kannst du nur Karten aus der Kartenauswahl in deinem Auftrag.',
@@ -802,6 +806,74 @@ export const texte = {
       anzahl === 0
         ? 'Gemeldet: Das Paket kommt allein aus dem Feld — keine Aufgaben-Karten.'
         : `Gemeldet: ${anzahl} Aufgaben-Karte${anzahl === 1 ? '' : 'n'} für dieses Paket. FlowForge vermerkt sie als Herkunft.`
+  },
+  // Zuschnitt je benanntem Ziel (BAUPLAN 44): Der Auftrag der Auftragsquellen
+  // nennt die Ziele mit ihrer Adresse — je Zeile eine, denn Zusatznamen dürfen
+  // Kommas enthalten und zwei Blöcke ohne Zusatznamen hießen sonst gleich.
+  agentenZuschnitt: {
+    auftragZusatz: (bezeichnungen) =>
+      '\nBenannte Ziele deines Zuschnitts — das sind die Blöcke hinter dir, die ein ' +
+      'Arbeitspaket UMSETZEN:\n' +
+      bezeichnungen.map((b) => '- ' + b).join('\n') +
+      '\nSchneide für JEDES dieser Ziele ein eigenes Paket mit eigenen Fertig-Kriterien und ' +
+      'trage alle Pakete in EINEM Aufruf von melde_arbeitspaket ein (Feld pakete; zielBlock = ' +
+      'die Blocknummer von oben). Nur-lesende und prüfende Blöcke stehen nicht in dieser ' +
+      'Liste — sie bekommen kein eigenes Paket, sondern das des Ziels, an dessen Arbeit sie ' +
+      'hängen; sonst würde an anderen Kriterien gemessen, als gebaut wurde. ' +
+      'Nenne je Paket in erlaubteDateien die Dateien und Ordner, die dieses ' +
+      'Paket anfassen darf (auch neu entstehende): Diese Liste IST die Schreibsperre — was nicht ' +
+      'drinsteht, kann der Umsetzer nicht schreiben. Schneide die Listen deshalb ' +
+      'überschneidungsfrei und vollständig.',
+    // Genau ein Ziel: Alles bleibt wie vor Bauschritt 44 — kein Wort über
+    // Adressen, die es nicht auseinanderzuhalten gibt.
+    auftragZusatzEines: (bezeichnung) =>
+      `\nDein Paket geht an ${bezeichnung} — er setzt es um. Nenne in erlaubteDateien die ` +
+      'Dateien und Ordner, die dieses Paket anfassen darf (auch neu entstehende): Diese Liste ' +
+      'IST die Schreibsperre — was nicht drinsteht, kann er nicht schreiben.',
+    auftragZusatzKeines:
+      '\nHinter dir liegt kein Block, der ein Arbeitspaket umsetzt — schneide genau ein Paket ' +
+      'und lass zielBlock leer; es gilt dann für alle. Nenne in erlaubteDateien trotzdem die ' +
+      'Dateien und Ordner, die dieses Paket anfassen darf.',
+    // Zweiter Teil des Zusatzes (Abschlussprüfung Bauschritt 44): Er gilt NUR
+    // für Blöcke mit dem Kennzeichen kartenZuteilung — nur sie dürfen
+    // paket_melden rufen und nur sie werden auf Vollständigkeit geprüft. Ein
+    // selbstgebauter Block, der bloß „Arbeitspaket" liefert, bekam diesen Satz
+    // vorher ebenfalls: Folgte er ihm, wies ihn die Prüfung ab („noch kein
+    // Paket gemeldet"), und paket_melden löste für ihn eine Rechte-Rückfrage
+    // aus — aufgefordert zu etwas, das ihm verwehrt ist, und für den Gehorsam
+    // abgewiesen.
+    aufgabenZusatz:
+      ' Nenne je Paket außerdem in aufgabenIds die Aufgaben-Karten aus deiner ' +
+      'paket_melden-Meldung, die es abdeckt — FlowForge prüft, ob jede gemeldete Aufgabe in ' +
+      'mindestens einem Paket vorkommt, und fordert sonst nach.',
+    // Nachforderung (BAUPLAN 44): dasselbe erprobte Muster wie Startanleitung
+    // und Prüfbefehl — nichts neu erarbeiten, nur nachtragen. Was fehlt, steht
+    // NAMENTLICH da; „irgendetwas ist unvollständig" wäre eine Schnitzeljagd.
+    nachforderung: (aufgaben, ziele) =>
+      '\n\nNachforderung von FlowForge zu deinem Zuschnitt: Er deckt nicht alles ab. Arbeite ' +
+      'jetzt NICHTS neu und ändere nichts am Projekt — rufe allein melde_arbeitspaket erneut auf ' +
+      '(ein Aufruf mit ALLEN Paketen, er ersetzt den bisherigen).' +
+      (aufgaben.length
+        ? '\nDiese Aufgaben deines gemeldeten Pakets kommen in keinem Zuschnitt vor — trage sie ' +
+          'in aufgabenIds des Pakets ein, das sie umsetzt (oder schneide ein weiteres Paket ' +
+          'dafür):\n' +
+          aufgaben.map((a) => '- ' + a).join('\n')
+        : '') +
+      (ziele.length
+        ? '\nDiese benannten Ziele haben kein Paket bekommen — jedes braucht eines mit eigenen ' +
+          'Fertig-Kriterien (zielBlock = Blocknummer):\n' +
+          ziele.map((z) => '- ' + z).join('\n')
+        : '') +
+      '\nGehört eine Aufgabe wirklich nicht in dieses Paket, sag das im Feld anmerkung — dann ' +
+      'weiß der Nutzer, warum sie liegen bleibt.',
+    // Ohne paket_melden gibt es nichts, wogegen gemessen werden könnte.
+    nachforderungPaket:
+      '\n\nNachforderung von FlowForge: Du hast nicht gemeldet, an welchen Aufgaben-Karten dieser ' +
+      'Lauf arbeitet. Arbeite jetzt NICHTS neu — rufe paket_melden auf (aufgabenIds = ids der ' +
+      'offenen Aufgaben-Karten deiner Kartenauswahl; leer, wenn dein Auftrag allein aus dem Feld ' +
+      'kam) und danach melde_arbeitspaket erneut mit allen Paketen. Ohne die Paket-Meldung ' +
+      'bekommt keine Karte dieses Laufs ihre Herkunft, und niemand prüft, ob dein Zuschnitt ' +
+      'vollständig ist.'
   },
   agentenKarten: {
     kontext: (liste, themen = []) =>
@@ -978,6 +1050,18 @@ export const texte = {
     empfaengerOptional: (bezeichnung, etikett, wozu) =>
       `- ${bezeichnung} nimmt deine Lieferung „${etikett}" mit, falls du eine lieferst — ` +
       `verlangt wird sie nicht. Er ${wozu}.\n`,
+    // Mehrere Empfänger mit demselben Etikett und demselben „wozu" (BAUPLAN 44,
+    // mitgenommen aus 43): Mit mehreren benannten Zielen hinter Paket schneiden
+    // stand derselbe Satz sonst dreimal im Auftrag — in JEDEM Anlauf. Gebündelt
+    // wird der Satz, nicht die Empfänger: Weggelassen wird keiner, denn sie
+    // tragen die Verantwortungssprache. Bei genau EINEM Empfänger bleibt der
+    // Wortlaut Zeichen für Zeichen der bisherige.
+    empfaengerMehrere: (bezeichnungen, etikett, wozu) =>
+      `- ${bezeichnungen.join(', ')} bekommen deine Lieferung „${etikett}". Jeder von ihnen ` +
+      `${wozu}.\n`,
+    empfaengerMehrereOptional: (bezeichnungen, etikett, wozu) =>
+      `- ${bezeichnungen.join(', ')} nehmen deine Lieferung „${etikett}" mit, falls du eine ` +
+      `lieferst — verlangt wird sie nicht. Jeder von ihnen ${wozu}.\n`,
     // Ehrlicher Rückfall, wenn der Empfänger-Block kein brauchtWozu zu diesem
     // Etikett hat (selbstgebaute Blöcke ohne Angabe): lieber zugeben, dass es
     // nicht genauer steht, als ein Wozu zu erfinden.
@@ -1626,6 +1710,13 @@ export const texte = {
       schritte: 'schritte',
       fundstellen: 'fundstellen',
       nichtDabei: 'nichtDabei',
+      // Zuschnitt je Ziel und Datenvertrag (BAUPLAN 44).
+      pakete: 'pakete',
+      zielBlock: 'zielBlock',
+      aufgabenIds: 'aufgabenIds',
+      erlaubteDateien: 'erlaubteDateien',
+      bausteine: 'bausteine',
+      schnittstellen: 'schnittstellen',
       beanstandungen: 'beanstandungen',
       fundort: 'fundort',
       rotVorGruen: 'rotVorGruen',
@@ -1656,6 +1747,64 @@ export const texte = {
       'Ein Arbeitspaket ohne Fertig-Kriterien ist keins: Ohne sie gäbe es weder ein Ziel für ' +
       'die Umsetzung noch einen Maßstab für die Prüfung. Trage in fertigKriterien mindestens ' +
       'eine prüfbare Aussage ein.',
+    // Zuschnitt je Ziel und Datenvertrag (BAUPLAN 44). Jede Abweisung sagt, was
+    // stattdessen zu tun ist — der Agent soll korrigieren können, ohne zu raten.
+    arbeitspaketOhnePaket:
+      'Abgelehnt: pakete ist leer. Trage je benanntem Ziel deines Auftrags einen Zuschnitt ein ' +
+      '— gibt es kein benanntes Ziel, genau einen ohne zielBlock.',
+    paketFehler: (nummer, grund) => `Paket ${nummer}: ${grund}`,
+    ohneZiel: 'ohne Ziel',
+    zielDoppelt: (bezeichnung) =>
+      `Zwei Pakete für dasselbe Ziel (${bezeichnung}): Der Empfänger bekäme eines von beiden, ` +
+      'ohne dass irgendwer sagen könnte welches. Fasse sie zu einem Paket zusammen oder gib ' +
+      'jedem sein eigenes Ziel.',
+    zielBlockUnbekannt: (gewaehlt, gueltig) =>
+      `„${gewaehlt}" ist keines deiner benannten Ziele. Adressieren kannst du an: ${gueltig} — ` +
+      'trage in zielBlock die Blocknummer ein (z.B. „3").',
+    zielBlockOhneZiele: (gewaehlt) =>
+      `Du hast das Paket an „${gewaehlt}" adressiert, aber hinter dir liegt kein Block, der ein ` +
+      'Arbeitspaket umsetzt. Lass zielBlock leer — dann gilt dein Paket für alle.',
+    // Die Verbindung Zuschnitt → Aufgaben-Karte wird hart geprüft (BAUPLAN 44):
+    // Eine erfundene id deckte sonst nichts ab, und die Vollständigkeit wäre
+    // wieder eine Schätzung.
+    aufgabenIdsOhnePaket:
+      'Du nennst in aufgabenIds Aufgaben-Karten, hast aber noch kein Paket gemeldet. Rufe zuerst ' +
+      'paket_melden auf (welche offenen Aufgaben-Karten dieser Lauf bearbeitet) — danach kannst ' +
+      'du je Zuschnitt sagen, welche davon er abdeckt.',
+    aufgabeUnbekannt: (id, gueltig) =>
+      `„${id}" gehört nicht zu deinem gemeldeten Paket. In aufgabenIds gehören nur ids aus ` +
+      `deiner paket_melden-Meldung: ${gueltig}.`,
+    // Eigener Wortlaut statt zuVieleEintraege: Kennungen lassen sich nicht
+    // „zusammenfassen". Und die Grenze gilt an beiden Enden (paket_melden und
+    // Zuschnitt), damit kein Paket entsteht, das niemand mehr vollständig
+    // zuschneiden kann.
+    zuVieleAufgabenIds: (max, ist) =>
+      `${ist} Aufgaben-Karten in einer Meldung — höchstens ${max} sind erlaubt. So viele ` +
+      'Aufgaben auf einmal sind kein Lauf mehr, den ein Mensch nachvollziehen kann: Nimm ' +
+      'weniger Karten in die Kartenauswahl und lass den Rest einen zweiten Lauf machen.',
+    dateiMuster: (eintrag) =>
+      `„${eintrag}" ist ein Muster, kein Pfad — Platzhalter wie * ? [ ] { } versteht FlowForge ` +
+      'nicht und würde nichts treffen. Nenne die Dateien einzeln (z.B. „src/main/lauf.js") oder ' +
+      'den Ordner mit Schrägstrich am Ende (z.B. „src/shared/").',
+    // Ausbrechender Eintrag (BAUPLAN 44): Er stünde sichtbar im Vertrag, träfe
+    // aber nie eine Datei — der Bauer würde dann ausgerechnet an der Datei
+    // gestoppt, die er vor sich in der Liste liest. Deshalb schon beim Melden
+    // abweisen, mit dem Ist-Wert.
+    dateiAusserhalb: (eintrag) =>
+      `„${eintrag}" zeigt aus dem Projektordner hinaus — der Datenvertrag nennt nur Dateien ` +
+      'INNERHALB des Projekts. Schreibe den Pfad relativ zum Projektordner, ohne führenden ' +
+      'Schrägstrich, ohne Laufwerksbuchstaben und ohne „.." (z.B. „src/main/lauf.js").',
+    // Projektordner als Eintrag (BAUPLAN 44): Er überlebte das Melden, traf in
+    // der Schreibsperre aber nichts — die Liste war nicht leer (die Sperre galt
+    // also), und der Bauer wurde an jedem Schreibversuch gestoppt mit der
+    // Begründung, die Datei stehe nicht in einer Liste, die „alles" sagt.
+    // Deshalb abweisen, mit Ist-Wert und dem sauberen Weg für diesen Fall.
+    dateiProjektordner: (eintrag) =>
+      `„${eintrag}" meint den ganzen Projektordner — ein Datenvertrag, der alles erlaubt, ist ` +
+      'kein Vertrag, und als Schreibsperre träfe der Eintrag keine einzige Datei. Nenne die ' +
+      'Dateien und Ordner einzeln (z.B. „src/main/lauf.js", „src/shared/"). Soll dieses Paket ' +
+      'wirklich ohne Einschränkung arbeiten, lass erlaubteDateien ganz weg — ohne Liste sperrt ' +
+      'nichts.',
     urteilFehlt: (werte) => `Das Feld urteil fehlt oder ist unbekannt. Erlaubt ist genau: ${werte.join(' oder ')}.`,
     urteilOhneBeanstandung:
       'Urteil „fehlgeschlagen" ohne eine einzige Beanstandung: Damit wüsste die Reparatur nicht, ' +
@@ -1696,6 +1845,11 @@ export const texte = {
       schritte: 'Umsetzungsschritte',
       fundstellen: 'Voraussichtlich betroffen',
       nichtDabei: 'Nicht Teil des Pakets',
+      // Zuschnitt je Ziel und Datenvertrag (BAUPLAN 44).
+      zielBlock: 'Für',
+      erlaubteDateien: 'Erlaubte Dateien',
+      bausteine: 'Diese Bausteine entstehen',
+      schnittstellen: 'Rein und raus',
       urteil: 'Urteil',
       beanstandungen: 'Beanstandungen',
       rotVorGruen: 'Rot-vor-Grün-Beleg',
@@ -1715,8 +1869,11 @@ export const texte = {
         'Meldet dein Blockergebnis an FlowForge — Pflicht zum Abschluss deines Blocks. Der Rahmen ' +
         '(fazit, getan, offen, anmerkung) plus ein Freitext-Feld für deine eigentliche Lieferung.',
       arbeitspaket:
-        'Meldet das geschnittene Arbeitspaket an FlowForge — Pflicht zum Abschluss deines Blocks. ' +
-        'Die Fertig-Kriterien sind der Maßstab, an dem das Ergebnis später gemessen wird.',
+        'Meldet die geschnittenen Arbeitspakete an FlowForge — Pflicht zum Abschluss deines ' +
+        'Blocks, und zwar in EINEM Aufruf: pakete trägt je benanntem Ziel einen Zuschnitt ' +
+        '(ein zweiter Aufruf ersetzt den ersten). Die Fertig-Kriterien sind der Maßstab, an ' +
+        'dem das Ergebnis später gemessen wird; erlaubteDateien ist der Datenvertrag — nenne ' +
+        'Dateien und Ordner einzeln, Platzhalter wie * oder ** sind nicht erlaubt.',
       pruefbeleg:
         'Meldet deinen Prüfbeleg an FlowForge — Pflicht zum Abschluss deines Blocks. Aus dem ' +
         'Urteil und den Beanstandungen steuert FlowForge die Reparatur-Runden; aus der Prüfkarte ' +
@@ -1753,6 +1910,31 @@ export const texte = {
       schritte: 'Umsetzungsschritte in sinnvoller Reihenfolge.',
       fundstellen: 'Voraussichtlich betroffene Dateien und Stellen.',
       nichtDabei: 'Was ausdrücklich NICHT Teil des Pakets ist.',
+      // Zuschnitt je Ziel und Datenvertrag (BAUPLAN 44).
+      pakete:
+        'Je benanntem Ziel deines Auftrags EIN Zuschnitt — alle in diesem einen Aufruf. Gibt ' +
+        'es kein benanntes Ziel, genau einer ohne zielBlock (er gilt dann für alle).',
+      zielBlock:
+        'Die Blocknummer des Ziels, für das dieser Zuschnitt ist (z.B. „3") — dein Auftrag ' +
+        'listet die benannten Ziele mit ihrer Nummer. Danach richtet FlowForge die Zustellung ' +
+        'aus: Nur dieser Block und die Blöcke hinter ihm, die an seiner Arbeit weiterarbeiten, ' +
+        'bekommen diesen Zuschnitt. Leer lassen, wenn es nur ein Ziel gibt oder keines ' +
+        'benannt ist.',
+      paketAufgabenIds:
+        'Die ids der Aufgaben-Karten aus deiner paket_melden-Meldung, die dieser Zuschnitt ' +
+        'abdeckt — daran erkennt FlowForge, dass keine Aufgabe unter den Tisch fällt.',
+      erlaubteDateien:
+        'Der Datenvertrag: welche Dateien und Ordner dieses Paket anfassen darf — auch die, ' +
+        'die erst entstehen. Je Eintrag ein Pfad relativ zum Projektordner ' +
+        '(„src/main/lauf.js") oder ein Ordner mit Schrägstrich am Ende („src/shared/"). ' +
+        'Platzhalter wie *, ** oder ? versteht FlowForge nicht und weist sie ab. Diese Liste ' +
+        'IST die Schreibsperre des umsetzenden Blocks: Was nicht drinsteht, kann er nicht ' +
+        'schreiben. Nenne sie vollständig und schneide sie so, dass zwei Pakete sich nicht ' +
+        'überschneiden.',
+      bausteine: 'Welche Bausteine in diesem Paket entstehen — je Eintrag einer, mit Namen.',
+      schnittstellen:
+        'Was in dieses Paket hineingeht und was herauskommt — die Nahtstellen zu den anderen ' +
+        'Paketen, je Eintrag eine.',
       urteil:
         'bestanden = alle Fertig-Kriterien halten · fehlgeschlagen = mindestens eines hält nicht ' +
         '(dann gehört jede Beanstandung einzeln in beanstandungen).',
@@ -2102,6 +2284,16 @@ export const texte = {
     // in seinen eigenen Unterordner — sonst archiviert er fremde Tests.
     fremderPruefordnerFuerAgent: (ordner) =>
       `In der Prüfmappe gehört dir nur dein eigener Ordner: pruefung/${ordner}/ — dort legst du alle deine Prüfungen ab (und lässt deinen Prüfbefehl genau darauf zeigen). Andere Stellen unter pruefung/ gehören anderen Prüf-Blöcken und sind gesperrt.`,
+    // Datenvertrag als Schreibsperre (BAUPLAN 44): Was nicht in der Dateiliste
+    // des eigenen Arbeitspakets steht, wird hart abgelehnt — keine Rückfrage,
+    // denn im Automodus wäre sie wirkungslos. Der Text sagt dem Agenten, was er
+    // STATTDESSEN tun soll, statt ihn im Kreis probieren zu lassen.
+    ausserhalbDateilisteFuerAgent: (datei, liste) =>
+      `„${datei}" steht nicht in der Dateiliste deines Arbeitspakets. Anfassen darfst du nur: ` +
+      `${liste.join(', ')} (dazu deinen Ordner arbeitsablage/ für Wegwerf-Hilfen). Braucht dein ` +
+      'Paket wirklich eine weitere Datei, schreibe das ins Feld anmerkung deiner Ergebnis-Meldung ' +
+      '— dann schneidet der nächste Lauf das Paket richtig. Baue den Rest fertig, statt es erneut ' +
+      'zu versuchen.',
     // Bilder-Verbot in der Prüfmappe (BAUPLAN 17): hartes Nein, auch für Prüf-Blöcke.
     pruefmappeBildFuerAgent:
       'Bilddateien sind im Prüfordner „pruefung" verboten (hartes Nein, auch für Prüf-Blöcke): Prüfungen sind kleine Textdateien und Skripte. Prüfe ohne Bildvergleiche — die blockieren künftige, völlig erlaubte Änderungen.',
@@ -2272,6 +2464,16 @@ export const texte = {
     // Prüfordner je Prüfer (BAUPLAN 41).
     fremderPruefordnerGesperrt:
       'Schreiben außerhalb des eigenen Prüfordners gestoppt — jeder Prüfer hat seinen eigenen.',
+    // Datenvertrag als Schreibsperre (BAUPLAN 44): in Alltagssprache, damit
+    // Georg im Ticker sieht, was passiert ist — und woran es lag.
+    ausserhalbDateilisteGesperrt: (datei) =>
+      `Schreiben an „${datei}" gestoppt — die Datei steht nicht in der Dateiliste des ` +
+      'Arbeitspakets dieses Blocks.',
+    // Einmal je Block: Ab hier gilt die Sperre. Bekommt ein Block mehrere
+    // Arbeitspakete, gilt die Vereinigung ihrer Listen — die Zahl sagt es.
+    dateilisteAktiv: (bezeichnung, anzahl) =>
+      `Datenvertrag aktiv für ${bezeichnung}: ${anzahl} erlaubte Datei${anzahl === 1 ? '' : 'en'} ` +
+      '— Schreibversuche daneben werden gestoppt (arbeitsablage/ bleibt frei).',
     // Lauf-Mappe statt Projekt-Mappe (BAUPLAN 17).
     pruefmappeGeleert:
       'Prüfmappe geleert — der Prüfer baut seine Prüfungen frisch fürs aktuelle Paket.',
@@ -2356,11 +2558,54 @@ export const texte = {
       `Vorschlag fürs nächste Paket: ${anzahl} Karte${anzahl === 1 ? '' : 'n'} — ${empfehlung}`,
     // Karten-Zuteilung (BAUPLAN 29): sichtbar im Ticker und damit im Laufbericht.
     kartenZuteilung: (zeilen) => `Karten verteilt: ${zeilen}`,
-    // Paket melden & Themen (BAUPLAN 30).
-    paketGemeldet: (titel) =>
+    // Paket melden & Themen (BAUPLAN 30). Seit BAUPLAN 44 mit der Bezeichnung
+    // des meldenden Blocks: Zwei Auftragsquellen im Schaubild ergaben sonst zwei
+    // Zeilen, die nicht auseinanderzuhalten waren.
+    paketGemeldet: (bezeichnung, titel) =>
       titel.length
-        ? `Paket gemeldet: ${titel.length} Aufgabe${titel.length === 1 ? '' : 'n'} — „${titel.join('“, „')}". Karten aus diesem Lauf tragen das als Herkunft.`
-        : 'Paket gemeldet: allein aus dem Feld — keine Aufgaben-Karten.',
+        ? `Paket gemeldet von ${bezeichnung}: ${titel.length} Aufgabe${titel.length === 1 ? '' : 'n'} — „${titel.join('“, „')}". Karten aus diesem Lauf tragen das als Herkunft.`
+        : `Paket gemeldet von ${bezeichnung}: allein aus dem Feld — keine Aufgaben-Karten.`,
+    // Zuschnitt je Ziel (BAUPLAN 44): Wer welches Paket bekommen hat, ist die
+    // erste Stelle, an der Georg nachsieht, wenn ein Bauer das Falsche baute.
+    zuschnittGeschnitten: (bezeichnung, zeilen) =>
+      `Zuschnitt von ${bezeichnung}: ${zeilen.join(' | ')}`,
+    zuschnittZiel: (bezeichnung, anzahlDateien) =>
+      `${bezeichnung} — ${anzahlDateien} erlaubte Datei${anzahlDateien === 1 ? '' : 'en'}`,
+    zuschnittOhneZiel: (anzahlDateien) =>
+      `ohne Ziel (gilt für alle) — ${anzahlDateien} erlaubte Datei${anzahlDateien === 1 ? '' : 'en'}`,
+    // Vollständigkeit des Zuschnitts (BAUPLAN 44). Jede Zeile steht im Ticker
+    // und damit im Laufbericht — Georgs Alltagstest („er übergeht eine Aufgabe")
+    // muss dort sichtbar sein, sonst hält er die Prüfung für nicht gelaufen.
+    paketNachgefordert: (bezeichnung) =>
+      `${bezeichnung} hat nicht gemeldet, an welchen Aufgaben-Karten der Lauf arbeitet — FlowForge ` +
+      'fordert die Paket-Meldung einmal nach (ohne sie prüft niemand die Vollständigkeit).',
+    // Ohne „auch nach der Nachforderung" formuliert: Die Runde kann auch
+    // deshalb ausbleiben, weil der Lauf gerade angehalten wird — dann hätte der
+    // Satz eine Nachforderung behauptet, die es nie gab.
+    paketFehltWeiter: (bezeichnung) =>
+      `${bezeichnung} hat kein Paket gemeldet — die Vollständigkeit des Zuschnitts bleibt in ` +
+      'diesem Lauf ungeprüft, und die Karten dieses Laufs tragen keine Aufgabe als Herkunft.',
+    // Die ehrliche Grenze: Kommt der Auftrag allein aus dem Wunsch-/Fehlerbild-
+    // Feld, gibt es keine Aufgaben-Karten, gegen die gemessen werden könnte.
+    paketOhneAufgaben: (bezeichnung) =>
+      `${bezeichnung} arbeitet allein aus seinem Feld — geprüft wird deshalb nur, ob jedes ` +
+      'benannte Ziel ein Paket bekommen hat, nicht ob jede Aufgabe darin vorkommt.',
+    // Selbstauskunft verhindern (BAUPLAN 44): Gemessen wird immer gegen die
+    // ERSTE Meldung — ein späteres Schrumpfen besteht die Prüfung nicht, es
+    // steht hier.
+    paketGeschrumpft: (bezeichnung, vorher, nachher) =>
+      `${bezeichnung} meldet sein Paket kleiner als zuvor (${vorher} → ${nachher} Aufgaben) — ` +
+      'gemessen wird weiterhin gegen die erste Meldung.',
+    zuschnittNachgefordert: (bezeichnung, aufgaben, ziele) =>
+      `${bezeichnung} hat seinen Zuschnitt nicht vollständig geschnitten` +
+      (aufgaben.length ? ` (nicht abgedeckt: „${aufgaben.join('“, „')}")` : '') +
+      (ziele.length ? ` (ohne Paket: ${ziele.join(' | ')})` : '') +
+      ' — FlowForge fordert einmal nach.',
+    zuschnittWeiterOhne: (bezeichnung, aufgaben, ziele) =>
+      `${bezeichnung} hat den Zuschnitt nicht vervollständigt` +
+      (aufgaben.length ? ` (nicht abgedeckt: „${aufgaben.join('“, „')}")` : '') +
+      (ziele.length ? ` (ohne Paket: ${ziele.join(' | ')})` : '') +
+      ' — der Lauf macht ehrlich vermerkt weiter.',
     themenUebernommen: (uebernommen, abgelehnt) =>
       `Themen sortiert: ${uebernommen} übernommen, ${abgelehnt} abgelehnt.`,
     // Audit (BAUPLAN 25): volle Lesetiefe, bewusst teuer — die Kosten-Folge
@@ -2592,6 +2837,12 @@ export const texte = {
     // Paket & Sonderlauf (BAUPLAN 30).
     paketZeile: (titel) => `Paket dieses Laufs: „${titel.join('“, „')}"`,
     paketLeerZeile: 'Paket dieses Laufs: allein aus dem Feld — keine Aufgaben-Karten.',
+    // Paket je Auftragsquelle (BAUPLAN 44): Zwei Auftragsquellen im Schaubild
+    // überschrieben sich vorher wortlos — jetzt steht je Block eine Zeile.
+    paketBlockZeile: (bezeichnung, titel) =>
+      titel.length
+        ? `Paket von ${bezeichnung}: „${titel.join('“, „')}"`
+        : `Paket von ${bezeichnung}: allein aus dem Feld — keine Aufgaben-Karten.`,
     keineZumFilter: 'Kein Laufbericht mit diesem Ausgang.',
     filterAlle: 'Alle',
     dauerSekunden: (s) => `Dauer: ${s} Sekunden`,
@@ -2613,7 +2864,11 @@ export const texte = {
       // Lieferschein (BAUPLAN 42): Der Block hat gearbeitet, sein Ergebnis aber
       // auch nach der Nachforderung nicht gemeldet — ohne Meldung gibt es keine
       // Lieferung an die folgenden Blöcke.
-      'ohne-meldung': 'Ergebnis nicht gemeldet'
+      'ohne-meldung': 'Ergebnis nicht gemeldet',
+      // Vollständigkeit des Zuschnitts (BAUPLAN 44): Der Block hat gearbeitet
+      // und gemeldet, aber nicht jede gemeldete Aufgabe bzw. nicht jedes
+      // benannte Ziel bedient — er trägt in einem kurzen zweiten Anlauf nach.
+      'zuschnitt-unvollstaendig': 'Zuschnitt unvollständig'
     },
     details: 'Einzelheiten',
     schliessen: 'Zuklappen',
@@ -2641,8 +2896,10 @@ export const texte = {
       (v.begruendung ? ` (${v.begruendung})` : ''),
     // Karten-Zuteilung (BAUPLAN 29): wie die Karten verteilt wurden — je
     // Block mit Kartenzahl, wie im Ticker.
+    // Getrennt durch „ | ": Die Bezeichnung enthält seit BAUPLAN 44 selbst
+    // Trennzeichen („Block 3 „Bauer · UI"").
     kartenZuteilungZeile: (eintraege) =>
-      'Karten verteilt: ' + eintraege.map((e) => `${e.block} ${e.anzahl}`).join(' · '),
+      'Karten verteilt: ' + eintraege.map((e) => `${e.block} ${e.anzahl}`).join(' | '),
     // Lokale Helfer-KI (Wunsch Georg, 13.08.2026): ihr Anteil im Bericht.
     // Seit BAUPLAN 20 zählen auch die Vorreparatur-Versuche mit — samt der
     // Frage, wie viele davon die Nachprüfung bestanden haben.

@@ -160,22 +160,23 @@ describe('BAUPLAN 43 · Zwei gleiche Blöcke bleiben unterscheidbar', () => {
   ]
   const pfeile = [pfeil('p', 'b'), pfeil('b', 'u'), pfeil('b', 'm')]
 
-  it('nennt beide Prüfer mit Zusatznamen und eigener Nummer', () => {
+  // Umgeschrieben mit BAUPLAN 44: Vorher stand für JEDEN Empfänger eine eigene
+  // Zeile — bei zwei Prüfern also derselbe „wozu"-Satz zweimal, in jedem Anlauf.
+  // Seit 44 wird der SATZ gebündelt, sobald zwei Empfänger in Etikett,
+  // Verbindlichkeit und „wozu" übereinstimmen; genannt werden weiterhin beide
+  // mit Nummer und Zusatzname (weggelassen wird nie einer — sie tragen die
+  // Verantwortungssprache).
+  it('nennt beide Prüfer mit Zusatznamen und eigener Nummer — in EINER Zeile', () => {
     const text = vorspannText(bloecke, pfeile, 'b')
     expect(text).toContain(
-      v.empfaenger(
-        bezeichnung(3, 'Prüfer · UI'),
+      v.empfaengerMehrere(
+        [bezeichnung(3, 'Prüfer · UI'), bezeichnung(4, 'Prüfer · Motor')],
         'Umsetzungsbericht',
         wozu('pruefer', 'Umsetzungsbericht')
       )
     )
-    expect(text).toContain(
-      v.empfaenger(
-        bezeichnung(4, 'Prüfer · Motor'),
-        'Umsetzungsbericht',
-        wozu('pruefer', 'Umsetzungsbericht')
-      )
-    )
+    // Und der „wozu"-Satz steht danach genau einmal statt zweimal.
+    expect(text.split(wozu('pruefer', 'Umsetzungsbericht'))).toHaveLength(2)
   })
 
   it('stellt die beiden Prüfer in der Kettenzeile NEBENeinander', () => {
@@ -547,5 +548,86 @@ describe('BAUPLAN 43 · Derselbe Block liest in jedem Anlauf dasselbe', () => {
     const kopie = JSON.parse(JSON.stringify(bloecke))
     const kopiePfeile = JSON.parse(JSON.stringify(pfeile))
     expect(vorspannText(kopie, kopiePfeile, 'b')).toBe(vorspannText(bloecke, pfeile, 'b'))
+  })
+})
+
+describe('BAUPLAN 44 · Gleiche Empfänger-Zeilen stehen einmal statt dreimal', () => {
+  // Rot-vor-Grün: Vor Bauschritt 44 hängte vorspannText je Empfänger eine eigene
+  // Zeile an — bei drei Bauern hinter „Paket schneiden" stand derselbe
+  // „wozu"-Satz dreimal im Auftrag, und zwar in JEDEM Anlauf. Die Bausteine
+  // empfaengerMehrere/empfaengerMehrereOptional gab es nicht (Zugriff darauf war
+  // undefined). Beim Nachbauen wurde zusätzlich die Grenze verfälscht
+  // (Bündelung schon ab EINEM Empfänger) — dann wurde die Prüfung „bei genau
+  // einem Empfänger bleibt der Wortlaut der bisherige" rot.
+  const dreiBauer = [
+    block('p', 'paket-schneiden'),
+    block('b1', 'bauer', 'UI'),
+    block('b2', 'bauer', 'Motor'),
+    block('b3', 'bauer', 'Daten')
+  ]
+  const dreiPfeile = [pfeil('p', 'b1'), pfeil('p', 'b2'), pfeil('p', 'b3')]
+
+  it('fasst drei Bauer mit demselben „wozu" in EINE Zeile — und lässt keinen weg', () => {
+    const text = vorspannText(dreiBauer, dreiPfeile, 'p')
+    const namen = [
+      bezeichnung(2, 'Bauer · UI'),
+      bezeichnung(3, 'Bauer · Motor'),
+      bezeichnung(4, 'Bauer · Daten')
+    ]
+    expect(text).toContain(
+      v.empfaengerMehrere(namen, 'Arbeitspaket', wozu('bauer', 'Arbeitspaket'))
+    )
+    for (const name of namen) expect(text).toContain(name)
+    // Der teure Teil — der „wozu"-Satz — steht genau einmal.
+    expect(text.split(wozu('bauer', 'Arbeitspaket'))).toHaveLength(2)
+  })
+
+  it('bleibt bei genau EINEM Empfänger Zeichen für Zeichen beim bisherigen Wortlaut', () => {
+    const einer = [block('p', 'paket-schneiden'), block('b', 'bauer')]
+    const einerPfeile = [pfeil('p', 'b')]
+    expect(vorspannText(einer, einerPfeile, 'p')).toContain(
+      v.empfaenger(bezeichnung(2, 'Bauer'), 'Arbeitspaket', wozu('bauer', 'Arbeitspaket'))
+    )
+  })
+
+  it('bündelt nur bei gleichem Etikett, gleicher Verbindlichkeit und gleichem „wozu"', () => {
+    // Standard-Vorlage: Angreifer, Bauer und Prüfer bekommen alle das
+    // Arbeitspaket — aber mit drei VERSCHIEDENEN „wozu"-Sätzen. Da hilft
+    // Bündeln nicht, und es darf auch nichts verschmelzen.
+    const vorlage = [
+      block('p', 'paket-schneiden'),
+      block('a', 'angreifer'),
+      block('b', 'bauer'),
+      block('t', 'pruefer')
+    ]
+    const kanten = [pfeil('p', 'a'), pfeil('a', 'b'), pfeil('b', 't')]
+    const text = vorspannText(vorlage, kanten, 'p')
+    for (const [nummer, name, id] of [
+      [2, 'Angreifer', 'angreifer'],
+      [3, 'Bauer', 'bauer'],
+      [4, 'Prüfer', 'pruefer']
+    ])
+      expect(text).toContain(
+        v.empfaenger(bezeichnung(nummer, name), 'Arbeitspaket', wozu(id, 'Arbeitspaket'))
+      )
+  })
+
+  it('hält optionale Empfänger von verlangten getrennt — sonst verspricht der Satz zu viel', () => {
+    // Zwei Bauer nehmen die Angriffsliste OPTIONAL mit; die Zeile muss die
+    // optionale Sprache tragen, nicht die verlangende.
+    const bloecke = [
+      block('a', 'angreifer'),
+      block('b1', 'bauer', 'UI'),
+      block('b2', 'bauer', 'Motor')
+    ]
+    const kanten = [pfeil('a', 'b1'), pfeil('a', 'b2')]
+    const text = vorspannText(bloecke, kanten, 'a')
+    expect(text).toContain(
+      v.empfaengerMehrereOptional(
+        [bezeichnung(2, 'Bauer · UI'), bezeichnung(3, 'Bauer · Motor')],
+        'Angriffsliste',
+        wozu('bauer', 'Angriffsliste')
+      )
+    )
   })
 })

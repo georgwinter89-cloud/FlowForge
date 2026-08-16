@@ -40,7 +40,13 @@ import {
   rueckfuehrungsZiel,
   zwischenBloecke,
   budgetNehmen,
-  laufstandPasst
+  budgetAusStand,
+  laufstandPasst,
+  zielListe,
+  zielAdresse,
+  zuschnittAuftragZusatz,
+  zuschnittRouting,
+  ARBEITSPAKET_ETIKETT
 } from '../shared/kettenRegeln.js'
 import { prueferKritik, mitteGekuerzt } from '../shared/kantenRegeln.js'
 import {
@@ -54,6 +60,11 @@ import {
   beanstandungenEinstufen,
   grundsaetzlicheBeanstandungen,
   pruefkarteAusMeldungen,
+  zuschnitteAusMeldung,
+  zuschnitteAusMeldungen,
+  zuschnittSchluessel,
+  zuschnittDeckung,
+  dateiListeVereinigen,
   RAHMEN_WERKZEUG,
   BEANSTANDUNG_MAX
 } from '../shared/lieferschein.js'
@@ -346,10 +357,27 @@ function meldungenText(meldungen) {
 // Die Lieferungen eines Blocks je Etikett — genau das, was ein Nachfolger mit
 // passendem braucht in seinen Auftrag bekommt. Meldungen ohne Etikett (Blöcke,
 // die nichts liefern) tauchen hier bewusst nicht auf.
+//
+// Zuschnitt je Ziel (BAUPLAN 44): Je Etikett steht hier nicht mehr EIN Text,
+// sondern ein Text JE ZIEL — Schlüssel ist die instanzId des benannten Ziels,
+// '' das Paket ohne Ziel (gilt für alle). Ohne diese Ebene gäbe es keinen Ort,
+// an dem stünde, welches Paket für wen ist: Alle Bauer bekämen denselben Text.
+// Die Zuordnung steckt IN der Meldung, nicht in einer Nebenstruktur — sonst
+// wäre sie nach einer Wiederaufnahme weg.
 function lieferungenAusMeldungen(meldungen) {
   const je = {}
-  for (const meldung of meldungen ?? [])
-    if (meldung?.etikett) je[meldung.etikett] = lieferscheinText(meldung)
+  for (const meldung of meldungen ?? []) {
+    if (!meldung?.etikett) continue
+    const zuschnitte = meldung.art === 'arbeitspaket' ? zuschnitteAusMeldung(meldung) : []
+    if (zuschnitte.length === 0) {
+      je[meldung.etikett] = { '': lieferscheinText(meldung) }
+      continue
+    }
+    const jeZiel = {}
+    for (const paket of zuschnitte)
+      jeZiel[zuschnittSchluessel(paket)] = lieferscheinText(meldung, zuschnittSchluessel(paket))
+    je[meldung.etikett] = jeZiel
+  }
   return je
 }
 
@@ -1244,7 +1272,17 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           letztesTorProtokoll: '',
           torGruenBefehl: '',
           pruefbefehlNachforderung: '',
-          rauchtestRueckmeldung: ''
+          rauchtestRueckmeldung: '',
+          // Vollständigkeit des Zuschnitts (BAUPLAN 44):
+          // zuschnittNachforderung — der fertige Nachtrag-Text, den dieser
+          //   Block im nächsten Anlauf bekommt (er nennt die nicht abgedeckten
+          //   Aufgaben und die unbedienten Ziele NAMENTLICH). Er hängt am
+          //   Knoten, nicht im Auftragstext: Der wird bei jedem Anlauf
+          //   vollständig neu gebaut;
+          // dateilisteGemeldet — die Ticker-Zeile zum Datenvertrag kommt einmal
+          //   je Block, nicht in jeder Reparatur-Runde erneut.
+          zuschnittNachforderung: '',
+          dateilisteGemeldet: false
         }
       ])
     )
@@ -1287,18 +1325,19 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     kartenFuerBlock = (instanzId) => kartenZuteilung.get(instanzId) ?? ausgewaehlt
     const nachfolgerVon = new Map(kettenIds.map((id) => [id, []]))
     for (const pfeil of workflow.pfeile) nachfolgerVon.get(pfeil.von)?.push(pfeil.nach)
-    // Alle Nachfahren eines Blocks entlang der Pfeile, gruppiert nach
-    // Blockname — zugeteilt wird per Name (so kennt der Agent die Blöcke).
-    // Seit BAUPLAN 41 ist das der Anzeigename samt Zusatz: Zwei gleiche Blöcke
-    // sind damit eindeutig adressierbar; ohne Zusatz bekommen wie bisher alle
-    // gleichnamigen Instanzen dieselbe Zuteilung.
+    // Alle Nachfahren eines Blocks entlang der Pfeile, je Instanz eine ADRESSE
+    // (BAUPLAN 44). Bis Bauschritt 43 war der Schlüssel der Anzeigename: Zwei
+    // Blöcke ohne (oder mit gleichem) Zusatznamen verschmolzen zu EINEM Eintrag,
+    // der Agent sah sie als einen und konnte sie weder getrennt beliefern noch
+    // getrennt zuteilen. Adressiert wird deshalb über die Blocknummer — sie ist
+    // immer eindeutig, auch ohne Zusatznamen, und hält damit jedes schon
+    // gespeicherte Schaubild am Laufen.
     // Seit BAUPLAN 43 in der Reihenfolge der Kette statt in der zufälligen
     // Reihenfolge der Tiefensuche: Derselbe Auftrag trägt zwei Listen — vorn im
     // Vorspann die Empfänger (nur wer wirklich etwas bekommt), hinten hier alle
-    // Nachfahren (alle bekommen Karten). Gleiche Namen und gleiche Reihenfolge
-    // sind das Einzige, was sie mechanisch aufeinander beziehbar macht.
-    function nachfahrenNamen(instanzId) {
-      const namen = new Map()
+    // Nachfahren (alle bekommen Karten). Gleiche Bezeichnungen und gleiche
+    // Reihenfolge sind das Einzige, was sie mechanisch aufeinander beziehbar macht.
+    function nachfahrenAdressen(instanzId) {
       const nachfahren = new Set()
       const offen = [...(nachfolgerVon.get(instanzId) ?? [])]
       while (offen.length) {
@@ -1307,30 +1346,87 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         nachfahren.add(id)
         for (const weiter of nachfolgerVon.get(id) ?? []) offen.push(weiter)
       }
+      const liste = []
       for (const id of kettenIds) {
         if (!nachfahren.has(id)) continue
         const name = knoten.get(id)?.name
         if (!name) continue
-        if (!namen.has(name)) namen.set(name, [])
-        namen.get(name).push(id)
+        const nummer = nummerVon.get(id)
+        liste.push({
+          instanzId: id,
+          nummer,
+          name,
+          adresse: zielAdresse(nummer),
+          bezeichnung: texte.ticker.blockBezeichnung(nummer, name)
+        })
       }
-      return namen
+      return liste
     }
+
+    // Benannte Ziele je Auftragsquelle (BAUPLAN 44) — reine Funktion aus
+    // Blöcken und Pfeilen, deshalb wie der Vorspann EINMAL je Lauf gerechnet:
+    // Der Agent liest in jeder Reparatur-Runde dieselben Adressen.
+    const zieleVon = new Map(
+      kettenIds.map((id) => [id, zielListe(workflow.bloecke, workflow.pfeile, id)])
+    )
 
     // Paket melden & Herkunft (BAUPLAN 30): Die Aufgaben-Karten, an denen
     // dieser Lauf arbeitet — gemeldet von Paket schneiden/Diagnose über
-    // paket_melden (null = nicht gemeldet). Damit stempelt FlowForge jede im
-    // Lauf angelegte oder geänderte Karte: Aufgabe(n) · Block · Lauf.
-    let laufPaket = null
+    // paket_melden. Seit BAUPLAN 44 JE AUFTRAGSQUELLE statt einmal je Lauf:
+    // Zwei Auftragsquellen im Schaubild (Paket schneiden und Diagnose)
+    // überschrieben sich vorher wortlos, und die Herkunft jeder Karte trug nur
+    // das zuletzt gemeldete Paket — derselbe Fehlertyp, den Bauschritt 41
+    // überall sonst beseitigt hat.
+    const laufPakete = new Map()
+    // Der Maßstab der Vollständigkeitsprüfung (BAUPLAN 44): die ERSTE Meldung
+    // je Auftragsquelle, die danach nicht mehr wandert. Ohne sie wäre die
+    // Prüfung eine Selbstauskunft: Der billigste Weg, eine Nachforderung zu
+    // bestehen, wäre nicht ein zusätzlicher Zuschnitt, sondern ein zweiter
+    // paket_melden-Aufruf mit weniger Aufgaben — der Server-Hinweis sagt dem
+    // Agenten sogar ausdrücklich, dass ein erneuter Aufruf ersetzt.
+    const laufPaketeMassstab = new Map()
+    // Rückfall ohne Bruch: Ein Laufstand von vor Bauschritt 44 trägt EINE Liste
+    // ohne Block — sie gilt dann wie bisher für alle.
+    let laufPaketRueckfall = null
+    // Das Paket des nächstgelegenen Auftragsquellen-Vorfahren dieses Blocks —
+    // er hat den Auftrag geschnitten, an dem hier gearbeitet wird.
+    function paketFuerBlock(instanzId) {
+      if (!instanzId) return laufPaketRueckfall
+      if (laufPakete.has(instanzId)) return laufPakete.get(instanzId)
+      const distanz = distanzVon.get(instanzId)
+      let naechste = null
+      let treffer = null
+      for (const [id, aufgaben] of laufPakete) {
+        const naehe = distanz?.get(id)
+        if (naehe == null) continue
+        if (naechste === null || naehe < naechste) {
+          naechste = naehe
+          treffer = aufgaben
+        }
+      }
+      return treffer ?? laufPaketRueckfall
+    }
     function herkunftFuerBlock(instanzId) {
       const name = instanzId ? knoten.get(instanzId)?.name : null
+      const paket = paketFuerBlock(instanzId)
       return {
         quelle: 'block',
         block: name ?? texte.laufberichte.unbekannterBlock,
         laufId: bericht.id,
         laufStart: bericht.gestartetAm,
-        ...(laufPaket?.length ? { aufgaben: laufPaket } : {})
+        ...(paket?.length ? { aufgaben: paket } : {})
       }
+    }
+    // Der Laufbericht führt das Paket je meldendem Block — sonst zeigte er bei
+    // zwei Auftragsquellen nur eines von zweien.
+    function paketBerichtSetzen() {
+      // Nichts gemeldet heißt: keine Zeile. Eine leere Liste hieße im Bericht
+      // „gemeldet, aber leer" — das wäre eine andere Aussage.
+      if (laufPakete.size === 0) return
+      bericht.paket = [...laufPakete].map(([id, aufgaben]) => ({
+        block: texte.ticker.blockBezeichnung(nummerVon.get(id), knoten.get(id)?.name ?? '?'),
+        aufgaben: aufgaben.map((a) => a.titel)
+      }))
     }
     function paketMeldungAnnehmen({ instanzId, aufgabenIds }) {
       const geladen = kartenLaden(projektPfad)
@@ -1348,11 +1444,46 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         feldGefuellt
       })
       if (urteil.fehler) return urteil
-      laufPaket = urteil.aufgaben
-      bericht.paket = urteil.aufgaben.map((a) => a.titel)
-      tickern(texte.ticker.paketGemeldet(urteil.aufgaben.map((a) => a.titel)))
+      const bezeichnung = texte.ticker.blockBezeichnung(
+        nummerVon.get(instanzId),
+        k?.name ?? '?'
+      )
+      // Gemessen wird gegen die ERSTE Meldung (BAUPLAN 44). Ein späteres
+      // Schrumpfen besteht die Vollständigkeitsprüfung deshalb nicht — und es
+      // steht sichtbar im Ticker, statt sich als zweite „Paket gemeldet"-Zeile
+      // zu tarnen.
+      const massstab = laufPaketeMassstab.get(instanzId)
+      if (!massstab) laufPaketeMassstab.set(instanzId, urteil.aufgaben)
+      else if (urteil.aufgaben.length < massstab.length)
+        tickern(
+          texte.ticker.paketGeschrumpft(bezeichnung, massstab.length, urteil.aufgaben.length)
+        )
+      laufPakete.set(instanzId, urteil.aufgaben)
+      paketBerichtSetzen()
+      tickern(texte.ticker.paketGemeldet(bezeichnung, urteil.aufgaben.map((a) => a.titel)))
       standSpeichern()
       return { ok: true, meldung: texte.agentenPaket.gemeldet(urteil.aufgaben.length) }
+    }
+
+    // Was die Vollständigkeitsprüfung als SOLL-Menge nimmt: der eingefrorene
+    // Maßstab dieser Auftragsquelle. Ein Laufstand von vor Bauschritt 44 kennt
+    // ihn nicht — dort gilt die zurückgelesene Meldung (Rückfall ohne Bruch).
+    // null heißt „noch gar nichts gemeldet" und ist etwas anderes als eine leere
+    // Liste („kommt allein aus dem Feld").
+    function gemeldetesPaketVon(instanzId) {
+      if (laufPaketeMassstab.has(instanzId)) return laufPaketeMassstab.get(instanzId)
+      if (laufPakete.has(instanzId)) return laufPakete.get(instanzId)
+      return laufPaketRueckfall
+    }
+
+    // Und wogegen die aufgabenIds eines Zuschnitts geprüft werden: die AKTUELLE
+    // Meldung. Bewusst nicht der Maßstab — korrigiert ein Agent seine
+    // Paket-Meldung nach oben, wäre die neue Karte sonst „unbekannt", obwohl er
+    // sie gerade erst gemeldet hat. Das Schrumpfen bleibt trotzdem wirkungslos:
+    // Gemessen wird oben gegen den Maßstab.
+    function aktuellesPaketVon(instanzId) {
+      if (laufPakete.has(instanzId)) return laufPakete.get(instanzId)
+      return laufPaketRueckfall
     }
 
     // Eine Motor-Session pro Lauf (BAUPLAN 19): Kennung und Füllstand der
@@ -1395,6 +1526,12 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     // sein Ergebnis nicht, wird genau einmal nachgefordert; danach gilt er als
     // fehlgeschlagen. Einen Rückfall auf den Abschlusstext gibt es nicht mehr.
     const meldungNachgefordert = new Set()
+    // Vollständigkeit des Zuschnitts (BAUPLAN 44): ein EIGENES Set neben den
+    // vier vorhandenen. Hinge sie an meldungNachgefordert, schlössen sich beide
+    // aus — ein Block, der erst gar nichts meldete und dann unvollständig
+    // zuschnitt, gälte sofort als fehlgeschlagen, obwohl er nur nachtragen
+    // müsste.
+    const zuschnittNachgefordert = new Set()
     // Automatischer Übertrag (SPEC §5): Zähler gegen die Übertragsgrenze,
     // gemeinsam für alle Blöcke des Laufs.
     let uebertraege = 0
@@ -1456,7 +1593,8 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
               nk.meldungenVorher.length > 0 ||
               nk.torProtokoll ||
               nk.pruefbefehlNachforderung ||
-              nk.rauchtestRueckmeldung
+              nk.rauchtestRueckmeldung ||
+              nk.zuschnittNachforderung
             )
           })
           .map((id) => {
@@ -1481,7 +1619,11 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
                 // Messung veraltet, das Tor läuft dann eben erneut.
                 torProtokoll: nk.torProtokoll,
                 pruefbefehlNachforderung: nk.pruefbefehlNachforderung,
-                rauchtestRueckmeldung: nk.rauchtestRueckmeldung
+                rauchtestRueckmeldung: nk.rauchtestRueckmeldung,
+                // Vollständigkeit des Zuschnitts (BAUPLAN 44): Ein offener
+                // Nachtrag überlebt den App-Neustart — sonst liefe der Block
+                // erneut, ohne zu erfahren, was ihm fehlt.
+                zuschnittNachforderung: nk.zuschnittNachforderung
               }
             ]
           }),
@@ -1502,8 +1644,9 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         // ihrer Teilmenge.
         kartenZuteilung: [...kartenZuteilung],
         // Paket (BAUPLAN 30): die gemeldeten Aufgaben-Karten wandern mit —
-        // die Herkunft stimmt auch nach einer Wiederaufnahme.
-        paket: laufPaket,
+        // die Herkunft stimmt auch nach einer Wiederaufnahme. Seit BAUPLAN 44
+        // je Auftragsquelle statt einmal je Lauf.
+        pakete: [...laufPakete],
         // Sonderlauf (BAUPLAN 30): die Wiederaufnahme baut denselben
         // Ein-Block-Workflow wieder auf.
         sonderlauf,
@@ -1521,7 +1664,13 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         rauchtestNachgefordert: [...rauchtestNachgefordert],
         // Lieferschein (BAUPLAN 42): eine verbrauchte Meldungs-Nachforderung
         // wird nach einem Neustart nicht erneut gewährt.
-        meldungNachgefordert: [...meldungNachgefordert]
+        meldungNachgefordert: [...meldungNachgefordert],
+        // Vollständigkeit des Zuschnitts (BAUPLAN 44): ebenso — ohne diesen
+        // Eintrag gewährte jeder App-Neustart die Runde erneut.
+        zuschnittNachgefordert: [...zuschnittNachgefordert],
+        // Und der eingefrorene Maßstab wandert mit: Sonst hieße ein Neustart,
+        // dass die geschrumpfte Meldung plötzlich als erste gilt.
+        paketeMassstab: [...laufPaketeMassstab]
       })
     }
 
@@ -1581,6 +1730,10 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           nk.pruefbefehlNachforderung = Boolean(kante.pruefbefehlNachforderung)
           if (typeof kante.rauchtestRueckmeldung === 'string')
             nk.rauchtestRueckmeldung = kante.rauchtestRueckmeldung
+          // Vollständigkeit des Zuschnitts (BAUPLAN 44) — ebenso tolerant:
+          // Ohne Eintrag läuft alles wie vor diesem Schritt.
+          if (typeof kante.zuschnittNachforderung === 'string')
+            nk.zuschnittNachforderung = kante.zuschnittNachforderung
         }
       for (const [id, u] of Array.isArray(fortsetzung.uebergaben) ? fortsetzung.uebergaben : [])
         if (knoten.has(id)) {
@@ -1598,12 +1751,14 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       if (Number.isInteger(fortsetzung.rundenStandard)) rundenStandard = fortsetzung.rundenStandard
       else if (Number.isInteger(fortsetzung.rundenUebrig)) rundenStandard = fortsetzung.rundenUebrig
       if (Number.isInteger(fortsetzung.uebertraege)) uebertraege = fortsetzung.uebertraege
+      // Seit BAUPLAN 44 über die reine Regel budgetAusStand — sie lässt sich
+      // ohne Lauf prüfen („ein Neustart gewährt die Runde nicht erneut").
+      const kettenEintraege = kette.map((eintrag) => ({
+        instanzId: eintrag.instanzId,
+        def: defVon(eintrag.blockId)
+      }))
       const budgetUebernehmen = (wert, menge, gilt) => {
-        if (Array.isArray(wert)) {
-          for (const id of wert) if (knoten.has(id)) menge.add(id)
-        } else if (wert === true) {
-          for (const eintrag of kette) if (gilt(defVon(eintrag.blockId))) menge.add(eintrag.instanzId)
-        }
+        for (const id of budgetAusStand(wert, kettenEintraege, gilt)) menge.add(id)
       }
       budgetUebernehmen(
         fortsetzung.startanleitungNachgefordert,
@@ -1622,6 +1777,13 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       )
       // Lieferschein (BAUPLAN 42): gilt für jeden Block.
       budgetUebernehmen(fortsetzung.meldungNachgefordert, meldungNachgefordert, () => true)
+      // Vollständigkeit des Zuschnitts (BAUPLAN 44): gilt für die
+      // Auftragsquellen — sie sind die einzigen, die ein Paket schneiden.
+      budgetUebernehmen(
+        fortsetzung.zuschnittNachgefordert,
+        zuschnittNachgefordert,
+        (def) => def?.kartenZuteilung
+      )
       // Tor ohne KI (BAUPLAN 35): Die Baseline wurde beim ursprünglichen Start
       // gemessen — sie gilt für den ganzen Lauf und wird nicht neu erhoben.
       // Seit BAUPLAN 41 je Prüf-Instanz; ein alter Stand trug genau eine, die
@@ -1647,11 +1809,24 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         : [])
         if (knoten.has(id) && Array.isArray(ids))
           kartenZuteilung.set(id, ids.filter((kartenId) => typeof kartenId === 'string'))
-      // Paket (BAUPLAN 30): tolerant gegenüber alten Laufständen.
-      if (Array.isArray(fortsetzung.paket))
-        laufPaket = fortsetzung.paket
+      // Paket (BAUPLAN 30/44): tolerant gegenüber alten Laufständen — ein Stand
+      // von vor Bauschritt 44 trägt EINE Liste ohne Block; sie gilt dann wie
+      // bisher für alle. Ein alter Laufstand wird dadurch nicht ungültig.
+      const paketEintraege = (liste) =>
+        (Array.isArray(liste) ? liste : [])
           .filter((a) => a && typeof a.id === 'string')
           .map((a) => ({ id: a.id, titel: String(a.titel ?? '') }))
+      if (Array.isArray(fortsetzung.pakete))
+        for (const [id, liste] of fortsetzung.pakete)
+          if (knoten.has(id)) laufPakete.set(id, paketEintraege(liste))
+      if (Array.isArray(fortsetzung.paket)) laufPaketRueckfall = paketEintraege(fortsetzung.paket)
+      // Der eingefrorene Maßstab (BAUPLAN 44) kommt zurück; ein Stand von vor
+      // diesem Bauschritt kennt ihn nicht — dann gilt die gespeicherte Meldung
+      // als Maßstab, genau wie in einem Lauf ohne zweiten Aufruf.
+      if (Array.isArray(fortsetzung.paketeMassstab))
+        for (const [id, liste] of fortsetzung.paketeMassstab)
+          if (knoten.has(id)) laufPaketeMassstab.set(id, paketEintraege(liste))
+      paketBerichtSetzen()
       const naechster = kette.find((eintrag) => knoten.get(eintrag.instanzId).status !== 'fertig')
       if (naechster)
         tickern(
@@ -1676,17 +1851,20 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         zuteilung,
         karten: geladen.karten,
         ausgewaehlt,
-        nachfolger: nachfahrenNamen(instanzId)
+        ziele: nachfahrenAdressen(instanzId)
       })
       if (urteil.fehler) return urteil
       for (const [id, ids] of urteil.zuteilung) kartenZuteilung.set(id, ids)
       // Der Bericht zeigt den Gesamtstand der Zuteilung — je Block mit
       // Kartenzahl; ein erneuter Aufruf ersetzt die erneut genannten Blöcke.
+      // Mit der Blocknummer (BAUPLAN 44): Zwei namensgleiche Ziele ergaben
+      // vorher zwei identische Zeilen, und Georg konnte im Laufbericht nicht
+      // nachsehen, wer was bekommen hat.
       bericht.kartenZuteilung = [...kartenZuteilung].map(([id, ids]) => ({
-        block: knoten.get(id)?.name ?? '?',
+        block: texte.ticker.blockBezeichnung(nummerVon.get(id), knoten.get(id)?.name ?? '?'),
         anzahl: ids.length
       }))
-      const zeilen = urteil.jeBlock.map((e) => `${e.block} ${e.anzahl}`).join(', ')
+      const zeilen = urteil.jeBlock.map((e) => `${e.block} ${e.anzahl}`).join(' | ')
       tickern(texte.ticker.kartenZuteilung(zeilen))
       standSpeichern()
       return { ok: true, meldung: texte.agentenKartenZuteilung.gespeichert(zeilen) }
@@ -1820,7 +1998,11 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         aufKartenZuteilung: kartenZuteilungAnnehmen,
         // Paket melden & Herkunft (BAUPLAN 30).
         aufPaketMeldung: paketMeldungAnnehmen,
-        holeHerkunft: herkunftFuerBlock
+        holeHerkunft: herkunftFuerBlock,
+        // Vollständigkeit (BAUPLAN 44): Gegen das gemeldete Paket werden die
+        // aufgabenIds eines Zuschnitts hart geprüft — ohne diese Verbindung
+        // wäre die Vollständigkeit wieder Textraten.
+        holePaket: aktuellesPaketVon
       })
     }
 
@@ -1847,6 +2029,18 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     // (wenn dort gerade ein anderer Block arbeitet) als eigene Session.
     function blockAusfuehren(k, auftrag, uebertragErlaubt) {
       const instanzId = k.eintrag.instanzId
+      // Datenvertrag als Schreibsperre (BAUPLAN 44): Dass sie gilt, sagt der
+      // Ticker EINMAL je Block — nicht in jeder Reparatur-Runde erneut.
+      const dateiListe = dateiListeFuer(k)
+      if (dateiListe && !k.dateilisteGemeldet) {
+        k.dateilisteGemeldet = true
+        tickern(
+          texte.ticker.dateilisteAktiv(
+            texte.ticker.blockBezeichnung(nummerVon.get(instanzId), k.name),
+            dateiListe.length
+          )
+        )
+      }
       const uebertrag = {
         aktiv: uebertragErlaubt,
         testModus: Boolean(einstellungen.uebertragTest),
@@ -1905,6 +2099,14 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           // ihn freigeschaltet ist. Fremde lösen die Rechte-Rückfrage aus.
           liefert: k.def.liefert ?? [],
           lieferscheinFrei: [...werkzeugeFuerBlock(k.def)],
+          // Zuschnitt je benanntem Ziel (BAUPLAN 44): die Umsetzer hinter
+          // diesem Block — gegen sie validiert das Melde-Werkzeug die
+          // Zieladresse eines Zuschnitts.
+          ziele: zieleVon.get(instanzId) ?? [],
+          // Datenvertrag als Schreibsperre (BAUPLAN 44): die erlaubten Dateien
+          // der bei diesem Block angekommenen Arbeitspakete — null heißt „keine
+          // Sperre" (kein Paket, kein Vertrag, alter Laufstand).
+          dateiListe,
           // Modellklasse je Block (BAUPLAN 37): die Wahl an der Blockkarte,
           // sonst die Voreinstellung des Blocks. Der Motor trägt sie beim
           // Agent-Aufruf ein; das Modell der Unteraufgaben hängt zusätzlich
@@ -2072,12 +2274,27 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         // genau ihn ausführen.
         if (k.pruefOrdner) auftrag += texte.agentenPruefordner.zusatz(k.pruefOrdner)
         if (k.def.kartenZuteilung) {
-          const namen = [...nachfahrenNamen(k.eintrag.instanzId).keys()]
-          if (namen.length) auftrag += texte.agentenKartenZuteilung.auftragZusatz(namen)
+          const nachfahren = nachfahrenAdressen(k.eintrag.instanzId)
+          if (nachfahren.length)
+            auftrag += texte.agentenKartenZuteilung.auftragZusatz(
+              nachfahren.map((z) => z.bezeichnung)
+            )
           // Paket melden (BAUPLAN 30): auch im Ein-Block-Lauf — die Herkunft
           // der Karten hängt daran.
           auftrag += texte.agentenPaket.auftragZusatz
         }
+        // Zuschnitt je benanntem Ziel (BAUPLAN 44): Wer das Arbeitspaket
+        // liefert, bekommt seine Ziele mit Adresse genannt — je Zeile eine.
+        // Bei genau einem Ziel bleibt es beim knappen Satz: Es gibt nichts
+        // auseinanderzuhalten, und der Auftrag soll nicht wachsen. Der Teil zu
+        // aufgabenIds hängt am Kennzeichen kartenZuteilung, nicht am Etikett —
+        // sonst verspricht der Auftrag einem selbstgebauten Block etwas, das er
+        // nicht einlösen darf (zuschnittAuftragZusatz).
+        if ((k.def.liefert ?? []).includes(ARBEITSPAKET_ETIKETT))
+          auftrag += zuschnittAuftragZusatz(
+            zieleVon.get(k.eintrag.instanzId) ?? [],
+            Boolean(k.def.kartenZuteilung)
+          )
         // Prüfkarten (BAUPLAN 18): gezogene alte Prüfungen werden zusätzlich
         // zur Paket-Prüfung ausgeführt — der Zusatz gehört in jeden
         // Anlauf dieses Blocks (auch nach einem Übertrag).
@@ -2138,6 +2355,11 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         // Prüfbefehl-Nachforderung (BAUPLAN 35): nur nachtragen, nichts neu
         // prüfen — dasselbe Muster wie die Startanleitungs-Nachforderung.
         if (k.pruefbefehlNachforderung) auftrag += texte.agentenUebergabe.pruefbefehlNachforderung
+        // Vollständigkeit des Zuschnitts (BAUPLAN 44): Der Nachtrag nennt die
+        // nicht abgedeckten Aufgaben und die unbedienten Ziele NAMENTLICH — er
+        // ist am Knoten fertig gebaut worden, denn der Auftragstext entsteht
+        // hier bei jedem Anlauf neu.
+        if (k.zuschnittNachforderung) auftrag += k.zuschnittNachforderung
         if (k.startanleitungNachforderung)
           auftrag += texte.agentenUebergabe.startanleitungNachforderung
         // Lieferschein (BAUPLAN 42): So meldet dieser Block sein Ergebnis —
@@ -2184,6 +2406,10 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         // „nach einem Übertrag ersetzt die Meldung des Nachfolgers die des
         // unterbrochenen Vorgängers": Der Übertrag bleibt in dieser Schleife.
         k.meldungen = meldungenZusammenfuehren(k.meldungen, ergebnis.meldungen)
+        // Zuschnitt je Ziel (BAUPLAN 44): Wer welches Paket bekommt, steht im
+        // Ticker und damit im Laufbericht — die erste Stelle, an der Georg
+        // nachsieht, wenn ein Bauer das Falsche gebaut hat.
+        zuschnittTickern(k, ergebnis.meldungen)
         if (ergebnis.verbrauch) {
           // Gezählt wird der ehrliche Anteil dieses Blocks: der Zuwachs des
           // Koordinator-Fadens plus der Verbrauch seiner Agenten (Block-Agent
@@ -2429,6 +2655,100 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     // kommen alle nummeriert an. Fan-in ohne stillen Verlust (BAUPLAN 40): Bei
     // ungleicher Distanz gewinnt weiter der nähere — die verdrängte Lieferung
     // steht jetzt aber im Ticker, statt wortlos zu verschwinden.
+    // Welcher Text dieser Lieferung gilt für DIESEN Empfänger? (BAUPLAN 44)
+    // Ein Etikett trägt seit 44 einen Text je Ziel; die Auswahl trifft
+    // zuschnittRouting — ein an X adressiertes Paket geht an X und an dessen
+    // Nachfahren ohne näheres Ziel, ein Paket ohne Ziel gilt für alle. Alte
+    // Lieferungen (ein blanker Text je Etikett) laufen unverändert durch.
+    function textFuerEmpfaenger(lieferung, etikett, k) {
+      const jeZiel = lieferung.texte?.[etikett]
+      if (typeof jeZiel === 'string') return jeZiel
+      if (!jeZiel || typeof jeZiel !== 'object') return null
+      const schluessel = zuschnittRouting(
+        workflow.bloecke,
+        workflow.pfeile,
+        k.eintrag.instanzId,
+        Object.keys(jeZiel)
+      )
+      const stuecke = schluessel.map((s) => jeZiel[s]).filter(Boolean)
+      // Leer heißt „hier steht nichts" — dann greift der Gesamttext der
+      // Lieferung als Rückfall, statt eine leere Übergabe zu schreiben.
+      return stuecke.length ? stuecke.join('\n\n') : null
+    }
+
+    // Der Datenvertrag, der für DIESEN Block gilt (BAUPLAN 44): die erlaubten
+    // Dateien der Arbeitspakete, die bei ihm ankommen. Ausgewählt wird mit
+    // genau derselben Regel wie der Übergabe-Text (uebergabenAuswahl plus
+    // zuschnittRouting) — eine zweite, eigene Regel sperrte sonst etwas
+    // anderes, als im Auftrag steht.
+    //
+    // Drei Festlegungen:
+    //   - Nur UMSETZER-Blöcke (!nurLesen && !prueft, dieselbe Filterung wie die
+    //     benannten Ziele). Der Prüfer bekommt das Paket seines Bauers mit und
+    //     stünde sonst bei seiner eigenen, völlig legitimen Arbeit.
+    //   - Mehrere Pakete: Es gilt die VEREINIGUNG ihrer Listen. Zwei
+    //     Auftragsquellen vor einem Bauer sind legitim; die engere Auslegung
+    //     stoppte ihn bei genau der Arbeit, die er tun soll. Ein Paket ohne
+    //     Liste trägt dabei nichts bei, setzt die Sperre aber auch nicht aus —
+    //     sonst schaltete ein einziges listenloses Paket die ganze Sperre
+    //     lautlos ab, und Georg hielte sie für geltend.
+    //   - Trägt KEINES der angekommenen Pakete eine Dateiliste, gibt es keine
+    //     Sperre (null). Keine Liste heißt „kein Vertrag", nicht „nichts
+    //     erlaubt" — sonst blockierte ein wiederaufgenommener Lauf mit einem
+    //     Paket von vor Bauschritt 44 jeden Schreibversuch.
+    function dateiListeFuer(k) {
+      if (k.def.nurLesen || k.def.prueft) return null
+      const distanz = distanzVon.get(k.eintrag.instanzId)
+      const lieferungen = []
+      for (const vorfahre of vorfahrenVon.get(k.eintrag.instanzId)) {
+        const vk = knoten.get(vorfahre.instanzId)
+        // Dieselbe Vorauswahl wie uebergabenText: Wer keine Lieferung abgelegt
+        // hat, ist auch für die Distanz-Regel nicht da — sonst sperrte die
+        // Sperre gegen einen anderen Stand, als im Auftrag steht.
+        if (vk.lieferung == null || !vk.meldungen?.length) continue
+        lieferungen.push({
+          naehe: distanz.get(vorfahre.instanzId) ?? Number.MAX_SAFE_INTEGER,
+          liefert: vk.def.liefert,
+          zuschnitte: zuschnitteAusMeldungen(vk.meldungen)
+        })
+      }
+      const angekommene = []
+      for (const gruppe of uebergabenAuswahl(k.def, lieferungen).gruppen) {
+        if (gruppe.etikett !== ARBEITSPAKET_ETIKETT) continue
+        for (const lieferung of gruppe.angekommen) {
+          const schluessel = zuschnittRouting(
+            workflow.bloecke,
+            workflow.pfeile,
+            k.eintrag.instanzId,
+            lieferung.zuschnitte.map(zuschnittSchluessel)
+          )
+          for (const paket of lieferung.zuschnitte)
+            if (schluessel.includes(zuschnittSchluessel(paket))) angekommene.push(paket)
+        }
+      }
+      return dateiListeVereinigen(angekommene)
+    }
+
+    // Ein gemeldeter Zuschnitt als Ticker-Zeile: je Paket sein Ziel mit
+    // Blocknummer und wie viele Dateien der Datenvertrag freigibt (BAUPLAN 44).
+    function zuschnittTickern(k, meldungen) {
+      for (const meldung of meldungen ?? []) {
+        if (meldung?.art !== 'arbeitspaket') continue
+        const zuschnitte = zuschnitteAusMeldung(meldung)
+        if (zuschnitte.length === 0) continue
+        tickern(
+          texte.ticker.zuschnittGeschnitten(
+            texte.ticker.blockBezeichnung(nummerVon.get(k.eintrag.instanzId), k.name),
+            zuschnitte.map((p) =>
+              p.zielBezeichnung
+                ? texte.ticker.zuschnittZiel(p.zielBezeichnung, p.erlaubteDateien?.length ?? 0)
+                : texte.ticker.zuschnittOhneZiel(p.erlaubteDateien?.length ?? 0)
+            )
+          )
+        )
+      }
+    }
+
     function uebergabenText(k) {
       const distanz = distanzVon.get(k.eintrag.instanzId)
       const lieferungen = []
@@ -2446,6 +2766,7 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           // Lieferschein (BAUPLAN 42): je Etikett ein eigener Text. Ein Block
           // mit zwei Etiketten reichte bisher beiden Nachfolgern denselben
           // Abschlusstext — jetzt bekommt jeder genau seine Lieferung.
+          // Seit BAUPLAN 44 je Etikett ein Text JE ZIEL (Schlüssel '' = ohne Ziel).
           texte: vk.lieferungen ?? {}
         })
       }
@@ -2456,7 +2777,10 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       const eintraege = []
       for (const gruppe of gruppen) {
         gruppe.angekommen.forEach((lieferung, index) => {
-          const text = lieferung.texte?.[gruppe.etikett] ?? lieferung.text
+          // Zuschnitt je Ziel (BAUPLAN 44): Welcher der gelieferten Zuschnitte
+          // für DIESEN Empfänger gilt, entscheidet die Routing-Regel in
+          // kettenRegeln — dieselbe, die Vorspann und braucht-Chips lesen.
+          const text = textFuerEmpfaenger(lieferung, gruppe.etikett, k) ?? lieferung.text
           eintraege.push(
             gruppe.angekommen.length === 1
               ? texte.agentenUebergabe.eintrag(gruppe.etikett, lieferung.name, text)
@@ -2618,6 +2942,85 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       }
     }
 
+    // Vollständigkeit des Zuschnitts (BAUPLAN 44): Prüft eine Auftragsquelle,
+    // die eben gemeldet hat, und fordert genau EINMAL nach. Liefert true, wenn
+    // der Block weiterlaufen darf, und false, wenn er dafür erneut startet.
+    //
+    // Verbraucht ist die Runde, macht der Lauf ehrlich vermerkt weiter — wie
+    // bei Startanleitung, Rauchtest und Prüfbefehl, NICHT wie bei der
+    // Meldungspflicht: Ein unvollständiger Zuschnitt ist ein zu enges Paket,
+    // kein fehlendes Ergebnis; den ganzen Lauf dafür fallen zu lassen, kostete
+    // Georg mehr, als es ihm brächte.
+    function zuschnittGeprueft(k, id, ergebnis) {
+      const bezeichnung = texte.ticker.blockBezeichnung(nummerVon.get(id), k.name)
+      const nachfordern = (nachtrag, tickerZeile) => {
+        // Auch dieser Anlauf steht im Bericht: Er hat Kontingent gekostet, und
+        // Georg soll sehen, was FlowForge beanstandet hat.
+        bericht.blockErgebnisse.push({
+          instanzId: id,
+          block: k.def.name,
+          zusatz: zusatznameBereinigen(k.eintrag.zusatz),
+          zeit: jetztIso(),
+          zustand: 'zuschnitt-unvollstaendig',
+          ergebnisText: String(ergebnis.ergebnisText ?? '').slice(0, 4000),
+          meldungen: k.meldungen,
+          tokens: ergebnis.blockTokens ?? null,
+          aufschluesselung: ergebnis.blockAufschluesselung ?? null,
+          kostenUsd: ergebnis.blockKosten ?? null,
+          modelle: ergebnis.blockModelle ?? null
+        })
+        zuschnittNachgefordert.add(id)
+        // Der Nachtrag hängt am KNOTEN, nicht im Auftragstext — der wird bei
+        // jedem Anlauf vollständig neu gebaut.
+        k.zuschnittNachforderung = nachtrag
+        // Seine eigene Meldung von eben liegt bei: Er soll nachtragen, nicht
+        // neu erarbeiten.
+        k.meldungWiederholen = true
+        k.meldungenVorher = k.meldungen.length ? k.meldungen : k.meldungenVorher
+        k.status = 'offen'
+        tickern(tickerZeile)
+      }
+      const budgetFrei = () =>
+        !zuschnittNachgefordert.has(id) && !lauf.sanft && !lauf.hart && !endZustand
+      const paket = gemeldetesPaketVon(id)
+      // paket_melden ist Pflicht für Auftragsquellen (BAUPLAN 44): Ohne die
+      // Meldung trägt keine Karte dieses Laufs ihre Herkunft, und die
+      // Vollständigkeitsprüfung liefe still leer — Georg sähe einen grünen Lauf
+      // und hielte eine nicht gelaufene Prüfung für eine bestandene.
+      if (!paket) {
+        if (budgetFrei()) {
+          nachfordern(
+            texte.agentenZuschnitt.nachforderungPaket,
+            texte.ticker.paketNachgefordert(bezeichnung)
+          )
+          return false
+        }
+        tickern(texte.ticker.paketFehltWeiter(bezeichnung))
+        return true
+      }
+      const ziele = zieleVon.get(id) ?? []
+      const deckung = zuschnittDeckung(ziele, paket, k.meldungen)
+      const aufgaben = deckung.fehlendeAufgaben.map((a) => a.titel)
+      const offeneZiele = deckung.unbedienteZiele.map((z) => z.bezeichnung)
+      if (aufgaben.length || offeneZiele.length) {
+        if (budgetFrei()) {
+          nachfordern(
+            texte.agentenZuschnitt.nachforderung(aufgaben, offeneZiele),
+            texte.ticker.zuschnittNachgefordert(bezeichnung, aufgaben, offeneZiele)
+          )
+          return false
+        }
+        tickern(texte.ticker.zuschnittWeiterOhne(bezeichnung, aufgaben, offeneZiele))
+        return true
+      }
+      // Die ehrliche Grenze (SPEC §4.1): Kommt der Auftrag allein aus dem
+      // Wunsch-/Fehlerbild-Feld, gibt es keine Aufgaben-Karten, gegen die
+      // gemessen werden könnte — dann sagt der Ticker das, statt eine nicht
+      // gelaufene Prüfung wie eine bestandene aussehen zu lassen.
+      if (paket.length === 0) tickern(texte.ticker.paketOhneAufgaben(bezeichnung))
+      return true
+    }
+
     // Verarbeitet das endgültige Ergebnis eines Blocks — nacheinander, auch
     // wenn mehrere Blöcke gleichzeitig fertig werden.
     async function verarbeite(id, ergebnis) {
@@ -2710,6 +3113,14 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         return
       }
 
+      // Vollständigkeit des Zuschnitts (BAUPLAN 44): Deckt der geschnittene
+      // Zuschnitt jede gemeldete Aufgabe ab, und hat jedes benannte Ziel ein
+      // Paket bekommen? Eingehängt HINTER der Meldungspflicht und VOR
+      // k.status='fertig' — dahinter wäre der Block schon verbucht, alle
+      // Anlauf-Zusätze abgeräumt und er stünde zweimal im Bericht.
+      // Nur Auftragsquellen (Kennzeichen kartenZuteilung) schneiden Pakete.
+      if (k.def.kartenZuteilung && !zuschnittGeprueft(k, id, ergebnis)) return
+
       // Block ist wirklich fertig: mitgeschleppte Zusätze für den nächsten
       // Anlauf sind damit erledigt.
       k.status = 'fertig'
@@ -2726,6 +3137,8 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       // Lieferschein-Zusätze dieses Anlaufs (BAUPLAN 42) ebenso.
       k.meldungWiederholen = false
       k.nachforderungBeleg = ''
+      // Zuschnitt-Nachtrag dieses Anlaufs (BAUPLAN 44) ebenso.
+      k.zuschnittNachforderung = ''
       // Tor-Zusätze dieses Anlaufs (BAUPLAN 35) ebenso.
       k.torProtokoll = ''
       k.rauchtestRueckmeldung = ''

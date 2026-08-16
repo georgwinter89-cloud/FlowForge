@@ -15,6 +15,7 @@
 // Die Schema-Ebene (Ebene 1) steht im Werkzeug selbst (lieferscheinWerkzeuge.js).
 import { texte } from './texte.js'
 import { TITEL_MAX, TEXT_MAX } from './kartenRegeln.js'
+import { zielFuerAdresse } from './kettenRegeln.js'
 
 // Ein Werkzeug je liefert-Etikett, nicht je Blocksorte: Die MCP-Server werden
 // einmal je Motor gebaut und ein Lauf-Motor bedient alle Blöcke (BAUPLAN 19) —
@@ -44,6 +45,21 @@ export const FUNDORT_MAX = 200
 export const BEANSTANDUNG_MAX = 400
 export const BELEG_MAX = 1200
 export const INHALT_MAX = 6000
+
+// Zuschnitt je Ziel (BAUPLAN 44): So viele Pakete trägt EINE Meldung höchstens
+// — ein Schaubild mit mehr benannten Zielen ist keins mehr, das ein Mensch liest.
+export const PAKETE_MAX = 12
+// Der Datenvertrag hat eine EIGENE Anzahl-Grenze statt LISTE_MAX (20) zu erben:
+// Aus dieser Liste wird mit Bauschritt 46 die Schreibsperre — eine zu enge
+// Grenze wäre dann kein gekürzter Text, sondern ein blockierter Bauer.
+export const DATEILISTE_MAX = 60
+// Aufgaben-Kennungen zählen aus demselben Grund eigens (BAUPLAN 44): Die beiden
+// Enden derselben Rechnung müssen gleich weit reichen. Gälte hier LISTE_MAX (20),
+// während paket_melden mehr Karten annimmt, könnte ein Paket mit 21 Aufgaben die
+// Vollständigkeit nie bestehen — FlowForge forderte endlos etwas nach, das der
+// Agent gar nicht eintragen darf, und beschuldigte ihn für eine eigene Grenze.
+// Deshalb gilt diese Zahl an BEIDEN Enden (paketMeldungPruefen und hier).
+export const AUFGABEN_MAX = 200
 
 export const EINSTUFUNGEN = ['mechanisch', 'grundsaetzlich']
 export const URTEILE = ['bestanden', 'fehlgeschlagen']
@@ -149,8 +165,10 @@ function freierText(wert, max, feld, einzeilen = true) {
 }
 
 // Eine Liste kurzer Zeilen: leere Einträge fliegen raus, Anzahl und Länge sind
-// gedeckelt.
-function zeilenListe(roh, feld, { max = LISTE_MAX, zeileMax = ZEILE_MAX } = {}) {
+// gedeckelt. `zuViel` überschreibt die Abweisung bei zu vielen Einträgen — der
+// Standardrat („fasse zusammen") passt für Fließtext, aber nicht für Listen aus
+// Kennungen, wo es nichts zusammenzufassen gibt.
+function zeilenListe(roh, feld, { max = LISTE_MAX, zeileMax = ZEILE_MAX, zuViel = null } = {}) {
   const zeilen = []
   for (const eintrag of Array.isArray(roh) ? roh : []) {
     const text = einzeilig(eintrag)
@@ -159,7 +177,12 @@ function zeilenListe(roh, feld, { max = LISTE_MAX, zeileMax = ZEILE_MAX } = {}) 
       return { fehler: texte.lieferschein.eintragZuLang(feld, zeileMax, text.length) }
     zeilen.push(text)
   }
-  if (zeilen.length > max) return { fehler: texte.lieferschein.zuVieleEintraege(feld, max, zeilen.length) }
+  if (zeilen.length > max)
+    return {
+      fehler: zuViel
+        ? zuViel(max, zeilen.length)
+        : texte.lieferschein.zuVieleEintraege(feld, max, zeilen.length)
+    }
   return { zeilen }
 }
 
@@ -186,7 +209,98 @@ function rahmenPruefen(roh) {
   }
 }
 
-function arbeitspaketPruefen(roh) {
+// Die EINE Schreibweise eines Dateilisten-Eintrags (BAUPLAN 44): Beide Enden
+// derselben Rechnung — das Melden hier und die Schreibsperre im Motor
+// (stehtInDateiliste) — müssen gleich normalisieren, sonst nimmt das eine an,
+// was das andere nie trifft: Ein Eintrag „/src/main/lauf.js" (eine naheliegende
+// Schreibweise für „relativ zum Projektordner") galt als gültiger Vertrag,
+// während der Motor ihn auf die Laufwerkswurzel rechnete und übersprang — der
+// Schreibversuch auf genau diese Datei wurde dann mit der Begründung gestoppt,
+// sie stehe nicht in der Liste, in der sie sichtbar stand.
+//
+// Rückgabe: { pfad } in einheitlicher Schreibweise (Schrägstriche vorwärts,
+// ohne './' und ohne führenden '/'), { hinaus } mit dem UNVERÄNDERTEN Ist-Wert,
+// wenn der Eintrag aus dem Projektordner hinausführt, oder { wurzel } mit dem
+// Ist-Wert, wenn er auf den Projektordner SELBST zeigt.
+export function dateiEintragNormalisieren(wert) {
+  // Der Ist-Wert für die Ablehnung bleibt so stehen, wie der Agent ihn schrieb.
+  const roh = String(wert ?? '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  const text = roh.replace(/\\/g, '/')
+  if (!text) return { pfad: '' }
+  // Zeigt aus dem Projekt hinaus: UNC-Freigabe („\\server\ablage") und
+  // Laufwerksbuchstabe („C:\…") sind absolut, „.." bricht aus.
+  if (text.startsWith('//') || /^[a-zA-Z]:/.test(text)) return { hinaus: roh }
+  // Ein führender Schrägstrich meint „relativ zum Projektordner" — eine völlig
+  // naheliegende Schreibweise, die ohne dieses Wegkürzen auf die Wurzel des
+  // Laufwerks gerechnet würde und damit nie eine Projektdatei träfe.
+  //
+  // Gekürzt wird, bis nichts mehr wegzukürzen ist (Abschlussprüfung Bauschritt
+  // 44): In fester Reihenfolge blieb ein Schrägstrich stehen, den erst das
+  // Entfernen des Punkt-Vorsatzes freilegte — „.//" wurde zu „/" und damit zu
+  // einem angenommenen, gespeicherten Eintrag, der auf die Laufwerkswurzel
+  // zeigte. Die Liste galt dann als nicht leer (die Sperre griff also), traf
+  // aber keine einzige Datei, und der Bauer wurde an JEDEM Schreibversuch
+  // gestoppt. Jede Schreibweise, die am Ende auf den Projektordner selbst
+  // zeigt, muss in den wurzel-Ausgang laufen.
+  let pfad = text
+  let vorher = ''
+  while (pfad !== vorher) {
+    vorher = pfad
+    pfad = pfad.replace(/^\/+/, '').replace(/^(\.\/)+/, '')
+  }
+  if (pfad.split('/').includes('..')) return { hinaus: roh }
+  // Zeigt auf den Projektordner selbst („.", „./", „.\", „/" allein): Er
+  // überlebte das Melden, traf in der Sperre aber nichts — die Liste war nicht
+  // leer (die Sperre galt also), rechnete sich aber auf einen leeren relativen
+  // Pfad und wurde übersprungen. Folge: Der Bauer wurde an JEDEM Schreibversuch
+  // gestoppt, mit der Begründung, die Datei stehe nicht in einer Liste, die
+  // „alles" sagt (BAUPLAN 44).
+  if (!pfad || pfad === '.') return { wurzel: roh }
+  return { pfad }
+}
+
+// Der Datenvertrag (BAUPLAN 44): welche Dateien dieses Paket anfassen darf.
+// Glob-Muster werden abgewiesen statt still ins Leere zu laufen — es gibt im
+// ganzen Projekt keinen Glob-Abgleicher, und ab Bauschritt 46 wäre die Folge
+// ein Bauer, der bei jedem Schreibversuch gestoppt wird. Geprüft wird nur der
+// genannte Pfad, nie der Dateibestand: Der Vertrag nennt auch neu anzulegende
+// Dateien.
+function dateiListePruefen(roh) {
+  const tl = texte.lieferschein
+  const eintraege = []
+  for (const wert of Array.isArray(roh) ? roh : []) {
+    // Auf eine Schreibweise bringen — dieselbe Rechnung wie die Schreibsperre.
+    const eintrag = dateiEintragNormalisieren(wert)
+    // Ein ausbrechender Eintrag wird beim MELDEN abgewiesen (wie ein
+    // Glob-Muster), statt still als wirkungsloser Vertragsteil stehenzubleiben.
+    if (eintrag.hinaus) return { fehler: tl.dateiAusserhalb(eintrag.hinaus) }
+    // Ein Eintrag, der den Projektordner selbst meint, wird ebenfalls beim
+    // MELDEN abgewiesen: Ein Vertrag, der alles erlaubt, ist kein Vertrag — und
+    // in der Sperre träfe er keine einzige Datei. Für diesen Fall gibt es einen
+    // sauberen Weg, und der Text nennt ihn: erlaubteDateien weglassen, dann
+    // gilt „keine Liste = keine Sperre".
+    if (eintrag.wurzel) return { fehler: tl.dateiProjektordner(eintrag.wurzel) }
+    const text = eintrag.pfad
+    if (!text) continue
+    if (/[*?[\]{}]/.test(text)) return { fehler: tl.dateiMuster(text) }
+    if (text.length > FUNDORT_MAX)
+      return { fehler: tl.eintragZuLang(tl.felder.erlaubteDateien, FUNDORT_MAX, text.length) }
+    if (!eintraege.includes(text)) eintraege.push(text)
+  }
+  if (eintraege.length > DATEILISTE_MAX)
+    return {
+      fehler: tl.zuVieleEintraege(tl.felder.erlaubteDateien, DATEILISTE_MAX, eintraege.length)
+    }
+  return { eintraege }
+}
+
+// EIN Zuschnitt: das alte Arbeitspaket plus Zieladresse und Datenvertrag.
+// `umfeld.ziele` sind die benannten Ziele des rufenden Blocks (kettenRegeln.
+// zielListe); liegen sie vor, wird die Adresse hart dagegen validiert — eine
+// erfundene Adresse träfe sonst niemanden, ohne dass jemand es merkt.
+function zuschnittPruefen(roh, umfeld) {
   const tl = texte.lieferschein
   const ziel = pflichtText(roh?.ziel, ZEILE_MAX, tl.felder.ziel)
   if (ziel.fehler) return ziel
@@ -201,15 +315,185 @@ function arbeitspaketPruefen(roh) {
   if (fundstellen.fehler) return fundstellen
   const nichtDabei = zeilenListe(roh?.nichtDabei, tl.felder.nichtDabei)
   if (nichtDabei.fehler) return nichtDabei
+  const bausteine = zeilenListe(roh?.bausteine, tl.felder.bausteine)
+  if (bausteine.fehler) return bausteine
+  const schnittstellen = zeilenListe(roh?.schnittstellen, tl.felder.schnittstellen)
+  if (schnittstellen.fehler) return schnittstellen
+  // Verbindung zur gemeldeten Aufgaben-Karte (BAUPLAN 44): Ohne sie wäre die
+  // Vollständigkeitsprüfung ein Textvergleich — genau die Bauform, die
+  // Bauschritt 42 abgeschafft hat. Geprüft wird deshalb HART gegen das mit
+  // paket_melden gemeldete Paket (`umfeld.paket`, Muster: paketMeldungPruefen):
+  // Eine erfundene id deckte sonst nichts ab und niemand merkte es.
+  //
+  // Die Anzahl-Grenze ist AUFGABEN_MAX, dieselbe wie in paketMeldungPruefen —
+  // mit dem geerbten LISTE_MAX (20) wäre ein Paket mit 21 gemeldeten Aufgaben
+  // nicht mehr vollständig zuschneidbar gewesen.
+  const aufgabenIds = zeilenListe(roh?.aufgabenIds, tl.felder.aufgabenIds, {
+    max: AUFGABEN_MAX,
+    zeileMax: FUNDORT_MAX,
+    zuViel: (max, ist) => tl.zuVieleAufgabenIds(max, ist)
+  })
+  if (aufgabenIds.fehler) return aufgabenIds
+  if (umfeld && 'paket' in umfeld && aufgabenIds.zeilen.length) {
+    const paket = Array.isArray(umfeld.paket) ? umfeld.paket : null
+    // Noch gar kein Paket gemeldet: Die Reihenfolge ist die Antwort — erst
+    // paket_melden, dann der Zuschnitt. Sonst zeigte die Verbindung ins Leere.
+    if (!paket) return { fehler: tl.aufgabenIdsOhnePaket }
+    const bekannt = new Set(paket.map((a) => String(a?.id)))
+    for (const id of aufgabenIds.zeilen)
+      if (!bekannt.has(id))
+        return {
+          fehler: tl.aufgabeUnbekannt(
+            id,
+            paket.map((a) => `${a?.id} („${a?.titel ?? ''}")`).join(', ')
+          )
+        }
+  }
+  const dateien = dateiListePruefen(roh?.erlaubteDateien)
+  if (dateien.fehler) return dateien
+  let zielBlock = ''
+  let zielInstanzId = null
+  let zielBezeichnung = ''
+  const rohZiel = einzeilig(roh?.zielBlock)
+  if (rohZiel) {
+    const ziele = Array.isArray(umfeld?.ziele) ? umfeld.ziele : null
+    if (ziele && ziele.length) {
+      const treffer = zielFuerAdresse(ziele, rohZiel)
+      if (!treffer)
+        return {
+          fehler: tl.zielBlockUnbekannt(rohZiel, ziele.map((z) => z.bezeichnung).join(' · '))
+        }
+      zielBlock = treffer.adresse
+      zielInstanzId = treffer.instanzId
+      zielBezeichnung = treffer.bezeichnung
+    } else if (ziele) return { fehler: tl.zielBlockOhneZiele(rohZiel) }
+    else {
+      // Ohne Zielliste (Prüfskripte, selbstgebaute Wege) bleibt die Adresse
+      // stehen, wie sie kam — geprüft wird dann nur die Länge.
+      if (rohZiel.length > ZEILE_MAX)
+        return { fehler: tl.feldZuLang(tl.felder.zielBlock, ZEILE_MAX, rohZiel.length) }
+      zielBlock = rohZiel
+      zielBezeichnung = rohZiel
+    }
+  }
   return {
-    teil: {
+    paket: {
+      zielBlock,
+      zielInstanzId,
+      zielBezeichnung,
       ziel: ziel.text,
       fertigKriterien: kriterien.zeilen,
       schritte: schritte.zeilen,
       fundstellen: fundstellen.zeilen,
-      nichtDabei: nichtDabei.zeilen
+      nichtDabei: nichtDabei.zeilen,
+      bausteine: bausteine.zeilen,
+      schnittstellen: schnittstellen.zeilen,
+      erlaubteDateien: dateien.eintraege,
+      aufgabenIds: aufgabenIds.zeilen
     }
   }
+}
+
+// Ein Aufruf trägt ALLE Pakete (BAUPLAN 44, Entscheidung Georg): Der
+// Sammel-Schlüssel der Meldungen ist (etikett, art) — ein zweiter Aufruf
+// ersetzte den ersten, und von drei Paketen überlebte nur das dritte. Ein
+// Aufruf ist zugleich atomar: Er übersteht einen Übertrag mitten in der Meldung.
+function arbeitspaketPruefen(roh, umfeld) {
+  const tl = texte.lieferschein
+  // Rückfall ohne Bruch: Eine Meldung im alten Format (ein Paket, flach) gilt
+  // als Liste mit genau einem Eintrag.
+  const rohe = Array.isArray(roh?.pakete) ? roh.pakete : roh?.ziel != null ? [roh] : []
+  if (rohe.length === 0) return { fehler: tl.arbeitspaketOhnePaket }
+  if (rohe.length > PAKETE_MAX)
+    return { fehler: tl.zuVieleEintraege(tl.felder.pakete, PAKETE_MAX, rohe.length) }
+  const pakete = []
+  const belegt = new Set()
+  for (let i = 0; i < rohe.length; i++) {
+    const geprueft = zuschnittPruefen(rohe[i], umfeld)
+    if (geprueft.fehler) return { fehler: tl.paketFehler(i + 1, geprueft.fehler) }
+    // Zwei Pakete für dasselbe Ziel: Der Empfänger bekäme eines von beiden,
+    // ohne dass jemand sagen könnte welches — lieber sofort abweisen.
+    const schluessel = zuschnittSchluessel(geprueft.paket)
+    if (belegt.has(schluessel))
+      return { fehler: tl.zielDoppelt(geprueft.paket.zielBezeichnung || tl.ohneZiel) }
+    belegt.add(schluessel)
+    pakete.push(geprueft.paket)
+  }
+  return { teil: { pakete } }
+}
+
+// Der Schlüssel, unter dem ein Zuschnitt zugestellt wird: die Instanz des
+// benannten Ziels, '' für ein Paket ohne Ziel (gilt für alle).
+export function zuschnittSchluessel(paket) {
+  return paket?.zielInstanzId ?? ''
+}
+
+// Die Zuschnitte einer Arbeitspaket-Meldung — tolerant gegenüber Meldungen aus
+// der Zeit vor Bauschritt 44 (ein Paket, flach im Meldungsobjekt).
+export function zuschnitteAusMeldung(meldung) {
+  if (Array.isArray(meldung?.pakete)) return meldung.pakete
+  if (meldung?.ziel != null) return [meldung]
+  return []
+}
+
+// Alle Zuschnitte einer Meldungsliste — eine Stelle für Deckung, Ticker und
+// Schreibsperre, damit sie nicht dreimal verschieden zählen.
+export function zuschnitteAusMeldungen(meldungen) {
+  const alle = []
+  for (const meldung of meldungen ?? [])
+    if (meldung?.art === 'arbeitspaket') alle.push(...zuschnitteAusMeldung(meldung))
+  return alle
+}
+
+// Der Arbeitsbereich eines Blocks aus den Paketen, die bei ihm ankommen
+// (BAUPLAN 44): die VEREINIGUNG ihrer Dateilisten, wie SPEC §4.1 und §7 (3) es
+// zusagen. Ein Paket ohne Liste trägt nichts bei — es setzt die Sperre aber
+// auch nicht aus: Sonst hätte ein einziges listenloses Paket neben einem
+// vollständigen die ganze Sperre lautlos abgeschaltet, und Georg hielte eine
+// Sperre für geltend, die es nicht ist. Keine Liste in KEINEM Paket heißt
+// weiterhin keine Sperre (null) — das ist der Rückfall ohne Bruch für alte
+// Laufstände.
+export function dateiListeVereinigen(zuschnitte) {
+  const dateien = []
+  for (const paket of zuschnitte ?? [])
+    for (const datei of paket?.erlaubteDateien ?? [])
+      if (!dateien.includes(datei)) dateien.push(datei)
+  return dateien.length ? dateien : null
+}
+
+// Vollständigkeit des Zuschnitts (BAUPLAN 44) — die reine Rechnung, ohne Motor
+// und ohne Electron, damit die Regel-Prüfungen sie direkt fahren können.
+//
+// Zwei Fragen, beide beantwortbar erst seit Teil A:
+//   1. Kommt jede Aufgabe des GEMELDETEN Pakets (paket_melden) in mindestens
+//      einem Zuschnitt vor? Gemessen wird gegen `aufgabenIds` je Zuschnitt —
+//      eine Rechnung, keine Textsuche.
+//   2. Hat jedes benannte Ziel ein Paket bekommen?
+//
+// Rückfall ohne Bruch: Ein einziger Zuschnitt OHNE Zieladresse gilt für alle
+// (Routing-Regel) — bei höchstens EINEM benannten Ziel ist damit alles bedient,
+// und ein Agent, der wie vor Bauschritt 44 ein Paket ohne Ziel meldet, läuft
+// unverändert durch. Ab ZWEI benannten Zielen ist ein Paket ohne Adresse dagegen
+// genau das Problem, das dieser Schritt löst: Beide bekämen denselben Zuschnitt.
+export function zuschnittDeckung(ziele, gemeldetesPaket, meldungen) {
+  const zuschnitte = zuschnitteAusMeldungen(meldungen)
+  const fehlendeAufgaben = []
+  const unbedienteZiele = []
+  // Ohne einen einzigen Zuschnitt gibt es nichts zu decken — dass gar nichts
+  // gemeldet wurde, fängt die Meldungspflicht ab (meldungVollstaendig).
+  if (zuschnitte.length === 0) return { fehlendeAufgaben, unbedienteZiele }
+  const abgedeckt = new Set()
+  for (const paket of zuschnitte)
+    for (const id of paket?.aufgabenIds ?? []) abgedeckt.add(String(id))
+  for (const aufgabe of Array.isArray(gemeldetesPaket) ? gemeldetesPaket : [])
+    if (!abgedeckt.has(String(aufgabe?.id))) fehlendeAufgaben.push(aufgabe)
+  const liste = Array.isArray(ziele) ? ziele : []
+  const ohneZiel = zuschnitte.some((paket) => !paket?.zielInstanzId)
+  if (!(ohneZiel && liste.length <= 1)) {
+    const bedient = new Set(zuschnitte.map((paket) => paket?.zielInstanzId).filter(Boolean))
+    for (const ziel of liste) if (!bedient.has(ziel.instanzId)) unbedienteZiele.push(ziel)
+  }
+  return { fehlendeAufgaben, unbedienteZiele }
 }
 
 function pruefbelegPruefen(roh) {
@@ -347,13 +631,15 @@ const TEIL_PRUEFER = {
 }
 
 // Die eine Stelle, an der eine Meldung geprüft wird — für Werkzeug und
-// Prüfskripte gleichermaßen. Liefert { fehler } oder { meldung }.
-export function meldungPruefen(art, roh, etikett = null) {
+// Prüfskripte gleichermaßen. `umfeld` (BAUPLAN 44) reicht durch, was nur der
+// Lauf weiß: `ziele` sind die benannten Ziele des rufenden Blocks, gegen die
+// eine Zieladresse validiert wird. Liefert { fehler } oder { meldung }.
+export function meldungPruefen(art, roh, etikett = null, umfeld = null) {
   const pruefer = TEIL_PRUEFER[art]
   if (!pruefer) return { fehler: texte.lieferschein.unbekannteArt(String(art)) }
   const rahmen = rahmenPruefen(roh)
   if (rahmen.fehler) return rahmen
-  const teil = pruefer(roh)
+  const teil = pruefer(roh, umfeld)
   if (teil.fehler) return teil
   return { meldung: { art, etikett: etikett ?? null, ...rahmen.rahmen, ...teil.teil } }
 }
@@ -397,19 +683,42 @@ export function fundZeile(f) {
   return `[${kopf}]${ort} ${f?.text ?? ''}`.trim()
 }
 
+// Ein Zuschnitt als lesbarer Text (BAUPLAN 44). Zieladresse und Datenvertrag
+// stehen mit drin — stünden sie nur geprüft im Objekt, käme der Vertrag beim
+// Bauer nie an.
+export function zuschnittText(paket) {
+  const tl = texte.lieferschein
+  let text = ''
+  if (paket?.zielBezeichnung) text += `${tl.labels.zielBlock}: ${paket.zielBezeichnung}\n`
+  text += `${tl.labels.ziel}: ${paket?.ziel ?? ''}\n`
+  text += abschnitt(tl.labels.fertigKriterien, paket?.fertigKriterien)
+  text += abschnitt(tl.labels.schritte, paket?.schritte)
+  text += abschnitt(tl.labels.fundstellen, paket?.fundstellen)
+  text += abschnitt(tl.labels.bausteine, paket?.bausteine)
+  text += abschnitt(tl.labels.schnittstellen, paket?.schnittstellen)
+  text += abschnitt(tl.labels.erlaubteDateien, paket?.erlaubteDateien)
+  text += abschnitt(tl.labels.nichtDabei, paket?.nichtDabei)
+  return text
+}
+
 // Der Lieferschein als lesbarer Text: geht als Übergabe an die Nachfolger und
 // steht so im Laufbericht. Gegliedert — nicht mehr als Fließtext, aus dem
 // FlowForge sich etwas heraussucht.
-export function lieferscheinText(meldung) {
+//
+// `zielSchluessel` (BAUPLAN 44) wählt bei einem Arbeitspaket den Zuschnitt für
+// GENAU EINEN Empfänger; ohne Angabe stehen alle Zuschnitte drin (Laufbericht,
+// Blockkarte, Wiederhol-Vorlage).
+export function lieferscheinText(meldung, zielSchluessel = undefined) {
   const tl = texte.lieferschein
   if (!meldung) return ''
   let text = `${tl.labels.fazit}: ${meldung.fazit}\n`
   if (meldung.art === 'arbeitspaket') {
-    text += `${tl.labels.ziel}: ${meldung.ziel}\n`
-    text += abschnitt(tl.labels.fertigKriterien, meldung.fertigKriterien)
-    text += abschnitt(tl.labels.schritte, meldung.schritte)
-    text += abschnitt(tl.labels.fundstellen, meldung.fundstellen)
-    text += abschnitt(tl.labels.nichtDabei, meldung.nichtDabei)
+    const alle = zuschnitteAusMeldung(meldung)
+    const gewaehlt =
+      zielSchluessel === undefined
+        ? alle
+        : alle.filter((p) => zuschnittSchluessel(p) === zielSchluessel)
+    for (const paket of gewaehlt.length ? gewaehlt : alle) text += zuschnittText(paket)
   } else if (meldung.art === 'pruefbeleg') {
     text += `${tl.labels.urteil}: ${tl.urteile[meldung.urteil] ?? meldung.urteil}\n`
     text += abschnitt(tl.labels.geprueft, meldung.geprueft)

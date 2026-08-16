@@ -18,7 +18,7 @@ import {
   schaubildReihenfolge,
   vorfahrenSortiert
 } from '../../shared/kettenRegeln.js'
-import { beanstandungZeile, fundZeile } from '../../shared/lieferschein.js'
+import { beanstandungZeile, fundZeile, zuschnitteAusMeldung } from '../../shared/lieferschein.js'
 import { BlockChips } from './Blockbibliothek.jsx'
 import Bestaetigung from './Bestaetigung.jsx'
 import VerbrauchZeile from './VerbrauchZeile.jsx'
@@ -465,17 +465,30 @@ function LieferscheinAnsicht({ meldungen }) {
         <div className="lieferschein" key={i}>
           {m.etikett && <p className="lieferschein-etikett">{m.etikett}</p>}
           <p className="lieferschein-fazit">{m.fazit}</p>
-          {m.art === 'arbeitspaket' && (
-            <>
-              <p className="bericht-zeile">
-                {tl.labels.ziel}: {m.ziel}
-              </p>
-              <Abschnitt label={tl.labels.fertigKriterien} zeilen={m.fertigKriterien} />
-              <Abschnitt label={tl.labels.schritte} zeilen={m.schritte} />
-              <Abschnitt label={tl.labels.fundstellen} zeilen={m.fundstellen} />
-              <Abschnitt label={tl.labels.nichtDabei} zeilen={m.nichtDabei} />
-            </>
-          )}
+          {/* Zuschnitt je Ziel (BAUPLAN 44): Ein Arbeitspaket trägt seit 44
+              mehrere Zuschnitte, jeder mit Ziel und Datenvertrag.
+              zuschnitteAusMeldung ist tolerant gegenüber Berichten von vorher
+              (ein Paket, flach im Meldungsobjekt). */}
+          {m.art === 'arbeitspaket' &&
+            zuschnitteAusMeldung(m).map((paket, p) => (
+              <div className="lieferschein-abschnitt" key={p}>
+                {paket.zielBezeichnung && (
+                  <p className="bericht-zeile">
+                    {tl.labels.zielBlock}: {paket.zielBezeichnung}
+                  </p>
+                )}
+                <p className="bericht-zeile">
+                  {tl.labels.ziel}: {paket.ziel}
+                </p>
+                <Abschnitt label={tl.labels.fertigKriterien} zeilen={paket.fertigKriterien} />
+                <Abschnitt label={tl.labels.schritte} zeilen={paket.schritte} />
+                <Abschnitt label={tl.labels.fundstellen} zeilen={paket.fundstellen} />
+                <Abschnitt label={tl.labels.bausteine} zeilen={paket.bausteine} />
+                <Abschnitt label={tl.labels.schnittstellen} zeilen={paket.schnittstellen} />
+                <Abschnitt label={tl.labels.erlaubteDateien} zeilen={paket.erlaubteDateien} />
+                <Abschnitt label={tl.labels.nichtDabei} zeilen={paket.nichtDabei} />
+              </div>
+            ))}
           {m.art === 'pruefbeleg' && (
             <>
               <p className={'lieferschein-urteil urteil-' + m.urteil}>
@@ -617,12 +630,21 @@ function Laufbericht({ bericht, aufklappen = null }) {
       {offen && (
         <div className="bericht-details">
           {dauer && <p className="feld-hinweis">{dauer}</p>}
-          {/* Paket (BAUPLAN 30): die gemeldeten Aufgaben-Karten dieses Laufs. */}
-          {Array.isArray(bericht.paket) && (
-            <p className="feld-hinweis">
-              {bericht.paket.length ? tb.paketZeile(bericht.paket) : tb.paketLeerZeile}
-            </p>
-          )}
+          {/* Paket (BAUPLAN 30): die gemeldeten Aufgaben-Karten dieses Laufs.
+              Seit BAUPLAN 44 je Auftragsquelle eine Zeile — Berichte von vorher
+              tragen eine blanke Titel-Liste und werden weiter so gezeigt. */}
+          {Array.isArray(bericht.paket) &&
+            (bericht.paket.length === 0 ? (
+              <p className="feld-hinweis">{tb.paketLeerZeile}</p>
+            ) : typeof bericht.paket[0] === 'string' ? (
+              <p className="feld-hinweis">{tb.paketZeile(bericht.paket)}</p>
+            ) : (
+              bericht.paket.map((eintrag, i) => (
+                <p className="feld-hinweis" key={i}>
+                  {tb.paketBlockZeile(eintrag.block, eintrag.aufgaben ?? [])}
+                </p>
+              ))
+            ))}
           <VerbrauchZeile verbrauch={bericht.verbrauch} modus={bericht.modus} />
           {/* Token-Aufschlüsselung & theoretische API-Kosten (Wunsch Georg,
               13.08.2026) — die Kosten rechnet der Motor aus den Preisen der

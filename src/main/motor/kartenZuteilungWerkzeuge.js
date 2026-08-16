@@ -12,31 +12,45 @@
 // ohnehin immer dabei).
 import { z } from 'zod'
 import { texte } from '../../shared/texte.js'
+import { zielFuerAdresse } from '../../shared/kettenRegeln.js'
+import { AUFGABEN_MAX } from '../../shared/lieferschein.js'
 
 // Reine Prüf-Funktion, exportiert für die Regel-Prüfungen.
 // zuteilung: [{ block, kartenIds }], karten: alle Projektkarten,
 // ausgewaehlt: Karten-IDs der Kartenauswahl des Laufs,
-// nachfolger: Map Blockname → [instanzIds] der Nachfahren des rufenden Blocks.
+// ziele: die Nachfahren des rufenden Blocks als Adressen
+//   [{ instanzId, nummer, name, adresse, bezeichnung }].
+//
+// Adressiert wird seit BAUPLAN 44 über die Blocknummer und trifft GENAU EINE
+// Instanz. Vorher war der Schlüssel der Anzeigename: Zwei Bauer ohne
+// Zusatznamen verschmolzen zu einem Eintrag und bekamen beide dieselbe
+// Zuteilung — mit einem eigenen Paket je Ziel wäre das ein stiller Fehlschlag.
 // Liefert { fehler } oder { ok, zuteilung: [instanzId, kartenIds][], jeBlock }.
-export function kartenZuteilungPruefen({ zuteilung, karten, ausgewaehlt, nachfolger }) {
+export function kartenZuteilungPruefen({ zuteilung, karten, ausgewaehlt, ziele }) {
   const tz = texte.agentenKartenZuteilung
+  const liste = Array.isArray(ziele) ? ziele : []
   const eintraege = (Array.isArray(zuteilung) ? zuteilung : []).filter(
     (e) => e && typeof e.block === 'string' && e.block.trim()
   )
   if (eintraege.length === 0) return { fehler: tz.leereZuteilung }
-  if (!nachfolger || nachfolger.size === 0) return { fehler: tz.keineNachfolger }
-  const unbekannt = [...new Set(eintraege.map((e) => e.block.trim()))].filter(
-    (name) => !nachfolger.has(name)
-  )
+  if (liste.length === 0) return { fehler: tz.keineNachfolger }
+  const unbekannt = [
+    ...new Set(
+      eintraege.map((e) => e.block.trim()).filter((adresse) => !zielFuerAdresse(liste, adresse))
+    )
+  ]
   if (unbekannt.length)
     return {
-      fehler: tz.unbekannteBloecke(unbekannt.join(', '), [...nachfolger.keys()].join(', '))
+      fehler: tz.unbekannteBloecke(
+        unbekannt.join(', '),
+        liste.map((z) => z.bezeichnung).join(' | ')
+      )
     }
   const nachId = new Map((Array.isArray(karten) ? karten : []).map((k) => [k.id, k]))
   const auswahl = new Set(Array.isArray(ausgewaehlt) ? ausgewaehlt : [])
-  // Je Block eine Karten-Liste — nennt der Agent denselben Block mehrfach,
+  // Je Instanz eine Karten-Liste — nennt der Agent dieselbe Adresse mehrfach,
   // gewinnt der letzte Eintrag (ein erneuter Aufruf ersetzt, kein Rätselraten).
-  const jeName = new Map()
+  const jeInstanz = new Map()
   for (const eintrag of eintraege) {
     const ids = [
       ...new Set((Array.isArray(eintrag.kartenIds) ? eintrag.kartenIds : []).map((id) => String(id)))
@@ -45,13 +59,16 @@ export function kartenZuteilungPruefen({ zuteilung, karten, ausgewaehlt, nachfol
     const ohneStatus = ids.filter((id) => nachId.get(id)?.sorte !== 'status')
     const fremd = ohneStatus.filter((id) => !auswahl.has(id))
     if (fremd.length) return { fehler: tz.fremdeKarten(fremd.join(', ')) }
-    jeName.set(eintrag.block.trim(), ohneStatus)
+    jeInstanz.set(zielFuerAdresse(liste, eintrag.block).instanzId, ohneStatus)
   }
   const paare = []
   const jeBlock = []
-  for (const [name, ids] of jeName) {
-    for (const instanzId of nachfolger.get(name)) paare.push([instanzId, ids])
-    jeBlock.push({ block: name, anzahl: ids.length })
+  for (const [instanzId, ids] of jeInstanz) {
+    paare.push([instanzId, ids])
+    jeBlock.push({
+      block: liste.find((z) => z.instanzId === instanzId)?.bezeichnung ?? instanzId,
+      anzahl: ids.length
+    })
   }
   return { ok: true, zuteilung: paare, jeBlock }
 }
@@ -72,6 +89,12 @@ export function paketMeldungPruefen({ aufgabenIds, karten, ausgewaehlt, feldGefu
     if (feldGefuellt) return { ok: true, aufgaben: [] }
     return { fehler: tp.leerOhneFeld }
   }
+  // Dieselbe Grenze wie im Zuschnitt (BAUPLAN 44): Was hier hereinkommt, muss
+  // drüben in aufgabenIds abgedeckt werden können. Wären die beiden Enden
+  // verschieden weit, entstünde ein Paket, dessen Vollständigkeit niemand mehr
+  // erfüllen kann — und die Nachforderung beschuldigte den Agenten dafür.
+  if (ids.length > AUFGABEN_MAX)
+    return { fehler: texte.lieferschein.zuVieleAufgabenIds(AUFGABEN_MAX, ids.length) }
   const nachId = new Map((Array.isArray(karten) ? karten : []).map((k) => [k.id, k]))
   const auswahl = new Set(Array.isArray(ausgewaehlt) ? ausgewaehlt : [])
   const aufgaben = []
@@ -125,7 +148,12 @@ export async function kartenZuteilungWerkzeugServer({ aufKartenZuteilung, aufPak
       zuteilung: z
         .array(
           z.object({
-            block: z.string().describe('Name des nachfolgenden Blocks im Schaubild'),
+            block: z
+              .string()
+              .describe(
+                'Die Blocknummer des nachfolgenden Blocks im Schaubild (z.B. „3") — dein ' +
+                  'Auftrag listet sie; zwei Blöcke können gleich heißen, die Nummer ist eindeutig'
+              ),
             kartenIds: z
               .array(z.string())
               .describe(

@@ -315,24 +315,44 @@ export const BLOCK_KATALOG = [
       'sinnvollste nächste Arbeit und benenne, welche Karte(n) du dir vornimmst; ' +
       'zusammengehörige Aufgaben darfst du zu einem Paket bündeln. ' +
       'Prüfe durch eigenes Lesen im Projektordner (liegt dir ein Projekt-Überblick vor, nutze ' +
-      'ihn als Abkürzung), wie sich dieser Wunsch in EIN zusammenhängendes Arbeitspaket ' +
-      'fassen lässt. Miss die Paketgröße NICHT an der Sitzungslänge: Läuft der Kontext eines ' +
+      'ihn als Abkürzung), wie sich dieser Wunsch in Arbeitspakete fassen lässt. ' +
+      'Miss die Paketgröße NICHT an der Sitzungslänge: Läuft der Kontext eines ' +
       'Blocks voll, übergibt FlowForge automatisch an einen frischen Anlauf, der nahtlos ' +
       'weitermacht — jeder eigene Lauf kostet dagegen eigenen Grundaufwand. Schneide ' +
       'deshalb so GROSS wie inhaltlich sinnvoll: Was zusammengehört und sich gemeinsam prüfen ' +
       'lässt, gehört in EIN Paket. Schneide nur dann kleiner, wenn der Wunsch wirklich ' +
       'unabhängige Baustellen mischt oder mittendrin eine Entscheidung des Nutzers nötig wäre ' +
       '— dann benenne, was bewusst draußen bleibt. ' +
+      // Zuschnitt je benanntem Ziel (BAUPLAN 44): Die Ziele selbst kann der
+      // Katalog nicht kennen — sie stehen im Schaubild. Ihre Adressen hängt
+      // lauf.js als Zusatz an (agentenZuschnitt.auftragZusatz).
+      'Wie viele Pakete du schneidest, sagt dir das Schaubild: Für JEDES benannte Ziel ' +
+      'hinter dir — das sind die Blöcke, die ein Arbeitspaket umsetzen — schneidest du ein ' +
+      'eigenes Paket mit eigenen Fertig-Kriterien, und alle Pakete gehen in EINEN Aufruf von ' +
+      'melde_arbeitspaket. Gibt es nur ein Ziel, ist es ein Paket. ' +
       'Projektkarten sind nie Teil des Pakets: FlowForge pflegt sie über eigene Blöcke — ' +
       'nimm sie weder in die Schritte noch in die ' +
       'Fertig-Kriterien auf. ' +
-      'Deine Meldung ist das Arbeitspaket — halte jedes Feld kompakt: ' +
+      'Deine Meldung sind die Arbeitspakete — halte jedes Feld kompakt. Je Paket: ' +
+      'zielBlock (die Blocknummer des Ziels), ' +
       'ziel (das Ziel des Pakets in einem Satz), fundstellen (voraussichtlich betroffene ' +
       'Dateien), schritte (Umsetzungsschritte in sinnvoller Reihenfolge), nichtDabei (was ' +
       'ausdrücklich NICHT Teil des Pakets ist) und fertigKriterien: prüfbare Aussagen, an denen ' +
       'sich das Ergebnis später messen lässt — bei gebündelten Aufgaben eigene Kriterien je ' +
       'Teilstück. Ohne Fertig-Kriterien weist FlowForge deine Meldung ab: Ohne Maßstab gäbe ' +
-      'es weder ein Ziel für die Umsetzung noch etwas zu prüfen.'
+      'es weder ein Ziel für die Umsetzung noch etwas zu prüfen. ' +
+      'Dazu der Datenvertrag je Paket: erlaubteDateien (welche Dateien und Ordner dieses ' +
+      'Paket anfassen darf — auch die, die erst entstehen), bausteine (was in diesem Paket ' +
+      'entsteht) und schnittstellen (was rein- und rausgeht). erlaubteDateien IST die ' +
+      'Schreibsperre des umsetzenden Blocks: Was nicht drinsteht, kann er nicht schreiben — ' +
+      'eine vergessene Datei stoppt ihn mitten in der Arbeit. Nenne Pfade und Ordner einzeln ' +
+      '(Platzhalter wie * oder ** versteht FlowForge nicht), vollständig, und schneide die ' +
+      'Listen zweier Pakete überschneidungsfrei. ' +
+      'In aufgabenIds gehören je Paket die ids der Aufgaben-Karten aus deiner ' +
+      'paket_melden-Meldung, die dieses Paket abdeckt: FlowForge rechnet nach, ob jede ' +
+      'gemeldete Aufgabe in mindestens einem Paket vorkommt und jedes benannte Ziel eines ' +
+      'bekommen hat — fehlt etwas, läufst du kurz erneut und trägst nach. Rufe deshalb ' +
+      'paket_melden VOR melde_arbeitspaket auf.'
   },
   {
     id: 'angreifer',
@@ -433,12 +453,24 @@ export const BLOCK_KATALOG = [
       'entsteht. Prüfe ehrlich, ob eine andere Erklärung ebenso gut passt — wenn ja, benenne ' +
       'beide und was sie unterscheiden würde. Rate nicht: Kannst du die Ursache nicht belegen, ' +
       'schreibe das offen und benenne, welche Information fehlt. ' +
-      'Deine Meldung ist das Arbeitspaket: ziel (das Fehlerbild und die belegte ' +
+      // Zuschnitt je benanntem Ziel (BAUPLAN 44): dieselbe Sprache wie bei
+      // Paket schneiden — die Adressen hängt lauf.js als Zusatz an.
+      'Deine Meldung sind die Arbeitspakete — für JEDES benannte Ziel hinter dir (die Blöcke, ' +
+      'die ein Arbeitspaket umsetzen) eines, alle in EINEM Aufruf von melde_arbeitspaket. ' +
+      'Gibt es nur ein Ziel, ist es ein Paket. Je Paket: zielBlock (die Blocknummer des ' +
+      'Ziels), ziel (das Fehlerbild und die belegte ' +
       'Ursache in einem Satz), fundstellen (Fundort der Ursache und betroffene Dateien), ' +
       'schritte (der minimale Fix in möglichst kleinen Schritten), nichtDabei (was ausdrücklich ' +
       'NICHT angefasst wird) und fertigKriterien — darunter: ein Test, der den ' +
-      'Fehler nachstellt, ist vor dem Fix rot und danach grün. Die Herleitung, warum genau dort ' +
-      'das Verhalten entsteht, gehört in anmerkung.'
+      'Fehler nachstellt, ist vor dem Fix rot und danach grün. Dazu der Datenvertrag: ' +
+      'erlaubteDateien (welche Dateien und Ordner dieses Paket anfassen darf, auch neu ' +
+      'entstehende — das IST die Schreibsperre des umsetzenden Blocks, nenne sie vollständig; ' +
+      'keine Platzhalter wie * oder **), ' +
+      'bausteine (was entsteht) und schnittstellen (was rein- und rausgeht); in aufgabenIds ' +
+      'die ids der Aufgaben-Karten aus deiner paket_melden-Meldung, die dieses Paket abdeckt ' +
+      '(rufe paket_melden deshalb zuerst — FlowForge prüft die Vollständigkeit und fordert ' +
+      'sonst nach). ' +
+      'Die Herleitung, warum genau dort das Verhalten entsteht, gehört in anmerkung.'
   },
   {
     id: 'bauer',
@@ -453,8 +485,9 @@ export const BLOCK_KATALOG = [
     brauchtOptional: ['Angriffsliste', 'Antwort des Menschen', 'Befundliste'],
     brauchtWozu: {
       Arbeitspaket:
-        'baut genau das und nichts anderes — Ziel, Schritte, Fundstellen und „nicht dabei" ' +
-        'sind seine Grenzen, und an den Fertig-Kriterien wird seine Arbeit gemessen',
+        'baut genau SEIN Paket und nichts anderes — Ziel, Schritte, Fundstellen und „nicht ' +
+        'dabei" sind seine Grenzen, die erlaubten Dateien sind sein Arbeitsbereich, und an ' +
+        'den Fertig-Kriterien wird seine Arbeit gemessen',
       Angriffsliste:
         'räumt jeden Fund aus oder begründet, warum er dieses Paket nicht trifft — schreib ' +
         'je Fund Schwere und Fundort dazu, sonst kann er ihn nicht ausräumen',
@@ -499,6 +532,12 @@ export const BLOCK_KATALOG = [
       'darfst du sie höchstens EINMAL ganz am Ende laufen lassen — keine Dauerschleife. ' +
       'Eigene Hilfsskripte und Probedateien legst du im Ordner arbeitsablage/ ab — FlowForge ' +
       'leert ihn nach dem Lauf von selbst. ' +
+      // Die Sperre VORHER ansagen, nicht erst beim Abbruch (BAUPLAN 44) — genau
+      // das Muster, das die Prüfmappe eine Zeile höher schon hat.
+      'Die erlaubten Dateien deines Arbeitspakets sind dein Arbeitsbereich: Was dort nicht ' +
+      'steht, kannst du nicht schreiben (das ist gesperrt) — arbeitsablage/ bleibt frei. ' +
+      'Fehlt dir eine Datei, schreibe das ins Feld anmerkung deiner Meldung, statt es erneut ' +
+      'zu versuchen. Nennt dein Arbeitspaket keine erlaubten Dateien, gilt keine Sperre. ' +
       'Kommt eine Rückmeldung aus einer Reparatur-Runde, hat deren Behebung Vorrang. ' +
       'Pflicht-Artefakt Startanleitung: Bevor du fertig bist, lege mit dem Werkzeug ' +
       'startanleitung_setzen fest, wie man das gebaute Ergebnis startet — beschreibung (ein ' +
@@ -523,8 +562,9 @@ export const BLOCK_KATALOG = [
     braucht: ['Arbeitspaket', 'Umsetzungsbericht'],
     brauchtWozu: {
       Arbeitspaket:
-        'prüft ausschließlich gegen die Fertig-Kriterien dieses Pakets — formuliere jedes so, ' +
-        'dass es sich messen lässt, sonst hat er keinen Maßstab',
+        'prüft ausschließlich gegen die Fertig-Kriterien genau des Pakets, das für die Arbeit ' +
+        'geschnitten wurde, die er prüft — nicht gegen irgendeines; formuliere jedes ' +
+        'Kriterium so, dass es sich messen lässt, sonst hat er keinen Maßstab',
       Umsetzungsbericht:
         'misst deine Arbeit an den Fertig-Kriterien des Arbeitspakets — schreib ihn so, dass ' +
         'er jedes einzelne bei dir findet, mit Fundort'

@@ -29,7 +29,10 @@ import { vorschlagWerkzeugServer } from './vorschlagWerkzeuge.js'
 import { laufVorschlagWerkzeugServer } from './laufVorschlagWerkzeuge.js'
 import { kartenZuteilungWerkzeugServer } from './kartenZuteilungWerkzeuge.js'
 import { lieferscheinWerkzeugServer } from './lieferscheinWerkzeuge.js'
-import { WERKZEUG_PRAEFIX as LIEFERSCHEIN_PRAEFIX } from '../../shared/lieferschein.js'
+import {
+  WERKZEUG_PRAEFIX as LIEFERSCHEIN_PRAEFIX,
+  dateiEintragNormalisieren
+} from '../../shared/lieferschein.js'
 import { prozessWurzelMelden } from '../prozesse.js'
 
 const laden = createRequire(import.meta.url)
@@ -277,11 +280,18 @@ function befehlOhneRueckfrage(befehl) {
 // Rein lesender Befehl: jedes Teilstück ist ein Lese-Werkzeug (cd davor ist
 // erlaubt), und nichts wird in eine Datei umgeleitet. `2>&1` und Umleitungen
 // ins Nichts (NUL, /dev/null) verändern keine Datei und bleiben erlaubt.
+//
+// Gefragt wird nach einer ECHTEN Umleitung (umleitungsZiele, s.u.), nicht nach
+// dem Zeichen „>" (Abschlussprüfung Bauschritt 44): Ein „>" im SUCHMUSTER ist
+// keine Umleitung, und ein Lesebefehl wird davon nicht schreibend. Vorher
+// scheiterte `grep -rn "=>" src/` allein am Zeichen — mit einer Ticker-Zeile,
+// die das Gegenteil dessen behauptete, was passierte („rein lesende Befehle
+// laufen durch"), und SPEC §7 sagt genau das wörtlich zu. Nach Pfeilfunktionen
+// oder Vergleichen zu suchen ist die Alltagsarbeit der nur-lesenden Blöcke.
+// Wichtig: {gesperrt} ist absichtlich keine Rückfrage — Georgs Automodus kann
+// einen grundlos gestoppten Block also nicht durchwinken.
 function befehlNurLesend(befehl) {
-  const ohneHarmloseUmleitung = String(befehl)
-    .replace(/2>&1/g, '')
-    .replace(/>+\s*(\/dev\/null|nul)\b/gi, '')
-  if (ohneHarmloseUmleitung.includes('>')) return false
+  if (umleitungsZiele(befehl).length > 0) return false
   const namen = befehlsNamen(befehl).filter((name) => name !== 'cd')
   return namen.length > 0 && namen.every((name) => LESE_BEFEHLE.has(name))
 }
@@ -290,14 +300,99 @@ function befehlNurLesend(befehl) {
 // Projekt-Grenze (SPEC §7) gilt auch für sie (Zweit-Audit C-02): Zeigt ein
 // Umleitungsziel aus dem Projektordner hinaus, wird gefragt. 2>&1 und
 // Wegwerf-Ziele (NUL, /dev/null) verändern keine Datei und zählen nicht.
-function umleitungsZielAusserhalb(befehl, projektPfad) {
-  const text = String(befehl)
-    .replace(/\d*>&\d+/g, ' ')
-    .replace(/>+\s*(\/dev\/null|nul)\b/gi, ' ')
-  for (const treffer of text.matchAll(/>+\s*("[^"]+"|'[^']+'|\S+)/g)) {
-    const ziel = treffer[1].replace(/^["']|["']$/g, '')
-    if (!liegtImProjekt(ziel, projektPfad)) return ziel
+// Alle Datei-Umleitungsziele eines Befehls. Pfeile aus Code zählen NICHT:
+// `node -e "x => y"`, `a >= b` und jedes „>" INNERHALB eines
+// Anführungszeichen-Bereichs (`npm test -- --grep "a > b"`) sind keine
+// Umleitung — seit die Dateiliste (BAUPLAN 44) hier hart sperrt, wäre so ein
+// Fehlgriff nicht mehr nur eine überflüssige Rückfrage, sondern ein grundlos
+// gestoppter Bauer, der sich nicht befreien kann: {gesperrt} ist absichtlich
+// keine Rückfrage, der Automodus kann sie also nicht durchwinken.
+//
+// Deshalb läuft die Zerlegung EINMAL durch den Befehlstext und führt dabei den
+// Anführungszeichen-Zustand mit, statt mit einem einzelnen regulären Ausdruck
+// über den ganzen Text zu gehen. Ein zitierter Abschnitt NACH einem „>" ist
+// sehr wohl ein gültiges Ziel (`echo x > "src/mit leerzeichen.js"`).
+//
+// Ausgeschlossen bleibt das Gleichheitszeichen — davor („=>") und danach
+// („>=") —, ebenso die Kanal-Umleitung („2>&1") und Wegwerf-Ziele (NUL,
+// /dev/null): Sie fassen keine Datei an. Der Bindestrich gehört ausdrücklich
+// NICHT dazu: `echo hallo -> ../draussen.txt` ist für die Shell ein Argument
+// „-" plus eine echte Umleitung, und schlösse man ihn aus, liefen
+// Projekt-Grenze (SPEC §7) und Dateilisten-Sperre still daran vorbei.
+//
+// `$null` gehört dazu (BAUPLAN 44): FlowForge läuft auf Windows und ruft
+// PowerShell — dort ist „2>$null" dasselbe Idiom wie „2>/dev/null" in Bash und
+// fasst ebenso wenig eine Datei an. Ohne diesen Eintrag las die Zerlegung
+// „$null" als Pfad, und weil Dateilisten-Sperre, Prüfmappe und „darf nur lesen"
+// über dieselbe Rechnung entscheiden, stoppte EIN Alltagsbefehl den Block an
+// drei Stellen hart — ohne Rückfrage, also auch im Automodus nicht lösbar.
+// Nur der Name selbst zählt: `> $env:TEMP/log.txt` bleibt eine echte Umleitung.
+const WEGWERF_ZIEL = /^(\/dev\/null|nul|\$null)$/i
+
+function zieleZerlegen(text, zitateBeachten) {
+  const ziele = []
+  let zitat = ''
+  let i = 0
+  while (i < text.length) {
+    const zeichen = text[i]
+    if (zitat) {
+      if (zeichen === zitat) zitat = ''
+      i++
+      continue
+    }
+    if (zitateBeachten && (zeichen === '"' || zeichen === "'")) {
+      zitat = zeichen
+      i++
+      continue
+    }
+    if (zeichen !== '>') {
+      i++
+      continue
+    }
+    // „>>" ist EIN Pfeil, nicht zwei.
+    let ende = i
+    while (text[ende] === '>') ende++
+    if (text[i - 1] === '=' || text[ende] === '=' || text[ende] === '&') {
+      i = ende
+      continue
+    }
+    let j = ende
+    while (j < text.length && /\s/.test(text[j])) j++
+    let ziel = ''
+    if (zitateBeachten && (text[j] === '"' || text[j] === "'")) {
+      const schluss = text.indexOf(text[j], j + 1)
+      if (schluss > j) {
+        ziel = text.slice(j + 1, schluss)
+        j = schluss + 1
+      } else {
+        // Anführungszeichen ohne Gegenstück — die Zerlegung meldet das oben.
+        zitat = text[j]
+        j++
+      }
+    } else {
+      const start = j
+      while (j < text.length && !/[\s|&;<>]/.test(text[j])) j++
+      ziel = text.slice(start, j)
+    }
+    if (ziel && !WEGWERF_ZIEL.test(ziel)) ziele.push(ziel)
+    i = j
   }
+  return { ziele, offenesZitat: zitat !== '' }
+}
+
+function umleitungsZiele(befehl) {
+  const text = String(befehl)
+  const mitZitaten = zieleZerlegen(text, true)
+  // Bleibt am Ende ein Anführungszeichen offen, war die Zitat-Annahme falsch
+  // (`echo don't > log.txt`). Sicherheits-Leitplanke: An dieser Stelle hängt
+  // auch die Projektgrenze (SPEC §7) — im Zweifel lieber eine Umleitung
+  // ERKENNEN als übersehen. Deshalb dann noch einmal ohne Zitat-Zustand.
+  if (!mitZitaten.offenesZitat) return mitZitaten.ziele
+  return zieleZerlegen(text, false).ziele
+}
+
+function umleitungsZielAusserhalb(befehl, projektPfad) {
+  for (const ziel of umleitungsZiele(befehl)) if (!liegtImProjekt(ziel, projektPfad)) return ziel
   return null
 }
 
@@ -329,6 +424,74 @@ function liegtImEigenenPruefordner(datei, projektPfad, pruefOrdner) {
   return relativ === eigen || relativ.startsWith(eigen + path.sep)
 }
 
+// Die Wegwerf-Fläche der Agenten (SPEC §4.3): Hilfsskripte und Probedateien
+// legt der Bauer laut Katalog-Auftrag hier ab, und FlowForge leert den Ordner am
+// Lauf-Ende. Der Zuschnitt listet ihn nie auf — deshalb ist er von der
+// Dateilisten-Sperre ausdrücklich frei (BAUPLAN 44).
+const ARBEITSABLAGE = 'arbeitsablage'
+
+function liegtInArbeitsablage(datei, projektPfad) {
+  if (!datei) return false
+  const relativ = path
+    .relative(path.resolve(projektPfad), path.resolve(projektPfad, String(datei)))
+    .toLowerCase()
+  return relativ === ARBEITSABLAGE || relativ.startsWith(ARBEITSABLAGE + path.sep)
+}
+
+// Datenvertrag als Schreibsperre (BAUPLAN 44): Steht diese Datei in der
+// Dateiliste des Arbeitspakets? Genau dasselbe Normalisierungs-Muster wie alle
+// übrigen Pfad-Prüfungen hier (path.relative/resolve/toLowerCase, Ordner als
+// Präfix mit path.sep) — die Liste kommt als Modelltext („src/main/lauf.js",
+// teils mit „./" davor oder mit Schrägstrichen andersherum), die Prüfung rechnet
+// in Windows-Pfaden.
+//
+// Ein Eintrag gilt als ORDNER, wenn er auf einen Schrägstrich endet oder keine
+// Datei-Endung trägt — dann deckt er alles darunter ab. Geprüft wird
+// ausschließlich gegen den GEMELDETEN Pfad, nie gegen den Dateibestand: Der
+// Vertrag nennt ausdrücklich auch Dateien, die erst entstehen.
+//
+// Die Schreibweise eines Eintrags richtet dieselbe reine Funktion, die schon
+// das Melden prüft (dateiEintragNormalisieren, src/shared/lieferschein.js) —
+// beide Enden derselben Rechnung müssen gleich normalisieren, sonst sperrt die
+// Liste eine Datei, die sichtbar in ihr steht.
+// Exportiert, damit sich die Sperre ohne laufenden Motor prüfen lässt.
+export function stehtInDateiliste(datei, projektPfad, liste) {
+  if (!datei || !Array.isArray(liste) || liste.length === 0) return false
+  const relativ = path
+    .relative(path.resolve(projektPfad), path.resolve(projektPfad, String(datei)))
+    .toLowerCase()
+  for (const roh of liste) {
+    // Ein ausbrechender Eintrag trifft nie etwas im Projekt, und ein Eintrag auf
+    // den Projektordner selbst („.") träfe alles — das Melde-Werkzeug weist
+    // beide ab; hier werden sie übersprungen (alte Laufstände tragen noch
+    // ungeprüfte Listen zurück). Beide Enden geben damit dieselbe Antwort.
+    const eintrag = dateiEintragNormalisieren(roh).pfad ?? ''
+    if (!eintrag) continue
+    const ordner = /[/\\]$/.test(eintrag) || !/\.[^./\\]+$/.test(eintrag)
+    const ziel = path
+      .relative(path.resolve(projektPfad), path.resolve(projektPfad, eintrag))
+      .toLowerCase()
+    if (!ziel || ziel.startsWith('..')) continue
+    if (relativ === ziel) return true
+    if (ordner && relativ.startsWith(ziel + path.sep)) return true
+  }
+  return false
+}
+
+// Die eine Stelle, an der die Dateilisten-Sperre entscheidet — für das
+// Schreib-Werkzeug wie für ein Umleitungsziel eines Befehls. Reihenfolge
+// verbindlich: der eigene Prüfordner und arbeitsablage/ sind FREI (die
+// spezifischere Erlaubnis gewinnt), danach zählt die Liste. Keine Liste = keine
+// Sperre — alte Laufstände bringen Arbeitspakete ohne Dateiliste zurück, und ein
+// gespeicherter Lauf darf davon nicht ungültig werden.
+function ausserhalbDateiliste(datei, projektPfad, dateiListe, pruefOrdner) {
+  if (!datei) return false
+  if (!Array.isArray(dateiListe) || dateiListe.length === 0) return false
+  if (liegtInArbeitsablage(datei, projektPfad)) return false
+  if (pruefOrdner && liegtImEigenenPruefordner(datei, projektPfad, pruefOrdner)) return false
+  return !stehtInDateiliste(datei, projektPfad, dateiListe)
+}
+
 // Bilddateien sind in der Prüfmappe verboten (BAUPLAN 17, hartes Nein — auch
 // für Prüf-Blöcke): Prüfungen sind kleine Textdateien und Skripte; Bilder
 // blähen die Mappe auf und laden zu pixelgenauen Vergleichen ein.
@@ -340,13 +503,20 @@ const BILD_IM_BEFEHL = /\.(png|jpe?g|gif|bmp|webp|svg|ico|tiff?|heic|avif)\b/i
 // Faustregel (Befehlstexte sind nicht sicher zerlegbar) — sie trifft genau die
 // beobachteten Aufweich-Versuche (sed -i auf Prüfdateien); reine Testläufe wie
 // „node pruefung/test.js" bleiben erlaubt.
+//
+// Gefragt wird nach einer ECHTEN Umleitung (umleitungsZiele), nicht nach dem
+// Zeichen „>" (Abschlussprüfung Bauschritt 44): Ein Pfeil im Suchmuster
+// (`grep -n "a => b" pruefung/p1/x.test.js`) oder im Testfilter
+// (`npx vitest run pruefung/p1/x.test.js -t "a > b"`) schreibt nichts. Vorher
+// wurde genau das hart gestoppt — SPEC §7 sperrt aber nur, was „erkennbar
+// hineinschreibt", und SPEC §4.3 erlaubt dem Bauer den Prüflauf am Ende. Die
+// beiden Vorstufen für 2>&1 und die Wegwerf-Ziele entfallen: Die Zerlegung
+// deckt beide selbst ab (2>&1 ist eine Kanal-Umleitung, NUL und /dev/null sind
+// keine Ziele).
 function befehlAendertPruefmappe(befehl) {
   const text = String(befehl)
   if (!new RegExp('\\b' + PRUEF_ORDNER + '\\b', 'i').test(text)) return false
-  const ohneHarmloseUmleitung = text
-    .replace(/2>&1/g, '')
-    .replace(/>+\s*(\/dev\/null|nul)\b/gi, '')
-  if (ohneHarmloseUmleitung.includes('>')) return true
+  if (umleitungsZiele(text).length > 0) return true
   return /\b(sed\s+-i|rm|del|mv|move|cp|copy|tee|touch|remove-item|set-content|add-content|out-file)\b/i.test(
     text
   )
@@ -388,7 +558,12 @@ function liegtImProjekt(datei, projektPfad) {
 // ins Leere läuft.
 // pruefOrdner (BAUPLAN 41): der eigene Unterordner dieser Prüf-Instanz in der
 // Prüfmappe — in fremde Prüfordner schreibt auch ein Prüfer nicht.
-export function pruefeWerkzeug(name, eingabe, projektPfad, nurLesen, darfPruefen, lokaleKi = true, nurLesenBefehle = false, darfKartenAnlegen = false, darfVorschlagen = false, darfLaufVorschlag = false, darfZuteilen = false, pruefOrdner = '', lieferscheinFrei = []) {
+// dateiListe (BAUPLAN 44): der Datenvertrag der Arbeitspakete, die bei DIESEM
+// Block angekommen sind (bei mehreren die Vereinigung ihrer Listen). Steht als
+// LETZTER Parameter mit sicherem Standard: null = keine Sperre. Gesetzt wird sie
+// nur für Blöcke, die ein Paket umsetzen — ein Prüfer stünde sonst bei
+// legitimer Arbeit.
+export function pruefeWerkzeug(name, eingabe, projektPfad, nurLesen, darfPruefen, lokaleKi = true, nurLesenBefehle = false, darfKartenAnlegen = false, darfVorschlagen = false, darfLaufVorschlag = false, darfZuteilen = false, pruefOrdner = '', lieferscheinFrei = [], dateiListe = null) {
   if (name.startsWith(MENSCH_PRAEFIX)) return { erlaubt: true }
   // Lieferschein (BAUPLAN 42): frei ist je Block genau das Werkzeug zu seinem
   // liefert-Etikett — die anderen fragen nach.
@@ -503,6 +678,15 @@ export function pruefeWerkzeug(name, eingabe, projektPfad, nurLesen, darfPruefen
         gesperrt: texte.rechteFrage.fremderPruefordnerFuerAgent(pruefOrdner),
         tickerText: texte.ticker.fremderPruefordnerGesperrt
       }
+    // Datenvertrag als Schreibsperre (BAUPLAN 44): Was das eigene Arbeitspaket
+    // nicht auflistet, bleibt zu — hartes Nein, keine Rückfrage: Im Automodus
+    // wäre eine Rückfrage wirkungslos, und dann hielte der Code die Zusage
+    // „Dateiliste wird durchgesetzt" gar nicht.
+    if (ausserhalbDateiliste(datei, projektPfad, dateiListe, pruefOrdner))
+      return {
+        gesperrt: texte.rechteFrage.ausserhalbDateilisteFuerAgent(String(datei), dateiListe),
+        tickerText: texte.ticker.ausserhalbDateilisteGesperrt(String(datei))
+      }
     if (liegtImProjekt(datei, projektPfad)) return { erlaubt: true }
     return { frage: texte.rechteFrage.schreibenAusserhalb(String(datei ?? '?')) }
   }
@@ -518,8 +702,29 @@ export function pruefeWerkzeug(name, eingabe, projektPfad, nurLesen, darfPruefen
       return { gesperrt: texte.rechteFrage.pruefmappeBildFuerAgent, tickerText: texte.ticker.pruefmappeBildGesperrt }
     if (!darfPruefen && befehlAendertPruefmappe(befehl))
       return { gesperrt: texte.rechteFrage.pruefmappeGesperrtFuerAgent, tickerText: texte.ticker.pruefmappeGesperrt }
+    // Ehrliche Grenze des Datenvertrags (BAUPLAN 44, SPEC §7): Die Sperre greift
+    // an den Schreib-Werkzeugen, nicht an ausgeführten Befehlen. Genau EINE
+    // Stelle ist billig mitzunehmen — das Umleitungsziel liegt hier schon
+    // ausgelesen vor, und `echo x > src/nichtMeins.js` war das lauteste Loch.
+    //
+    // Die Dateiliste steht VOR der Projektgrenze, und das ist der ganze Punkt:
+    // Ein Ziel AUSSERHALB des Projekts steht per Definition nicht in der Liste.
+    // Andersherum (Projektgrenze zuerst) wäre der gefährlichere Schreibvorgang
+    // schwächer behandelt als der harmlosere — die Grenze gibt nur eine {frage},
+    // und die erlaubt der Automodus ohne Nachfrage: `echo x > ../draussen.txt`
+    // käme durch, während `echo x > src/fremd.js` hart gesperrt wird.
+    for (const ziel of umleitungsZiele(befehl))
+      // Ein Ziel mit stehengebliebenem Anführungszeichen ist ein Fehlgriff der
+      // Zerlegung, kein Pfad — im Zweifel NICHT sperren.
+      if (!/["']/.test(ziel) && ausserhalbDateiliste(ziel, projektPfad, dateiListe, pruefOrdner))
+        return {
+          gesperrt: texte.rechteFrage.ausserhalbDateilisteFuerAgent(ziel, dateiListe),
+          tickerText: texte.ticker.ausserhalbDateilisteGesperrt(ziel)
+        }
     // Umleitungsziel außerhalb des Projektordners: dieselbe Grenze wie bei
-    // den Schreib-Werkzeugen — Rückfrage statt stillem Schreiben (C-02).
+    // den Schreib-Werkzeugen — Rückfrage statt stillem Schreiben (C-02). Sie
+    // gilt jetzt genau für Blöcke OHNE Dateiliste; mit Liste hat oben schon die
+    // harte Sperre entschieden.
     const umleitungsZiel = umleitungsZielAusserhalb(befehl, projektPfad)
     if (umleitungsZiel)
       return { frage: texte.rechteFrage.schreibenAusserhalb(umleitungsZiel) }
@@ -813,6 +1018,12 @@ export function starteLaufMotor(optionen) {
     // Herkunft (BAUPLAN 30): holeHerkunft(instanzId) liefert Block · Lauf ·
     // Paket-Aufgaben für den Karten-Stempel des gerade laufenden Blocks.
     holeHerkunft = null,
+    // Vollständigkeit (BAUPLAN 44): holePaket(instanzId) liefert die mit
+    // paket_melden gemeldeten Aufgaben-Karten dieses Blocks — gegen sie werden
+    // die aufgabenIds eines Zuschnitts hart geprüft (null = noch nichts
+    // gemeldet). Als Funktion, nicht als Wert: Die Meldung kommt erst während
+    // des Blocks, der Werkzeugkasten steht schon davor.
+    holePaket = null,
     // Lieferschein (BAUPLAN 42): Beim Laufstart steht das Schaubild fest —
     // FlowForge registriert genau die Melde-Werkzeuge, die DIESE Kette braucht.
     // Freigeschaltet ist je Block nur sein eigenes (blockAusfuehren).
@@ -1043,7 +1254,9 @@ export function starteLaufMotor(optionen) {
       block?.darfLaufVorschlag ?? false,
       block?.darfZuteilen ?? false,
       block?.pruefOrdner ?? '',
-      block?.lieferscheinFrei ?? []
+      block?.lieferscheinFrei ?? [],
+      // Datenvertrag als Schreibsperre (BAUPLAN 44) — null heißt keine Sperre.
+      block?.dateiListe ?? null
     )
     if (urteil.gesperrt) return nein(urteil.gesperrt, urteil.tickerText)
     if (urteil.erlaubt) {
@@ -1123,6 +1336,14 @@ export function starteLaufMotor(optionen) {
     const lieferscheinServer = await lieferscheinWerkzeugServer({
       werkzeuge: lieferscheinWerkzeuge,
       holeBlock: () => (block ? { liefert: block.liefert } : null),
+      // Zuschnitt je benanntem Ziel (BAUPLAN 44): die Ziele des gerade
+      // laufenden Blocks — der Lauf rechnet sie aus dem Schaubild.
+      holeZiele: () => (block ? (block.ziele ?? null) : null),
+      // Vollständigkeit (BAUPLAN 44): das gemeldete Paket dieses Blocks —
+      // gegen es werden die aufgabenIds eines Zuschnitts hart geprüft. Ohne
+      // Paket-Quelle (Chat, Sonderwege) bleibt der Schlüssel weg, dann prüft
+      // lieferschein.js die aufgabenIds gar nicht erst.
+      holePaket: holePaket ? () => (block ? (holePaket(block.instanzId) ?? null) : null) : null,
       aufMeldung: (meldung) => {
         if (!block) return
         // Je Etikett gilt die letzte Meldung — meldet ein Agent zweimal, ist
@@ -1279,7 +1500,9 @@ export function starteLaufMotor(optionen) {
             block?.darfLaufVorschlag ?? false,
             block?.darfZuteilen ?? false,
             block?.pruefOrdner ?? '',
-            block?.lieferscheinFrei ?? []
+            block?.lieferscheinFrei ?? [],
+            // Datenvertrag als Schreibsperre (BAUPLAN 44) — null heißt keine Sperre.
+            block?.dateiListe ?? null
           )
           if (urteil.erlaubt) return { behavior: 'allow', updatedInput: eingabeDaten }
           if (urteil.gesperrt) {
@@ -1630,7 +1853,9 @@ export function starteLaufMotor(optionen) {
     // ein — der Koordinator selbst läuft auf dem Billigmodell.
     // pruefOrdner (BAUPLAN 41): der eigene Unterordner dieses Prüfers in der
     // Prüfmappe — Schreibversuche daneben werden hart abgelehnt.
-    blockAusfuehren({ auftrag, blockName, instanzId = null, nurLesen = false, darfPruefen = false, pruefOrdner = '', lokaleKi = true, darfKartenAnlegen = false, darfVorschlagen = false, darfLaufVorschlag = false, darfZuteilen = false, liefert = [], lieferscheinFrei = [], modell = null, unterModell = null, modellName = '', uebertrag }) {
+    // dateiListe (BAUPLAN 44): der Datenvertrag der bei diesem Block
+    // angekommenen Arbeitspakete — null heißt „keine Sperre".
+    blockAusfuehren({ auftrag, blockName, instanzId = null, nurLesen = false, darfPruefen = false, pruefOrdner = '', lokaleKi = true, darfKartenAnlegen = false, darfVorschlagen = false, darfLaufVorschlag = false, darfZuteilen = false, liefert = [], lieferscheinFrei = [], ziele = null, dateiListe = null, modell = null, unterModell = null, modellName = '', uebertrag }) {
       if (tot)
         return Promise.resolve({
           zustand: 'fehlgeschlagen',
@@ -1658,6 +1883,12 @@ export function starteLaufMotor(optionen) {
           // und welches Melde-Werkzeug er dafür rückfragefrei nutzen darf.
           liefert,
           lieferscheinFrei,
+          // Zuschnitt je benanntem Ziel (BAUPLAN 44): die Umsetzer hinter
+          // diesem Block, gegen die eine Zieladresse validiert wird.
+          ziele,
+          // Datenvertrag als Schreibsperre (BAUPLAN 44): die erlaubten Dateien
+          // der Arbeitspakete, die BEI DIESEM Block angekommen sind.
+          dateiListe,
           meldungen: [],
           modell: modell ?? sdkModell(MODELL_KLASSE_STANDARD),
           unterModell,
@@ -1858,7 +2089,16 @@ export function starteChatMotor(optionen) {
       // Karten anlegen ist der Normalweg des nur-lesenden Chats — außer während
       // eines Laufs: dann ist der Chat wirklich lesend (ein Schreiber pro Projekt).
       !laufAktiv,
-      false
+      false,
+      // Ab hier ausgeschrieben statt den Standardwerten überlassen (Fund 12 der
+      // Angriffsliste zu BAUPLAN 44): Die Signatur trägt 14 Positionsparameter —
+      // ein Neuzugang rutschte an einer verkürzten Aufrufstelle sonst still an
+      // die falsche Stelle. Der Chat hat kein Arbeitspaket, also keine Sperre.
+      false, // darfLaufVorschlag
+      false, // darfZuteilen
+      '', // pruefOrdner
+      [], // lieferscheinFrei
+      null // dateiListe
     )
     // Während ein Lauf läuft, sagt die Abweisung ehrlich, warum: nicht „dieser
     // Block darf nur lesen", sondern „im Projekt läuft gerade ein Lauf".

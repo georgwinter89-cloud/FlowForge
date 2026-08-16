@@ -39,13 +39,29 @@ function rahmenFelder() {
 
 function teilFelder(art) {
   const p = texte.lieferschein.param
+  // Zuschnitt je benanntem Ziel (BAUPLAN 44): ALLE Pakete in EINEM Aufruf. Der
+  // Sammel-Schlüssel der Meldungen ist (etikett, art) — bei mehreren Aufrufen
+  // löschte der zweite den ersten, und von drei Paketen überlebte nur das
+  // dritte. Ein Aufruf ist zugleich atomar: Er übersteht einen Übertrag mitten
+  // in der Meldung.
   if (art === 'arbeitspaket')
     return {
-      ziel: z.string().describe(p.ziel),
-      fertigKriterien: z.array(z.string()).describe(p.fertigKriterien),
-      schritte: z.array(z.string()).optional().describe(p.schritte),
-      fundstellen: z.array(z.string()).optional().describe(p.fundstellen),
-      nichtDabei: z.array(z.string()).optional().describe(p.nichtDabei)
+      pakete: z
+        .array(
+          z.object({
+            zielBlock: z.string().optional().describe(p.zielBlock),
+            ziel: z.string().describe(p.ziel),
+            fertigKriterien: z.array(z.string()).describe(p.fertigKriterien),
+            schritte: z.array(z.string()).optional().describe(p.schritte),
+            fundstellen: z.array(z.string()).optional().describe(p.fundstellen),
+            nichtDabei: z.array(z.string()).optional().describe(p.nichtDabei),
+            aufgabenIds: z.array(z.string()).optional().describe(p.paketAufgabenIds),
+            erlaubteDateien: z.array(z.string()).optional().describe(p.erlaubteDateien),
+            bausteine: z.array(z.string()).optional().describe(p.bausteine),
+            schnittstellen: z.array(z.string()).optional().describe(p.schnittstellen)
+          })
+        )
+        .describe(p.pakete)
     }
   if (art === 'pruefbeleg')
     return {
@@ -117,10 +133,17 @@ function teilFelder(art) {
 
 // holeBlock() liefert die Blockdefinition (liefert-Etiketten) des gerade
 // laufenden Blocks; aufMeldung(meldung) reicht die geprüfte Meldung an die
-// Lauf-Verwaltung weiter.
+// Lauf-Verwaltung weiter. holeZiele() liefert die benannten Ziele des laufenden
+// Blocks (BAUPLAN 44) — gegen sie wird die Zieladresse eines Zuschnitts hart
+// validiert, sonst träfe eine erfundene Adresse niemanden. holePaket() liefert
+// die mit paket_melden gemeldeten Aufgaben-Karten (BAUPLAN 44) — gegen sie
+// werden die aufgabenIds eines Zuschnitts hart geprüft, sonst wäre die
+// Vollständigkeitsprüfung wieder ein Textvergleich.
 export async function lieferscheinWerkzeugServer({
   werkzeuge,
   holeBlock,
+  holeZiele = null,
+  holePaket = null,
   aufMeldung,
   aufAbweisung = null
 }) {
@@ -152,7 +175,19 @@ export async function lieferscheinWerkzeugServer({
           etikett = etikettFuerWerkzeug(def, name)
           if (!etikett) return fehler(tl.etikettUnbekannt(name, def?.liefert ?? []))
         }
-        const geprueft = meldungPruefen(art, eingabe, etikett)
+        // Das Umfeld reicht durch, was nur der Lauf weiß. Ein Schlüssel steht
+        // nur drin, wenn der Lauf ihn liefern kann — fehlt er, prüft
+        // lieferschein.js ihn gar nicht erst (Prüfskripte, selbstgebaute Wege).
+        const ziele = holeZiele?.() ?? null
+        const umfeld = {}
+        if (ziele) umfeld.ziele = ziele
+        if (holePaket) umfeld.paket = holePaket() ?? null
+        const geprueft = meldungPruefen(
+          art,
+          eingabe,
+          etikett,
+          Object.keys(umfeld).length ? umfeld : null
+        )
         if (geprueft.fehler) return fehler(geprueft.fehler)
         aufMeldung(geprueft.meldung)
         return { content: [{ type: 'text', text: tl.angenommen(etikett) }] }

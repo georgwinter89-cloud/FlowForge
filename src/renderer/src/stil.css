@@ -1728,7 +1728,10 @@ body {
 
 .marke-startanleitung-fehlt,
 .marke-startanleitung-laeuft-nicht,
-.marke-ohne-meldung {
+.marke-ohne-meldung,
+/* Vollständigkeit des Zuschnitts (BAUPLAN 44): kein Fehlschlag, aber auch
+   kein sauberes „erledigt" — derselbe Ton wie die übrigen Nachforderungen. */
+.marke-zuschnitt-unvollstaendig {
   border-color: var(--lesend);
   color: var(--lesend);
 }

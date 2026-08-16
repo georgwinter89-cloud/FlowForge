@@ -305,6 +305,143 @@ export function empfaengerLage(bloecke, pfeile, instanzId) {
   return lage
 }
 
+// ── Benannte Ziele des Zuschnitts (BAUPLAN 44) ──────────────────────────────
+// Bis Bauschritt 43 schnitt „Paket schneiden" EIN Arbeitspaket für alle. Seit 44
+// schneidet es je benanntem Ziel eines. Ein „benanntes Ziel" ist NICHT jeder
+// Empfänger des Etiketts (Entscheidung Georg, 16.08.2026), sondern nur der
+// Empfänger, der das Paket UMSETZT (!nurLesen && !prueft — heute genau der
+// Bauer). Der Grund ist ein stiller Maßstab-Bruch: Bekäme der Prüfer ein eigenes
+// Paket, misst er die Arbeit des Bauers an anderen Fertig-Kriterien, als der
+// Bauer sie gebaut hat. Angreifer und Prüfer bekommen deshalb kein eigenes
+// Paket, sondern das ihres nächstgelegenen Umsetzers (zuschnittRouting).
+export const ARBEITSPAKET_ETIKETT = 'Arbeitspaket'
+
+// Adressiert wird über die BLOCKNUMMER, nicht über den Zusatznamen
+// (Entscheidung Georg, 16.08.2026): Zwei Bauer ohne Zusatznamen wären über den
+// Namen gar nicht adressierbar, und eine Zusatznamen-Pflicht hielte jedes schon
+// gespeicherte Schaubild an. Die Nummer ist dieselbe, die Vorspann und Ticker
+// nennen („Block 3 „Bauer · UI"").
+export function zielAdresse(nummer) {
+  return String(nummer)
+}
+
+// Die Adresse eines Ziels aus dem, was das Modell geschrieben hat — tolerant:
+// „3", „Block 3", „3 Bauer · UI", „Block 3 „Bauer · UI"" meinen dasselbe. Passt
+// keine Nummer, gilt der eindeutige Anzeigename noch als Adresse (bequem, wenn
+// es nur einen gibt); mehrdeutige Namen liefern null, damit die Abweisung die
+// gültigen Adressen nennen kann, statt still den falschen Block zu treffen.
+//
+// Die Zahl zählt NUR am Anfang (optional hinter „Block"), nie irgendwo im Text:
+// Ein Zusatzname mit Ziffer („Bauer · Phase 2") traf sonst still den Block mit
+// dieser Nummer statt den gemeinten — ohne Abweisung und ohne Ticker-Zeile,
+// also genau die stille Fehlzustellung, die Bauschritt 44 abstellt.
+export function zielFuerAdresse(ziele, roh) {
+  const liste = Array.isArray(ziele) ? ziele : []
+  const text = String(roh ?? '').trim()
+  if (!text || liste.length === 0) return null
+  const zahl = text.match(/^(?:block\s*)?(\d+)\b/i)
+  if (zahl) return liste.find((z) => String(z.adresse) === zahl[1]) ?? null
+  const gleich = liste.filter((z) => String(z.name ?? '').toLowerCase() === text.toLowerCase())
+  return gleich.length === 1 ? gleich[0] : null
+}
+
+// Die benannten Ziele dieses Blocks: die Umsetzer unter den Empfängern seines
+// Arbeitspakets. Reine Funktion aus (bloecke, pfeile) wie vorspannText — sie
+// liest nichts aus dem Laufstatus, damit der Auftrag in jedem Anlauf Wort für
+// Wort derselbe bleibt. Liefert [{ instanzId, nummer, name, adresse, bezeichnung }].
+export function zielListe(bloecke, pfeile, instanzId) {
+  const lage = empfaengerLage(bloecke, pfeile, instanzId)
+  const ziele = []
+  const gesehen = new Set()
+  for (const empfaenger of lage.empfaenger) {
+    if (empfaenger.etikett !== ARBEITSPAKET_ETIKETT) continue
+    if (gesehen.has(empfaenger.instanzId)) continue
+    const eintrag = bloecke.find((b) => b.instanzId === empfaenger.instanzId)
+    const def = blockDefinition(eintrag?.blockId)
+    if (!def || def.nurLesen || def.prueft) continue
+    gesehen.add(empfaenger.instanzId)
+    ziele.push({
+      instanzId: empfaenger.instanzId,
+      nummer: empfaenger.nummer,
+      name: empfaenger.name,
+      adresse: zielAdresse(empfaenger.nummer),
+      bezeichnung: texte.ticker.blockBezeichnung(empfaenger.nummer, empfaenger.name)
+    })
+  }
+  return ziele
+}
+
+// Der Auftragszusatz zum Zuschnitt (BAUPLAN 44) — ZWEIGETEILT
+// (Abschlussprüfung Bauschritt 44): Ziel-Adressierung und erlaubteDateien gehen
+// an JEDEN Block, der ein Arbeitspaket liefert; der Zuschnitt je Ziel ist auch
+// ohne Aufgaben-Karten sinnvoll. Die Sätze zu aufgabenIds und zur Nachforderung
+// gehen NUR an Blöcke mit dem Kennzeichen kartenZuteilung — nur sie dürfen
+// paket_melden rufen (Werkzeug-Gate im Motor), und nur sie werden auf
+// Vollständigkeit geprüft.
+//
+// Im Katalog fallen beide zusammen, bei einem im Block-Editor gebauten Block
+// nicht: liefert-Etiketten sind dort freie Eingabe. Ein solcher Block bekam
+// vorher das Versprechen „FlowForge prüft das und fordert sonst nach" — folgte
+// er ihm, wies ihn die Meldungsprüfung ab („noch kein Paket gemeldet"), und
+// paket_melden löste für ihn eine Rechte-Rückfrage aus. Er saß fest.
+export function zuschnittAuftragZusatz(ziele, kartenZuteilung) {
+  const tz = texte.agentenZuschnitt
+  const liste = Array.isArray(ziele) ? ziele : []
+  const zusatz =
+    liste.length > 1
+      ? tz.auftragZusatz(liste.map((z) => z.bezeichnung))
+      : liste.length === 1
+        ? tz.auftragZusatzEines(liste[0].bezeichnung)
+        : tz.auftragZusatzKeines
+  return kartenZuteilung ? zusatz + tz.aufgabenZusatz : zusatz
+}
+
+// Welcher Zuschnitt gilt für DIESEN Empfänger? Die eine Stelle, an der das
+// entschieden wird — Lauf, Auftrags-Vorspann und braucht-Chips fragen alle hier,
+// sonst behaupten sie etwas anderes, als der Lauf tut (der Zweck von
+// Bauschritt 40).
+//
+// `zielSchluessel` sind die Schlüssel der vorliegenden Pakete: die instanzId des
+// adressierten Ziels, '' für ein Paket ohne Ziel. Die Regel unter den
+// ADRESSIERTEN Paketen, von oben nach unten:
+//   1. Ist der Empfänger selbst adressiert, gilt sein eigenes Paket.
+//   2. Sonst das Paket seines nächstgelegenen adressierten Vorfahren (gleich
+//      nahe gelten alle) — so bekommt der Prüfer das Paket SEINES Bauers.
+//   3. Sonst alle adressierten Pakete. Das trifft die Blöcke VOR den Umsetzern
+//      (der Angreifer sitzt zwischen Paket schneiden und Bauer): Er soll alles
+//      angreifen, was gebaut wird — ihm gar nichts zu geben wäre ein stiller
+//      Verlust, den es vor 44 nicht gab.
+// Das Paket OHNE Adresse kommt immer ZUSÄTZLICH dazu — „ein Zuschnitt ohne
+// Adresse gilt für alle" (SPEC §4.1). Als bloßer Rückfall hinter den
+// adressierten Paketen erreichte es genau die Blöcke nie, die eines haben:
+// Bauer und Prüfer verlören still, was für alle gemeint war. Meldet ein Agent
+// wie vor 44 EIN Paket ohne Adresse, ist es das einzige — Rückfall ohne Bruch.
+export function zuschnittRouting(bloecke, pfeile, empfaengerId, zielSchluessel) {
+  const vorhanden = []
+  for (const schluessel of zielSchluessel ?? [])
+    if (!vorhanden.includes(schluessel)) vorhanden.push(schluessel)
+  if (vorhanden.length === 0) return []
+  const adressiert = vorhanden.filter((schluessel) => schluessel)
+  const ergebnis = []
+  if (adressiert.includes(empfaengerId)) ergebnis.push(empfaengerId)
+  else if (adressiert.length) {
+    const distanz = vorfahrenDistanzen(bloecke, pfeile, empfaengerId)
+    let naechste = null
+    for (const schluessel of adressiert) {
+      if (!distanz.has(schluessel)) continue
+      const naehe = distanz.get(schluessel)
+      if (naechste === null || naehe < naechste) {
+        naechste = naehe
+        ergebnis.length = 0
+        ergebnis.push(schluessel)
+      } else if (naehe === naechste) ergebnis.push(schluessel)
+    }
+    if (ergebnis.length === 0) ergebnis.push(...adressiert)
+  }
+  if (vorhanden.includes('')) ergebnis.push('')
+  return ergebnis
+}
+
 // Deckel für die Kettenzeile: Ein Schaubild mit 40 Blöcken ergäbe sonst eine
 // Zeile, die niemand liest — und sie stünde in JEDEM Auftrag.
 export const KETTE_MAX_BLOECKE = 12
@@ -467,6 +604,32 @@ function aufzaehlungGedeckelt(stuecke, max = NACHFAHREN_MAX_NAMEN) {
   ])
 }
 
+// Empfänger mit identischem Etikett, identischer Verbindlichkeit und
+// identischem „wozu" zu je einer Gruppe (BAUPLAN 44). empfaengerLage selbst
+// gruppiert bewusst NICHT: Bauschritt 44 braucht die vollständige Liste als
+// Daten (zielListe) — die Bündelung ist reine Darstellung.
+// Fehlt dem Empfänger-Block ein brauchtWozu zu diesem Etikett (selbstgebaute
+// Blöcke ohne Angabe), greift der ehrliche Rückfall — erfunden wird nichts.
+function empfaengerGruppen(empfaenger, v) {
+  const gruppen = []
+  const nachSchluessel = new Map()
+  for (const einer of empfaenger) {
+    const wozu = einer.wozu ?? v.wozuRueckfall(einer.etikett)
+    // Der Trenner steht als Escape da, nie als rohes Zeichen: Ein NUL-Byte im
+    // Quelltext macht diese Datei für die Projektsuche zur Binärdatei — dann
+    // findet in der zentralen Regeldatei niemand mehr etwas (BAUPLAN 44).
+    const schluessel = [einer.etikett, einer.optional ? 'o' : 'p', wozu].join('\u0000')
+    let gruppe = nachSchluessel.get(schluessel)
+    if (!gruppe) {
+      gruppe = { etikett: einer.etikett, optional: einer.optional, wozu, wer: [] }
+      nachSchluessel.set(schluessel, gruppe)
+      gruppen.push(gruppe)
+    }
+    gruppe.wer.push(einer)
+  }
+  return gruppen
+}
+
 // Der fertige Vorspann eines Blockauftrags — aus den Bausteinen in
 // texte.agentenVorspann zusammengesetzt.
 //
@@ -484,13 +647,22 @@ export function vorspannText(bloecke, pfeile, instanzId) {
   const lage = empfaengerLage(bloecke, pfeile, instanzId)
   let text = v.ueberschrift + v.empfaengerUeberschrift
   if (lage.empfaenger.length)
-    for (const empfaenger of lage.empfaenger) {
-      // Fehlt dem Empfänger-Block ein brauchtWozu zu diesem Etikett
-      // (selbstgebaute Blöcke ohne Angabe), greift der ehrliche Rückfall —
-      // erfunden wird hier nichts.
-      const wozu = empfaenger.wozu ?? v.wozuRueckfall(empfaenger.etikett)
-      const zeile = empfaenger.optional ? v.empfaengerOptional : v.empfaenger
-      text += zeile(bezeichnung(empfaenger), empfaenger.etikett, wozu)
+    // Gleiche Empfänger-Zeilen zusammenfassen (BAUPLAN 44, mitgenommen aus 43):
+    // Die Empfänger-Liste ist die einzige ungedeckelte Angabe des Vorspanns, und
+    // sie steht in JEDEM Anlauf im Auftrag. Mit mehreren benannten Zielen hinter
+    // „Paket schneiden" stünde derselbe „wozu"-Satz mehrfach da. Gebündelt wird
+    // deshalb der SATZ, nie ein Empfänger — sie tragen die
+    // Verantwortungssprache. Erst ab ZWEI Empfängern mit identischem
+    // etikett + optional + wozu greift die Bündelung; darunter bleibt der
+    // Wortlaut Zeichen für Zeichen der bisherige.
+    for (const gruppe of empfaengerGruppen(lage.empfaenger, v)) {
+      if (gruppe.wer.length === 1) {
+        const zeile = gruppe.optional ? v.empfaengerOptional : v.empfaenger
+        text += zeile(bezeichnung(gruppe.wer[0]), gruppe.etikett, gruppe.wozu)
+      } else {
+        const zeile = gruppe.optional ? v.empfaengerMehrereOptional : v.empfaengerMehrere
+        text += zeile(gruppe.wer.map(bezeichnung), gruppe.etikett, gruppe.wozu)
+      }
     }
   // Ohne Empfänger: Verdrängung erklärt sich selbst und schlägt alle anderen
   // Sätze — „keiner davon verlangt eines deiner Etiketten" wäre dort schlicht
@@ -660,6 +832,27 @@ export function budgetNehmen(budget, zielId, standard) {
   if (!zielId || uebrig <= 0) return { erlaubt: false, uebrig: 0, genutzt: standard }
   budget.set(zielId, uebrig - 1)
   return { erlaubt: true, uebrig: uebrig - 1, genutzt: standard - uebrig + 1 }
+}
+
+// Verbrauchte Nachforderungs-Budgets aus dem Laufstand zurücklesen (BAUPLAN 41,
+// seit 44 als reine Funktion, damit die Regel-Prüfungen sie ohne Lauf fahren
+// können). Ohne diesen Weg gewährte jeder App-Neustart jede Nachforderung
+// erneut — der Grundsatz ist „lieber eine Nachforderung zu wenig als eine
+// Endlosschleife".
+//
+// `wert` ist der gespeicherte Eintrag: eine Liste von Instanz-Kennungen (das
+// heutige Format), `true` aus einem Stand von vor Bauschritt 41 (gilt dann
+// vorsichtshalber für JEDEN Block, auf den `gilt` zutrifft) oder nichts.
+// `eintraege` ist die Kette als [{ instanzId, def }]. Liefert die Kennungen,
+// deren Budget verbraucht ist.
+export function budgetAusStand(wert, eintraege, gilt) {
+  const kette = Array.isArray(eintraege) ? eintraege : []
+  if (Array.isArray(wert)) {
+    const bekannt = new Set(kette.map((e) => e.instanzId))
+    return wert.filter((id) => bekannt.has(id))
+  }
+  if (wert === true) return kette.filter((e) => gilt(e.def)).map((e) => e.instanzId)
+  return []
 }
 
 // Wiederaufnahme (BAUPLAN 11/41): Passt ein gespeicherter Laufstand noch zum
