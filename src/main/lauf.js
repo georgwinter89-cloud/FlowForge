@@ -35,6 +35,8 @@ import {
   vorfahrenSortiert,
   vorfahrenDistanzen,
   uebergabenAuswahl,
+  vorspannText,
+  vorspannZeile,
   rueckfuehrungsZiel,
   zwischenBloecke,
   budgetNehmen,
@@ -1257,6 +1259,26 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     const distanzVon = new Map(
       kettenIds.map((id) => [id, vorfahrenDistanzen(workflow.bloecke, workflow.pfeile, id)])
     )
+    // Empfänger im Auftrag (BAUPLAN 43): Der Vorspann jedes Blocks — Empfänger,
+    // Kette, Position — wird EINMAL je Lauf gerechnet, nicht je Anlauf. Er ist
+    // eine reine Funktion aus Blöcken und Pfeilen; einmal gerechnet macht das
+    // sichtbar, statt es nur zu behaupten: Reparatur-Runde, Nachforderung und
+    // Übertrag lesen Wort für Wort denselben Text wie der erste Anlauf.
+    const vorspannVon = new Map(
+      kettenIds.map((id) => [id, vorspannText(workflow.bloecke, workflow.pfeile, id)])
+    )
+    // Dieselbe Angabe als eine Zeile für den Ticker — und damit für den
+    // Laufbericht, dessen Verlauf der Ticker ist. Der zusammengesetzte Auftrag
+    // geht nur an den Motor und wird nirgends aufbewahrt; ohne diese Zeile
+    // könnte Georg nie nachsehen, was FlowForge gerechnet hat, sondern nur aus
+    // dem Verhalten des Agenten raten (Alltagstest BAUPLAN 43).
+    const vorspannZeileVon = new Map(
+      kettenIds.map((id) => [id, vorspannZeile(workflow.bloecke, workflow.pfeile, id)])
+    )
+    // Wie fanOutGemeldet: je Block genau einmal. Der Block-Start läuft nach
+    // sanftem Stopp und Wiederaufnahme erneut durch — der Vorspann ändert sich
+    // dabei nicht und flutete den Ticker sonst mit demselben Text.
+    const vorspannGemeldet = new Set()
 
     // Karten-Zuteilung (BAUPLAN 29): instanzId → Karten-IDs, gefüllt vom
     // Werkzeug karten_zuteilen der Auftragsquellen-Blöcke. Nicht zugeteilte
@@ -1270,20 +1292,27 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     // Seit BAUPLAN 41 ist das der Anzeigename samt Zusatz: Zwei gleiche Blöcke
     // sind damit eindeutig adressierbar; ohne Zusatz bekommen wie bisher alle
     // gleichnamigen Instanzen dieselbe Zuteilung.
+    // Seit BAUPLAN 43 in der Reihenfolge der Kette statt in der zufälligen
+    // Reihenfolge der Tiefensuche: Derselbe Auftrag trägt zwei Listen — vorn im
+    // Vorspann die Empfänger (nur wer wirklich etwas bekommt), hinten hier alle
+    // Nachfahren (alle bekommen Karten). Gleiche Namen und gleiche Reihenfolge
+    // sind das Einzige, was sie mechanisch aufeinander beziehbar macht.
     function nachfahrenNamen(instanzId) {
       const namen = new Map()
+      const nachfahren = new Set()
       const offen = [...(nachfolgerVon.get(instanzId) ?? [])]
-      const besucht = new Set()
       while (offen.length) {
         const id = offen.pop()
-        if (besucht.has(id)) continue
-        besucht.add(id)
-        const name = knoten.get(id)?.name
-        if (name) {
-          if (!namen.has(name)) namen.set(name, [])
-          namen.get(name).push(id)
-        }
+        if (nachfahren.has(id)) continue
+        nachfahren.add(id)
         for (const weiter of nachfolgerVon.get(id) ?? []) offen.push(weiter)
+      }
+      for (const id of kettenIds) {
+        if (!nachfahren.has(id)) continue
+        const name = knoten.get(id)?.name
+        if (!name) continue
+        if (!namen.has(name)) namen.set(name, [])
+        namen.get(name).push(id)
       }
       return namen
     }
@@ -2023,7 +2052,14 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         // Karten-Zuteilung (BAUPLAN 29): Ein zugeteilter Block bekommt nur
         // seine Teilmenge in den Auftrag (die Status-Karte immer) — sonst
         // wie bisher die volle Auswahl.
+        // Empfänger im Auftrag (BAUPLAN 43): Der Vorspann steht GANZ vorn — vor
+        // Karten-Kontext und Übergaben. Er ist die Ortsangabe („wo stehe ich,
+        // wer bekommt meine Lieferung"), alles danach ist Inhalt: Karten,
+        // Übergaben und der Katalog-Auftrag lesen sich erst richtig, wenn klar
+        // ist, für wen gearbeitet wird. Weiter hinten stünde er zwischen zwei
+        // Inhaltsblöcken und läse sich wie ein Nachtrag.
         let auftrag =
+          (vorspannVon.get(k.eintrag.instanzId) ?? '') +
           kartenKontext(projektPfad, kartenFuerBlock(k.eintrag.instanzId)) +
           uebergabenText(k) +
           texte.agentenUebergabe.auftragEinleitung +
@@ -2511,6 +2547,16 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         lauf.aktiveInstanzen.add(eintrag.instanzId)
         senden({ art: 'block', instanzId: eintrag.instanzId })
         tickern(texte.ticker.blockStartet(nummerVon.get(eintrag.instanzId), kette.length, k.name))
+        // Empfänger im Auftrag (BAUPLAN 43): Was FlowForge diesem Block über
+        // seinen Platz im Schaubild sagt, steht damit auch im Ticker und im
+        // Laufbericht — Wort für Wort derselbe Text, den der Agent vorn in
+        // seinem Auftrag liest. Der Wortlaut kommt unverändert aus
+        // texte.agentenVorspann; hier wird nichts formuliert.
+        if (!vorspannGemeldet.has(eintrag.instanzId)) {
+          vorspannGemeldet.add(eintrag.instanzId)
+          const zeile = vorspannZeileVon.get(eintrag.instanzId)
+          if (zeile) tickern(zeile)
+        }
         // Audit (BAUPLAN 25): volle Lesetiefe, bewusst teuer — die
         // Kosten-Folge steht sichtbar am Start im Ticker.
         if (k.def.audit) tickern(texte.ticker.auditKostenHinweis)

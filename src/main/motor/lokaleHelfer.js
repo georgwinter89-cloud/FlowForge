@@ -33,6 +33,7 @@
 // erprobbar, wie es die Bauplan-Regel für neue Bausteine verlangt.
 import fs from 'node:fs'
 import path from 'node:path'
+import { texte } from '../../shared/texte.js'
 
 // Standard-Adresse: Ollama auf diesem Rechner. Über die Einstellungen ist auch
 // ein anderer Rechner im Heimnetz möglich (z.B. ein Gaming-PC mit richtiger
@@ -479,21 +480,11 @@ export function lokalRecherchieren({ projektPfad, auftrag, modell, adresse = STA
 // — dann spart sich FlowForge die Nachprüfung.
 export async function lokalReparieren({ projektPfad, auftrag, modell, adresse = STANDARD_ADRESSE, aufSchritt, aufDenken }) {
   const nachrichten = [
-    {
-      role: 'system',
-      content:
-        'Du bist ein Reparatur-Helfer in einem Projektordner. Du arbeitest allein: ' +
-        'Rückfragen werden nie beantwortet — arbeite mit dem, was der Auftrag nennt, und ' +
-        'schreibe Unklares in deinen Bericht statt zu fragen. Du bekommst Beanstandungen ' +
-        'eines Prüfers und behebst GENAU diese — nicht mehr, keine Verschönerungen, keine ' +
-        'neuen Dateien. Finde die betroffenen Stellen mit suchen und datei_lesen, und ' +
-        'behebe sie mit dem Werkzeug ersetzen: Der alt-Text muss ZEICHENGENAU so in der ' +
-        'Datei stehen (samt Einrückung) und eindeutig sein — nimm zur Not umgebende ' +
-        'Zeilen dazu. Lies eine Stelle immer erst mit datei_lesen, bevor du sie ersetzt. ' +
-        'Wenn du fertig bist, antworte OHNE weiteren Werkzeugaufruf mit einer kurzen ' +
-        'Liste auf Deutsch: was du wo ersetzt hast. Kannst du eine Stelle nicht finden ' +
-        'oder nicht beheben, schreibe genau das — erfinde nichts.'
-    },
+    // Empfänger im Auftrag (BAUPLAN 43): Der System-Text liegt jetzt zentral in
+    // texte.js — inline nannte er einen Blocknamen, während der Auftrag darunter
+    // (reparaturAuftrag) schon entnamentlicht war, und die Inventur-Prüfung
+    // konnte ihn hier gar nicht sehen.
+    { role: 'system', content: texte.agentenLokaleHelfer.reparaturSystem },
     { role: 'user', content: String(auftrag ?? '') }
   ]
   const zaehler = { ersetzungen: 0 }

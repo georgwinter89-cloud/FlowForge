@@ -1339,6 +1339,12 @@ Zusammengehöriges nimmt.)
   (`paket_melden`) in mindestens einem Zuschnitt vorkommt und ob jedes benannte Ziel
   eines bekommen hat. Fehlt etwas, greift das Nachforderungs-Muster: Der Block läuft
   einmal kurz erneut und trägt nur nach.
+- **Mitzunehmen aus Schritt 43:** Die Empfänger-Liste des Auftrags-Vorspanns ist als
+  einzige seiner Angaben ungedeckelt (Kettenzeile und Nachfahren-Aufzählung sind es).
+  Solange ein Block wenige Empfänger hat, ist das wahrer Inhalt; mit mehreren benannten
+  Zielen hinter Paket schneiden wächst sie spürbar (gemessen: 15 Empfänger desselben
+  Etiketts ≈ 3.600 Zeichen, in jedem Anlauf). Naheliegend ist, gleiche „wozu"-Sätze
+  zusammenzufassen statt Empfänger wegzulassen — sie tragen die Verantwortungssprache.
 - Nachzuziehen: SPEC §4.3 (Zuschnitt je Ziel, Datenvertrag), §4.1 (Vollständigkeit),
   §7 (Dateiliste als Sperre, samt Grenze).
 **Alltagstest:** Georg legt drei benannte Bauer hinter Paket schneiden und startet:

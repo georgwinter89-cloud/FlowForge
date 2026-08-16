@@ -20,6 +20,10 @@ export const BLOCK_SYMBOL_STANDARD = '🧱'
 // Bereich (Bibliotheks-Klappe, BAUPLAN 30): Katalog-Schlüssel, „eigene" oder
 // ein frei eingetippter Name — die Länge gilt für den freien Namen.
 export const BEREICH_MAX = 30
+// Empfänger im Auftrag (BAUPLAN 43, „Kein Kennzeichen ohne Editor-Feld"):
+// je braucht-Etikett ein Satz aus der Sicht dieses Blocks. Er steht später im
+// Auftrag des LIEFERNDEN Blocks hinter „Er …" — deshalb ein Satz, nicht mehr.
+export const BRAUCHT_WOZU_MAX = 200
 
 // Bereich normalisieren: trimmen, Mehrfach-Leerzeichen zusammenziehen;
 // leer/fehlend → BEREICH_EIGENE. Tippt der Nutzer den Anzeigenamen einer
@@ -56,6 +60,27 @@ function pruefeEtiketten(roh, label) {
   return { etiketten }
 }
 
+// Das „wozu" je braucht-Etikett (BAUPLAN 43): Nur Sätze zu Etiketten, die der
+// Block wirklich braucht — sonst wüchsen beim Umbenennen eines Etiketts stille
+// Karteileichen mit. Leere Angaben fallen raus; dort greift im Vorspann der
+// ehrliche Rückfall-Satz. Der Schlusspunkt wird abgeschnitten, weil FlowForge
+// ihn selbst setzt („Er misst …."). Liefert { fehler } oder { brauchtWozu }.
+function pruefeBrauchtWozu(roh, etiketten) {
+  const brauchtWozu = {}
+  for (const etikett of etiketten) {
+    const satz = String(roh?.[etikett] ?? '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .replace(/\.+$/, '')
+      .trim()
+    if (!satz) continue
+    if (satz.length > BRAUCHT_WOZU_MAX)
+      return { fehler: texte.blockRegeln.brauchtWozuZuLang(etikett, BRAUCHT_WOZU_MAX) }
+    brauchtWozu[etikett] = satz
+  }
+  return { brauchtWozu }
+}
+
 // Prüft und normalisiert einen eigenen Block — liefert { fehler } oder
 // { block } (ohne id; die vergibt der Hauptprozess). Alle Felder, über die
 // Leinwand, Regeln und Lauf iterieren, sind danach garantiert gesetzt.
@@ -81,6 +106,9 @@ export function pruefeEigenenBlock(roh) {
   // Bereich (BAUPLAN 30): Altbestand ohne Feld landet unter „Eigene".
   const bereich = pruefeBereich(roh?.bereich)
   if (bereich.fehler) return { fehler: bereich.fehler }
+  // Empfänger im Auftrag (BAUPLAN 43): das „wozu" je braucht-Etikett.
+  const wozu = pruefeBrauchtWozu(roh?.brauchtWozu, braucht.etiketten)
+  if (wozu.fehler) return { fehler: wozu.fehler }
   return {
     block: {
       name,
@@ -88,6 +116,7 @@ export function pruefeEigenenBlock(roh) {
       beschreibung,
       auftrag,
       braucht: braucht.etiketten,
+      brauchtWozu: wozu.brauchtWozu,
       liefert: liefert.etiketten,
       bereich: bereich.bereich,
       // Modellklasse (BAUPLAN 37): Voreinstellung des eigenen Blocks — die

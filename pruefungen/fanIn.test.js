@@ -100,10 +100,13 @@ describe('BAUPLAN 40 · Blöcke, die zusammenführen, nehmen alles', () => {
 
 describe('BAUPLAN 40 · Die braucht-Chips zeigen, was der Lauf wirklich tut', () => {
   // Zwei Angreifer hintereinander vor dem Bauer: verschiedene Distanz.
+  // Zusatznamen seit BAUPLAN 43: Der Chip nennt den ANZEIGENAMEN — bis dahin
+  // stand am Bauer zweimal derselbe „Angreifer" zur Auswahl, und man sah nicht,
+  // welcher der beiden gewonnen hatte.
   const bloecke = [
     { instanzId: 'paket', blockId: 'paket-schneiden' },
-    { instanzId: 'a1', blockId: 'angreifer' },
-    { instanzId: 'a2', blockId: 'angreifer' },
+    { instanzId: 'a1', blockId: 'angreifer', zusatz: 'weit' },
+    { instanzId: 'a2', blockId: 'angreifer', zusatz: 'nah' },
     { instanzId: 'bauer', blockId: 'bauer' }
   ]
   const pfeile = [
@@ -114,7 +117,7 @@ describe('BAUPLAN 40 · Die braucht-Chips zeigen, was der Lauf wirklich tut', ()
 
   it('nennt nur den näheren Lieferanten — wie die Übergabe im Lauf', () => {
     const herkunft = brauchtHerkunft(bloecke, pfeile, 'bauer')
-    expect(herkunft.get('Angriffsliste')).toEqual(['Angreifer'])
+    expect(herkunft.get('Angriffsliste')).toEqual(['Angreifer · nah'])
     expect(herkunft.get('Arbeitspaket')).toEqual(['Paket schneiden'])
   })
 

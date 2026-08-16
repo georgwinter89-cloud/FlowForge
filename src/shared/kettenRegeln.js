@@ -4,7 +4,7 @@
 // Arbeitsauftrag mit Feldwerten. Geprüft wird im Hauptprozess; die Oberfläche
 // nutzt dieselben Regeln für sofortige Rückmeldung beim Verbinden.
 import { texte } from './texte.js'
-import { blockDefinition, zusatznameBereinigen } from './blockKatalog.js'
+import { blockDefinition, blockAnzeigeName, zusatznameBereinigen } from './blockKatalog.js'
 
 function blockName(bloecke, instanzId) {
   const eintrag = bloecke.find((b) => b.instanzId === instanzId)
@@ -175,7 +175,11 @@ export function brauchtHerkunft(bloecke, pfeile, instanzId) {
     const vDef = blockDefinition(vorfahre.blockId)
     if (!vDef) continue
     lieferungen.push({
-      name: vDef.name,
+      // Anzeigename statt Katalogname (BAUPLAN 43): Zwei Prüfer hießen im Chip
+      // wie im Vorspann beide „Prüfer" — mit Zusatznamen sind sie unterscheidbar
+      // („Prüfer · UI"). Die Signatur bleibt gleich, Leinwand.jsx merkt nur den
+      // besseren Namen.
+      name: blockAnzeigeName(vDef, vorfahre),
       naehe: distanz.get(vorfahre.instanzId) ?? Number.MAX_SAFE_INTEGER,
       liefert: vDef.liefert
     })
@@ -187,6 +191,360 @@ export function brauchtHerkunft(bloecke, pfeile, instanzId) {
       gruppe.angekommen.map((l) => l.name)
     )
   return herkunft
+}
+
+// ── Empfänger im Auftrag (BAUPLAN 43) ───────────────────────────────────────
+// FlowForge stellt jedem Blockauftrag drei aus dem Schaubild gerechnete Angaben
+// voran: WER bekommt, was dieser Block liefert (Block, Etikett, wozu), die Kette
+// in einer Zeile und die Position. Quelle sind ausschließlich Blöcke und Pfeile
+// — kein Laufstatus, keine Lieferung, kein Koordinator: Der Auftrag wird bei
+// JEDEM Anlauf desselben Blocks neu gebaut (Reparatur-Runde, Nachforderung,
+// Übertrag), und er muss Wort für Wort gleich bleiben. Deshalb sind die
+// Funktionen hier rein und ausschließlich aus (bloecke, pfeile, instanzId).
+
+// Alle Nachfahren einer Karte entlang der Pfeile, topologisch sortiert.
+// Gegenstück zu vorfahrenSortiert.
+function nachfahrenSortiert(bloecke, pfeile, instanzId) {
+  const { nachfolger } = nachbarn(bloecke, pfeile)
+  const gefunden = new Set()
+  const stapel = [...(nachfolger.get(instanzId) ?? [])]
+  while (stapel.length) {
+    const id = stapel.pop()
+    if (gefunden.has(id)) continue
+    gefunden.add(id)
+    stapel.push(...(nachfolger.get(id) ?? []))
+  }
+  return topologisch(bloecke, pfeile).filter((b) => gefunden.has(b.instanzId))
+}
+
+// Nummer und Anzeigename jeder Karte — die eine Stelle, an der beides zusammen
+// gerechnet wird. Die Nummer ist die topologische Reihenfolge (dieselbe, die der
+// Lauf und der Ticker verwenden), der Name der Anzeigename samt Zusatz
+// (BAUPLAN 41) — sonst hießen zwei Prüfer im Vorspann beide „Prüfer".
+function kennungen(bloecke, pfeile) {
+  const reihenfolge = topologisch(bloecke, pfeile)
+  const kennung = new Map(
+    reihenfolge.map((b, idx) => [
+      b.instanzId,
+      { instanzId: b.instanzId, nummer: idx + 1, name: blockAnzeigeName(blockDefinition(b.blockId), b) }
+    ])
+  )
+  return kennung
+}
+
+// Wer bekommt wirklich, was dieser Block liefert? Reine Daten, keine Texte.
+//
+// Nicht „alle Nachfahren mit passendem braucht": Die Distanz-Regel wirft
+// Lieferungen weg (uebergabenAuswahl) — liegt ein zweiter Lieferant desselben
+// Etiketts näher am Nachfahren, kommt diese Lieferung dort NICHT an. Deshalb
+// wird für JEDEN Nachfahren einmal dieselbe Auswahl über den statischen Graphen
+// gefahren und geprüft, ob dieser Block in `angekommen` oder in `verdraengt`
+// steht. Nur so sagt der Vorspann dasselbe, was der Lauf später tut.
+//
+// Liefert:
+//   nummer, gesamt          — Ort im Schaubild (topologische Reihenfolge)
+//   empfaenger[]            — { instanzId, nummer, name, etikett, optional, wozu }
+//   verdraengt[]            — { etikett, gewinner: [{ nummer, name }] }
+//   nachfahren[]            — { instanzId, nummer, name } (für den Fall
+//                             „niemand braucht deine Etiketten, obwohl da wer ist")
+export function empfaengerLage(bloecke, pfeile, instanzId) {
+  const kennungVon = kennungen(bloecke, pfeile)
+  const kennung = (id) => kennungVon.get(id) ?? { instanzId: id, nummer: 0, name: '?' }
+  const lage = {
+    nummer: kennungVon.get(instanzId)?.nummer ?? 0,
+    gesamt: bloecke.length,
+    empfaenger: [],
+    verdraengt: [],
+    nachfahren: []
+  }
+  const eintrag = bloecke.find((b) => b.instanzId === instanzId)
+  const def = blockDefinition(eintrag?.blockId)
+  if (!def) return lage
+  const nachfahren = nachfahrenSortiert(bloecke, pfeile, instanzId)
+  lage.nachfahren = nachfahren.map((b) => kennung(b.instanzId))
+  // Etikett → instanzId → Gewinner-Kennung. Gesammelt wird über ALLE Nachfahren,
+  // gemeldet nur, was nirgends angekommen ist (siehe unten).
+  const verdraengtVon = new Map()
+  const angekommen = new Set()
+  for (const nachfahre of nachfahren) {
+    const nDef = blockDefinition(nachfahre.blockId)
+    if (!nDef) continue
+    const distanz = vorfahrenDistanzen(bloecke, pfeile, nachfahre.instanzId)
+    const lieferungen = []
+    for (const vorfahre of vorfahrenSortiert(bloecke, pfeile, nachfahre.instanzId)) {
+      const vDef = blockDefinition(vorfahre.blockId)
+      if (!vDef) continue
+      lieferungen.push({
+        ...kennung(vorfahre.instanzId),
+        naehe: distanz.get(vorfahre.instanzId) ?? Number.MAX_SAFE_INTEGER,
+        liefert: vDef.liefert
+      })
+    }
+    for (const gruppe of uebergabenAuswahl(nDef, lieferungen).gruppen) {
+      if (gruppe.angekommen.some((l) => l.instanzId === instanzId)) {
+        angekommen.add(gruppe.etikett)
+        lage.empfaenger.push({
+          ...kennung(nachfahre.instanzId),
+          etikett: gruppe.etikett,
+          // Optionale Bedarfe brauchen eine eigene Sprache: Der Empfänger
+          // verlangt nichts — „er misst deine Arbeit daran" wäre gelogen.
+          optional: !(nDef.braucht ?? []).includes(gruppe.etikett),
+          wozu: nDef.brauchtWozu?.[gruppe.etikett] ?? null
+        })
+      } else if (gruppe.verdraengt.some((l) => l.instanzId === instanzId)) {
+        if (!verdraengtVon.has(gruppe.etikett)) verdraengtVon.set(gruppe.etikett, new Map())
+        for (const gewinner of gruppe.angekommen)
+          verdraengtVon.get(gruppe.etikett).set(gewinner.instanzId, kennung(gewinner.instanzId))
+      }
+    }
+  }
+  // Verdrängung nur melden, wenn dieses Etikett bei KEINEM Nachfahren ankommt —
+  // sonst behauptete der Vorspann „kommt bei niemandem an", obwohl es das tut.
+  for (const [etikett, gewinner] of verdraengtVon)
+    if (!angekommen.has(etikett)) lage.verdraengt.push({ etikett, gewinner: [...gewinner.values()] })
+  return lage
+}
+
+// Deckel für die Kettenzeile: Ein Schaubild mit 40 Blöcken ergäbe sonst eine
+// Zeile, die niemand liest — und sie stünde in JEDEM Auftrag.
+export const KETTE_MAX_BLOECKE = 12
+
+// Die Kette in EINER Zeile — verzweigungstreu.
+//
+// Die topologische Reihenfolge allein wäre eine Lüge: Aus zwei parallelen
+// Prüfern würde „Prüfer → Prüfer", also einer, der den anderen prüft. Gerechnet
+// wird deshalb die Ebene aus dem LÄNGSTEN Weg von vorn; Blöcke derselben Ebene
+// stehen nebeneinander in geschweiften Klammern:
+//   1 Paket schneiden → 2 Bauer → {3 Prüfer · UI | 4 Prüfer · Motor} → 5 Sessionende
+// Bei mehr als KETTE_MAX_BLOECKE Blöcken bleiben Anfang und Ende stehen, die
+// Mitte wird zu „…" — der Sprung in den Blocknummern sagt genau, was fehlt.
+// Auch eine EINZELNE Ebene kann zu breit sein (zwanzig parallele Prüfer, oder
+// acht Blöcke nebeneinander gleich am Anfang): Dann wird sie in sich gekürzt,
+// statt den Rest zu fressen oder selbst wegzufallen — sonst hielte der Deckel
+// genau dort nicht, wo man ihn braucht.
+//
+// `instanzId` ist der Block, der diese Zeile LIEST. Er darf in seiner eigenen
+// Kette nie fehlen: Vorher konnte im Auftrag „… → 11 → … → 20" stehen, während
+// eine Zeile tiefer „Du bist Block 15 von 20" behauptet wurde. Seine Ebene
+// bleibt deshalb immer stehen, und das übrige Budget geht zuerst an die Ebenen
+// in seiner Nähe. Das allein reicht nicht: Ist seine Ebene selbst zu breit
+// (sechs parallele Bauer), wird sie in sich gekürzt — deshalb bekommt auch
+// ebeneGekuerzt den eigenen Eintrag mit und behält ihn wie Anfang und Ende.
+// Ohne instanzId (Vorschau, Prüfung) wird wie bisher von vorn aufgefüllt.
+export function kettenZeile(bloecke, pfeile, instanzId = null) {
+  const reihenfolge = topologisch(bloecke, pfeile)
+  if (reihenfolge.length === 0) return ''
+  const kennungVon = kennungen(bloecke, pfeile)
+  const { vorgaenger } = nachbarn(bloecke, pfeile)
+  const ebeneVon = new Map()
+  // Topologisch heißt: Alle Vorgänger sind schon gerechnet, wenn der Block dran ist.
+  for (const block of reihenfolge) {
+    const vor = vorgaenger.get(block.instanzId) ?? []
+    const ebene = vor.length ? Math.max(...vor.map((id) => ebeneVon.get(id) ?? 0)) + 1 : 0
+    ebeneVon.set(block.instanzId, ebene)
+  }
+  // Ein Eintrag ist „Nummer Name" — die Nummern sind eindeutig, ein Eintrag also
+  // auch. Deshalb genügt der Eintrag des lesenden Blocks, um ihn beim Kürzen
+  // innerhalb seiner Ebene wiederzufinden.
+  const eintragVon = (kennung) => `${kennung.nummer} ${kennung.name}`
+  const ebenen = []
+  for (const block of reihenfolge) {
+    const ebene = ebeneVon.get(block.instanzId)
+    if (!ebenen[ebene]) ebenen[ebene] = []
+    ebenen[ebene].push(eintragVon(kennungVon.get(block.instanzId)))
+  }
+  const stueck = (ebene) => (ebene.length === 1 ? ebene[0] : `{${ebene.join(' | ')}}`)
+  if (reihenfolge.length <= KETTE_MAX_BLOECKE) return ebenen.map(stueck).join(' → ')
+  // Gesetzte Ebenen: die erste, die letzte und die des lesenden Blocks. Sie
+  // stehen immer — jede höchstens mit ihrem gleichen Anteil am Deckel, in sich
+  // gekürzt. Ohne diese Grenze fraß eine breite Ebene das ganze Budget, die
+  // Schleife brach ab, und ausgerechnet die Blöcke, die den Ort erklären,
+  // fielen weg — in beide Richtungen (BAUPLAN 43).
+  const eigeneEbene = ebeneVon.has(instanzId) ? ebeneVon.get(instanzId) : null
+  const eigenerEintrag =
+    eigeneEbene === null ? null : eintragVon(kennungVon.get(instanzId))
+  const gesetzt = [...new Set([0, ebenen.length - 1, ...(eigeneEbene === null ? [] : [eigeneEbene])])]
+  const anteil = Math.max(2, Math.floor(KETTE_MAX_BLOECKE / gesetzt.length))
+  const gezeigt = new Map()
+  let budget = KETTE_MAX_BLOECKE
+  for (const i of gesetzt) {
+    // Der eigene Eintrag geht mit: Seine Ebene stehen zu lassen genügt nicht,
+    // wenn sie in sich gekürzt wird — genau dann fiel der lesende Block wieder
+    // heraus (BAUPLAN 43).
+    const gekuerzt = ebeneGekuerzt(ebenen[i], anteil, eigenerEintrag)
+    gezeigt.set(i, gekuerzt.eintraege)
+    budget -= gekuerzt.anzahl
+  }
+  budget = Math.max(0, budget)
+  // Der Rest des Budgets geht an die Ebenen um den lesenden Block herum (ohne
+  // ihn: an die vorderen). Passt eine nicht mehr, hören wir auf — die
+  // dahinter liegenden sind noch weiter weg und noch weniger wert.
+  const uebrige = ebenen.map((_, i) => i).filter((i) => !gezeigt.has(i))
+  if (eigeneEbene !== null)
+    uebrige.sort((a, b) => Math.abs(a - eigeneEbene) - Math.abs(b - eigeneEbene) || a - b)
+  for (const i of uebrige) {
+    if (ebenen[i].length > budget) break
+    budget -= ebenen[i].length
+    gezeigt.set(i, ebenen[i])
+  }
+  // Ausgegeben wird in Schaubild-Reihenfolge; jede Lücke wird zu genau einem
+  // „…". Eine bloß in sich gekürzte Ebene trägt ihr eigenes „…" schon mit.
+  const teile = []
+  let luecke = false
+  for (let i = 0; i < ebenen.length; i++) {
+    if (!gezeigt.has(i)) {
+      luecke = true
+      continue
+    }
+    if (luecke) teile.push('…')
+    luecke = false
+    teile.push(stueck(gezeigt.get(i)))
+  }
+  return teile.join(' → ')
+}
+
+// Eine Ebene, die allein schon breiter ist als ihr Anteil am Deckel, wird in
+// sich gekürzt: Anfang und Ende bleiben stehen, die Mitte wird zu „…" — genau
+// die Zusage, die die Kettenzeile für das Ganze macht. `anzahl` zählt die echten
+// Blöcke (ohne das „…"), damit das Budget der vorderen Ebenen stimmt.
+//
+// `eigen` ist der Eintrag des lesenden Blocks, falls er auf dieser Ebene steht.
+// Er bleibt wie Anfang und Ende IMMER stehen: Die Ebene bloß nicht wegzuwerfen
+// reichte nicht — stand der Lesende in ihrer Mitte, kürzte ihn genau diese
+// Funktion wieder heraus, während die Positionszeile darunter seine Nummer
+// nannte (BAUPLAN 43). Was danach vom Anteil übrig ist, geht an seine Nachbarn:
+// Wer neben ihm steht, erklärt seinen Ort am besten.
+function ebeneGekuerzt(ebene, max, eigen = null) {
+  if (ebene.length <= max) return { eintraege: ebene, anzahl: ebene.length }
+  const eigenerIndex = eigen === null ? -1 : ebene.indexOf(eigen)
+  const behalten = new Set([0, ebene.length - 1])
+  if (eigenerIndex >= 0) behalten.add(eigenerIndex)
+  const uebrige = ebene
+    .map((_, i) => i)
+    .filter((i) => !behalten.has(i))
+    .sort((a, b) =>
+      eigenerIndex >= 0 ? Math.abs(a - eigenerIndex) - Math.abs(b - eigenerIndex) || a - b : a - b
+    )
+  for (const i of uebrige) {
+    if (behalten.size >= max) break
+    behalten.add(i)
+  }
+  // Ausgegeben wird in Ebenen-Reihenfolge; jede Lücke wird zu genau einem „…".
+  const eintraege = []
+  let luecke = false
+  for (let i = 0; i < ebene.length; i++) {
+    if (!behalten.has(i)) {
+      luecke = true
+      continue
+    }
+    if (luecke) eintraege.push('…')
+    luecke = false
+    eintraege.push(ebene[i])
+  }
+  return { eintraege, anzahl: behalten.size }
+}
+
+// Aufzählung in Alltagssprache: „A", „A und B", „A, B und C".
+function aufzaehlung(stuecke) {
+  if (stuecke.length <= 1) return stuecke[0] ?? ''
+  return stuecke.slice(0, -1).join(', ') + ' und ' + stuecke[stuecke.length - 1]
+}
+
+// Deckel für die Nachfahren-Aufzählung im Vorspann: So viele Namen werden
+// genannt, der Rest nur gezählt.
+export const NACHFAHREN_MAX_NAMEN = 4
+
+// Dieselbe Aufzählung, aber gedeckelt: „A, B, C, D und 35 weitere". Ohne den
+// Deckel wuchs dieser eine Satz mit dem Schaubild (bei 40 Blöcken 39 Namen,
+// rund 1.100 Zeichen) — und er steht in JEDEM Anlauf des Blocks erneut im
+// Auftrag. Genannt werden die ersten Namen; die Zahl dahinter ist ehrlich, es
+// verschwindet nichts stillschweigend (BAUPLAN 43).
+function aufzaehlungGedeckelt(stuecke, max = NACHFAHREN_MAX_NAMEN) {
+  if (stuecke.length <= max) return aufzaehlung(stuecke)
+  return aufzaehlung([
+    ...stuecke.slice(0, max),
+    texte.agentenVorspann.weitereBloecke(stuecke.length - max)
+  ])
+}
+
+// Der fertige Vorspann eines Blockauftrags — aus den Bausteinen in
+// texte.agentenVorspann zusammengesetzt.
+//
+// Formulierungsregel, verbindlich: Die Verantwortungssprache steckt
+// ausschließlich in den Empfänger-Zeilen („Er misst deine Arbeit an …"). Kette
+// und Position sind reine Ortsangaben — nie „danach kommt noch wer", sonst
+// schiebt der Agent seine Verantwortung weiter. Bei genau EINEM Block im
+// Schaubild (Ein-Block-Lauf, Sonderlauf) entfallen Kette und Position ganz.
+export function vorspannText(bloecke, pfeile, instanzId) {
+  const eintrag = bloecke.find((b) => b.instanzId === instanzId)
+  const def = blockDefinition(eintrag?.blockId)
+  if (!def) return ''
+  const v = texte.agentenVorspann
+  const bezeichnung = (k) => texte.ticker.blockBezeichnung(k.nummer, k.name)
+  const lage = empfaengerLage(bloecke, pfeile, instanzId)
+  let text = v.ueberschrift + v.empfaengerUeberschrift
+  if (lage.empfaenger.length)
+    for (const empfaenger of lage.empfaenger) {
+      // Fehlt dem Empfänger-Block ein brauchtWozu zu diesem Etikett
+      // (selbstgebaute Blöcke ohne Angabe), greift der ehrliche Rückfall —
+      // erfunden wird hier nichts.
+      const wozu = empfaenger.wozu ?? v.wozuRueckfall(empfaenger.etikett)
+      const zeile = empfaenger.optional ? v.empfaengerOptional : v.empfaenger
+      text += zeile(bezeichnung(empfaenger), empfaenger.etikett, wozu)
+    }
+  // Ohne Empfänger: Verdrängung erklärt sich selbst und schlägt alle anderen
+  // Sätze — „keiner davon verlangt eines deiner Etiketten" wäre dort schlicht
+  // falsch, denn verlangt wird es sehr wohl, nur von einem Näheren geliefert.
+  else if (!lage.verdraengt.length) {
+    // Drei verschiedene Wahrheiten, und nur die Reihenfolge hier hält sie
+    // auseinander:
+    //   kein Nachfahre       → „du bist der letzte Schritt" (stimmt).
+    //   keine liefert-Etiketten (Sessionende, Karten-Probe, Rechte-Probe, jeder
+    //     selbstgebaute Block ohne Etikett), aber es liegt noch etwas dahinter →
+    //     der Tippfehler-Hinweis wäre eine Schnitzeljagd nach einem Etikett, das
+    //     es gar nicht gibt.
+    //   Etiketten da, Nachfahren da, keiner will sie → genau der Tippfehler-Fall
+    //     selbstgebauter Blöcke (BAUPLAN 43, KLEIN 15).
+    if (!lage.nachfahren.length) text += v.keiner
+    else if (!(def.liefert ?? []).length) text += v.ohneEtiketten
+    // Gedeckelt: Der Satz soll ein vertipptes Etikett sichtbar machen, nicht das
+    // halbe Schaubild abschreiben — bei 40 Blöcken standen hier 39 Namen, in
+    // JEDEM Anlauf dieses Blocks erneut.
+    else text += v.keinerTrotzNachfahren(aufzaehlungGedeckelt(lage.nachfahren.map(bezeichnung)))
+  }
+  for (const verloren of lage.verdraengt)
+    text += v.verdraengt(verloren.etikett, aufzaehlung(verloren.gewinner.map(bezeichnung)))
+  // Vierte Angabe für Prüf-Blöcke: Wohin die Kritik bei „fehlgeschlagen" geht,
+  // weiß nur das Schaubild — die gespeicherte Wahl „zurück zu", sonst der
+  // nächste Vorfahre. Kein Katalogtext kann das wissen.
+  if (def.prueft) {
+    const zielId = rueckfuehrungsZiel(bloecke, pfeile, instanzId)
+    if (zielId) text += v.rueckfuehrung(bezeichnung(kennungen(bloecke, pfeile).get(zielId)))
+  }
+  if (bloecke.length <= 1) text += v.einzelblock
+  // Die Kette bekommt den lesenden Block mit: Sonst konnte sie ihn wegkürzen,
+  // während die Positionszeile darunter seine Nummer nennt (BAUPLAN 43).
+  else
+    text += v.kette(kettenZeile(bloecke, pfeile, instanzId)) + v.position(lage.nummer, lage.gesamt)
+  // Die Bausteine sind Zeilen (je ein \n) — der Auftrag trennt seine Abschnitte
+  // durch eine Leerzeile. Nur Fuge, kein Text: Der Karten-Kontext klebte sonst
+  // an der Positionszeile.
+  return text + '\n'
+}
+
+// Derselbe Vorspann als EINE Zeile — für den Ticker und damit für den
+// Laufbericht: Dessen Verlauf IST der Ticker.
+//
+// Ohne das steht der Vorspann ausschließlich im Prompt des Agenten, und den
+// bewahrt niemand auf: Der zusammengesetzte Auftrag geht an den Motor, das
+// Berichtsobjekt kennt ihn nicht, und die Block-Vorschau zeigt nur den
+// Katalog-Auftrag. Georg könnte das gebaute Verhalten dann nur am Verhalten des
+// Agenten erraten — der Alltagstest dieses Bauschritts („im Laufbericht steht
+// ‚geht an niemanden — du bist der letzte Schritt'") wäre nicht durchführbar.
+// Kein eigener Wortlaut: exakt die Bausteine aus texte.agentenVorspann, nur
+// ohne Zeilenumbrüche — eine Ticker-Zeile ist eine Zeile.
+export function vorspannZeile(bloecke, pfeile, instanzId) {
+  return vorspannText(bloecke, pfeile, instanzId).replace(/\s+/g, ' ').trim()
 }
 
 // Schaubild-Regeln beim Bearbeiten — liefert null oder eine Fehlermeldung.

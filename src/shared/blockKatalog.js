@@ -17,7 +17,23 @@
 //
 // brauchtOptional (seit Bauschritt 9): Übergaben, die der Block nutzt, wenn ein
 // Block davor sie liefert — aber nicht verlangt (die Steck-Regel prüft nur braucht).
-// So kommt der Bauer in „Bug jagen" ohne Angreifer aus.
+// So kommt „Bug jagen" ohne Angriffsliste aus.
+//
+// brauchtWozu (Empfänger im Auftrag, BAUPLAN 43): je braucht- bzw.
+// brauchtOptional-Etikett EIN Satz — formuliert aus der Sicht des Blocks, der
+// das Etikett BRAUCHT, und gelesen wird er vom Block, der es LIEFERT. FlowForge
+// setzt ihn im Auftrags-Vorspann hinter „Er …": aus
+// { 'Umsetzungsbericht': 'misst deine Arbeit an …' } wird beim Lieferanten
+// „Block 4 „Prüfer" bekommt deine Lieferung „Umsetzungsbericht". Er misst deine
+// Arbeit an …". Deshalb beginnt jeder Satz mit einem Verb in der 3. Person und
+// endet ohne Punkt. Fehlt ein Eintrag (selbstgebaute Blöcke ohne Angabe),
+// greift der ehrliche Rückfall texte.agentenVorspann.wozuRueckfall — hier wird
+// nichts erfunden. Pflegbar ist das Feld im Block-Editor (Schritt 2).
+//
+// Genau darin steckt die Information, die seit Bauschritt 43 aus den Aufträgen
+// verschwunden ist: Kein Auftrag nennt mehr einen anderen Block beim Namen —
+// das Schaubild sagt, wer wirklich hinter einem liegt, der Katalog nur noch,
+// wozu ein Etikett gebraucht wird.
 //
 // erzeugtAufgaben (seit Bauschritt 9): Der Block legt selbst Aufgaben-Karten an
 // (Spec-Interview). Er zählt damit als Auftragsquelle für spätere Blöcke, und
@@ -172,7 +188,7 @@ export const BLOCK_KATALOG = [
       'karten_uebersicht. Du darfst nichts verändern — nur lesen: Rein lesende Befehle ' +
       '(Ordner auflisten, suchen, Dateien ansehen) laufen durch; Programme oder Tests ' +
       'auszuführen ist für diesen Block gesperrt — versuche es gar nicht erst. ' +
-      'Deine Meldung ist die Übergabe an die folgenden Blöcke: Ins Feld inhalt gehört der ' +
+      'Ins Feld inhalt deiner Meldung gehört der ' +
       'Projekt-Überblick, kompakt (höchstens etwa 30 Zeilen) und mit diesen Punkten: ' +
       '1. Was für ein Projekt das ist und wie es aufgebaut ist. ' +
       '2. Womit es gebaut, getestet und gestartet wird (falls erkennbar). ' +
@@ -239,7 +255,7 @@ export const BLOCK_KATALOG = [
       'fokussierte Karten als eine lange. Jede Karte bekommt ein thema (kurzes Schlagwort): ' +
       'Bündle die Karten in 3 bis 6 Themen — nicht mehr; sie sind die Ordnung der ' +
       'Karten-Seitenleiste. Dateien im Projektordner fasst du nicht an. ' +
-      'Ins Feld inhalt deiner Meldung gehört der Projekt-Überblick für die folgenden Blöcke — ' +
+      'Ins Feld inhalt deiner Meldung gehört der Projekt-Überblick — ' +
       'kompakt (höchstens etwa 25 Zeilen): 1. Was gebaut wird und für wen. 2. Der Kernablauf. ' +
       '3. Was bewusst draußen bleibt. 4. Die angelegten Aufgaben in der geplanten Reihenfolge.'
   },
@@ -253,7 +269,21 @@ export const BLOCK_KATALOG = [
     braucht: [],
     // Liegt ein Projekt-Überblick vor (z.B. vom Spec-Interview), wird er
     // mitgereicht — verlangt wird er nicht: Der Block liest selbst (12.08.2026).
-    brauchtOptional: ['Projekt-Überblick'],
+    // „Antwort des Menschen" und „Befundliste" seit BAUPLAN 43: Beide Etiketten
+    // hatten im ganzen Katalog keinen Abnehmer — die Frage an den Menschen
+    // lieferte laut SPEC §4.3 „an die Folgeblöcke", technisch aber ins Leere.
+    brauchtOptional: ['Projekt-Überblick', 'Antwort des Menschen', 'Befundliste'],
+    brauchtWozu: {
+      'Projekt-Überblick':
+        'nimmt ihn als Abkürzung beim Zuschnitt, statt sich alles selbst zu erlesen — ' +
+        'schreib Aufbau und Besonderheiten so hinein, dass sich daraus ein Paket schneiden lässt',
+      'Antwort des Menschen':
+        'schneidet das Arbeitspaket nach dieser Festlegung zu — gib die Antwort wortgetreu ' +
+        'weiter und sag in einem Satz, was daraus für die Arbeit folgt',
+      Befundliste:
+        'sucht darin die nächste lohnende Arbeit — jeder Fund braucht Schwere und Fundort, ' +
+        'sonst lässt er sich nicht zuschneiden'
+    },
     liefert: ['Arbeitspaket'],
     nurLesen: true,
     prueft: false,
@@ -286,23 +316,23 @@ export const BLOCK_KATALOG = [
       'zusammengehörige Aufgaben darfst du zu einem Paket bündeln. ' +
       'Prüfe durch eigenes Lesen im Projektordner (liegt dir ein Projekt-Überblick vor, nutze ' +
       'ihn als Abkürzung), wie sich dieser Wunsch in EIN zusammenhängendes Arbeitspaket ' +
-      'fassen lässt. Miss die Paketgröße NICHT an der Sitzungslänge: Läuft der Kontext des ' +
-      'Bauers voll, übergibt FlowForge automatisch an einen frischen Anlauf, der nahtlos ' +
+      'fassen lässt. Miss die Paketgröße NICHT an der Sitzungslänge: Läuft der Kontext eines ' +
+      'Blocks voll, übergibt FlowForge automatisch an einen frischen Anlauf, der nahtlos ' +
       'weitermacht — jeder eigene Lauf kostet dagegen eigenen Grundaufwand. Schneide ' +
       'deshalb so GROSS wie inhaltlich sinnvoll: Was zusammengehört und sich gemeinsam prüfen ' +
       'lässt, gehört in EIN Paket. Schneide nur dann kleiner, wenn der Wunsch wirklich ' +
       'unabhängige Baustellen mischt oder mittendrin eine Entscheidung des Nutzers nötig wäre ' +
       '— dann benenne, was bewusst draußen bleibt. ' +
-      'Projektkarten sind nie Teil des Pakets — sie pflegt der ' +
-      'Sessionende-Block nach der Prüfung; nimm sie weder in die Schritte noch in die ' +
+      'Projektkarten sind nie Teil des Pakets: FlowForge pflegt sie über eigene Blöcke — ' +
+      'nimm sie weder in die Schritte noch in die ' +
       'Fertig-Kriterien auf. ' +
-      'Deine Meldung ist die Übergabe an Angreifer und Bauer — halte jedes Feld kompakt: ' +
+      'Deine Meldung ist das Arbeitspaket — halte jedes Feld kompakt: ' +
       'ziel (das Ziel des Pakets in einem Satz), fundstellen (voraussichtlich betroffene ' +
       'Dateien), schritte (Umsetzungsschritte in sinnvoller Reihenfolge), nichtDabei (was ' +
       'ausdrücklich NICHT Teil des Pakets ist) und fertigKriterien: prüfbare Aussagen, an denen ' +
-      'ein Prüfer das Ergebnis messen kann — bei gebündelten Aufgaben eigene Kriterien je ' +
-      'Teilstück. Ohne Fertig-Kriterien weist FlowForge deine Meldung ab: Der Prüfer hätte ' +
-      'keinen Maßstab und der Bauer kein Ziel.'
+      'sich das Ergebnis später messen lässt — bei gebündelten Aufgaben eigene Kriterien je ' +
+      'Teilstück. Ohne Fertig-Kriterien weist FlowForge deine Meldung ab: Ohne Maßstab gäbe ' +
+      'es weder ein Ziel für die Umsetzung noch etwas zu prüfen.'
   },
   {
     id: 'angreifer',
@@ -312,6 +342,11 @@ export const BLOCK_KATALOG = [
     beschreibung:
       'Sucht vor dem Bauen, woran das Arbeitspaket scheitern könnte. Darf nichts verändern.',
     braucht: ['Arbeitspaket'],
+    brauchtWozu: {
+      Arbeitspaket:
+        'sucht, woran genau dieses Paket scheitern kann — benenne Ziel, Schritte und ' +
+        'Fundstellen so genau, dass er die richtigen Stellen unter die Lupe nimmt'
+    },
     liefert: ['Angriffsliste'],
     nurLesen: true,
     prueft: false,
@@ -335,7 +370,7 @@ export const BLOCK_KATALOG = [
       'Suche an diesen Stellen gezielt nach: Annahmen im Arbeitspaket, die nicht stimmen; ' +
       'Stellen, die mitgeändert werden müssen, aber nicht genannt sind; versteckten ' +
       'Abhängigkeiten; Rand- und Fehlerfällen; Konflikten mit bestehendem Verhalten. ' +
-      'Deine Meldung ist die Angriffsliste für den Bauer: je Fund ein Eintrag mit ein bis zwei ' +
+      'Deine Meldung ist die Angriffsliste: je Fund ein Eintrag mit ein bis zwei ' +
       'Sätzen, Schwere und Fundort (Datei), nach Gefahr sortiert. Findest du nach gründlicher ' +
       'Suche nichts, melde ehrlich eine leere Fundliste — erfinde keine Funde.'
   },
@@ -347,7 +382,20 @@ export const BLOCK_KATALOG = [
     beschreibung:
       'Belegt die Ursache eines Fehlers, bevor etwas angefasst wird — und schneidet daraus den minimalen Fix.',
     braucht: [],
-    brauchtOptional: ['Projekt-Überblick'],
+    // „Antwort des Menschen" und „Befundliste" seit BAUPLAN 43 (siehe Paket
+    // schneiden): Beide Etiketten hatten sonst nirgends einen Abnehmer.
+    brauchtOptional: ['Projekt-Überblick', 'Antwort des Menschen', 'Befundliste'],
+    brauchtWozu: {
+      'Projekt-Überblick':
+        'nimmt ihn als Abkürzung bei der Ursachensuche — nenne Aufbau und Besonderheiten, ' +
+        'nicht nur den Zweck des Projekts',
+      'Antwort des Menschen':
+        'richtet die Ursachensuche danach aus — gib die Antwort wortgetreu weiter und sag in ' +
+        'einem Satz, was daraus für die Arbeit folgt',
+      Befundliste:
+        'nimmt deine Funde als Spur zur Ursache — ohne Fundort je Fund muss er die Stelle ' +
+        'noch einmal selbst suchen'
+    },
     liefert: ['Arbeitspaket'],
     nurLesen: true,
     prueft: false,
@@ -385,10 +433,10 @@ export const BLOCK_KATALOG = [
       'entsteht. Prüfe ehrlich, ob eine andere Erklärung ebenso gut passt — wenn ja, benenne ' +
       'beide und was sie unterscheiden würde. Rate nicht: Kannst du die Ursache nicht belegen, ' +
       'schreibe das offen und benenne, welche Information fehlt. ' +
-      'Deine Meldung ist das Arbeitspaket für den Bauer: ziel (das Fehlerbild und die belegte ' +
+      'Deine Meldung ist das Arbeitspaket: ziel (das Fehlerbild und die belegte ' +
       'Ursache in einem Satz), fundstellen (Fundort der Ursache und betroffene Dateien), ' +
       'schritte (der minimale Fix in möglichst kleinen Schritten), nichtDabei (was ausdrücklich ' +
-      'NICHT angefasst wird) und fertigKriterien für den Prüfer — darunter: ein Test, der den ' +
+      'NICHT angefasst wird) und fertigKriterien — darunter: ein Test, der den ' +
       'Fehler nachstellt, ist vor dem Fix rot und danach grün. Die Herleitung, warum genau dort ' +
       'das Verhalten entsteht, gehört in anmerkung.'
   },
@@ -400,7 +448,23 @@ export const BLOCK_KATALOG = [
     beschreibung:
       'Setzt genau das Arbeitspaket um und räumt dabei die Funde der Angriffsliste aus, falls eine da ist.',
     braucht: ['Arbeitspaket'],
-    brauchtOptional: ['Angriffsliste'],
+    // „Antwort des Menschen" und „Befundliste" seit BAUPLAN 43 (siehe Paket
+    // schneiden): Beide Etiketten hatten sonst nirgends einen Abnehmer.
+    brauchtOptional: ['Angriffsliste', 'Antwort des Menschen', 'Befundliste'],
+    brauchtWozu: {
+      Arbeitspaket:
+        'baut genau das und nichts anderes — Ziel, Schritte, Fundstellen und „nicht dabei" ' +
+        'sind seine Grenzen, und an den Fertig-Kriterien wird seine Arbeit gemessen',
+      Angriffsliste:
+        'räumt jeden Fund aus oder begründet, warum er dieses Paket nicht trifft — schreib ' +
+        'je Fund Schwere und Fundort dazu, sonst kann er ihn nicht ausräumen',
+      'Antwort des Menschen':
+        'baut nach dieser Festlegung — gib die Antwort wortgetreu weiter und sag in einem ' +
+        'Satz, was daraus für die Umsetzung folgt',
+      Befundliste:
+        'nimmt die Funde mit, soweit sie sein Arbeitspaket treffen — jeder Fund braucht ' +
+        'Schwere und Fundort'
+    },
     liefert: ['Umsetzungsbericht'],
     nurLesen: false,
     prueft: false,
@@ -425,24 +489,25 @@ export const BLOCK_KATALOG = [
       'auf Vorrat — was du schon weißt, liest du nicht erneut. ' +
       'Halte dich an Stil und Aufbau des ' +
       'bestehenden Codes und bleibe im Projektordner. Was das Arbeitspaket ausdrücklich ' +
-      'ausschließt, baust du nicht — auch nicht nebenbei. Projektkarten fasst du nicht an, ' +
-      'das übernimmt der Sessionende-Block. ' +
-      'Die Prüfmappe im Ordner pruefung/ gehört dem Prüfer: Du änderst dort nie etwas (das ' +
-      'ist gesperrt) — hältst du eine Prüfung für falsch, schreibe das in deinen ' +
-      'Abschlusstext. Prüfen ist nicht deine Aufgabe: Kontrolliere deine Arbeit mit eigenen, ' +
+      'ausschließt, baust du nicht — auch nicht nebenbei. Projektkarten sind nicht dein ' +
+      'Gegenstand: FlowForge pflegt sie über eigene Blöcke — du fasst sie nicht an. ' +
+      'Die Prüfmappe im Ordner pruefung/ gehört den Prüf-Blöcken: Du änderst dort nie etwas (das ' +
+      'ist gesperrt) — hältst du eine Prüfung für falsch, schreibe das ins Feld anmerkung ' +
+      'deiner Meldung. Prüfen ist nicht deine Aufgabe: Kontrolliere deine Arbeit mit eigenen, ' +
       'schnellen Stichproben. Beim ersten Durchlauf ist die Prüfmappe ohnehin leer (FlowForge ' +
-      'leert sie am Laufstart); liegen dort in einer Reparatur-Runde Prüfungen des Prüfers, ' +
+      'leert sie am Laufstart); liegen dort in einer Reparatur-Runde fremde Prüfungen, ' +
       'darfst du sie höchstens EINMAL ganz am Ende laufen lassen — keine Dauerschleife. ' +
       'Eigene Hilfsskripte und Probedateien legst du im Ordner arbeitsablage/ ab — FlowForge ' +
       'leert ihn nach dem Lauf von selbst. ' +
-      'Kommt vom Prüfer eine Rückmeldung aus einer Reparatur-Runde, hat deren Behebung Vorrang. ' +
+      'Kommt eine Rückmeldung aus einer Reparatur-Runde, hat deren Behebung Vorrang. ' +
       'Pflicht-Artefakt Startanleitung: Bevor du fertig bist, lege mit dem Werkzeug ' +
       'startanleitung_setzen fest, wie man das gebaute Ergebnis startet — beschreibung (ein ' +
       'Satz), dazu befehl (Kommandozeile im Projektordner) und/oder adresse (http(s)-Adresse ' +
       'oder Datei im Projektordner für den Browser). Stimmt die vorhandene Startanleitung noch, ' +
       'setze sie unverändert erneut — ohne gültige Startanleitung gilt dein Auftrag als nicht fertig. ' +
-      'Deine Meldung ist die Übergabe an den Prüfer, und er misst deine Arbeit an den ' +
-      'Fertig-Kriterien des Arbeitspakets — schreibe sie so, dass er jedes bei dir findet: ' +
+      'Deine Meldung ist der Umsetzungsbericht, und gemessen wird deine Arbeit an den ' +
+      'Fertig-Kriterien des Arbeitspakets — schreibe ihn so, dass sich jedes einzelne bei dir ' +
+      'findet: ' +
       'kriterien (je Fertig-Kriterium, wie und wo du es umgesetzt hast), dateien (jede angelegte, ' +
       'geänderte oder gelöschte Datei mit ihrer Art), angriffsliste (falls es eine gab: je Fund, ' +
       'wie du ihn ausgeräumt hast oder warum er dieses Paket nicht trifft) und offen (was du ' +
@@ -454,8 +519,16 @@ export const BLOCK_KATALOG = [
     name: 'Prüfer',
     symbol: '🔬',
     beschreibung:
-      'Frischer Agent ohne Bauer-Wissen: schreibt eigene Tests, führt sie aus und liefert einen Rot-vor-Grün-Beleg.',
+      'Frischer Agent ohne Bau-Wissen: schreibt eigene Tests, führt sie aus und liefert einen Rot-vor-Grün-Beleg.',
     braucht: ['Arbeitspaket', 'Umsetzungsbericht'],
+    brauchtWozu: {
+      Arbeitspaket:
+        'prüft ausschließlich gegen die Fertig-Kriterien dieses Pakets — formuliere jedes so, ' +
+        'dass es sich messen lässt, sonst hat er keinen Maßstab',
+      Umsetzungsbericht:
+        'misst deine Arbeit an den Fertig-Kriterien des Arbeitspakets — schreib ihn so, dass ' +
+        'er jedes einzelne bei dir findet, mit Fundort'
+    },
     liefert: ['Prüfbeleg'],
     nurLesen: false,
     prueft: true,
@@ -468,9 +541,10 @@ export const BLOCK_KATALOG = [
     pruefbefehlPflicht: true,
     felder: [],
     auftrag:
-      'Du bist der Prüfer — ein frischer Agent ohne das Arbeitswissen des Bauers. Antworte ' +
+      'Du bist der Prüfer — ein frischer Agent, der beim Bauen nicht dabei war und deshalb ' +
+      'kein Arbeitswissen aus erster Hand hat. Antworte ' +
       'auf Deutsch. Maßstab deiner Prüfung sind AUSSCHLIESSLICH die Fertig-Kriterien des ' +
-      'Arbeitspakets: Du prüfst, was der Bauer in diesem Lauf gebaut hat — nicht das ganze ' +
+      'Arbeitspakets: Du prüfst, was in diesem Lauf gebaut wurde — nicht das ganze ' +
       'Projekt. Dein Prüfordner (FlowForge nennt ihn dir unten) ist deine Werkbank für ' +
       'DIESEN Lauf: Er ist beim Laufstart geleert — baue deine Prüfungen frisch fürs ' +
       'aktuelle Paket, ohne Alttest-Ballast. Bilddateien sind dort verboten (hartes Nein). ' +
@@ -494,15 +568,15 @@ export const BLOCK_KATALOG = [
       'Zitiere beide tatsächlichen Ausgaben kurz im Feld rotVorGruen deiner Meldung. ' +
       'Du darfst Testdateien schreiben und Tests ausführen — den geprüften Code selbst ' +
       'veränderst du nie. Wegwerf-Hilfsskripte gehören in den Ordner arbeitsablage/, bleibende ' +
-      'Prüfungen in deinen Prüfordner. Projektkarten sind nicht dein Prüfgegenstand: Sie werden ' +
-      'erst nach dir vom Sessionende-Block gepflegt. ' +
+      'Prüfungen in deinen Prüfordner. Projektkarten sind nicht dein Prüfgegenstand: FlowForge ' +
+      'pflegt sie über eigene Blöcke — miss nichts an ihnen. ' +
       'Pflicht-Artefakt Prüfbefehl: Bevor du fertig bist, hinterlege mit dem Werkzeug ' +
       'pruefbefehl_setzen genau EINEN Befehl, der alle deine Prüfungen in deinem Prüfordner ' +
       'ausführt und bei einem Fehlschlag mit einem Fehlercode endet. ' +
       'Schreibe deine Prüfungen so, dass ein einziger Aufruf genügt — braucht es mehrere ' +
       'Schritte, lege ein Sammel-Skript in deinen Prüfordner und nenne nur dieses. FlowForge spielt ' +
       'diesen Befehl in Reparatur-Runden selbst ab, OHNE dich zu starten: Bleibt er rot, geht ' +
-      'das Protokoll direkt an den Bauer zurück; erst bei Grün wirst du erneut gerufen. Das ' +
+      'das Protokoll ohne dich in die Reparatur zurück; erst bei Grün wirst du erneut gerufen. Das ' +
       'gilt auch, wenn du „fehlgeschlagen" urteilst — gerade dann. ' +
       'Deine Meldung ist der Prüfbeleg, und an ihm hängen die Reparatur-Runden: ' +
       'geprueft (welche Fertig-Kriterien du wie geprüft hast), rotVorGruen (die beiden ' +
@@ -513,7 +587,7 @@ export const BLOCK_KATALOG = [
       'Randfall), „grundsaetzlich" für alles, was Umbau, neue Struktur oder eine Entscheidung ' +
       'braucht. Diese Einstufung entscheidet, ob eine kleine lokale KI die Reparatur zuerst ' +
       'versuchen darf — stufe im Zweifel als grundsaetzlich ein. Ein Fehlurteil ohne eine ' +
-      'einzige Beanstandung weist FlowForge ab (der Bauer wüsste nicht, was zu tun ist), ' +
+      'einzige Beanstandung weist FlowForge ab (die Reparatur wüsste nicht, was zu tun ist), ' +
       'ebenso ein bestandenes Urteil mit offenen Beanstandungen. ' +
       'Dazu die beiden Felder für die Prüfkarte, die FlowForge bei bestandener Prüfung ' +
       'automatisch anlegt: pruefkarteTitel (kurzer Name des Geprüften, höchstens 80 Zeichen) ' +
@@ -600,7 +674,7 @@ export const BLOCK_KATALOG = [
     felder: [],
     auftrag:
       'Du bist das Audit: der Rundum-Blick über das GANZE Projekt — nicht über ein ' +
-      'einzelnes Arbeitspaket (dafür gibt es den Prüfer). Du beurteilst ehrlich, wie es um ' +
+      'einzelnes Arbeitspaket (das messen die Prüf-Blöcke eines Bau-Laufs). Du beurteilst ehrlich, wie es um ' +
       'das Projekt steht. Antworte auf Deutsch. Du darfst keine Dateien verändern und ' +
       'nichts ausführen — nur lesen; deine einzige Schreibarbeit ist das Anlegen von ' +
       'Karten (karte_anlegen ist für dich freigeschaltet). ' +
@@ -641,6 +715,11 @@ export const BLOCK_KATALOG = [
     beschreibung:
       'Misst am Code nach, ob die Projektkarten noch wahr sind. Jede Korrektur ist ein Vorschlag — du entscheidest je Karte: übernehmen, bearbeiten oder ablehnen.',
     braucht: [],
+    // „Kartenbericht" hat bewusst keinen Abnehmer im Katalog (BAUPLAN 43) und
+    // ist KEIN Versehen: Der Karten-Prüfer ist ein Sonderlauf — seine Arbeit
+    // geht als Karten-Vorschläge an FlowForge und als Bericht an den Nutzer,
+    // nicht an einen Folgeblock. Im Auftrags-Vorspann steht deshalb ehrlich
+    // „geht an niemanden".
     liefert: ['Kartenbericht'],
     nurLesen: true,
     prueft: false,
@@ -711,7 +790,7 @@ export const BLOCK_KATALOG = [
       'bedeutet die Wahl für den Nutzer und sein Projekt — keine Technik-Frage. Gib 2 bis 4 ' +
       'Antwort-Optionen mit und stelle deine Empfehlung an die erste Stelle, als Empfehlung ' +
       'benannt. Du veränderst nichts und baust nichts. ' +
-      'Ins Feld inhalt deiner Meldung gehört die Übergabe an die folgenden Blöcke: die Frage, ' +
+      'Ins Feld inhalt deiner Meldung gehören: die Frage, ' +
       'die Antwort des Nutzers wortgetreu, und in ein bis zwei Sätzen, was daraus für die ' +
       'weitere Arbeit folgt.'
   },
@@ -723,6 +802,14 @@ export const BLOCK_KATALOG = [
     beschreibung:
       'Bringt das Projektgedächtnis auf Stand: Status-Karte aktualisieren, Erledigtes abhaken, Offenes festhalten — und deckt den Tisch für den nächsten Lauf.',
     braucht: ['Umsetzungsbericht', 'Prüfbeleg'],
+    brauchtWozu: {
+      Umsetzungsbericht:
+        'hakt daran die erledigten Aufgaben-Karten ab und schreibt die Status-Karte fort — ' +
+        'nenne klar, was wirklich fertig wurde und was offen blieb',
+      'Prüfbeleg':
+        'schreibt das Prüfungs-Ergebnis in die Status-Karte und hält offene Beanstandungen ' +
+        'als Aufgaben fest — Urteil und Beanstandungen gehören deshalb unverkürzt hinein'
+    },
     liefert: [],
     nurLesen: false,
     prueft: false,
@@ -808,13 +895,18 @@ export const BLOCK_KATALOG = [
     beschreibung:
       'Prüft die Textdatei und lässt sie durch, wenn sie in Ordnung ist. Darf nichts verändern.',
     braucht: ['Textdatei'],
+    brauchtWozu: {
+      Textdatei:
+        'sieht sich die Textdatei an und urteilt über sie — leg sie im Projektordner ab und ' +
+        'nenne ihren Namen in deiner Meldung'
+    },
     liefert: ['Prüfbeleg'],
     nurLesen: true,
     prueft: true,
     uebung: true,
     felder: [],
     auftrag:
-      'Du bist der Prüfer. Sieh dir die zuletzt geänderte Textdatei (.txt) im Projektordner an. ' +
+      'Du bist der Übungs-Prüfer. Sieh dir die zuletzt geänderte Textdatei (.txt) im Projektordner an. ' +
       'Die Prüfung ist bestanden, wenn sie eine freundliche Begrüßung auf Deutsch und ein Datum ' +
       'enthält. Du darfst nichts verändern — nur lesen. Antworte auf Deutsch. ' +
       'Melde deinen Prüfbeleg: urteil „bestanden" oder „fehlgeschlagen", dazu geprueft (was du ' +
@@ -829,6 +921,11 @@ export const BLOCK_KATALOG = [
     beschreibung:
       'Findet absichtlich immer etwas zu meckern — zum Ausprobieren der Reparatur-Runden.',
     braucht: ['Textdatei'],
+    brauchtWozu: {
+      Textdatei:
+        'sucht in der Textdatei absichtlich einen Kritikpunkt, um die Reparatur-Runden ' +
+        'vorzuführen — leg sie im Projektordner ab und nenne ihren Namen'
+    },
     liefert: ['Prüfbeleg'],
     nurLesen: true,
     prueft: true,

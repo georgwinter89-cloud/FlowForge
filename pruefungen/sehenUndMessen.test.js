@@ -207,6 +207,15 @@ describe('BAUPLAN 36 · Sicht-Hilfe: woher kommt, was der Block braucht', () => 
     expect(herkunft.get('Arbeitspaket')).toEqual(['Paket schneiden'])
   })
 
+  it('nennt ihn mit Zusatznamen, wenn er einen hat (BAUPLAN 43)', () => {
+    // Bis Bauschritt 43 stand hier der Katalogname: Zwei „Prüfer · UI" und
+    // „Prüfer · Motor" hießen im Chip wie im Auftrags-Vorspann beide „Prüfer".
+    const benannt = [{ ...bloecke[0], zusatz: 'Datenbank' }, bloecke[1]]
+    expect(brauchtHerkunft(benannt, pfeile, '2').get('Arbeitspaket')).toEqual([
+      'Paket schneiden · Datenbank'
+    ])
+  })
+
   it('lässt die Liste leer, wenn keiner liefert — das ist das „fehlt"', () => {
     // Der Bauer allein auf der Leinwand: Sein Arbeitspaket liefert niemand.
     const herkunft = brauchtHerkunft([bloecke[1]], [], '2')
@@ -215,17 +224,19 @@ describe('BAUPLAN 36 · Sicht-Hilfe: woher kommt, was der Block braucht', () => 
 
   it('nennt bei gleicher Distanz alle Lieferanten (Fan-out, BAUPLAN 34)', () => {
     const zwei = [
-      { instanzId: '1', blockId: 'paket-schneiden' },
-      { instanzId: '1b', blockId: 'paket-schneiden' },
+      { instanzId: '1', blockId: 'paket-schneiden', zusatz: 'Frontend' },
+      { instanzId: '1b', blockId: 'paket-schneiden', zusatz: 'Backend' },
       { instanzId: '2', blockId: 'bauer' }
     ]
     const kanten = [
       { von: '1', nach: '2' },
       { von: '1b', nach: '2' }
     ]
+    // Genau hier zahlt der Anzeigename (BAUPLAN 43): Vorher stand zweimal
+    // dasselbe Wort im Chip, und die beiden Lieferanten waren nicht zu trennen.
     expect(brauchtHerkunft(zwei, kanten, '2').get('Arbeitspaket')).toEqual([
-      'Paket schneiden',
-      'Paket schneiden'
+      'Paket schneiden · Frontend',
+      'Paket schneiden · Backend'
     ])
   })
 })

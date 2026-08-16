@@ -346,7 +346,9 @@ Seite aufs Projekt vorgefiltert zeigt (eigener Baustein, nicht Teil der Leinwand
 ### 4.2 Anatomie eines Blocks
 
 Name · Symbol · **Arbeitsauftrag** (Anweisung an den Agenten) · **braucht / liefert**
-(z.B. „braucht: Angriffsliste, liefert: geprüften Code") · optionale **Sperren**
+(z.B. „braucht: Angriffsliste, liefert: geprüften Code") · je braucht-Etikett ein
+**„wozu"** (ein Satz aus der Sicht dieses Blocks, gelesen wird er vom Lieferanten —
+§4.3 Auftrags-Vorspann) · optionale **Sperren**
 („darf nur lesen", „Pflichtfeld leer = Lauf hält an") · **Modellklasse** (§2).
 Der **Zusatzname** (§4.1) gehört nicht zum Block, sondern zu seiner Karte im
 Schaubild — derselbe Block darf mehrfach mit verschiedenen Zusatznamen liegen.
@@ -393,7 +395,48 @@ Herleitung), bevor etwas angefasst wird, und liefert als Arbeitspaket den
 minimalen Fix samt Fertig-Kriterien (inkl. Rot-vor-Grün-Test des Fehlers).
 
 **Frage an den Menschen:** stellt genau eine Folgen-Frage mit Antwort-Optionen
-und Empfehlung über das Gespräch (§6) und liefert die Antwort an die Folgeblöcke.
+und Empfehlung über das Gespräch (§6) und liefert die Antwort an die Folgeblöcke
+(„Antwort des Menschen" ist optionaler Bedarf von Paket schneiden, Diagnose und
+Bauer — wie die „Befundliste" des Audits).
+
+**Auftrags-Vorspann — Empfänger, Kette, Position** (seit Bauschritt 43): Vor
+jedem Blockauftrag stehen Angaben, die FlowForge **aus dem Schaubild rechnet** —
+aus Blöcken und Pfeilen, nicht aus dem Koordinator und nicht aus dem Laufstatus
+(derselbe Block liest in einer Reparatur-Runde dasselbe wie beim ersten Anlauf):
+die **Empfänger** je liefert-Etikett (Block mit Nummer und Zusatzname, Etikett,
+und **wozu** er es braucht), die **Kette** in einer Zeile (verzweigungstreu:
+parallele Blöcke stehen in geschweiften Klammern nebeneinander) und die
+**Position** („Du bist Block 2 von 5"). Das „wozu" stammt aus dem Feld
+**brauchtWozu** des empfangenden Blocks (§4.2); fehlt es, steht ein ehrlicher
+Rückfall-Satz statt einer Erfindung.
+**Formulierungsregel, verbindlich:** immer aus der Empfängersicht („Er misst
+deine Arbeit an den Fertig-Kriterien — schreib den Bericht so, dass er jedes bei
+dir findet"), nie als „danach kommt noch wer"; Kette und Position sind reine
+Ortsangaben ohne Erzählung. Die Aufträge anderer Blöcke werden **nie**
+mitgegeben.
+Empfänger ist nur, wer die Lieferung wirklich bekommt: Verdrängt die
+Distanz-Regel (unten, „Übergaben") die Lieferung, steht genau das im Vorspann
+statt eines Empfängers. Kommt niemand, steht „geht an niemanden — du bist der
+letzte Schritt"; liefert der Block überhaupt kein Etikett (Sessionende, die
+Proben, selbstgebaute Blöcke ohne Etikett), sagt der Vorspann genau das, denn an
+ihm kann nichts andocken; liegen dahinter Blöcke mit anderen Etiketten, nennt der
+Vorspann sie als Ursache (so wird ein vertippt geschriebenes eigenes Etikett
+sofort sichtbar). Auch diese Aufzählung hat einen Deckel, denn sie steht in jedem
+Anlauf des Blocks erneut: namentlich stehen dort höchstens die ersten vier Blöcke,
+die übrigen werden gezählt („… und 35 weitere") statt verschwiegen.
+**Prüf-Blöcke** bekommen eine vierte gerechnete Angabe: an welchen Block ihre
+Kritik bei „fehlgeschlagen" zurückgeht (die gespeicherte Wahl, sonst der nächste
+Vorfahre). Bei **genau einem Block** im Schaubild entfallen Kette und Position.
+Die Kettenzeile hat einen Deckel: Bei mehr als zwölf Blöcken wird sie gekürzt —
+Ausgelassenes steht als „…", und der Sprung in den Blocknummern zeigt, was fehlt;
+Empfänger, Position und Rückführung bleiben von dieser Kürzung unberührt. Denselben Vorspann
+tickert FlowForge beim Start jedes Blocks **einmal als eine Zeile** — Wort für Wort
+den Text, den der Agent vorn in seinem Auftrag liest; er steht damit im Ticker und
+im Laufbericht, sonst wäre nirgends nachlesbar, was FlowForge gerechnet hat.
+**Zuständigkeits-Grenzen bleiben** in den Aufträgen („Projektkarten fasst du
+nicht an", „die Prüfmappe gehört den Prüf-Blöcken") — sie gelten auch ohne den
+zugehörigen Block auf der Leinwand; nur der fremde Blockname als Begründung ist
+weg.
 
 **Lieferschein — Blockergebnisse als geprüfte Felder** (seit Bauschritt 42):
 Jeder Block meldet sein Ergebnis über ein **Werkzeug**, nicht als Fließtext. Beim
@@ -405,8 +448,11 @@ Melde-Werkzeuge, die diese Kette braucht — **eines je liefert-Etikett**
 ein fremdes löst die übliche Rechte-Rückfrage aus. Gemeinsamer Rahmen für alle:
 `fazit` (ein Satz für Ticker, Blockkarte und Bericht), `getan`, `offen` und
 `anmerkung` — das Freifeld gegen die Formular-Falle, für alles, was in kein Feld
-passt und der nächste Block trotzdem wissen sollte. Darunter je Etikett ein
-eigener Teil: Arbeitspaket (Ziel, Fertig-Kriterien, Schritte, Fundstellen, nicht
+passt und trotzdem ankommen soll. Einen nächsten Block behauptet die
+Feldbeschreibung nicht: Sie steht im Werkzeugkasten **jedes** Agenten, und beim
+letzten Block widerspräche sie dem Vorspann („geht an niemanden") im selben
+Auftrag. Darunter je Etikett ein eigener Teil: Arbeitspaket (Ziel,
+Fertig-Kriterien, Schritte, Fundstellen, nicht
 dabei), Prüfbeleg (Urteil als Auswahl, Beanstandungen mit Einstufung und Fundort,
 Rot-vor-Grün, geprüfte Kriterien, Prüfkarte), Umsetzungsbericht (je Kriterium wie
 umgesetzt, Dateiliste mit Art, Angriffsliste behandelt) und Angriffs-/Befundliste
@@ -830,6 +876,10 @@ Angreifer durch die Diagnose.
   Bauschritt 37 seine **Modellklasse** als Voreinstellung (§2; Altbestand ohne Feld
   läuft auf Standard, auf der Leinwand bleibt sie je Karte änderbar); Stepper und
   KI-Assistent kennen beide Felder.
+- Seit Bauschritt 43 trägt jedes **braucht**-Etikett ein eigenes Freitext-Feld „Wozu braucht
+  dein Block das?" (ein Satz, höchstens 200 Zeichen, im Schritt „Was braucht/liefert er?"):
+  Er steht später im Auftrag des Blocks, der das Etikett liefert (§4.3). Bleibt er leer,
+  greift dort der Rückfall-Satz — der KI-Assistent füllt ihn bewusst nicht.
 - **Erstellungsassistent in 4 Schritten:** Was soll der Block tun? → Was braucht/liefert er? →
   Sperren („darf nur lesen") und Modellklasse → Probelauf-Vorschau (der exakte
   Arbeitsauftrag, den der Agent bekäme). Eine **Stepper-Leiste** zeigt die Schritte

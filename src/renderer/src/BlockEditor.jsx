@@ -15,6 +15,7 @@ import {
   BLOCK_BESCHREIBUNG_MAX,
   BLOCK_AUFTRAG_MAX,
   BEREICH_MAX,
+  BRAUCHT_WOZU_MAX,
   ETIKETTEN_MAX,
   pruefeBereich
 } from '../../shared/blockRegeln.js'
@@ -90,6 +91,32 @@ function EtikettenFeld({ label, hinweis, etiketten, onAendern, datalistId, vorsc
   )
 }
 
+// Das „wozu" je braucht-Etikett (BAUPLAN 43, „Kein Kennzeichen ohne
+// Editor-Feld"): ein einzeiliges Freitext-Feld pro Etikett, direkt unter der
+// braucht-Liste. Der Satz landet im Auftrag des Blocks, der das Etikett
+// liefert — deshalb steht „Er …" als Anlauf im Label. Ohne Angabe greift im
+// Vorspann der ehrliche Rückfall-Satz, kein erfundenes Wozu.
+function WozuFelder({ etiketten, wozu, onAendern }) {
+  if (!etiketten.length) return null
+  return (
+    <div className="feld">
+      <span>{t.brauchtWozuUeberschrift}</span>
+      {etiketten.map((etikett) => (
+        <label className="feld" key={etikett}>
+          <span>{t.brauchtWozuFeld(etikett)}</span>
+          <input
+            value={wozu[etikett] ?? ''}
+            placeholder={t.brauchtWozuPlatzhalter}
+            onChange={(e) => onAendern({ ...wozu, [etikett]: e.target.value })}
+          />
+          <Zaehler wert={wozu[etikett] ?? ''} max={BRAUCHT_WOZU_MAX} />
+        </label>
+      ))}
+      <span className="feld-hinweis">{t.brauchtWozuHinweis}</span>
+    </div>
+  )
+}
+
 // Gespeicherter Bereich → Text im Kategorie-Feld: Katalog-Schlüssel werden
 // als Anzeigename gezeigt, „eigene"/leer bleibt leer, freie Namen wie sie sind.
 function bereichAnzeige(bereich) {
@@ -114,6 +141,10 @@ export default function BlockEditor({ block, onSpeichern, onAbbrechen }) {
     beschreibung: block?.beschreibung ?? '',
     auftrag: block?.auftrag ?? '',
     braucht: block?.braucht ?? [],
+    // Empfänger im Auftrag (BAUPLAN 43): Etikett → ein Satz. Altbestand ohne
+    // Feld startet leer; beim Speichern fallen Sätze zu entfernten Etiketten
+    // von selbst weg (pruefeEigenenBlock).
+    brauchtWozu: block?.brauchtWozu ?? {},
     liefert: block?.liefert ?? [],
     // Kategorie (BAUPLAN 30): im Feld steht der Anzeigename bzw. der freie
     // Name; „Eigene" bleibt leer (Platzhalter erklärt das). Beim Speichern
@@ -145,7 +176,13 @@ export default function BlockEditor({ block, onSpeichern, onAbbrechen }) {
     setKiLaeuft(false)
     if (!ergebnis.ok) return setFehler(ergebnis.fehler)
     // Der Assistent liefert den Bereich als Schlüssel — im Feld steht der Name.
-    setWerte({ ...ergebnis.vorschlag, bereich: bereichAnzeige(ergebnis.vorschlag.bereich) })
+    // Das „wozu" (BAUPLAN 43) füllt der Assistent nicht: Es steht nie leer da,
+    // sondern fehlt ehrlich, bis der Nutzer es tippt.
+    setWerte({
+      brauchtWozu: {},
+      ...ergebnis.vorschlag,
+      bereich: bereichAnzeige(ergebnis.vorschlag.bereich)
+    })
   }
 
   async function speichern() {
@@ -282,6 +319,11 @@ export default function BlockEditor({ block, onSpeichern, onAbbrechen }) {
                   onAendern={(neu) => setzen('braucht', neu)}
                   datalistId="etiketten-braucht"
                   vorschlaege={vorschlaege}
+                />
+                <WozuFelder
+                  etiketten={werte.braucht}
+                  wozu={werte.brauchtWozu}
+                  onAendern={(neu) => setzen('brauchtWozu', neu)}
                 />
                 <EtikettenFeld
                   label={t.liefertFeld}
