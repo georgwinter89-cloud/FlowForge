@@ -61,7 +61,8 @@ contextBridge.exposeInMainWorld('flowforge', {
   chatNeu: (pfad) => ipcRenderer.invoke('chat-neu', pfad ?? null),
   laufberichteLaden: (pfad) => ipcRenderer.invoke('laufberichte-laden', pfad),
   metrikenLaden: () => ipcRenderer.invoke('metriken-laden'),
-  pruefmappeLesen: (pfad) => ipcRenderer.invoke('pruefmappe-lesen', pfad),
+  pruefmappeLesen: (pfad, ordner = '') =>
+    ipcRenderer.invoke('pruefmappe-lesen', { pfad, ordner }),
   startanleitungLaden: (pfad) => ipcRenderer.invoke('startanleitung-laden', pfad),
   // App-Tab (BAUPLAN 32): Start/Stopp/Neustart, Zustand samt Ausgabe, Adresse
   // öffnen; Rückfall-Liste noch laufender Prozesse aus Läufen.

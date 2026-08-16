@@ -305,6 +305,21 @@ function liegtInPruefmappe(datei, projektPfad) {
   return relativ === PRUEF_ORDNER || relativ.startsWith(PRUEF_ORDNER + path.sep)
 }
 
+// Prüfordner je Prüf-Instanz (BAUPLAN 41): Jeder schreibende Prüfer hat seinen
+// eigenen Unterordner. Er darf in der Prüfmappe nur dort schreiben — sonst
+// archiviert er die Tests der anderen hinter seiner Prüfkarte, und die
+// Wiederholungsprüfung fährt fremde Zweige mit. Ehrliche Grenze: Die Sperre
+// greift an den Schreib-Werkzeugen; ein ausgeführter Befehl, der die Mappe
+// verändert, bleibt für Prüf-Blöcke wie bisher erlaubt.
+function liegtImEigenenPruefordner(datei, projektPfad, pruefOrdner) {
+  if (!datei || !pruefOrdner) return false
+  const eigen = path.join(PRUEF_ORDNER, pruefOrdner).toLowerCase()
+  const relativ = path
+    .relative(path.resolve(projektPfad), path.resolve(projektPfad, String(datei)))
+    .toLowerCase()
+  return relativ === eigen || relativ.startsWith(eigen + path.sep)
+}
+
 // Bilddateien sind in der Prüfmappe verboten (BAUPLAN 17, hartes Nein — auch
 // für Prüf-Blöcke): Prüfungen sind kleine Textdateien und Skripte; Bilder
 // blähen die Mappe auf und laden zu pixelgenauen Vergleichen ein.
@@ -362,7 +377,9 @@ function liegtImProjekt(datei, projektPfad) {
 // (Feedback Georg, 14.08.2026), damit der Nutzer nicht ungefragt mit
 // Vorschlägen unterbrochen wird, ein Bauer mit gutem Grund aber auch nicht
 // ins Leere läuft.
-export function pruefeWerkzeug(name, eingabe, projektPfad, nurLesen, darfPruefen, lokaleKi = true, nurLesenBefehle = false, darfKartenAnlegen = false, darfVorschlagen = false, darfLaufVorschlag = false, darfZuteilen = false) {
+// pruefOrdner (BAUPLAN 41): der eigene Unterordner dieser Prüf-Instanz in der
+// Prüfmappe — in fremde Prüfordner schreibt auch ein Prüfer nicht.
+export function pruefeWerkzeug(name, eingabe, projektPfad, nurLesen, darfPruefen, lokaleKi = true, nurLesenBefehle = false, darfKartenAnlegen = false, darfVorschlagen = false, darfLaufVorschlag = false, darfZuteilen = false, pruefOrdner = '') {
   if (name.startsWith(MENSCH_PRAEFIX)) return { erlaubt: true }
   if (name.startsWith(VORSCHLAG_PRAEFIX)) {
     if (!darfVorschlagen) return { frage: texte.rechteFrage.vorschlag }
@@ -459,6 +476,17 @@ export function pruefeWerkzeug(name, eingabe, projektPfad, nurLesen, darfPruefen
     // Die Prüfmappe gehört dem Prüfer (Entscheidung Georg, 12.08.2026).
     if (!darfPruefen && liegtInPruefmappe(datei, projektPfad))
       return { gesperrt: texte.rechteFrage.pruefmappeGesperrtFuerAgent, tickerText: texte.ticker.pruefmappeGesperrt }
+    // Und jedem Prüfer sein eigener Ordner (BAUPLAN 41).
+    if (
+      darfPruefen &&
+      pruefOrdner &&
+      liegtInPruefmappe(datei, projektPfad) &&
+      !liegtImEigenenPruefordner(datei, projektPfad, pruefOrdner)
+    )
+      return {
+        gesperrt: texte.rechteFrage.fremderPruefordnerFuerAgent(pruefOrdner),
+        tickerText: texte.ticker.fremderPruefordnerGesperrt
+      }
     if (liegtImProjekt(datei, projektPfad)) return { erlaubt: true }
     return { frage: texte.rechteFrage.schreibenAusserhalb(String(datei ?? '?')) }
   }
@@ -989,7 +1017,8 @@ export function starteLaufMotor(optionen) {
       block?.darfKartenAnlegen ?? false,
       block?.darfVorschlagen ?? false,
       block?.darfLaufVorschlag ?? false,
-      block?.darfZuteilen ?? false
+      block?.darfZuteilen ?? false,
+      block?.pruefOrdner ?? ''
     )
     if (urteil.gesperrt) return nein(urteil.gesperrt, urteil.tickerText)
     if (urteil.erlaubt) {
@@ -1031,7 +1060,14 @@ export function starteLaufMotor(optionen) {
     const startServer = await startWerkzeugServer({ projektPfad, aufEreignis })
     // Prüfbefehl (BAUPLAN 35): das Pflicht-Artefakt des Prüfers — hart
     // validiert, weil FlowForge ihn später selbst ohne Rückfrage abspielt.
-    const pruefbefehlServer = await pruefbefehlWerkzeugServer({ projektPfad, aufEreignis })
+    // Je Prüf-Instanz einer (BAUPLAN 41): Der Motor reicht die Kennung des
+    // gerade laufenden Blocks herein — sonst setzte ein Prüfer den Befehl für
+    // alle, und die Pflicht-Prüfung des zweiten liefe ins Leere.
+    const pruefbefehlServer = await pruefbefehlWerkzeugServer({
+      projektPfad,
+      aufEreignis,
+      holeInstanz: () => block?.instanzId ?? null
+    })
     // Karten-Vorschläge (BAUPLAN 26): der Abnahme-Dialog des Karten-Prüfers —
     // freigeschaltet nur für Blöcke mit kartenVorschlaege (pruefeWerkzeug).
     const vorschlagServer = aufKartenVorschlag
@@ -1187,7 +1223,8 @@ export function starteLaufMotor(optionen) {
             block?.darfKartenAnlegen ?? false,
             block?.darfVorschlagen ?? false,
             block?.darfLaufVorschlag ?? false,
-            block?.darfZuteilen ?? false
+            block?.darfZuteilen ?? false,
+            block?.pruefOrdner ?? ''
           )
           if (urteil.erlaubt) return { behavior: 'allow', updatedInput: eingabeDaten }
           if (urteil.gesperrt) {
@@ -1536,7 +1573,9 @@ export function starteLaufMotor(optionen) {
     // Blockkarte als SDK-Alias, das Modell ihrer Unteraufgaben und der
     // Klartext-Name für den Ticker. FlowForge trägt beides beim Agent-Aufruf
     // ein — der Koordinator selbst läuft auf dem Billigmodell.
-    blockAusfuehren({ auftrag, blockName, instanzId = null, nurLesen = false, darfPruefen = false, lokaleKi = true, darfKartenAnlegen = false, darfVorschlagen = false, darfLaufVorschlag = false, darfZuteilen = false, modell = null, unterModell = null, modellName = '', uebertrag }) {
+    // pruefOrdner (BAUPLAN 41): der eigene Unterordner dieses Prüfers in der
+    // Prüfmappe — Schreibversuche daneben werden hart abgelehnt.
+    blockAusfuehren({ auftrag, blockName, instanzId = null, nurLesen = false, darfPruefen = false, pruefOrdner = '', lokaleKi = true, darfKartenAnlegen = false, darfVorschlagen = false, darfLaufVorschlag = false, darfZuteilen = false, modell = null, unterModell = null, modellName = '', uebertrag }) {
       if (tot)
         return Promise.resolve({
           zustand: 'fehlgeschlagen',
@@ -1553,6 +1592,7 @@ export function starteLaufMotor(optionen) {
           instanzId,
           nurLesen,
           darfPruefen,
+          pruefOrdner,
           lokaleKi,
           darfKartenAnlegen,
           darfVorschlagen,

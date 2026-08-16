@@ -225,7 +225,10 @@ function registriereIpc() {
   // Extrakte und Urteile; die Schnitte rechnet die Oberfläche nach dem Filtern.
   ipcMain.handle('metriken-laden', () => metrikenLaden())
   // Prüfmappen-Ansicht an der Prüferkarte (BAUPLAN 17) — nur zum Nachlesen.
-  ipcMain.handle('pruefmappe-lesen', (_e, pfad) => pruefmappeUebersicht(pfad))
+  // ordner (BAUPLAN 41): der Prüfordner dieser Prüf-Instanz.
+  ipcMain.handle('pruefmappe-lesen', (_e, { pfad, ordner }) =>
+    pruefmappeUebersicht(pfad, ordner ?? '')
+  )
   // Zustände für die Kacheln der Projektübersicht (SPEC §9, BAUPLAN 15).
   ipcMain.handle('projekt-zustaende', (_e, pfade) => projektZustaende(pfade))
 

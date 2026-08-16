@@ -67,6 +67,46 @@ export function modellKlasseGueltig(roh) {
   return MODELL_KLASSEN.includes(roh) ? roh : null
 }
 
+// Zusatzname je Blockkarte (BAUPLAN 41): freies Feld auf der Leinwand, die
+// Sorte bleibt — aus „Bauer" wird „Bauer · Datenbank". Er macht zwei Dinge:
+// mehrere gleiche Blöcke in einem Lauf unterscheidbar (technisch nötig, sobald
+// zwei Prüfer hinter einem Bauer liegen) und er sagt dem Zuschnitt, wonach zu
+// schneiden ist. Einzeilig und kurz — er steht in Ticker, Aufträgen und
+// Laufbericht.
+export const ZUSATZNAME_MAX = 30
+
+export function zusatznameBereinigen(roh) {
+  return String(roh ?? '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, ZUSATZNAME_MAX)
+}
+
+// Der Name, den Georg sieht: Katalogname plus Zusatzname. Für Metriken bleibt
+// der Katalogname getrennt erhalten (SPEC §3.4) — sonst zerfiele „Blocktyp" in
+// beliebig viele Typen und der Wochenverlauf vergliche Äpfel mit Birnen.
+export function blockAnzeigeName(def, eintrag = null) {
+  const name = def?.name ?? ''
+  const zusatz = zusatznameBereinigen(eintrag?.zusatz)
+  return zusatz ? `${name} · ${zusatz}` : name
+}
+
+// Prüfordner je Prüf-Instanz (BAUPLAN 41): Jeder schreibende Prüfer bekommt
+// seinen eigenen Unterordner in der Prüfmappe — sonst archiviert der erste
+// Prüfer die Tests aller anderen hinter seiner Prüfkarte, und das Tor (SPEC
+// §4.1) urteilt über einen fremden Zweig. Der Name kommt aus der
+// Instanz-Kennung, NICHT aus dem Zusatznamen: Der aufbewahrte Prüfbefehl zeigt
+// über Läufe hinweg auf diesen Ordner und dürfte durch ein Umbenennen nicht ins
+// Leere laufen. Nur-lesende Prüf-Blöcke (die Übungs-Prüfer) schreiben nichts
+// und bekommen deshalb keinen Ordner — für sie bleibt alles wie bisher.
+export function pruefOrdnerFuer(def, eintrag) {
+  if (!def?.prueft || def.nurLesen) return ''
+  const kennung = String(eintrag?.instanzId ?? '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '')
+  return kennung ? 'pruefer-' + kennung.slice(0, 8) : ''
+}
+
 // Welche Klasse gilt für diesen Block? Die Wahl an der Blockkarte gewinnt,
 // sonst die Voreinstellung des Katalog-/Eigen-Blocks, sonst Standard.
 export function blockModellKlasse(def, eintrag = null) {
@@ -426,9 +466,9 @@ export const BLOCK_KATALOG = [
       'Du bist der Prüfer — ein frischer Agent ohne das Arbeitswissen des Bauers. Antworte ' +
       'auf Deutsch. Maßstab deiner Prüfung sind AUSSCHLIESSLICH die Fertig-Kriterien des ' +
       'Arbeitspakets: Du prüfst, was der Bauer in diesem Lauf gebaut hat — nicht das ganze ' +
-      'Projekt. Die Prüfmappe pruefung/ ist deine Werkbank für DIESEN Lauf: FlowForge hat ' +
-      'sie beim Laufstart geleert — baue deine Prüfungen frisch fürs aktuelle Paket, ohne ' +
-      'Alttest-Ballast. Bilddateien sind in der Mappe verboten (hartes Nein). ' +
+      'Projekt. Dein Prüfordner (FlowForge nennt ihn dir unten) ist deine Werkbank für ' +
+      'DIESEN Lauf: Er ist beim Laufstart geleert — baue deine Prüfungen frisch fürs ' +
+      'aktuelle Paket, ohne Alttest-Ballast. Bilddateien sind dort verboten (hartes Nein). ' +
       'Verlasse dich nicht auf den Umsetzungsbericht: Prüfe selbst nach — aber lies nicht ' +
       'das ganze Projekt. ARBEITSGEDÄCHTNIS-REGEL (dein Kontext ist der teuerste Teil des ' +
       'Laufs): Starte als ersten Schritt EINE Unteraufgabe (bevorzugt das Werkzeug ' +
@@ -437,7 +477,7 @@ export const BLOCK_KATALOG = [
       'Fertig-Kriterium mit Fundort meldet, wo und wie es umgesetzt ist — der Helfer wühlt ' +
       'in seinem eigenen Kontext, du bekommst nur sein kompaktes Fazit. Selbst liest du nur ' +
       'die Stellen, die du konkret prüfst, keine Datei doppelt und nichts auf Vorrat. ' +
-      'Schreibe wenige, kleine Testdateien in den Ordner pruefung/ (passend zu den ' +
+      'Schreibe wenige, kleine Testdateien in deinen Prüfordner (passend zu den ' +
       'Werkzeugen des Projekts; zur Not ein einfaches Skript, das bei Fehlern mit einer ' +
       'Fehlermeldung endet) und führe sie aus. Schreibe robuste Prüfungen, die nur brechen, ' +
       'wenn wirklich etwas kaputt ist: keine pixelgenauen Bildvergleiche, keine verbotenen ' +
@@ -449,13 +489,13 @@ export const BLOCK_KATALOG = [
       'Zitiere beide tatsächlichen Ausgaben kurz im Abschlusstext. ' +
       'Du darfst Testdateien schreiben und Tests ausführen — den geprüften Code selbst ' +
       'veränderst du nie. Wegwerf-Hilfsskripte gehören in den Ordner arbeitsablage/, bleibende ' +
-      'Prüfungen nach pruefung/. Projektkarten sind nicht dein Prüfgegenstand: Sie werden erst ' +
-      'nach dir vom Sessionende-Block gepflegt. ' +
+      'Prüfungen in deinen Prüfordner. Projektkarten sind nicht dein Prüfgegenstand: Sie werden ' +
+      'erst nach dir vom Sessionende-Block gepflegt. ' +
       'Pflicht-Artefakt Prüfbefehl: Bevor du fertig bist, hinterlege mit dem Werkzeug ' +
-      'pruefbefehl_setzen genau EINEN Befehl, der alle deine Prüfungen in pruefung/ ausführt ' +
-      'und bei einem Fehlschlag mit einem Fehlercode endet (z.B. „npx vitest run pruefung"). ' +
+      'pruefbefehl_setzen genau EINEN Befehl, der alle deine Prüfungen in deinem Prüfordner ' +
+      'ausführt und bei einem Fehlschlag mit einem Fehlercode endet. ' +
       'Schreibe deine Prüfungen so, dass ein einziger Aufruf genügt — braucht es mehrere ' +
-      'Schritte, lege ein Sammel-Skript in pruefung/ ab und nenne nur dieses. FlowForge spielt ' +
+      'Schritte, lege ein Sammel-Skript in deinen Prüfordner und nenne nur dieses. FlowForge spielt ' +
       'diesen Befehl in Reparatur-Runden selbst ab, OHNE dich zu starten: Bleibt er rot, geht ' +
       'das Protokoll direkt an den Bauer zurück; erst bei Grün wirst du erneut gerufen. Das ' +
       'gilt auch, wenn du FEHLGESCHLAGEN urteilst — gerade dann. ' +
@@ -499,15 +539,15 @@ export const BLOCK_KATALOG = [
     auftrag:
       'Du bist die Gesamtprüfung: Du prüfst, ob das Projekt als Ganzes noch hält, und ' +
       'berichtest ehrlich, was hält und was nicht. Antworte auf Deutsch. ' +
-      'Die Prüfmappe pruefung/ ist beim Laufstart geleert — alte Prüfungen gibt es nicht; ' +
-      'du schreibst dir deine Prüfungen frisch, statt alte abzuspielen. ' +
+      'Dein Prüfordner (FlowForge nennt ihn dir unten) ist beim Laufstart geleert — alte ' +
+      'Prüfungen gibt es nicht; du schreibst dir deine Prüfungen frisch, statt alte abzuspielen. ' +
       'Verschaffe dir zuerst einen Überblick — halte dein eigenes Arbeitsgedächtnis schlank ' +
       'und delegiere Suchen und Einlesen an Unteraufgaben (bevorzugt lokal_recherchieren, ' +
       'falls es bereitsteht — sonst das Agent-Werkzeug), die dir nur ihr ' +
       'kompaktes Fazit liefern: Was verspricht die Status-Karte, was legen die ' +
       'Entscheidungs-Karten fest, was sagt die Startanleitung? ' +
-      'Schreibe dann wenige, robuste Prüfungen für die Kernversprechen des Projekts in den ' +
-      'Ordner pruefung/ und führe sie aus. Bilddateien sind dort verboten (hartes Nein); ' +
+      'Schreibe dann wenige, robuste Prüfungen für die Kernversprechen des Projekts in ' +
+      'deinen Prüfordner und führe sie aus. Bilddateien sind dort verboten (hartes Nein); ' +
       'keine überstrengen Fallen (pixelgenaue Vergleiche, Wortverbote, Datei-Inventuren). ' +
       'Den geprüften Code veränderst du nie und du reparierst nichts. ' +
       'Wegwerf-Hilfen gehören in den Ordner arbeitsablage/. ' +

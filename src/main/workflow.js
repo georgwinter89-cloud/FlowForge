@@ -9,6 +9,7 @@ import { texte } from '../shared/texte.js'
 import {
   blockDefinition,
   blockModellKlasse,
+  zusatznameBereinigen,
   REPARATUR_RUNDEN_STANDARD,
   REPARATUR_RUNDEN_MAX,
   UEBERTRAG_GRENZE_STANDARD,
@@ -55,6 +56,10 @@ function bereinigen(roh) {
     sauber.bloecke.push({
       instanzId: typeof eintrag?.instanzId === 'string' ? eintrag.instanzId : crypto.randomUUID(),
       blockId: def.id,
+      // Zusatzname je Blockkarte (BAUPLAN 41): „Bauer · Datenbank". Einzeilig
+      // und gedeckelt — er wandert in Ticker, Aufträge und Laufbericht, und die
+      // Datei liegt im Projektordner (könnte von außen verbogen sein).
+      zusatz: zusatznameBereinigen(eintrag?.zusatz),
       feldWerte,
       zurueckZu: typeof eintrag?.zurueckZu === 'string' ? eintrag.zurueckZu : null,
       // Häkchen je Block (BAUPLAN 20): „lokale KI erlaubt" — Standard an,

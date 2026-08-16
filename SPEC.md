@@ -1,6 +1,6 @@
 # FlowForge — Produkt-Spezifikation V1
 
-Stand: 16.08.2026 (Bauschritt 40) · Ursprung: Grilling-Session vom 07.08.2026 (von Georg freigegeben) ·
+Stand: 16.08.2026 (Bauschritt 41) · Ursprung: Grilling-Session vom 07.08.2026 (von Georg freigegeben) ·
 fortlaufend gepflegt — dieses Dokument beschreibt die Gegenwart, Verhaltensänderungen
 werden hier nachgezogen (Historie liefert git).
 
@@ -153,6 +153,8 @@ Jeder Workflow-Lauf hinterlässt automatisch einen kompakten, strukturierten Ber
 Blöcke, Ergebnisse, Fehlschläge). Reines Nachschlagewerk in der App — wird **niemals automatisch
 in den Kontext künftiger Sessions geladen** und nie von Hand gepflegt. Zusätzlich ist das
 Ergebnis des letzten Laufs direkt an jeder Block-Karte auf der Leinwand aufklappbar.
+Seit Bauschritt 41 steht je Block **Katalogname und Zusatzname** (§4.1) getrennt im
+Bericht — angezeigt zusammen („Prüfer · Datenbank"), gezählt wird der Blocktyp (§3.4).
 Der Verbrauch steht je Block und für den ganzen Lauf im Bericht — seit 13.08.2026 mit
 **Token-Aufschlüsselung** (Eingabe, Ausgabe, Cache gelesen, Cache geschrieben) und den
 **theoretischen API-Kosten**, die der Motor aus den Preisen der genutzten Modelle berechnet
@@ -254,6 +256,12 @@ Seite aufs Projekt vorgefiltert zeigt (eigener Baustein, nicht Teil der Leinwand
   Modelle — den Koordinator (Haiku), den Block-Agenten (seine Klasse) und seine
   Unteraufgaben. Gezählt wird das Modell mit dem größten Token-Anteil, also praktisch
   immer das des Block-Agenten; die vollen Anteile stehen im Laufbericht (§3.2).
+- **Zusatznamen zerfasern die Metriken nicht** (seit Bauschritt 41): Der Laufbericht
+  führt Katalognamen und **Zusatzname** (§4.1) getrennt. Gezählt wird ausschließlich
+  der Katalogname — „Bauer · Datenbank" und „Bauer · Oberfläche" sind derselbe
+  Blocktyp, und der Wochenverlauf vergleicht weiter Gleiches mit Gleichem.
+  Auseinandergehalten werden sie über die Instanz-Kennung: Zwei verschieden benannte
+  Prüfer in einem Lauf sind zwei Erstläufe, keine Wiederholung.
 
 ## 4. Workflows & Blöcke
 
@@ -262,6 +270,17 @@ Seite aufs Projekt vorgefiltert zeigt (eigener Baustein, nicht Teil der Leinwand
 - Die Leinwand ist ein **Schaubild** (Entscheidung Georg, 07.08.2026): gerahmte Block-Karten,
   **frei platzierbar** (Positionen werden gespeichert), verbunden durch von Hand gezogene
   **Pfeile**, die die Reihenfolge bestimmen. Datenformat: Karten + Pfeile.
+- **Zusatzname je Blockkarte** (seit Bauschritt 41): ein freies Feld an der Karte
+  (höchstens 30 Zeichen, einzeilig) — die Sorte bleibt, aus „Bauer" wird
+  „Bauer · Datenbank". Er macht mehrere gleiche Blöcke in einem Lauf
+  unterscheidbar und sagt dem Zuschnitt, wonach zu schneiden ist. FlowForge
+  reicht ihn überall durch, wo sonst der Katalogname steht: Ticker, Aufträge und
+  Übergaben („von Block ‚Bauer · Datenbank'"), Karten-Zuteilung, Herkunft der
+  Karten, Sicherungspunkt-Beschriftungen und Laufbericht. In den **Metriken**
+  bleibt er getrennt (§3.4), und ein geänderter Zusatzname macht einen
+  gespeicherten Laufstand ungültig (die Wiederaufnahme bietet ihn nicht mehr an —
+  Übergaben und Zuteilungen des unterbrochenen Laufs zeigten sonst auf Namen, die
+  es nicht mehr gibt).
 - **Parallele Zweige** (seit Bauschritt 13): Von einer Karte dürfen mehrere Pfeile
   ausgehen und mehrere an einer ankommen; Kreise sind verboten. Ein Block startet,
   sobald alle seine Vorgänger fertig sind — ein Block mit mehreren eingehenden Pfeilen
@@ -308,7 +327,10 @@ Seite aufs Projekt vorgefiltert zeigt (eigener Baustein, nicht Teil der Leinwand
   Beanstandungen nach; was seine Tests abdecken, gilt mit Grün als erledigt. Nach einer
   lokalen Vorreparatur bleibt es bewusst bei der vollen Nachprüfung (ein kleines Modell
   könnte den Test statt des Codes angefasst haben). Ohne Prüfbefehl läuft alles wie zuvor.
-  Standard **2 Reparatur-Runden** (pro Workflow verstellbar); danach hält der Lauf an und stellt
+  Standard **2 Reparatur-Runden** (pro Workflow verstellbar) — seit Bauschritt 41
+  **je Rückführungs-Ziel** statt je Lauf: Zwei Prüfer hinter zwei Bauern aßen sich
+  sonst die Runden gegenseitig weg, und der zweite Zweig bekam die Folgen-Frage,
+  ohne je repariert zu haben. Danach hält der Lauf an und stellt
   eine Folgen-Frage („Weitermachen, zurückstellen oder Stand wiederherstellen?"). Im
   Verzweigten laufen genau die Blöcke auf den Wegen von X zum Prüfer erneut — parallele
   Zweige daneben behalten ihr Ergebnis; als Ziel wählbar sind alle Vorfahren des Prüfers.
@@ -321,6 +343,8 @@ Seite aufs Projekt vorgefiltert zeigt (eigener Baustein, nicht Teil der Leinwand
 Name · Symbol · **Arbeitsauftrag** (Anweisung an den Agenten) · **braucht / liefert**
 (z.B. „braucht: Angriffsliste, liefert: geprüften Code") · optionale **Sperren**
 („darf nur lesen", „Pflichtfeld leer = Lauf hält an") · **Modellklasse** (§2).
+Der **Zusatzname** (§4.1) gehört nicht zum Block, sondern zu seiner Karte im
+Schaubild — derselbe Block darf mehrfach mit verschiedenen Zusatznamen liegen.
 
 Kernprinzip (Life-OS-Lehre): **Blöcke erzwingen, statt zu bitten** — Sperren und Pflichtfelder
 blockieren den Weiterlauf, Regeln stehen nicht nur als Text im Prompt.
@@ -393,7 +417,7 @@ Block davor eine liefert — so kommt „Bug jagen" ohne Angreifer aus.
 
 **Prüfer:** prüft **nur das aktuelle Arbeitspaket** gegen dessen Fertig-Kriterien
 (Entscheidung Georg, 12.08.2026) — nicht das ganze Projekt. Schreibt wenige, robuste
-Tests frisch fürs aktuelle Paket in den festen Ordner **`pruefung/`** (die Mappe ist
+Tests frisch fürs aktuelle Paket in seinen **eigenen Prüfordner** (die Mappe ist
 beim Laufstart geleert, §unten), führt sie aus und liefert einen Rot-vor-Grün-Beleg:
 mindestens ein Test wird einmal mit absichtlich verfälschter Erwartung ausgeführt
 (Rot) und danach unverändert echt (Grün) — ein Test, der nie rot war, beweist nichts.
@@ -410,11 +434,30 @@ als frischer Agent in der Lauf-Session (§5); es ist kein anderes Gehirn.
 Prüfer-Blöcke melden ihr Urteil als letzte Zeile ihres Abschlusstexts
 („PRUEFUNG: BESTANDEN/FEHLGESCHLAGEN").
 
+**Prüfordner je Prüf-Instanz** (seit Bauschritt 41): Die Prüfmappe `pruefung/`
+bleibt die gemeinsame Werkbank des Laufs, aber jeder **schreibende** Prüfer
+bekommt darin einen eigenen Unterordner (`pruefung/pruefer-<Kennung>/`), den
+FlowForge ihm im Auftrag nennt und am Werkzeugaufruf durchsetzt: Schreiben
+daneben ist ein hartes Nein. Grund: Ohne eigenen Ordner archivierte der erste
+bestehende Prüfer die Tests aller anderen hinter seiner Prüfkarte, und die
+Wiederholungsprüfung fuhr fremde Zweige mit. Der Ordnername kommt aus der
+**Instanz-Kennung**, nicht aus dem Zusatznamen — der aufbewahrte Prüfbefehl zeigt
+über Läufe hinweg auf ihn und dürfte durch ein Umbenennen nicht ins Leere laufen.
+Aufbewahrt wird nach bestandener Prüfung nur der eigene Ordner; die
+Prüfmappen-Ansicht an der Prüferkarte zeigt entsprechend nur ihn. Nur-lesende
+Prüf-Blöcke (die Übungs-Prüfer) schreiben nichts und bekommen keinen Ordner.
+Ehrliche Grenze: Die Sperre greift an den Schreib-Werkzeugen, nicht an
+ausgeführten Befehlen.
+
 **Prüfbefehl — Pflicht-Artefakt des Prüfers** (seit Bauschritt 35; gilt auch für
 die Gesamtprüfung): Neben seinen Tests hinterlegt der Prüfer über das Werkzeug
 `pruefbefehl_setzen` **genau einen** Befehl, der alle seine Prüfungen ausführt und
 bei einem Fehlschlag mit einem Fehlercode endet — damit FlowForge in
-Reparatur-Runden ohne KI nachprüfen kann (§4.1). Fehlt er, läuft der Prüfer genau
+Reparatur-Runden ohne KI nachprüfen kann (§4.1). Seit Bauschritt 41 gehört er der
+**Prüf-Instanz**, nicht dem Projekt: Pflichtprüfung, Nachforderung, Tor, Archiv
+und Baseline zählen je Prüfer getrennt — sonst bestünde der zweite Prüfer die
+Pflicht, weil der erste gesetzt hat, und das Tor urteilte über einen fremden
+Zweig. Fehlt er, läuft der Prüfer genau
 **eine** Nachbesserungs-Runde erneut und trägt ihn nach, ohne etwas neu zu prüfen
 (dasselbe Muster wie die Startanleitung beim Bauer, §8); fehlt er danach immer noch,
 macht der Lauf ehrlich vermerkt weiter. Der Befehl liegt in der Verwaltungsdatei
@@ -426,8 +469,8 @@ Test-Werkzeugs (node, npm, npx, pnpm, yarn, vitest, jest, mocha, tsc, python, py
 pytest, deno, bun, go, cargo, dotnet, mvn, gradle, make, rspec, phpunit), **keine**
 Verkettung (`&`, `&&`, `|`, `;`), Umleitung (`>`, `<`) oder Unterausführung
 (`$(…)`, Backticks) — braucht eine Prüfung mehrere Schritte, gehört ein
-Sammel-Skript nach `pruefung/`. Das Werkzeug ist rückfragefrei nur in Prüf-Blöcken;
-andere Blöcke lösen die übliche Rechte-Rückfrage aus.
+Sammel-Skript in den eigenen Prüfordner. Das Werkzeug ist rückfragefrei nur in
+Prüf-Blöcken; andere Blöcke lösen die übliche Rechte-Rückfrage aus.
 
 **Baseline „vorher schon rot"** (seit Bauschritt 35): Nach einer bestandenen Prüfung
 bewahrt FlowForge den Prüfbefehl im verwalteten Bereich **außerhalb des
@@ -439,10 +482,14 @@ Fehlschlag; Altlasten werden stattdessen zu einer offenen Aufgaben-Karte (Herkun
 FlowForge, stabiler Titel — derselbe Befund legt nicht bei jedem Lauf eine neue an)
 und verbrennen keine Reparatur-Runde. Verglichen wird über die Fehlerzeilen beider
 Ausgaben, normalisiert um Zahlen, Pfadtrenner und Leerraum — Laufzeiten und
-Testzahlen sollen keinen Scheinbefund erzeugen. Ehrliche Grenzen: Ist die Prüfmappe
-beim Laufstart leer (voriger Lauf abgebrochen), gibt es keine Baseline; Prüfdateien
-gezogener Prüfkarten kommen erst nach der Messung in die Mappe und zählen nicht mit;
-ein Lauf ohne Prüf-Block misst gar nichts.
+Testzahlen sollen keinen Scheinbefund erzeugen. Seit Bauschritt 41 misst FlowForge
+je Prüf-Instanz: Jeder Prüfer bringt seinen eigenen aufbewahrten Befehl und seinen
+eigenen Prüfordner mit; derselbe Befehl wird trotzdem nur einmal abgespielt, und
+die Altlasten aller Messungen landen in **einer** Aufgaben-Karte. Ehrliche
+Grenzen: Ist der Prüfordner beim Laufstart leer (voriger Lauf abgebrochen), gibt
+es für ihn keine Baseline; Prüfdateien gezogener Prüfkarten kommen erst nach der
+Messung in die Mappe und zählen nicht mit; ein Lauf ohne Prüf-Block misst gar
+nichts.
 
 **Gesamtprüfung** (seit 12.08.2026, umgebaut 13.08.2026): eigener Prüf-Block für
 zwischendurch — prüft mit **frisch geschriebenen** Prüfungen, ob das Projekt als
@@ -780,7 +827,8 @@ Angreifer durch die Diagnose.
   Billigmodell nicht erbt. Weil der Übertrag den Koordinator-Faden misst, zählt für
   die Schwelle auch nur **sein** Kontextfenster — das Fenster des Block-Agenten steht
   getrennt daneben. Reparatur-Runden laufen als neuer Agent mit der
-  Prüferkritik im Auftrag. **Parallele Zweige** laufen als eigene Sessions, weil die
+  Prüferkritik im Auftrag; ihr **Budget zählt je Rückführungs-Ziel** (seit
+  Bauschritt 41, §4.1). **Parallele Zweige** laufen als eigene Sessions, weil die
   Lauf-Session einen Block nach dem anderen verarbeitet — ehrlich im Ticker vermerkt.
 - **Reparatur-Runde mit Diff und Vor-Fazit** (seit Bauschritt 34): Der frische Agent einer
   Reparatur-Runde bekommt neben der Prüferkritik zwei von FlowForge gerechnete Tatsachen —
@@ -1065,7 +1113,9 @@ Werkzeug `startanleitung_setzen` (hart validiert; die Datei selbst ist für ihn 
 alle Verwaltungsdateien, §3.1). Durchsetzung beim Bauer-Block: Fehlt die Startanleitung nach
 seinem Lauf, bekommt er genau eine Nachbesserungs-Runde (unabhängig von den Reparatur-Runden);
 fehlt sie danach immer noch, macht der Lauf weiter und vermerkt das ehrlich im Ticker und am
-Block-Ergebnis.
+Block-Ergebnis. Seit Bauschritt 41 zählen diese Nachbesserungs-Runden — Startanleitung,
+Rauchtest und Prüfbefehl — **je Block** statt je Lauf: Sonst verbrauchte der erste Bauer
+oder Prüfer sie, und ein zweiter bekäme nie eine.
 
 **Rauchtest nach dem Bauer** (seit Bauschritt 35): Direkt nach einem gelungenen Bau-Block
 startet FlowForge die Startanleitung **selbst** einmal kurz und stoppt sie wieder — ohne

@@ -19,6 +19,9 @@ import { texte } from '../shared/texte.js'
 import {
   blockDefinition,
   blockModellKlasse,
+  blockAnzeigeName,
+  pruefOrdnerFuer,
+  zusatznameBereinigen,
   sdkModell,
   unterModellFuer,
   UEBERTRAG_GRENZE_STANDARD
@@ -33,7 +36,9 @@ import {
   vorfahrenDistanzen,
   uebergabenAuswahl,
   rueckfuehrungsZiel,
-  zwischenBloecke
+  zwischenBloecke,
+  budgetNehmen,
+  laufstandPasst
 } from '../shared/kettenRegeln.js'
 import { prueferKritik, mitteGekuerzt } from '../shared/kantenRegeln.js'
 import { fehlerZeilen, neueFehler, grundsaetzlicheKritik } from '../shared/torRegeln.js'
@@ -147,6 +152,7 @@ function sonderlaufWorkflow(sonderlauf) {
       {
         instanzId: sonderlauf.instanzId,
         blockId: vorlage.blockId,
+        zusatz: '',
         feldWerte: {},
         zurueckZu: null,
         lokaleKi: true,
@@ -385,11 +391,15 @@ const BASELINE_MAX = 3000
 // Protokoll darunter (sonst wird aus einer kaputten Suite eine Bleiwüste).
 const TOR_BEANSTANDUNGEN_MAX = 8
 
-// Hat die Prüfmappe überhaupt Dateien? Ohne sie misst ein aufbewahrter
-// Prüfbefehl nichts Sinnvolles (die Baseline bliebe ein Scheinbefund).
-function pruefmappeHatDateien(projektPfad) {
+// Hat der Prüfordner dieser Instanz überhaupt Dateien? Ohne sie misst ein
+// aufbewahrter Prüfbefehl nichts Sinnvolles (die Baseline bliebe ein
+// Scheinbefund). Ohne eigenen Ordner (Übungs-Prüfer) zählt die ganze Mappe.
+function pruefmappeHatDateien(projektPfad, pruefOrdner = '') {
   try {
-    return fs.readdirSync(path.join(projektPfad, 'pruefung')).length > 0
+    return (
+      fs.readdirSync(path.join(projektPfad, 'pruefung', ...(pruefOrdner ? [pruefOrdner] : [])))
+        .length > 0
+    )
   } catch {
     return false
   }
@@ -412,6 +422,13 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     sonderlauf && blockId === SONDERLAEUFE[sonderlauf.art].blockId
       ? sonderlaufDefinition(sonderlauf)
       : blockDefinition(blockId)
+  // Zusatzname je Blockkarte (BAUPLAN 41): Überall, wo Georg einen Blocknamen
+  // liest — Ticker, Aufträge, Übergaben, Laufbericht —, steht der Anzeigename
+  // („Prüfer · Datenbank"). Für die Metriken bleibt der Katalogname getrennt
+  // erhalten (SPEC §3.4).
+  const anzeigeVon = (eintrag) => blockAnzeigeName(defVon(eintrag.blockId), eintrag)
+  // Prüfordner je Prüf-Instanz (BAUPLAN 41).
+  const ordnerVon = (eintrag) => pruefOrdnerFuer(defVon(eintrag.blockId), eintrag)
 
   // Ohne ausdrückliche Auswahl gilt die festgenagelte Vorauswahl:
   // Status-Karte (immer) + offene Aufgaben-Karten.
@@ -443,24 +460,11 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
   // unterbrochenen Lauf — sonst passen Blöcke und Lieferungen nicht mehr.
   // Ein Laufstand aus einer FlowForge-Version vor den parallelen Zweigen
   // (Positions- statt Blockliste) ist ebenfalls nicht fortsetzbar.
-  if (fortsetzung) {
-    const pfeilMenge = new Set(workflow.pfeile.map((p) => p.von + '→' + p.nach))
-    const idMenge = new Set(kettenIds)
-    const passt =
-      Array.isArray(fortsetzung.fertigIds) &&
-      Array.isArray(fortsetzung.kettenIds) &&
-      fortsetzung.kettenIds.length === kette.length &&
-      kette.every((eintrag, idx) => eintrag.instanzId === fortsetzung.kettenIds[idx]) &&
-      Array.isArray(fortsetzung.pfeile) &&
-      fortsetzung.pfeile.length === pfeilMenge.size &&
-      fortsetzung.pfeile.every(
-        (paar) => Array.isArray(paar) && pfeilMenge.has(paar[0] + '→' + paar[1])
-      ) &&
-      fortsetzung.fertigIds.every((id) => idMenge.has(id))
-    if (!passt) {
-      laufstandLoeschen(projektPfad)
-      return { ok: false, fehler: texte.wiederaufnahme.fehlerVeraendert }
-    }
+  // Seit BAUPLAN 41 gehört auch der Zusatzname dazu (laufstandPasst) — er
+  // steckt in Übergaben, Zuteilungen und Berichten des unterbrochenen Laufs.
+  if (fortsetzung && !laufstandPasst(kette, workflow.pfeile, fortsetzung)) {
+    laufstandLoeschen(projektPfad)
+    return { ok: false, fehler: texte.wiederaufnahme.fehlerVeraendert }
   }
   // Sperren-Mechanik „Pflichtfeld leer = Lauf hält an" (SPEC §4.2).
   const feldFehler = pruefePflichtfelder(kette)
@@ -491,7 +495,7 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           )
         : []
       if (offene.length === 0)
-        return { ok: false, fehler: texte.kette.fehlerAuftragsquelle(def.name, feld.label) }
+        return { ok: false, fehler: texte.kette.fehlerAuftragsquelle(anzeigeVon(eintrag), feld.label) }
     }
   }
 
@@ -570,40 +574,48 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
   // Wiederaufnahme (der Stand vor dem Lauf ist längst gemessen) und in Läufen
   // ohne Prüf-Block (Sonderläufe, reine Lese-Ketten) — da gäbe es kein Tor,
   // für das sie zählen könnte.
-  let baseline = null // { befehl, ausgabe, zeilen }
-  let baselineTicker = null
-  if (
-    !fortsetzung &&
-    kette.some((eintrag) => defVon(eintrag.blockId)?.prueft) &&
-    pruefmappeHatDateien(projektPfad)
-  ) {
-    const alterBefehl = pruefbefehlArchivLaden(projektPfad)
-    if (alterBefehl) {
-      const messung = await befehlAbspielen(projektPfad, alterBefehl, {
-        abbrechen: () => lauf.sanft || lauf.hart
-      })
-      const zeilen =
-        messung.code === 0 || messung.abgebrochen
-          ? []
-          : fehlerZeilen(messung.ausgabe).map((f) => f.zeile)
-      if (messung.abgebrochen) {
-        // Georg hat gestoppt, bevor die Messung durch war — dann gibt es keine
-        // Baseline, statt einer erfundenen.
-      } else if (messung.code === 0) {
-        baselineTicker = [texte.ticker.baselineSpielt(alterBefehl), texte.ticker.baselineGruen]
-      } else {
-        // Für den späteren Vergleich genügen die Fehlerzeilen — die volle
-        // Ausgabe wandert nur gedeckelt in die Aufträge und den Laufstand.
-        baseline = {
-          befehl: alterBefehl,
-          ausgabe: mitteGekuerzt(messung.ausgabe, BASELINE_MAX).text,
-          zeilen
+  // Je Prüf-Instanz eine eigene Baseline (BAUPLAN 41): Jeder Prüfer hat seinen
+  // eigenen aufbewahrten Prüfbefehl und seinen eigenen Prüfordner — eine
+  // gemeinsame Messung urteilte über einen fremden Zweig.
+  const baseline = new Map() // instanzId → { befehl, ausgabe, zeilen }
+  const baselineTicker = []
+  if (!fortsetzung) {
+    // Denselben Befehl misst FlowForge nur einmal — zwei Prüfer dürfen sich
+    // denselben aufbewahrten Befehl teilen (Altbestand aus einem Format ohne
+    // Instanz-Kennung).
+    const gemessen = new Map() // befehl → messung
+    for (const eintrag of kette) {
+      if (!defVon(eintrag.blockId)?.prueft) continue
+      if (!pruefmappeHatDateien(projektPfad, ordnerVon(eintrag))) continue
+      const alterBefehl = pruefbefehlArchivLaden(projektPfad, eintrag.instanzId)
+      if (!alterBefehl) continue
+      let messung = gemessen.get(alterBefehl)
+      if (!messung) {
+        messung = await befehlAbspielen(projektPfad, alterBefehl, {
+          gruppe: 'tor:' + projektPfad + ':' + eintrag.instanzId,
+          abbrechen: () => lauf.sanft || lauf.hart
+        })
+        gemessen.set(alterBefehl, messung)
+        if (messung.abgebrochen) {
+          // Georg hat gestoppt, bevor die Messung durch war — dann gibt es
+          // keine Baseline, statt einer erfundenen.
+        } else if (messung.code === 0) {
+          baselineTicker.push(texte.ticker.baselineSpielt(alterBefehl), texte.ticker.baselineGruen)
+        } else {
+          baselineTicker.push(
+            texte.ticker.baselineSpielt(alterBefehl),
+            texte.ticker.baselineRot(fehlerZeilen(messung.ausgabe).length)
+          )
         }
-        baselineTicker = [
-          texte.ticker.baselineSpielt(alterBefehl),
-          texte.ticker.baselineRot(zeilen.length)
-        ]
       }
+      if (messung.abgebrochen || messung.code === 0) continue
+      // Für den späteren Vergleich genügen die Fehlerzeilen — die volle
+      // Ausgabe wandert nur gedeckelt in die Aufträge und den Laufstand.
+      baseline.set(eintrag.instanzId, {
+        befehl: alterBefehl,
+        ausgabe: mitteGekuerzt(messung.ausgabe, BASELINE_MAX).text,
+        zeilen: fehlerZeilen(messung.ausgabe).map((f) => f.zeile)
+      })
     }
   }
 
@@ -647,9 +659,12 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         ? geladeneKarten.karten.filter((k) => k.sorte === 'pruefung').map((k) => [k.id, k])
         : []
     )
+    // Je Prüfordner einmal einlegen (BAUPLAN 41): Dieselbe Prüfkarte darf an
+    // zwei Prüfern hängen — dann bekommt jeder seine eigene Kopie.
     const schonEingelegt = new Set()
     for (const eintrag of kette) {
       if (!defVon(eintrag.blockId)?.prueft) continue
+      const pruefOrdner = ordnerVon(eintrag)
       const liste = []
       for (const kartenId of eintrag.pruefKarten ?? []) {
         const karte = pruefkartenNachId.get(kartenId)
@@ -658,13 +673,14 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           id: kartenId,
           titel: karte.titel,
           text: karte.text,
-          ordner: pruefkartenOrdner(kartenId),
+          ordner: pruefkartenOrdner(kartenId, pruefOrdner),
           dateien: pruefkartenArchivHatDateien(projektPfad, kartenId)
         }
-        if (!fortsetzung && anhang.dateien && !schonEingelegt.has(kartenId)) {
-          schonEingelegt.add(kartenId)
+        const schluessel = kartenId + '@' + pruefOrdner
+        if (!fortsetzung && anhang.dateien && !schonEingelegt.has(schluessel)) {
+          schonEingelegt.add(schluessel)
           try {
-            if (pruefkarteEinlegen(projektPfad, kartenId)) pruefkartenEingelegt++
+            if (pruefkarteEinlegen(projektPfad, kartenId, pruefOrdner)) pruefkartenEingelegt++
           } catch {
             // Eine klemmende Kopie verhindert den Start nicht — der Prüfer
             // bekommt die Karte dann ohne Dateien genannt.
@@ -679,10 +695,12 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
 
   // Sicherheitsnetz vor dem Lauf: der Stand von jetzt ist immer wiederholbar —
   // und die Folgen-Frage kann genau hierauf zurücksetzen.
+  // namen = Katalognamen (Metriken, SPEC §3.4), anzeigen = mit Zusatznamen.
   const namen = kette.map((b) => defVon(b.blockId).name)
+  const anzeigen = kette.map(anzeigeVon)
   const sicherung = await sicherungspunktAnlegen(
     projektPfad,
-    texte.sicherungen.beschriftungVorLauf(namen[0])
+    texte.sicherungen.beschriftungVorLauf(anzeigen[0])
   )
   if (!sicherung.ok) {
     aktiveLaeufe.delete(projektPfad)
@@ -1049,12 +1067,12 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
   if (pruefkartenEingelegt > 0) tickern(texte.ticker.pruefkartenEingelegt(pruefkartenEingelegt))
   // Baseline (BAUPLAN 35): schon vor dem ersten Block gemessen, hier erst
   // sichtbar — den Ticker gibt es erst ab jetzt.
-  for (const zeile of baselineTicker ?? []) tickern(zeile)
+  for (const zeile of baselineTicker) tickern(zeile)
   // Altlasten werden Aufgaben-Karte, keine Reparatur-Runde: Der Befund landet
   // dort, wo Georg ihn wiederfindet, und rutscht über die Kartenauswahl in die
   // nächsten Bau-Läufe. Der Titel ist bewusst stabil — derselbe Befund soll
   // nicht bei jedem Lauf eine neue Karte anlegen.
-  if (baseline) {
+  if (baseline.size > 0) {
     try {
       const vorhanden = kartenLaden(projektPfad)
       const schonDa =
@@ -1064,12 +1082,16 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
             karte.sorte === 'aufgabe' && !karte.erledigt && karte.titel === texte.tor.altlastTitel
         )
       if (!schonDa) {
+        // Mehrere Prüfer, mehrere Baselines: EINE Karte mit stabilem Titel —
+        // derselbe Befund soll nicht bei jedem Lauf eine neue anlegen.
+        const ersteRote = [...baseline.values()][0]
+        const alleZeilen = [...new Set([...baseline.values()].flatMap((b) => b.zeilen))]
         const angelegt = karteAnlegen(
           projektPfad,
           {
             sorte: 'aufgabe',
             titel: texte.tor.altlastTitel,
-            text: texte.tor.altlastText(baseline.befehl, baseline.zeilen.slice(0, 3).join(' · ')),
+            text: texte.tor.altlastText(ersteRote.befehl, alleZeilen.slice(0, 3).join(' · ')),
             thema: texte.tor.altlastThema
           },
           { quelle: 'flowforge', laufId: bericht.id, laufStart: bericht.gestartetAm }
@@ -1100,6 +1122,12 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         {
           eintrag,
           def: defVon(eintrag.blockId),
+          // Anzeigename (BAUPLAN 41): Katalogname plus Zusatzname — alles, was
+          // Georg liest. Der Katalogname bleibt an def.name für die Metriken.
+          name: anzeigeVon(eintrag),
+          // Prüfordner dieser Instanz (BAUPLAN 41) — leer bei allen, die keine
+          // Prüfungen schreiben.
+          pruefOrdner: ordnerVon(eintrag),
           status: 'offen', // 'offen' | 'laeuft' | 'fertig'
           lieferung: null,
           rueckmeldung: '',
@@ -1180,8 +1208,10 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     const nachfolgerVon = new Map(kettenIds.map((id) => [id, []]))
     for (const pfeil of workflow.pfeile) nachfolgerVon.get(pfeil.von)?.push(pfeil.nach)
     // Alle Nachfahren eines Blocks entlang der Pfeile, gruppiert nach
-    // Blockname — zugeteilt wird per Name (so kennt der Agent die Blöcke);
-    // tragen mehrere Instanzen denselben Namen, bekommen alle die Zuteilung.
+    // Blockname — zugeteilt wird per Name (so kennt der Agent die Blöcke).
+    // Seit BAUPLAN 41 ist das der Anzeigename samt Zusatz: Zwei gleiche Blöcke
+    // sind damit eindeutig adressierbar; ohne Zusatz bekommen wie bisher alle
+    // gleichnamigen Instanzen dieselbe Zuteilung.
     function nachfahrenNamen(instanzId) {
       const namen = new Map()
       const offen = [...(nachfolgerVon.get(instanzId) ?? [])]
@@ -1190,7 +1220,7 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         const id = offen.pop()
         if (besucht.has(id)) continue
         besucht.add(id)
-        const name = knoten.get(id)?.def.name
+        const name = knoten.get(id)?.name
         if (name) {
           if (!namen.has(name)) namen.set(name, [])
           namen.get(name).push(id)
@@ -1206,7 +1236,7 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     // Lauf angelegte oder geänderte Karte: Aufgabe(n) · Block · Lauf.
     let laufPaket = null
     function herkunftFuerBlock(instanzId) {
-      const name = instanzId ? knoten.get(instanzId)?.def.name : null
+      const name = instanzId ? knoten.get(instanzId)?.name : null
       return {
         quelle: 'block',
         block: name ?? texte.laufberichte.unbekannterBlock,
@@ -1258,15 +1288,22 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     // noch laufenden Blöcke fertig sind — sonst schreibt einer in den
     // zurückgesetzten Ordner hinein.
     let wiederherstellenNachLauf = false
-    let rundenUebrig = workflow.reparaturRunden
+    // Reparatur-Runden je Rückführungs-Ziel (BAUPLAN 41): Bis Bauschritt 40
+    // zählte EIN Zähler für den ganzen Lauf — zwei Prüfer hinter zwei Bauern
+    // aßen sich gegenseitig die Runden weg. rundenStandard ist die Einstellung
+    // des Workflows (ein alter Laufstand kann sie überschreiben).
+    const rundenUebrig = new Map() // zielInstanzId → verbleibende Runden
+    let rundenStandard = workflow.reparaturRunden
     // Startanleitungs-Pflicht (SPEC §8): genau eine Nachbesserungs-Runde pro
-    // Lauf — unabhängig von den Reparatur-Runden des Prüfers.
-    let startanleitungNachgefordert = false
+    // Block — unabhängig von den Reparatur-Runden des Prüfers.
     // Tor ohne KI (BAUPLAN 35): Auch der Prüfbefehl und der Rauchtest bekommen
-    // je genau EINE Nachbesserungs-Runde pro Lauf. Ohne dieses Budget liefe ein
-    // Projekt, dessen App grundsätzlich nicht startet, endlos im Kreis.
-    let pruefbefehlNachgefordert = false
-    let rauchtestNachgefordert = false
+    // je genau EINE Nachbesserungs-Runde. Ohne dieses Budget liefe ein Projekt,
+    // dessen App grundsätzlich nicht startet, endlos im Kreis. Seit BAUPLAN 41
+    // je Block statt je Lauf: Sonst verbrauchte der erste Prüfer die
+    // Nachforderung, und der zweite bekäme nie eine.
+    const startanleitungNachgefordert = new Set()
+    const pruefbefehlNachgefordert = new Set()
+    const rauchtestNachgefordert = new Set()
     // Automatischer Übertrag (SPEC §5): Zähler gegen die Übertragsgrenze,
     // gemeinsam für alle Blöcke des Laufs.
     let uebertraege = 0
@@ -1283,6 +1320,12 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       laufstandSpeichern(projektPfad, {
         gestartetAm: bericht.gestartetAm,
         kettenIds,
+        // Zusatznamen (BAUPLAN 41): Ein geänderter Name macht den Stand
+        // ungültig — die Wiederaufnahme prüft ihn mit (laufstandPasst).
+        zusaetze: kette.map((eintrag) => [
+          eintrag.instanzId,
+          zusatznameBereinigen(eintrag.zusatz)
+        ]),
         pfeile: workflow.pfeile.map((p) => [p.von, p.nach]),
         kartenIds: ausgewaehlt,
         fertigIds: kettenIds.filter((id) => knoten.get(id).status === 'fertig'),
@@ -1357,15 +1400,18 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         // Sonderlauf (BAUPLAN 30): die Wiederaufnahme baut denselben
         // Ein-Block-Workflow wieder auf.
         sonderlauf,
-        rundenUebrig,
+        // Budgets je Ziel bzw. je Block (BAUPLAN 41) — als Listen, damit sie
+        // eine Unterbrechung überstehen.
+        rundenUebrig: [...rundenUebrig],
+        rundenStandard,
         uebertraege,
-        startanleitungNachgefordert,
+        startanleitungNachgefordert: [...startanleitungNachgefordert],
         // Tor ohne KI (BAUPLAN 35): Baseline und verbrauchte Nachforderungen
         // wandern mit — sonst würde nach einem App-Neustart neu gemessen und
         // eine schon verbrauchte Nachbesserungs-Runde erneut gewährt.
-        baseline,
-        pruefbefehlNachgefordert,
-        rauchtestNachgefordert
+        baseline: [...baseline],
+        pruefbefehlNachgefordert: [...pruefbefehlNachgefordert],
+        rauchtestNachgefordert: [...rauchtestNachgefordert]
       })
     }
 
@@ -1415,21 +1461,57 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           knoten.get(id).uebergabe = typeof u?.text === 'string' ? u.text : ''
           knoten.get(id).uebergabeVerloren = Boolean(u?.verloren)
         }
-      if (Number.isInteger(fortsetzung.rundenUebrig)) rundenUebrig = fortsetzung.rundenUebrig
+      // Budgets (BAUPLAN 41): Listen sind das heutige Format. Ein alter Stand
+      // trägt eine Zahl (Runden für den ganzen Lauf) bzw. ein Ja/Nein je
+      // Nachforderung — die Zahl wird zur Vorgabe für jedes Ziel, ein
+      // verbrauchtes Ja gilt vorsichtshalber für alle Blöcke (lieber eine
+      // Nachforderung zu wenig als eine Endlosschleife).
+      if (Array.isArray(fortsetzung.rundenUebrig))
+        for (const [id, uebrig] of fortsetzung.rundenUebrig)
+          if (knoten.has(id) && Number.isInteger(uebrig)) rundenUebrig.set(id, uebrig)
+      if (Number.isInteger(fortsetzung.rundenStandard)) rundenStandard = fortsetzung.rundenStandard
+      else if (Number.isInteger(fortsetzung.rundenUebrig)) rundenStandard = fortsetzung.rundenUebrig
       if (Number.isInteger(fortsetzung.uebertraege)) uebertraege = fortsetzung.uebertraege
-      startanleitungNachgefordert = Boolean(fortsetzung.startanleitungNachgefordert)
+      const budgetUebernehmen = (wert, menge, gilt) => {
+        if (Array.isArray(wert)) {
+          for (const id of wert) if (knoten.has(id)) menge.add(id)
+        } else if (wert === true) {
+          for (const eintrag of kette) if (gilt(defVon(eintrag.blockId))) menge.add(eintrag.instanzId)
+        }
+      }
+      budgetUebernehmen(
+        fortsetzung.startanleitungNachgefordert,
+        startanleitungNachgefordert,
+        (def) => def?.startanleitungPflicht
+      )
+      budgetUebernehmen(
+        fortsetzung.pruefbefehlNachgefordert,
+        pruefbefehlNachgefordert,
+        (def) => def?.pruefbefehlPflicht
+      )
+      budgetUebernehmen(
+        fortsetzung.rauchtestNachgefordert,
+        rauchtestNachgefordert,
+        (def) => def?.startanleitungPflicht
+      )
       // Tor ohne KI (BAUPLAN 35): Die Baseline wurde beim ursprünglichen Start
       // gemessen — sie gilt für den ganzen Lauf und wird nicht neu erhoben.
-      if (fortsetzung.baseline && typeof fortsetzung.baseline.befehl === 'string')
-        baseline = {
-          befehl: fortsetzung.baseline.befehl,
-          ausgabe: String(fortsetzung.baseline.ausgabe ?? ''),
-          zeilen: Array.isArray(fortsetzung.baseline.zeilen)
-            ? fortsetzung.baseline.zeilen.filter((zeile) => typeof zeile === 'string')
-            : []
-        }
-      pruefbefehlNachgefordert = Boolean(fortsetzung.pruefbefehlNachgefordert)
-      rauchtestNachgefordert = Boolean(fortsetzung.rauchtestNachgefordert)
+      // Seit BAUPLAN 41 je Prüf-Instanz; ein alter Stand trug genau eine, die
+      // dann für jeden Prüfer gilt.
+      const baselineEintrag = (roh) => ({
+        befehl: String(roh.befehl),
+        ausgabe: String(roh.ausgabe ?? ''),
+        zeilen: Array.isArray(roh.zeilen) ? roh.zeilen.filter((z) => typeof z === 'string') : []
+      })
+      if (Array.isArray(fortsetzung.baseline)) {
+        for (const [id, roh] of fortsetzung.baseline)
+          if (knoten.has(id) && typeof roh?.befehl === 'string')
+            baseline.set(id, baselineEintrag(roh))
+      } else if (typeof fortsetzung.baseline?.befehl === 'string') {
+        for (const eintrag of kette)
+          if (defVon(eintrag.blockId)?.prueft)
+            baseline.set(eintrag.instanzId, baselineEintrag(fortsetzung.baseline))
+      }
       // Karten-Zuteilung (BAUPLAN 29): tolerant gegenüber alten Laufständen —
       // ohne Eintrag gilt schlicht die volle Auswahl.
       for (const [id, ids] of Array.isArray(fortsetzung.kartenZuteilung)
@@ -1448,7 +1530,7 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           texte.ticker.wiederaufnahme(
             nummerVon.get(naechster.instanzId),
             kette.length,
-            defVon(naechster.blockId).name
+            anzeigeVon(naechster)
           )
         )
       bericht.ticker.push({ zeit: jetztIso(), text: texte.laufberichte.fortgesetztHinweis })
@@ -1473,7 +1555,7 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       // Der Bericht zeigt den Gesamtstand der Zuteilung — je Block mit
       // Kartenzahl; ein erneuter Aufruf ersetzt die erneut genannten Blöcke.
       bericht.kartenZuteilung = [...kartenZuteilung].map(([id, ids]) => ({
-        block: knoten.get(id)?.def.name ?? '?',
+        block: knoten.get(id)?.name ?? '?',
         anzahl: ids.length
       }))
       const zeilen = urteil.jeBlock.map((e) => `${e.block} ${e.anzahl}`).join(', ')
@@ -1646,23 +1728,23 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         haupt = true
         laufMotorBelegt = true
         hauptMotorInstanz = instanzId
-        hauptMotorBlockName = k.def.name
+        hauptMotorBlockName = k.name
       } else {
         // Parallele Zweige (BAUPLAN 19): Die Lauf-Session verarbeitet einen
         // Block nach dem anderen — parallele Blöcke laufen ehrlich vermerkt
         // in eigenen Sessions.
-        tickern(texte.ticker.parallelEigeneSession(k.def.name))
+        tickern(texte.ticker.parallelEigeneSession(k.name))
         motor = motorBauen(
           null,
           () => instanzId,
-          () => k.def.name
+          () => k.name
         )
       }
       lauf.motoren.set(instanzId, motor)
       return motor
         .blockAusfuehren({
           auftrag,
-          blockName: k.def.name,
+          blockName: k.name,
           // Karten-Zuteilung (BAUPLAN 29): Die Instanz-Kennung ordnet
           // Zuteilung und Projektwissen dem laufenden Block zu.
           instanzId,
@@ -1670,6 +1752,8 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           // Nur Prüf-Blöcke dürfen die Prüfmappe verändern (Entscheidung Georg,
           // 12.08.2026) — der Bauer weicht sonst Prüfungen auf, statt zu reparieren.
           darfPruefen: Boolean(k.def.prueft),
+          // Und jeder Prüfer nur seinen eigenen Unterordner (BAUPLAN 41).
+          pruefOrdner: k.pruefOrdner,
           // Audit (BAUPLAN 25): nur-lesend für Dateien und Befehle, darf aber
           // Karten anlegen — Befunde werden Aufgaben-Karten.
           darfKartenAnlegen: Boolean(k.def.darfKartenAnlegen),
@@ -1720,6 +1804,16 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
             motor.beenden()
           }
         })
+    }
+
+    // Welche Baseline gehört in den Auftrag dieses Blocks? Ein Prüfer sieht
+    // seine eigene (er urteilt über seinen Zweig), ein Bau-Block alle.
+    function baselineFuer(k) {
+      if (k.def.prueft) {
+        const eigen = baseline.get(k.eintrag.instanzId)
+        return eigen ? [eigen] : []
+      }
+      return k.def.startanleitungPflicht ? [...baseline.values()] : []
     }
 
     // Führt einen Block vollständig aus: Auftrag bauen, Motor laufen lassen,
@@ -1799,6 +1893,10 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         // Auftragsquellen-Blöcke (Kennzeichen kartenZuteilung) bekommen das
         // Werkzeug samt der Namen ihrer Nachfahren erklärt — ohne Nachfahren
         // (Ein-Block-Lauf) gibt es nichts zuzuteilen, der Zusatz entfällt.
+        // Prüfordner je Prüf-Instanz (BAUPLAN 41): Der Auftrag nennt ihn — die
+        // Sperre am Werkzeugaufruf setzt ihn durch, und der Prüfbefehl muss
+        // genau ihn ausführen.
+        if (k.pruefOrdner) auftrag += texte.agentenPruefordner.zusatz(k.pruefOrdner)
         if (k.def.kartenZuteilung) {
           const namen = [...nachfahrenNamen(k.eintrag.instanzId).keys()]
           if (namen.length) auftrag += texte.agentenKartenZuteilung.auftragZusatz(namen)
@@ -1846,9 +1944,11 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         if (k.rauchtestRueckmeldung)
           auftrag += texte.agentenUebergabe.rauchtestRueckmeldung(k.rauchtestRueckmeldung)
         // Baseline: Bauer und Prüfer erfahren, was schon vor dem Lauf rot war —
-        // sonst hält jemand eine Altlast für sein eigenes Werk.
-        if (baseline && (k.def.prueft || k.def.startanleitungPflicht))
-          auftrag += texte.agentenUebergabe.baselineRot(baseline.befehl, baseline.ausgabe)
+        // sonst hält jemand eine Altlast für sein eigenes Werk. Ein Prüfer
+        // bekommt seine eigene Messung (BAUPLAN 41), der Bauer alle: Was vor
+        // dem Lauf rot war, geht ihn unabhängig vom Zweig an.
+        for (const b of baselineFuer(k))
+          auftrag += texte.agentenUebergabe.baselineRot(b.befehl, b.ausgabe)
         // Diff + Vor-Fazit (BAUPLAN 34, Retained Reasoning light): Der frische
         // Agent erkundet nicht neu — er weiß, was in diesem Lauf schon
         // geschehen ist und warum. Das Frische-Prinzip bleibt: Er erbt kein
@@ -1955,11 +2055,11 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           k.uebergabe = gekuerzt(text)
           bericht.uebertraege.push({
             zeit: jetztIso(),
-            block: k.def.name,
+            block: k.name,
             text: k.uebergabeVerloren
-              ? texte.laufberichte.uebertragOhneUebergabeZeile(k.def.name)
+              ? texte.laufberichte.uebertragOhneUebergabeZeile(k.name)
               : texte.laufberichte.uebertragZeile(
-                  k.def.name,
+                  k.name,
                   // Füllstand im Moment der Auslösung — nicht der am Session-Ende
                   // (die endgültige Fenstergröße würde ihn sonst kleinrechnen).
                   ergebnis.verbrauch?.uebertragBand?.von ?? ergebnis.verbrauch?.kontextProzentVon ?? '?',
@@ -2024,7 +2124,7 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       const text = diffTextBauen(vergleich.dateien, { verschmutzt: k.diffBasisVerschmutzt })
       tickern(
         texte.ticker.diffUebergeben(
-          k.def.name,
+          k.name,
           vergleich.dateien.length,
           diffBilanz(vergleich.dateien)
         )
@@ -2042,10 +2142,14 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     async function torAbspielen(k) {
       k.torGruenBefehl = ''
       if (lauf.sanft || lauf.hart || endZustand) return null
-      const befehl = pruefbefehlLaden(projektPfad)
+      // Je Prüf-Instanz ihr eigener Befehl und ihre eigene Prozessgruppe
+      // (BAUPLAN 41): Sonst urteilte das Tor über einen fremden Zweig, und ein
+      // fertiger Testlauf erschösse den laufenden des anderen.
+      const befehl = pruefbefehlLaden(projektPfad, k.eintrag.instanzId)
       if (!befehl) return null
-      tickern(texte.ticker.torSpielt(befehl))
+      tickern(texte.ticker.torSpielt(k.name, befehl))
       const messung = await befehlAbspielen(projektPfad, befehl, {
+        gruppe: 'tor:' + projektPfad + ':' + k.eintrag.instanzId,
         abbrechen: () => lauf.sanft || lauf.hart
       })
       // Abgebrochen heißt: Georg hat den Lauf gestoppt, nicht „die Prüfung ist
@@ -2060,14 +2164,15 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       // Altlasten sind schon als Aufgaben-Karte abgelegt und verbrennen keine
       // Reparatur-Runde. Ein Zeitlimit zählt dagegen immer als rot: Ein
       // Testlauf, der nicht endet, belegt gar nichts.
-      const zeilen = baseline
-        ? neueFehler(baseline.zeilen.join('\n'), messung.ausgabe)
+      const eigeneBaseline = baseline.get(k.eintrag.instanzId) ?? null
+      const zeilen = eigeneBaseline
+        ? neueFehler(eigeneBaseline.zeilen.join('\n'), messung.ausgabe)
         : fehlerZeilen(messung.ausgabe).map((f) => f.zeile)
-      if (baseline && zeilen.length === 0 && !messung.zeitlimit) {
+      if (eigeneBaseline && zeilen.length === 0 && !messung.zeitlimit) {
         // Bewusst ohne torGruenBefehl: Der Befehl ist nicht grün, nur die
         // Fehler sind alt — der Prüfer prüft normal nach (er kennt die
         // Baseline aus seinem Auftrag), aber ohne Rückführung.
-        tickern(texte.ticker.torAltlasten(baseline.zeilen.length))
+        tickern(texte.ticker.torAltlasten(eigeneBaseline.zeilen.length))
         return null
       }
       const genommen = zeilen.slice(0, TOR_BEANSTANDUNGEN_MAX)
@@ -2122,7 +2227,9 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         const vk = knoten.get(vorfahre.instanzId)
         if (vk.lieferung == null) continue
         lieferungen.push({
-          name: vk.def.name,
+          // Anzeigename (BAUPLAN 41): „von Block ‚Bauer · Datenbank'" — bei
+          // zwei gleichen Blöcken sonst nicht auseinanderzuhalten.
+          name: vk.name,
           nummer: nummerVon.get(vorfahre.instanzId),
           naehe: distanz.get(vorfahre.instanzId) ?? Number.MAX_SAFE_INTEGER,
           liefert: vk.def.liefert,
@@ -2161,10 +2268,7 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           tickern(
             texte.ticker.uebergabeVerdraengt(
               gruppe.etikett,
-              texte.ticker.blockBezeichnung(
-                nummerVon.get(k.eintrag.instanzId),
-                k.def.name
-              ),
+              texte.ticker.blockBezeichnung(nummerVon.get(k.eintrag.instanzId), k.name),
               gruppe.angekommen.map(bezeichnung).join(' und '),
               gruppe.verdraengt.map(bezeichnung).join(', ')
             )
@@ -2187,8 +2291,8 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       k.warteGemeldet.add(schluessel)
       tickern(
         grund === 'schreiber'
-          ? texte.ticker.warteAufSchreiber(k.def.name, worauf[0])
-          : texte.ticker.warteAufZweig(k.def.name, worauf)
+          ? texte.ticker.warteAufSchreiber(k.name, worauf[0])
+          : texte.ticker.warteAufZweig(k.name, worauf)
       )
     }
 
@@ -2211,7 +2315,7 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
               'zweig',
               vorgaenger
                 .filter((id) => knoten.get(id).status !== 'fertig')
-                .map((id) => knoten.get(id).def.name)
+                .map((id) => knoten.get(id).name)
             )
           continue
         }
@@ -2220,7 +2324,7 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           if (schreiber) {
             // pro Projekt schreibt nur ein Agent (SPEC §5) — und jetzt steht
             // auch im Ticker, auf wen dieser Block deshalb wartet.
-            warteGrundMelden(k, 'schreiber', [knoten.get(schreiber).def.name])
+            warteGrundMelden(k, 'schreiber', [knoten.get(schreiber).name])
             continue
           }
         }
@@ -2228,16 +2332,14 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         k.status = 'laeuft'
         lauf.aktiveInstanzen.add(eintrag.instanzId)
         senden({ art: 'block', instanzId: eintrag.instanzId })
-        tickern(
-          texte.ticker.blockStartet(nummerVon.get(eintrag.instanzId), kette.length, k.def.name)
-        )
+        tickern(texte.ticker.blockStartet(nummerVon.get(eintrag.instanzId), kette.length, k.name))
         // Audit (BAUPLAN 25): volle Lesetiefe, bewusst teuer — die
         // Kosten-Folge steht sichtbar am Start im Ticker.
         if (k.def.audit) tickern(texte.ticker.auditKostenHinweis)
         // Zusammenführung sichtbar machen (BAUPLAN 13): dieser Block hat auf
         // mehrere Zweige gewartet.
         if (vorgaenger.length > 1)
-          tickern(texte.ticker.zweigeZusammengefuehrt(k.def.name, vorgaenger.length))
+          tickern(texte.ticker.zweigeZusammengefuehrt(k.name, vorgaenger.length))
         laufende.set(
           eintrag.instanzId,
           knotenAusfuehren(k).then((ergebnis) => ({ id: eintrag.instanzId, ergebnis }))
@@ -2257,10 +2359,14 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     // alter Prüfungen ersetzen ihr Archiv — die Karte veraltet nicht.
     function pruefkarteNachBestandenerPruefung(instanzId, ergebnisText) {
       try {
+        // Aufbewahrt wird ausschließlich der eigene Prüfordner (BAUPLAN 41) —
+        // sonst nähme der erste bestehende Prüfer die Tests aller mit.
+        const pruefOrdner = knoten.get(instanzId)?.pruefOrdner ?? ''
         const frisch = kartenLaden(projektPfad)
         const vorhandene = new Set(frisch.ok ? frisch.karten.map((karte) => karte.id) : [])
         for (const anhang of pruefkartenVonInstanz.get(instanzId) ?? [])
-          if (vorhandene.has(anhang.id)) pruefkartenArchivAuffrischen(projektPfad, anhang.id)
+          if (vorhandene.has(anhang.id))
+            pruefkartenArchivAuffrischen(projektPfad, anhang.id, pruefOrdner)
         const roh = pruefkarteAusErgebnis(ergebnisText)
         const zeitText = new Date().toLocaleString('de-DE', {
           dateStyle: 'short',
@@ -2277,7 +2383,7 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           { ...herkunftFuerBlock(instanzId), quelle: 'flowforge' }
         )
         if (!angelegt.ok) return
-        pruefungenArchivieren(projektPfad, angelegt.karte.id)
+        pruefungenArchivieren(projektPfad, angelegt.karte.id, pruefOrdner)
         senden({ art: 'karten', karten: angelegt.karten })
         tickern(texte.ticker.pruefkarteAngelegt(angelegt.karte.titel))
       } catch {
@@ -2319,7 +2425,10 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         }
         bericht.blockErgebnisse.push({
           instanzId: id,
+          // Katalogname und Zusatzname getrennt (BAUPLAN 41, SPEC §3.4): Sonst
+          // zerfiele „Blocktyp" in den Metriken in beliebig viele Typen.
           block: k.def.name,
+          zusatz: zusatznameBereinigen(k.eintrag.zusatz),
           zeit: jetztIso(),
           zustand: 'fehlgeschlagen',
           ergebnisText: String(ergebnis.fehlertext ?? '').slice(0, 4000),
@@ -2362,10 +2471,12 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       // Kürzung sichtbar (BAUPLAN 34): Eine stillschweigend gestutzte Übergabe
       // ist genau die Art Kanten-Verlust, die dieser Schritt abstellt.
       if (lieferung.gekuerzt)
-        tickern(texte.ticker.uebergabeGekuerzt(k.def.name, lieferung.von, lieferung.auf))
+        tickern(texte.ticker.uebergabeGekuerzt(k.name, lieferung.von, lieferung.auf))
       const blockErgebnis = {
         instanzId: id,
+        // Katalogname für die Metriken, Zusatzname daneben (BAUPLAN 41).
         block: k.def.name,
+        zusatz: zusatznameBereinigen(k.eintrag.zusatz),
         zeit: jetztIso(),
         zustand: 'erfolgreich',
         ergebnisText: abschlusstext.slice(0, 4000),
@@ -2400,11 +2511,11 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       // fehlt sie danach immer noch, macht der Lauf ehrlich vermerkt weiter.
       if (k.def.startanleitungPflicht && !startanleitungVorhanden(projektPfad)) {
         blockErgebnis.zustand = 'startanleitung-fehlt'
-        if (!startanleitungNachgefordert && !lauf.sanft && !lauf.hart && !endZustand) {
-          startanleitungNachgefordert = true
+        if (!startanleitungNachgefordert.has(id) && !lauf.sanft && !lauf.hart && !endZustand) {
+          startanleitungNachgefordert.add(id)
           k.startanleitungNachforderung = true
           k.status = 'offen'
-          tickern(texte.ticker.startanleitungNachgefordert(k.def.name))
+          tickern(texte.ticker.startanleitungNachgefordert(k.name))
           return
         }
         tickern(texte.ticker.startanleitungWeiterOhne)
@@ -2423,20 +2534,22 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         !endZustand
       ) {
         const probe = await rauchtest(projektPfad, {
+          // Eigene Prozessgruppe je Block-Instanz (BAUPLAN 41).
+          gruppe: 'rauchtest:' + projektPfad + ':' + id,
           abbrechen: () => lauf.sanft || lauf.hart
         })
         if (probe.geprueft && probe.gruen) tickern(texte.ticker.rauchtestGruen)
         else if (probe.grund === 'appLaeuft') tickern(texte.ticker.rauchtestUebersprungen)
         else if (probe.geprueft && !probe.gruen) {
           blockErgebnis.zustand = 'startanleitung-laeuft-nicht'
-          if (!rauchtestNachgefordert) {
-            rauchtestNachgefordert = true
+          if (!rauchtestNachgefordert.has(id)) {
+            rauchtestNachgefordert.add(id)
             k.rauchtestRueckmeldung = mitteGekuerzt(
               String(probe.ausgabe ?? '').trim() || texte.tor.rauchtestOhneAusgabe,
               TOR_PROTOKOLL_MAX
             ).text
             k.status = 'offen'
-            tickern(texte.ticker.rauchtestRot(k.def.name))
+            tickern(texte.ticker.rauchtestRot(k.name))
             return
           }
           tickern(texte.ticker.rauchtestWeiterOhne)
@@ -2452,13 +2565,15 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       if (
         k.def.pruefbefehlPflicht &&
         k.status === 'fertig' &&
-        !pruefbefehlVorhanden(projektPfad)
+        // Je Prüf-Instanz geprüft (BAUPLAN 41): Sonst bestünde der zweite
+        // Prüfer die Pflicht, weil der erste gesetzt hat.
+        !pruefbefehlVorhanden(projektPfad, id)
       ) {
-        if (!pruefbefehlNachgefordert && !lauf.sanft && !lauf.hart && !endZustand) {
-          pruefbefehlNachgefordert = true
+        if (!pruefbefehlNachgefordert.has(id) && !lauf.sanft && !lauf.hart && !endZustand) {
+          pruefbefehlNachgefordert.add(id)
           k.pruefbefehlNachforderung = gekuerzt(String(ergebnis.ergebnisText ?? ''))
           k.status = 'offen'
-          tickern(texte.ticker.pruefbefehlNachgefordert(k.def.name))
+          tickern(texte.ticker.pruefbefehlNachgefordert(k.name))
           return
         }
         tickern(texte.ticker.pruefbefehlWeiterOhne)
@@ -2486,7 +2601,7 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           // Prüfung gehört, taugt als Maßstab — aufbewahrt wird er außerhalb
           // des Projektordners und liefert beim nächsten Laufstart die
           // Baseline „vorher schon rot".
-          pruefbefehlArchivieren(projektPfad)
+          pruefbefehlArchivieren(projektPfad, id)
         } else {
           tickern(bestanden === false ? texte.ticker.pruefungNichtBestanden : texte.ticker.pruefungOhneErgebnis)
           // Kanten-Gate (BAUPLAN 34): Ein Urteil FEHLGESCHLAGEN ohne eine
@@ -2507,11 +2622,11 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
             k.beanstandungNachgefordert = true
             k.beanstandungNachforderung = gekuerzt(String(ergebnis.ergebnisText ?? ''))
             k.status = 'offen'
-            tickern(texte.ticker.beanstandungenNachgefordert(k.def.name))
+            tickern(texte.ticker.beanstandungenNachgefordert(k.name))
             return
           }
           if (belegKritik.anzahl === 0 && k.beanstandungNachgefordert)
-            tickern(texte.ticker.beanstandungenOhneMarken(k.def.name))
+            tickern(texte.ticker.beanstandungenOhneMarken(k.name))
           const zielId = rueckfuehrungsZiel(workflow.bloecke, workflow.pfeile, id)
 
           // Lokale Vorreparatur (BAUPLAN 20): Mechanische Beanstandungen
@@ -2553,7 +2668,7 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
               beanstandungenEinstufen(ergebnis.ergebnisText) === 'mechanisch'
                 ? belegKritik.text
                 : null
-            if (!k.lokaleKritik) tickern(texte.ticker.lokaleReparaturNichtMechanisch(zielK.def.name))
+            if (!k.lokaleKritik) tickern(texte.ticker.lokaleReparaturNichtMechanisch(zielK.name))
           }
           if (lokalErlaubt && k.lokaleKritik) {
             while (
@@ -2609,13 +2724,13 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
                 // Metriken (BAUPLAN 31): Das Urteil fällt erst mit der
                 // Nachprüfung — Aufwand und Ziel-Block bis dahin am Knoten merken.
                 k.lokaleReparaturSchritte = reparatur.schritte ?? 0
-                k.lokaleReparaturBlock = zielK.def.name
+                k.lokaleReparaturBlock = zielK.name
                 k.status = 'offen'
                 return
               }
               // Nichts ersetzt (oder Ollama gescheitert): nichts zurückzurollen
               // und keine Nachprüfung nötig — der Versuch ist trotzdem verbraucht.
-              metrikUrteil(zielK.def.name, 'reparatur', 'gescheitert', reparatur.schritte)
+              metrikUrteil(zielK.name, 'reparatur', 'gescheitert', reparatur.schritte)
               tickern(
                 reparatur.ok
                   ? texte.ticker.lokaleReparaturNichtsErsetzt
@@ -2625,16 +2740,23 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
             // Budget aufgebraucht: der Motor-Bauer übernimmt mit der
             // Original-Kritik. Der Zähler gilt je Rückführung — bei der
             // nächsten frischen Beanstandung darf die lokale KI wieder ran.
-            tickern(texte.ticker.lokaleReparaturOpusUebernimmt(zielK.def.name))
+            tickern(texte.ticker.lokaleReparaturOpusUebernimmt(zielK.name))
             eskalationsKritik = eskalationsKritik ?? k.lokaleKritik
             k.lokaleVersuche = 0
             k.lokaleKritik = null
           }
 
           const kritik = eskalationsKritik ?? belegKritik.text
-          if (rundenUebrig > 0 && zielId && !lauf.sanft && !lauf.hart && !endZustand) {
-            rundenUebrig--
-            const genutzt = workflow.reparaturRunden - rundenUebrig
+          // Reparatur-Runden je Rückführungs-Ziel (BAUPLAN 41): Der Zähler
+          // hängt am Ziel, nicht am Lauf — zwei Zweige essen sich die Runden
+          // nicht mehr gegenseitig weg. Genommen wird erst, wenn der Lauf
+          // wirklich zurückführt.
+          const budget =
+            !lauf.sanft && !lauf.hart && !endZustand
+              ? budgetNehmen(rundenUebrig, zielId, rundenStandard)
+              : { erlaubt: false, genutzt: rundenStandard }
+          if (budget.erlaubt) {
+            const genutzt = budget.genutzt
             // Erneut laufen alle Blöcke auf den Wegen vom Ziel zum Prüfer —
             // parallele Zweige außerhalb behalten ihr Ergebnis.
             for (const nochmalId of zwischenBloecke(workflow.bloecke, workflow.pfeile, zielId, id)) {
@@ -2664,14 +2786,14 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
             // Der Prüfer selbst prüft in der nächsten Runde nur seine
             // Beanstandungen nach — keine erneute Vollprüfung.
             k.nachpruefung = kritik
-            tickern(texte.ticker.rueckfuehrung(ziel.def.name, genutzt, workflow.reparaturRunden))
+            tickern(texte.ticker.rueckfuehrung(ziel.name, genutzt, rundenStandard))
             if (belegKritik.anzahl > 0)
-              tickern(texte.ticker.beanstandungenUebergeben(belegKritik.anzahl, ziel.def.name))
+              tickern(texte.ticker.beanstandungenUebergeben(belegKritik.anzahl, ziel.name))
             if (belegKritik.weggelassen > 0)
               tickern(texte.ticker.beanstandungenTeilweise(belegKritik.weggelassen))
             return
           }
-          const wahl = await entscheidungStellen(k.def.name, workflow.reparaturRunden)
+          const wahl = await entscheidungStellen(k.name, rundenStandard)
           if (wahl === 'zurueckstellen') {
             tickern(texte.ticker.entscheidungZurueckgestellt)
             if (!endZustand) endZustand = 'zurueckgestellt'
@@ -2693,7 +2815,7 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       if (!k.def.nurLesen) {
         const punkt = await sicherungspunktAnlegen(
           projektPfad,
-          texte.sicherungen.beschriftungNachBlock(k.def.name)
+          texte.sicherungen.beschriftungNachBlock(k.name)
         )
         if (punkt.ok && punkt.neu) tickern(texte.ticker.sicherungspunktAngelegt)
       }
@@ -2921,7 +3043,9 @@ export function laufstandInfo(projektPfad) {
     const geladen = workflowLaden(projektPfad)
     if (geladen.ok) {
       const eintrag = geladen.workflow.bloecke.find((block) => block.instanzId === naechsteId)
-      if (eintrag) blockName = blockDefinition(eintrag.blockId)?.name ?? ''
+      // Mit Zusatzname (BAUPLAN 41) — sonst hieße das Angebot bei zwei Prüfern
+      // beide Male gleich.
+      if (eintrag) blockName = blockAnzeigeName(blockDefinition(eintrag.blockId), eintrag)
     }
   }
   return { ok: true, vorhanden: true, gestartetAm: stand.gestartetAm, blockName }

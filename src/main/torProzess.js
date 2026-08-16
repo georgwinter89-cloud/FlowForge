@@ -120,7 +120,10 @@ export async function befehlAbspielen(
 // Liefert { geprueft, gruen, ausgabe, grund }. geprueft: false heißt „konnte
 // nicht sinnvoll geprüft werden" (keine Startanleitung, App läuft schon im Tab,
 // nichts zu starten) — dann urteilt der Rauchtest über gar nichts.
-export async function rauchtest(projektPfad, { abbrechen = null } = {}) {
+// gruppe (BAUPLAN 41): Prozessgruppe dieses Rauchtests — je Block-Instanz eine
+// eigene. Ohne sie räumte der fertige Rauchtest des einen Bauers den laufenden
+// des anderen ab und meldete ein falsches Rot.
+export async function rauchtest(projektPfad, { abbrechen = null, gruppe = null } = {}) {
   const { anleitung } = startanleitungLaden(projektPfad)
   if (!anleitung) return { geprueft: false, grund: 'keine' }
   // Läuft die App gerade im App-Tab, würde der Rauchtest ihr den Port
@@ -142,7 +145,7 @@ export async function rauchtest(projektPfad, { abbrechen = null } = {}) {
         }
   }
 
-  const schluessel = 'rauchtest:' + projektPfad
+  const schluessel = gruppe ?? 'rauchtest:' + projektPfad
   prozessgruppeAnlegen(schluessel, projektPfad)
   let kind
   try {

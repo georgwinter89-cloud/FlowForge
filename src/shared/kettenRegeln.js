@@ -4,7 +4,7 @@
 // Arbeitsauftrag mit Feldwerten. Geprüft wird im Hauptprozess; die Oberfläche
 // nutzt dieselben Regeln für sofortige Rückmeldung beim Verbinden.
 import { texte } from './texte.js'
-import { blockDefinition } from './blockKatalog.js'
+import { blockDefinition, zusatznameBereinigen } from './blockKatalog.js'
 
 function blockName(bloecke, instanzId) {
   const eintrag = bloecke.find((b) => b.instanzId === instanzId)
@@ -288,6 +288,42 @@ export function rueckfuehrungsZiel(bloecke, pfeile, prueferInstanzId) {
   const gewaehlt = bloecke.find((b) => b.instanzId === prueferInstanzId)?.zurueckZu
   if (gewaehlt && vorfahren.some((b) => b.instanzId === gewaehlt)) return gewaehlt
   return vorfahren[vorfahren.length - 1].instanzId
+}
+
+// Reparatur-Runden je Rückführungs-Ziel (SPEC §5, BAUPLAN 41): Bis Bauschritt
+// 40 gab es EINEN Zähler für den ganzen Lauf. Liegen zwei Prüfer hinter zwei
+// Bauern, aß der eine Zweig dem anderen die Runden weg — der zweite Bauer bekam
+// die Folgen-Frage, ohne je repariert zu haben. Gezählt wird deshalb je Ziel.
+// budget ist eine Map zielInstanzId → verbleibende Runden; standard sind die im
+// Workflow eingestellten Runden. Liefert, ob eine Runde gewährt wurde, und die
+// wievielte es für dieses Ziel ist (für Ticker und Folgen-Frage).
+export function budgetNehmen(budget, zielId, standard) {
+  const uebrig = budget.get(zielId) ?? standard
+  if (!zielId || uebrig <= 0) return { erlaubt: false, uebrig: 0, genutzt: standard }
+  budget.set(zielId, uebrig - 1)
+  return { erlaubt: true, uebrig: uebrig - 1, genutzt: standard - uebrig + 1 }
+}
+
+// Wiederaufnahme (BAUPLAN 11/41): Passt ein gespeicherter Laufstand noch zum
+// heutigen Schaubild? Blöcke, Reihenfolge und Pfeile müssen dieselben sein —
+// und seit Bauschritt 41 auch die Zusatznamen: Sie stecken in Übergaben,
+// Zuteilungen und Berichten des unterbrochenen Laufs, ein geänderter Name
+// machte den Stand also unwahr. kette ist die topologische Reihenfolge der
+// Schaubild-Karten (mit ihrem Feld zusatz), stand der geladene Laufstand.
+export function laufstandPasst(kette, pfeile, stand) {
+  if (!Array.isArray(stand?.fertigIds) || !Array.isArray(stand?.kettenIds)) return false
+  if (stand.kettenIds.length !== kette.length) return false
+  if (!kette.every((eintrag, idx) => eintrag.instanzId === stand.kettenIds[idx])) return false
+  const pfeilMenge = new Set(pfeile.map((p) => p.von + '→' + p.nach))
+  if (!Array.isArray(stand.pfeile) || stand.pfeile.length !== pfeilMenge.size) return false
+  if (!stand.pfeile.every((paar) => Array.isArray(paar) && pfeilMenge.has(paar[0] + '→' + paar[1])))
+    return false
+  const idMenge = new Set(kette.map((eintrag) => eintrag.instanzId))
+  if (!stand.fertigIds.every((id) => idMenge.has(id))) return false
+  const alteZusaetze = new Map(Array.isArray(stand.zusaetze) ? stand.zusaetze : [])
+  return kette.every(
+    (eintrag) => (alteZusaetze.get(eintrag.instanzId) ?? '') === zusatznameBereinigen(eintrag.zusatz)
+  )
 }
 
 // Alle Karten auf den Wegen von „von" nach „bis" (beide einschließlich):

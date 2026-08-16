@@ -386,10 +386,15 @@ export function pruefkarteAnlegen(projektPfad, { titel, text }, herkunft = { que
 // hinterlassen? Je Prüfdatei Name, Größe und Zuletzt-geändert — nur zum
 // Nachlesen an der Prüferkarte; bearbeiten darf die Mappe weiterhin nur der
 // Prüfer. Gezählt werden Prüf-Dateien, nicht einzelne Testfälle darin.
-export function pruefmappeUebersicht(projektPfad) {
+// unterordner (BAUPLAN 41): der Prüfordner dieser Instanz — jede Prüferkarte
+// zeigt ihre eigene Mappe, nicht die der anderen.
+export function pruefmappeUebersicht(projektPfad, unterordner = '') {
   if (!istBekanntesProjekt(projektPfad) || !fs.existsSync(projektPfad))
     return { ok: false, fehler: texte.fehler.projektNichtGefunden }
-  const mappe = path.join(projektPfad, 'pruefung')
+  // Nur ein einfacher Ordnername — die Kennung kommt aus dem Schaubild, aber
+  // die Ansicht ruft über die IPC-Brücke, und die ist keine Vertrauensgrenze.
+  const eigen = /^[a-z0-9-]{1,40}$/.test(String(unterordner ?? '')) ? String(unterordner) : ''
+  const mappe = path.join(projektPfad, 'pruefung', ...(eigen ? [eigen] : []))
   const dateien = []
   function sammle(ordner) {
     let eintraege = []

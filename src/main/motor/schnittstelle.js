@@ -34,12 +34,13 @@
 //   Änderungen melden sich als Ereignis { art: 'karten', karten }.
 //
 //   Rückgabe = {
-//     blockAusfuehren({ auftrag, blockName, nurLesen, darfPruefen, lokaleKi,
-//                       modell, unterModell, modellName, uebertrag })
+//     blockAusfuehren({ auftrag, blockName, nurLesen, darfPruefen, pruefOrdner,
+//                       lokaleKi, modell, unterModell, modellName, uebertrag })
 //           Führt genau einen Block als frischen Agenten in der Lauf-Session
 //           aus. Der Arbeitsauftrag wird beim Agent-Aufruf von FlowForge
 //           selbst eingesetzt; die Sperren (nurLesen, Prüfmappen-Besitz,
-//           lokaleKi = Häkchen „lokale KI erlaubt", BAUPLAN 20) gelten für
+//           lokaleKi = Häkchen „lokale KI erlaubt", BAUPLAN 20; pruefOrdner =
+//           der eigene Prüf-Unterordner dieser Instanz, BAUPLAN 41) gelten für
 //           den Agenten und seine Helfer — erkannt an der
 //           Unteraufgaben-Kennung des Werkzeugaufrufs. modell/unterModell
 //           (BAUPLAN 37) sind die Modellklasse dieses Blocks und die seiner

@@ -303,6 +303,12 @@ export const texte = {
     fehlerWaehrendWarteschlange:
       'Dieser Workflow wartet in der Warteschlange auf seinen Start. Nimm ihn erst aus der Warteschlange, wenn du ihn ändern willst.',
     unbekannterBlock: 'Diesen Block kennt FlowForge nicht.',
+    // Zusatzname je Blockkarte (BAUPLAN 41): unterscheidbar machen und dem
+    // Zuschnitt sagen, wonach zu schneiden ist.
+    zusatzLabel: 'Zusatzname',
+    zusatzPlatzhalter: 'z.B. Datenbank',
+    zusatzHinweis:
+      'Ein eigener Name für genau diese Karte — aus „Bauer" wird „Bauer · Datenbank". Er macht mehrere gleiche Blöcke im selben Lauf unterscheidbar (Ticker, Laufbericht, Übergaben) und sagt gleichzeitig, wofür dieser Block zuständig ist. Für die Metriken bleibt der Blocktyp derselbe.',
     // Häkchen je Block (BAUPLAN 20): Abwahl der lokalen KI als echte Sperre.
     lokaleKiLabel: 'lokale KI erlaubt',
     lokaleKiHinweis:
@@ -1065,6 +1071,20 @@ export const texte = {
   },
   // Prüfkarten im Prüfer-Auftrag (BAUPLAN 18): Der Nutzer hat alte Prüfungen
   // auf diesen Prüf-Block gezogen — sie werden zusätzlich geprüft.
+  // Prüfordner je Prüf-Instanz (BAUPLAN 41): Jeder schreibende Prüfer hat
+  // seinen eigenen Unterordner in der Prüfmappe — sonst archiviert der erste
+  // bestehende Prüfer die Tests aller anderen hinter seiner Prüfkarte.
+  agentenPruefordner: {
+    zusatz: (ordner) =>
+      '\n\nDEIN PRÜFORDNER (von FlowForge zugewiesen): pruefung/' +
+      ordner +
+      '/\nAlle deine Prüfungen und Sammel-Skripte gehören ausschließlich dorthin — nicht ' +
+      'direkt nach pruefung/ und nie in den Ordner eines anderen Prüfers (das ist gesperrt). ' +
+      'Dein Prüfbefehl muss genau diesen Ordner ausführen (z.B. „npx vitest run pruefung/' +
+      ordner +
+      '"). Nur was in deinem Ordner liegt, bewahrt FlowForge nach bestandener Prüfung hinter ' +
+      'deiner Prüfkarte auf.'
+  },
   agentenPruefkarten: {
     einleitung:
       '\n\nZusätzlich von FlowForge — Wiederholungsprüfung: Der Nutzer hat die folgenden ' +
@@ -1723,6 +1743,10 @@ export const texte = {
     // Prüfordner gehören dem Prüfer — kein anderer Block ändert sie.
     pruefmappeGesperrtFuerAgent:
       'Der Prüfordner „pruefung" gehört dem Prüfer: Nur Prüf-Blöcke dürfen dort Dateien anlegen oder ändern. Lass die Prüfmappe unverändert — wenn eine Prüfung deiner Meinung nach falsch ist, schreibe das in deinen Abschlusstext.',
+    // Prüfordner je Prüfer (BAUPLAN 41): Auch ein Prüfer schreibt nur in
+    // seinen eigenen Unterordner — sonst archiviert er fremde Tests.
+    fremderPruefordnerFuerAgent: (ordner) =>
+      `In der Prüfmappe gehört dir nur dein eigener Ordner: pruefung/${ordner}/ — dort legst du alle deine Prüfungen ab (und lässt deinen Prüfbefehl genau darauf zeigen). Andere Stellen unter pruefung/ gehören anderen Prüfern und sind gesperrt.`,
     // Bilder-Verbot in der Prüfmappe (BAUPLAN 17): hartes Nein, auch für Prüfer.
     pruefmappeBildFuerAgent:
       'Bilddateien sind im Prüfordner „pruefung" verboten (hartes Nein, auch für Prüfer): Prüfungen sind kleine Textdateien und Skripte. Prüfe ohne Bildvergleiche — die blockieren künftige, völlig erlaubte Änderungen.',
@@ -1890,6 +1914,9 @@ export const texte = {
       'Änderung an der Prüfmappe gestoppt — die Prüfdateien gehören dem Prüfer.',
     pruefmappeBildGesperrt:
       'Bilddatei in der Prüfmappe gestoppt — Bilder sind dort verboten, auch für den Prüfer.',
+    // Prüfordner je Prüfer (BAUPLAN 41).
+    fremderPruefordnerGesperrt:
+      'Schreiben außerhalb des eigenen Prüfordners gestoppt — jeder Prüfer hat seinen eigenen.',
     // Lauf-Mappe statt Projekt-Mappe (BAUPLAN 17).
     pruefmappeGeleert:
       'Prüfmappe geleert — der Prüfer baut seine Prüfungen frisch fürs aktuelle Paket.',
@@ -1933,7 +1960,10 @@ export const texte = {
       `Der Prüfbefehl fehlt — „${block}" bekommt eine Nachbesserungs-Runde (er prüft nichts neu).`,
     pruefbefehlWeiterOhne:
       'Der Prüfbefehl fehlt weiterhin — Reparatur-Runden brauchen wieder einen Prüfer-Agenten.',
-    torSpielt: (befehl) => `Prüfbefehl wird abgespielt (ohne KI, 0 Tokens): ${befehl}`,
+    // Je Prüf-Instanz ein eigener Prüfbefehl (BAUPLAN 41) — der Ticker sagt,
+    // wessen Befehl gerade läuft.
+    torSpielt: (block, befehl) =>
+      `Prüfbefehl von „${block}" wird abgespielt (ohne KI, 0 Tokens): ${befehl}`,
     torRot: (anzahl) =>
       `Prüfbefehl abgespielt: rot (${anzahl} ${anzahl === 1 ? 'Fehlerzeile' : 'Fehlerzeilen'}) — zurück zum Bauer ohne Prüfer-Agent.`,
     torRotZeitlimit:
@@ -2146,6 +2176,9 @@ export const texte = {
     leer: 'Die Prüfmappe ist leer. Der Prüfer legt hier während des Laufs seine Prüfungen fürs aktuelle Paket ab — beim Start des nächsten Laufs wird sie geleert.',
     hinweis:
       'Gezählt werden Prüf-Dateien, nicht einzelne Testfälle darin. Nur zum Nachlesen — bearbeiten darf die Mappe nur der Prüfer.',
+    // Prüfordner je Prüfer (BAUPLAN 41): Jede Prüferkarte zeigt ihre eigene
+    // Mappe — deshalb steht hier, welcher Ordner gemeint ist.
+    eigenerOrdner: (ordner) => `Eigener Prüfordner dieser Karte: pruefung/${ordner}/`,
     groesseBytes: (bytes) => `${bytes} Byte`,
     groesseKb: (kb) => `${kb} KB`
   },
@@ -2205,6 +2238,9 @@ export const texte = {
     dauerSekunden: (s) => `Dauer: ${s} Sekunden`,
     dauerMinuten: (m) => `Dauer: etwa ${m} ${m === 1 ? 'Minute' : 'Minuten'}`,
     blockErgebnisseLabel: 'Blöcke dieses Laufs',
+    // Zusatzname (BAUPLAN 41): Im Bericht stehen Katalogname und Zusatzname
+    // getrennt — angezeigt werden sie zusammen, gezählt wird der Blocktyp.
+    blockMitZusatz: (block, zusatz) => (zusatz ? `${block} · ${zusatz}` : block),
     blockErgebnis: 'Letzter Lauf',
     blockZustaende: {
       erfolgreich: 'erledigt',

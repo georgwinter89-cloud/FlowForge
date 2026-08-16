@@ -47,6 +47,29 @@ describe('BAUPLAN 35 · Prüfbefehl wirklich abspielen', () => {
 
   // Ein hängender Testlauf darf den ganzen Lauf nicht anhalten — nach dem
   // Zeitlimit wird der Prozessbaum abgeräumt und das Ergebnis gilt als rot.
+  // Prozessgruppe je Instanz (BAUPLAN 41): Zwei Testläufe dürfen sich nicht
+  // gegenseitig abräumen. Gemessen vor dem Bauschritt (beide in der Gruppe
+  // „tor:<projekt>"): Der langsame Lauf endete mit Code 1 und LEERER Ausgabe —
+  // ein falsches Rot, für das später ein Bauer eine Reparatur-Runde bezahlt
+  // hätte. Mit getrennten Gruppen läuft er sauber durch.
+  it('lässt zwei gleichzeitige Testläufe in eigenen Gruppen unbehelligt', async () => {
+    const langsam = befehlAbspielen(
+      projekt,
+      'node -e "setTimeout(()=>console.log(\'fertig\'),9000)"',
+      { gruppe: 'tor:' + projekt + ':instanz-a' }
+    )
+    // Vorlauf, damit der Prozess-Späher (2-Sekunden-Takt) den langsamen Lauf
+    // wirklich als Gruppenmitglied kennt — sonst prüfte der Fall nichts.
+    await new Promise((weiter) => setTimeout(weiter, 4000))
+    const schnell = await befehlAbspielen(projekt, 'node -e "console.log(\'kurz\')"', {
+      gruppe: 'tor:' + projekt + ':instanz-b'
+    })
+    expect(schnell.code).toBe(0)
+    const ergebnis = await langsam
+    expect(ergebnis.code).toBe(0)
+    expect(ergebnis.ausgabe).toContain('fertig')
+  }, 40000)
+
   it('bricht einen hängenden Befehl am Zeitlimit ab und wertet ihn als rot', async () => {
     const messung = await befehlAbspielen(projekt, 'node -e "setTimeout(()=>{}, 60000)"', {
       zeitlimitMs: 2000

@@ -5,7 +5,10 @@ import {
   vorlageDefinition,
   blockKategorie,
   blockModellKlasse,
+  blockAnzeigeName,
+  pruefOrdnerFuer,
   MODELL_KLASSEN,
+  ZUSATZNAME_MAX,
   REPARATUR_RUNDEN_MAX,
   UEBERTRAG_GRENZE_MAX
 } from '../../shared/blockKatalog.js'
@@ -40,23 +43,30 @@ function zeitText(zeitstempel) {
   return new Date(zeitstempel).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })
 }
 
+// Anzeigename einer Schaubild-Karte (BAUPLAN 41): Katalogname plus Zusatzname
+// — dieselbe Auflösung wie im Lauf, damit Ticker und Karte dasselbe sagen.
+function anzeigeNameVon(bloecke, instanzId) {
+  const eintrag = (bloecke ?? []).find((b) => b.instanzId === instanzId)
+  return blockAnzeigeName(blockDefinition(eintrag?.blockId), eintrag)
+}
+
 function groesseText(bytes) {
   if (bytes < 1024) return tp.groesseBytes(bytes)
   return tp.groesseKb(Math.max(1, Math.round(bytes / 1024)))
 }
 
 // Prüfmappen-Ansicht an der Prüferkarte (BAUPLAN 17): aufklappbar wie das
-// Block-Ergebnis, in Alltagssprache — welche Prüfungen der letzte Lauf in
-// pruefung/ hinterlassen hat. Alle Prüf-Blockkarten zeigen dieselbe Mappe;
-// gelesen wird beim Aufklappen frisch.
-function PruefmappenBereich({ pfad }) {
+// Block-Ergebnis, in Alltagssprache — welche Prüfungen der letzte Lauf
+// hinterlassen hat. Seit BAUPLAN 41 zeigt jede Prüferkarte ihren EIGENEN
+// Prüfordner; gelesen wird beim Aufklappen frisch.
+function PruefmappenBereich({ pfad, ordner = '' }) {
   const [offen, setOffen] = useState(false)
   const [dateien, setDateien] = useState(null)
   function umschalten() {
     const jetztOffen = !offen
     setOffen(jetztOffen)
     if (jetztOffen)
-      window.flowforge.pruefmappeLesen(pfad).then((e) => setDateien(e.ok ? e.dateien : []))
+      window.flowforge.pruefmappeLesen(pfad, ordner).then((e) => setDateien(e.ok ? e.dateien : []))
   }
   return (
     <div className="block-ergebnis">
@@ -70,6 +80,7 @@ function PruefmappenBereich({ pfad }) {
       </button>
       {offen && dateien != null && (
         <div className="block-ergebnis-text">
+          {ordner && <p className="feld-hinweis">{tp.eigenerOrdner(ordner)}</p>}
           {dateien.length === 0 ? (
             <p className="feld-hinweis">{tp.leer}</p>
           ) : (
@@ -434,8 +445,10 @@ function BlockErgebnisZeile({ eintrag }) {
   return (
     <div className="block-ergebnis">
       <button className="block-ergebnis-knopf" onClick={() => setOffen(!offen)}>
+        {/* Zusatzname (BAUPLAN 41): Katalogname und Zusatz stehen getrennt im
+            Bericht — hier zusammen, damit zwei gleiche Blöcke unterscheidbar sind. */}
         <span>
-          {offen ? '▾' : '▸'} {eintrag.block}
+          {offen ? '▾' : '▸'} {tb.blockMitZusatz(eintrag.block, eintrag.zusatz)}
         </span>
         <span className={'block-ergebnis-marke marke-' + eintrag.zustand}>
           {tb.blockZustaende[eintrag.zustand] ?? eintrag.zustand}
@@ -660,6 +673,7 @@ function SchaubildKarte({
   onFeld,
   onSpeichern,
   onZurueckZu,
+  onZusatz,
   onLokaleKi,
   onModell,
   onEntfernen,
@@ -702,8 +716,10 @@ function SchaubildKarte({
       </span>
       <div className={'ketten-block-kopf' + (bearbeitbar ? ' schaubild-griff' : '')}>
         {nummer != null && <span className="block-nummer">{nummer}</span>}
+        {/* Zusatzname (BAUPLAN 41): „Bauer · Datenbank" — auch im Kartenkopf,
+            damit zwei gleiche Blöcke im Schaubild auseinanderzuhalten sind. */}
         <span className="karte-titel">
-          {def.symbol} {def.name}
+          {def.symbol} {blockAnzeigeName(def, eintrag)}
         </span>
         {aktiv && <span className="block-zustand">{t.laeuft}</span>}
         {bearbeitbar && (
@@ -715,6 +731,20 @@ function SchaubildKarte({
       {/* Sicht-Hilfe (BAUPLAN 36): An den braucht-Chips steht, welcher Vorfahre
           das liefert — oder dass es fehlt. */}
       <BlockChips def={def} herkunft={herkunft} />
+      {/* Zusatzname je Blockkarte (BAUPLAN 41): macht mehrere gleiche Blöcke
+          unterscheidbar und sagt dem Zuschnitt, wofür dieser Block zuständig
+          ist. Er wandert in Ticker, Aufträge, Übergaben und Laufbericht. */}
+      <label className="feld feld-kompakt" title={tk.zusatzHinweis}>
+        {tk.zusatzLabel}
+        <input
+          disabled={!bearbeitbar}
+          value={eintrag.zusatz ?? ''}
+          maxLength={ZUSATZNAME_MAX}
+          placeholder={tk.zusatzPlatzhalter}
+          onChange={(e) => onZusatz(e.target.value)}
+          onBlur={onSpeichern}
+        />
+      </label>
       {/* Häkchen je Block (BAUPLAN 20): „lokale KI erlaubt" — Standard an,
           erbt den globalen Schalter. Abgewählt ist eine echte Sperre:
           kein lokal_recherchieren, keine lokale Vorreparatur für diesen Block. */}
@@ -768,7 +798,7 @@ function SchaubildKarte({
             {vorfahren.map((d) => (
               <option key={d.instanzId} value={d.instanzId}>
                 {nummern.get(d.instanzId) != null ? nummern.get(d.instanzId) + '. ' : ''}
-                {blockDefinition(d.blockId)?.name}
+                {blockAnzeigeName(blockDefinition(d.blockId), d)}
               </option>
             ))}
           </select>
@@ -818,7 +848,7 @@ function SchaubildKarte({
           )}
         </div>
       )}
-      {def.prueft && <PruefmappenBereich pfad={pfad} />}
+      {def.prueft && <PruefmappenBereich pfad={pfad} ordner={pruefOrdnerFuer(def, eintrag)} />}
       {bearbeitbar && (
         <div
           className="pfeil-punkt"
@@ -1274,6 +1304,15 @@ export default function Leinwand({
       b.instanzId === instanzId ? { ...b, zurueckZu: ziel } : b
     )
     ketteSpeichern({ ...workflow, bloecke })
+  }
+
+  // Zusatzname je Blockkarte (BAUPLAN 41): getippt wird frei, gespeichert wird
+  // beim Verlassen des Feldes (wie die Formularfelder der Blöcke).
+  function zusatzSetzen(instanzId, wert) {
+    setWorkflow((alt) => ({
+      ...alt,
+      bloecke: alt.bloecke.map((b) => (b.instanzId === instanzId ? { ...b, zusatz: wert } : b))
+    }))
   }
 
   // Häkchen je Block (BAUPLAN 20): „lokale KI erlaubt" abwählen oder wieder setzen.
@@ -1896,6 +1935,7 @@ export default function Leinwand({
                 onFeld={(feldId, wert) => feldSetzen(eintrag.instanzId, feldId, wert)}
                 onSpeichern={() => ketteSpeichern(workflowRef.current)}
                 onZurueckZu={(ziel) => zurueckZuSetzen(eintrag.instanzId, ziel)}
+                onZusatz={(wert) => zusatzSetzen(eintrag.instanzId, wert)}
                 onLokaleKi={(erlaubt) => lokaleKiSetzen(eintrag.instanzId, erlaubt)}
                 onModell={(klasse) => modellSetzen(eintrag.instanzId, klasse)}
                 onEntfernen={() => entfernen(eintrag.instanzId)}
@@ -1956,11 +1996,7 @@ export default function Leinwand({
                 verbrauch={verbraeuche[id]}
                 modus={modus}
                 mitBalken
-                label={
-                  aktive.length > 1
-                    ? blockDefinition(bloecke.find((b) => b.instanzId === id)?.blockId)?.name
-                    : null
-                }
+                label={aktive.length > 1 ? anzeigeNameVon(bloecke, id) : null}
               />
             ))
           })()}
@@ -2020,7 +2056,7 @@ export default function Leinwand({
                 if (!def) return null
                 return (
                   <span key={id} className={'lauf-aktiv-chip kategorie-' + blockKategorie(def)}>
-                    {def.symbol} {def.name}
+                    {def.symbol} {anzeigeNameVon(bloecke, id)}
                   </span>
                 )
               })}
@@ -2044,7 +2080,7 @@ export default function Leinwand({
                   <span className="ticker-zeit">{zeile.zeit.toLocaleTimeString('de-DE')}</span>
                   {def && (
                     <span className="ticker-block">
-                      {def.symbol} {def.name}
+                      {def.symbol} {anzeigeNameVon(bloecke, zeile.instanzId)}
                     </span>
                   )}
                   {zeile.text}

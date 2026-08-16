@@ -8,7 +8,11 @@ import { z } from 'zod'
 import { texte } from '../../shared/texte.js'
 import { pruefbefehlSetzen } from '../pruefbefehl.js'
 
-export async function pruefbefehlWerkzeugServer({ projektPfad, aufEreignis }) {
+// holeInstanz (BAUPLAN 41): Der Befehl gehört der Prüf-Instanz, die ihn setzt —
+// nicht dem Projekt. Der Motor reicht die Kennung des gerade laufenden Blocks
+// herein; ohne sie bestünde ein zweiter Prüfer seine Pflicht, weil der erste
+// gesetzt hat, und das Tor urteilte über einen fremden Zweig.
+export async function pruefbefehlWerkzeugServer({ projektPfad, aufEreignis, holeInstanz = null }) {
   const { createSdkMcpServer, tool } = await import('@anthropic-ai/claude-agent-sdk')
 
   const setzen = tool(
@@ -18,7 +22,7 @@ export async function pruefbefehlWerkzeugServer({ projektPfad, aufEreignis }) {
       befehl: z.string().describe(texte.agentenPruefbefehl.befehlParam)
     },
     async ({ befehl }) => {
-      const ergebnis = pruefbefehlSetzen(projektPfad, befehl)
+      const ergebnis = pruefbefehlSetzen(projektPfad, holeInstanz?.() ?? null, befehl)
       if (!ergebnis.ok) {
         aufEreignis({ art: 'ticker', text: texte.ticker.pruefbefehlAbgelehnt(ergebnis.fehler) })
         return { content: [{ type: 'text', text: ergebnis.fehler }], isError: true }

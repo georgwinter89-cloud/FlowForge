@@ -140,14 +140,18 @@ describe('BAUPLAN 35 · Ablage und Archiv des Prüfbefehls', () => {
     fs.rmSync(projekt, { recursive: true, force: true })
   })
 
+  // Seit BAUPLAN 41 gehört jeder Prüfbefehl einer Prüf-Instanz — die Aufrufe
+  // tragen deshalb deren Kennung.
+  const prueferA = 'instanz-a'
+
   it('legt den Prüfbefehl ab und liest ihn zurück', () => {
-    expect(pruefbefehlSetzen(projekt, 'npm test').ok).toBe(true)
+    expect(pruefbefehlSetzen(projekt, prueferA, 'npm test').ok).toBe(true)
     expect(fs.existsSync(path.join(projekt, PRUEFBEFEHL_DATEI))).toBe(true)
-    expect(pruefbefehlLaden(projekt)).toBe('npm test')
+    expect(pruefbefehlLaden(projekt, prueferA)).toBe('npm test')
   })
 
   it('lehnt einen unzulässigen Befehl mit Begründung ab, ohne etwas abzulegen', () => {
-    const ergebnis = pruefbefehlSetzen(projekt, 'npm test && del x')
+    const ergebnis = pruefbefehlSetzen(projekt, prueferA, 'npm test && del x')
     expect(ergebnis.ok).toBe(false)
     expect(ergebnis.fehler).toBeTruthy()
     expect(fs.existsSync(path.join(projekt, PRUEFBEFEHL_DATEI))).toBe(false)
@@ -159,18 +163,18 @@ describe('BAUPLAN 35 · Ablage und Archiv des Prüfbefehls', () => {
   it('behandelt eine unzulässig gewordene Datei wie „kein Prüfbefehl"', () => {
     fs.writeFileSync(
       path.join(projekt, PRUEFBEFEHL_DATEI),
-      JSON.stringify({ befehl: 'npm test && del x' }),
+      JSON.stringify({ befehle: { [prueferA]: { befehl: 'npm test && del x' } } }),
       'utf8'
     )
-    expect(pruefbefehlLaden(projekt)).toBeNull()
+    expect(pruefbefehlLaden(projekt, prueferA)).toBeNull()
   })
 
   it('leert den Prüfbefehl beim Laufstart, behält aber das Archiv', () => {
-    pruefbefehlSetzen(projekt, 'npm test')
-    pruefbefehlArchivieren(projekt)
+    pruefbefehlSetzen(projekt, prueferA, 'npm test')
+    pruefbefehlArchivieren(projekt, prueferA)
     pruefbefehlLeeren(projekt)
-    expect(pruefbefehlLaden(projekt)).toBeNull()
-    expect(pruefbefehlArchivLaden(projekt)).toBe('npm test')
+    expect(pruefbefehlLaden(projekt, prueferA)).toBeNull()
+    expect(pruefbefehlArchivLaden(projekt, prueferA)).toBe('npm test')
   })
 })
 
