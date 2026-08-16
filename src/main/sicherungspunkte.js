@@ -20,7 +20,11 @@ import { dateiUnterschied } from '../shared/laufDiff.js'
 // Wiederherstellung würde sonst abgeräumte alte Vorschläge zurückholen.
 // chat.json (Verlauf des Co-Piloten, BAUPLAN 33): Gesprächsverlauf ist kein
 // Projektstand — eine Wiederherstellung soll ihn nicht zurückdrehen.
-const AUSGESCHLOSSEN = new Set(['.git', 'laufberichte', 'node_modules', 'laufstand.json', 'arbeitsablage', 'naechster-lauf.json', 'chat.json'])
+// pruefbefehl.json (Tor ohne KI, BAUPLAN 35): gehört zum Lauf, nicht zum
+// Projektstand — er zeigt auf die Prüfmappe, die der nächste Laufstart leert.
+// Nebenwirkung, die genau so gewollt ist: Er taucht damit auch nicht im Diff
+// der Reparatur-Runden auf (BAUPLAN 34).
+const AUSGESCHLOSSEN = new Set(['.git', 'laufberichte', 'node_modules', 'laufstand.json', 'arbeitsablage', 'naechster-lauf.json', 'chat.json', 'pruefbefehl.json'])
 const ZWEIG = 'haupt'
 const AUTOR = { name: 'FlowForge', email: 'flowforge@lokal' }
 

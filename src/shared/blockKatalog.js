@@ -349,6 +349,11 @@ export const BLOCK_KATALOG = [
     prueft: true,
     uebung: false,
     bereich: 'pruefen',
+    // Prüfbefehl als Pflicht-Artefakt (BAUPLAN 35): Ohne ihn muss FlowForge in
+    // jeder Reparatur-Runde einen Prüfer-Agenten bezahlen; mit ihm prüft es
+    // selbst nach — 0 Tokens. Fehlt er, gibt es genau eine Nachbesserungs-Runde
+    // (wie bei der Startanleitung des Bauers).
+    pruefbefehlPflicht: true,
     felder: [],
     auftrag:
       'Du bist der Prüfer — ein frischer Agent ohne das Arbeitswissen des Bauers. Antworte ' +
@@ -379,6 +384,14 @@ export const BLOCK_KATALOG = [
       'veränderst du nie. Wegwerf-Hilfsskripte gehören in den Ordner arbeitsablage/, bleibende ' +
       'Prüfungen nach pruefung/. Projektkarten sind nicht dein Prüfgegenstand: Sie werden erst ' +
       'nach dir vom Sessionende-Block gepflegt. ' +
+      'Pflicht-Artefakt Prüfbefehl: Bevor du fertig bist, hinterlege mit dem Werkzeug ' +
+      'pruefbefehl_setzen genau EINEN Befehl, der alle deine Prüfungen in pruefung/ ausführt ' +
+      'und bei einem Fehlschlag mit einem Fehlercode endet (z.B. „npx vitest run pruefung"). ' +
+      'Schreibe deine Prüfungen so, dass ein einziger Aufruf genügt — braucht es mehrere ' +
+      'Schritte, lege ein Sammel-Skript in pruefung/ ab und nenne nur dieses. FlowForge spielt ' +
+      'diesen Befehl in Reparatur-Runden selbst ab, OHNE dich zu starten: Bleibt er rot, geht ' +
+      'das Protokoll direkt an den Bauer zurück; erst bei Grün wirst du erneut gerufen. Das ' +
+      'gilt auch, wenn du FEHLGESCHLAGEN urteilst — gerade dann. ' +
       'Dein Abschlusstext ist der Prüfbeleg — kompakt: 1. Was du wie geprüft hast. ' +
       '2. Der Rot-vor-Grün-Beleg mit den Ausgaben. 3. Beanstandungen mit Fundort — oder dass ' +
       'es keine gibt. Jede Beanstandung steht als eigene Zeile in genau einem dieser Muster: ' +
@@ -412,6 +425,8 @@ export const BLOCK_KATALOG = [
     prueft: true,
     uebung: false,
     bereich: 'pruefen',
+    // Prüfbefehl als Pflicht-Artefakt (BAUPLAN 35) — wie beim Prüfer.
+    pruefbefehlPflicht: true,
     felder: [],
     auftrag:
       'Du bist die Gesamtprüfung: Du prüfst, ob das Projekt als Ganzes noch hält, und ' +
@@ -428,6 +443,9 @@ export const BLOCK_KATALOG = [
       'keine überstrengen Fallen (pixelgenaue Vergleiche, Wortverbote, Datei-Inventuren). ' +
       'Den geprüften Code veränderst du nie und du reparierst nichts. ' +
       'Wegwerf-Hilfen gehören in den Ordner arbeitsablage/. ' +
+      'Pflicht-Artefakt Prüfbefehl: Hinterlege mit dem Werkzeug pruefbefehl_setzen genau EINEN ' +
+      'Befehl, der alle deine Prüfungen ausführt und bei einem Fehlschlag mit einem Fehlercode ' +
+      'endet — FlowForge spielt ihn später selbst ab, um ohne KI nachzuprüfen. ' +
       'Dein Abschlusstext ist der Prüfbeleg — kompakt: 1. Was du geprüft hast und wie es ' +
       'ausging. 2. Jeder Fehlschlag mit Fundort in ein bis zwei Sätzen. ' +
       'Direkt vor der Urteils-Zeile stehen zwei Zeilen für die Prüfkarte, die FlowForge bei ' +

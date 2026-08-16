@@ -17,6 +17,7 @@ import { helferWerkzeugServer } from './helferWerkzeuge.js'
 import { menschWerkzeugServer } from './menschWerkzeuge.js'
 import { kontextFensterFuerModell, kontextFensterMerken } from './motorWissen.js'
 import { startWerkzeugServer } from './startWerkzeuge.js'
+import { pruefbefehlWerkzeugServer } from './pruefbefehlWerkzeuge.js'
 import { appWerkzeugServer } from './appWerkzeuge.js'
 import { vorschlagWerkzeugServer } from './vorschlagWerkzeuge.js'
 import { laufVorschlagWerkzeugServer } from './laufVorschlagWerkzeuge.js'
@@ -86,6 +87,13 @@ const MENSCH_PRAEFIX = 'mcp__mensch__'
 // unter der Sperre „darf nur lesen" deshalb tabu.
 const START_PRAEFIX = 'mcp__start__'
 
+// Prüfbefehl-Werkzeug (BAUPLAN 35): hinterlegt den Startbefehl der Prüfmappe,
+// den FlowForge in Reparatur-Runden selbst abspielt (Tor ohne KI). Er ändert
+// keine Projektdatei — aber er ist ein Befehl, den FlowForge später ohne
+// Rückfrage ausführt, und gehört deshalb dem Prüfer. Andere Blöcke lösen die
+// übliche Rechte-Rückfrage aus (Rückfrage statt Sperre, Feedback Georg).
+const PRUEFBEFEHL_PRAEFIX = 'mcp__pruefbefehl__'
+
 // Lokale Helfer-KI (Experiment, 13.08.2026): rein lesende Recherche über
 // Ollama — im Code auf Auflisten/Lesen/Suchen im Projektordner begrenzt,
 // deshalb ohne Rückfrage und auch unter „darf nur lesen" erlaubt.
@@ -123,7 +131,11 @@ const VERWALTUNGS_DATEIEN = new Set([
   'laufstand.json',
   'naechster-lauf.json',
   // Verlauf des Co-Piloten (BAUPLAN 33): Verwaltungsdatei wie die anderen.
-  'chat.json'
+  'chat.json',
+  // Prüfbefehl (BAUPLAN 35): FlowForge führt ihn selbst aus, ohne
+  // Rechte-Rückfrage — geschrieben wird er ausschließlich über das hart
+  // validierende Werkzeug pruefbefehl_setzen.
+  'pruefbefehl.json'
 ])
 const BERICHTE_ORDNER = 'laufberichte'
 
@@ -388,6 +400,14 @@ export function pruefeWerkzeug(name, eingabe, projektPfad, nurLesen, darfPruefen
     if (name === APP_AUSGABE) return { erlaubt: true }
     if (eingabe.port_freimachen) return { frage: texte.rechteFrage.appPortFreimachen }
     if (nurLesen) return { frage: texte.rechteFrage.appBedienen }
+    return { erlaubt: true }
+  }
+  // Prüfbefehl setzen (BAUPLAN 35): Pflicht-Artefakt des Prüfers — dort frei,
+  // sonst Rückfrage. Der Befehl selbst ist im Werkzeug hart validiert (ein
+  // Test-Werkzeug, keine Verkettung), denn FlowForge spielt ihn später ohne
+  // Rückfrage ab.
+  if (name.startsWith(PRUEFBEFEHL_PRAEFIX)) {
+    if (!darfPruefen) return { frage: texte.rechteFrage.pruefbefehl }
     return { erlaubt: true }
   }
   // Startanleitung setzen schreibt ins Projekt — validiert im Werkzeug selbst,
@@ -925,6 +945,9 @@ export function starteLaufMotor(optionen) {
     // Startanleitung (BAUPLAN 10): das Pflicht-Artefakt der Bau-Blöcke wird
     // ausschließlich über dieses validierende Werkzeug geschrieben.
     const startServer = await startWerkzeugServer({ projektPfad, aufEreignis })
+    // Prüfbefehl (BAUPLAN 35): das Pflicht-Artefakt des Prüfers — hart
+    // validiert, weil FlowForge ihn später selbst ohne Rückfrage abspielt.
+    const pruefbefehlServer = await pruefbefehlWerkzeugServer({ projektPfad, aufEreignis })
     // Karten-Vorschläge (BAUPLAN 26): der Abnahme-Dialog des Karten-Prüfers —
     // freigeschaltet nur für Blöcke mit kartenVorschlaege (pruefeWerkzeug).
     const vorschlagServer = aufKartenVorschlag
@@ -1003,6 +1026,7 @@ export function starteLaufMotor(optionen) {
           karten: kartenServer,
           mensch: menschServer,
           start: startServer,
+          pruefbefehl: pruefbefehlServer,
           ...(vorschlagServer ? { vorschlaege: vorschlagServer } : {}),
           ...(laufVorschlagServer ? { naechsterlauf: laufVorschlagServer } : {}),
           ...(zuteilungServer ? { zuteilung: zuteilungServer } : {}),

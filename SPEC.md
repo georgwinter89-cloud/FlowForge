@@ -121,7 +121,8 @@ Der Agent liest und schreibt Karten über eingebaute **Karten-Werkzeuge** (Über
 aktualisieren, erledigen) — dieselben Regeln, hart durchgesetzt; abgelehnte Versuche sind im
 Liveticker sichtbar. FlowForges Verwaltungsdateien im Projektordner (projekt.json, karten.json,
 workflow.json, startanleitung.json, laufstand.json, naechster-lauf.json, chat.json — der
-Verlauf des Co-Piloten, §6 — und die Laufberichte) sind für direkte Schreibzugriffe des
+Verlauf des Co-Piloten, §6 —, pruefbefehl.json — der Prüfbefehl des Tors, §4.3 — und die
+Laufberichte) sind für direkte Schreibzugriffe des
 Agenten gesperrt (hartes Nein, keine Rückfrage) — sonst ließen sich die Kartenregeln umgehen.
 
 ### 3.2 Laufberichte
@@ -155,8 +156,11 @@ des erzeugenden Laufs.
   **außerhalb** des Projektordners — das Projekt darf selbst ein Git-Repo sein oder werden.
   Dem Agenten ist Git-Benutzung per Sperre untersagt (hartes Nein, keine Rückfrage).
 - Ausgenommen von Sicherung und Wiederherstellung: Laufberichte (bleiben immer erhalten),
-  `node_modules` (per Installation wiederherstellbar) und `arbeitsablage`
-  (Wegwerf-Fläche der Agenten, wird am Lauf-Ende geleert).
+  `node_modules` (per Installation wiederherstellbar), `arbeitsablage`
+  (Wegwerf-Fläche der Agenten, wird am Lauf-Ende geleert) und `pruefbefehl.json`
+  (der Prüfbefehl gehört zum Lauf und zeigt auf die Prüfmappe, die der nächste
+  Laufstart leert — §4.3; sein Gedächtnis über Läufe hinweg ist das Archiv
+  außerhalb des Projektordners).
 - **Wiederherstellen-Knopf** mit Vorschau (was ändert sich, was verschwindet, was kommt
   zurück): Projektstand von jedem Sicherungspunkt zurückholen. Vorher wird der jetzige
   Stand automatisch gesichert — eine Wiederherstellung ist selbst wieder rückgängig machbar.
@@ -240,6 +244,16 @@ Seite aufs Projekt vorgefiltert zeigt (eigener Baustein, nicht Teil der Leinwand
   bleibt sie aus, wandert ehrlich vermerkt der ganze Prüfbeleg weiter.
   Sind alle Beanstandungen mechanisch, versucht zuerst die lokale Vorreparatur (§4.3) —
   ohne reguläre Runden zu verbrauchen.
+  **Tor ohne KI vor dem Prüfer-Agenten** (seit Bauschritt 35): Vor jeder Nachprüfung — der
+  Reparatur-Runde des Prüfers wie der Nachprüfung einer lokalen Vorreparatur — spielt
+  FlowForge den **Prüfbefehl** des Prüfers (§4.3) selbst ab, ohne Motor und ohne Tokens.
+  Bleibt er rot, geht das Fehlerprotokoll sofort als Rückmeldung an den Rückführungs-Ziel-Block,
+  ohne dass ein Prüfer-Agent startet (der Block-Anlauf steht mit 0 Tokens im Laufbericht) —
+  eine reguläre Reparatur-Runde verbraucht er trotzdem, sonst liefe das Paar Bauer/Tor endlos.
+  Erst bei Grün startet der Prüfer-Agent und prüft dann nur noch die **grundsätzlichen**
+  Beanstandungen nach; was seine Tests abdecken, gilt mit Grün als erledigt. Nach einer
+  lokalen Vorreparatur bleibt es bewusst bei der vollen Nachprüfung (ein kleines Modell
+  könnte den Test statt des Codes angefasst haben). Ohne Prüfbefehl läuft alles wie zuvor.
   Standard **2 Reparatur-Runden** (pro Workflow verstellbar); danach hält der Lauf an und stellt
   eine Folgen-Frage („Weitermachen, zurückstellen oder Stand wiederherstellen?"). Im
   Verzweigten laufen genau die Blöcke auf den Wegen von X zum Prüfer erneut — parallele
@@ -328,6 +342,40 @@ technisch „frischer Agent ohne das Arbeitswissen des Bauers" — jeder Block l
 als frischer Agent in der Lauf-Session (§5); es ist kein anderes Gehirn.
 Prüfer-Blöcke melden ihr Urteil als letzte Zeile ihres Abschlusstexts
 („PRUEFUNG: BESTANDEN/FEHLGESCHLAGEN").
+
+**Prüfbefehl — Pflicht-Artefakt des Prüfers** (seit Bauschritt 35; gilt auch für
+die Gesamtprüfung): Neben seinen Tests hinterlegt der Prüfer über das Werkzeug
+`pruefbefehl_setzen` **genau einen** Befehl, der alle seine Prüfungen ausführt und
+bei einem Fehlschlag mit einem Fehlercode endet — damit FlowForge in
+Reparatur-Runden ohne KI nachprüfen kann (§4.1). Fehlt er, läuft der Prüfer genau
+**eine** Nachbesserungs-Runde erneut und trägt ihn nach, ohne etwas neu zu prüfen
+(dasselbe Muster wie die Startanleitung beim Bauer, §8); fehlt er danach immer noch,
+macht der Lauf ehrlich vermerkt weiter. Der Befehl liegt in der Verwaltungsdatei
+`pruefbefehl.json` (für Agenten gesperrt, §3.1) und **gehört zum Lauf**: Der
+Laufstart leert ihn zusammen mit der Prüfmappe, und er ist von Sicherungspunkten
+ausgenommen (§3.3). Weil FlowForge ihn **ohne Rechte-Rückfrage** ausführt, liegt er
+an kürzerer Leine als ein Agenten-Befehl (§7): ein einzelner Aufruf eines
+Test-Werkzeugs (node, npm, npx, pnpm, yarn, vitest, jest, mocha, tsc, python, py,
+pytest, deno, bun, go, cargo, dotnet, mvn, gradle, make, rspec, phpunit), **keine**
+Verkettung (`&`, `&&`, `|`, `;`), Umleitung (`>`, `<`) oder Unterausführung
+(`$(…)`, Backticks) — braucht eine Prüfung mehrere Schritte, gehört ein
+Sammel-Skript nach `pruefung/`. Das Werkzeug ist rückfragefrei nur in Prüf-Blöcken;
+andere Blöcke lösen die übliche Rechte-Rückfrage aus.
+
+**Baseline „vorher schon rot"** (seit Bauschritt 35): Nach einer bestandenen Prüfung
+bewahrt FlowForge den Prüfbefehl im verwalteten Bereich **außerhalb des
+Projektordners** auf (wie die Prüfkarten). Beim nächsten Laufstart — noch vor dem
+Leeren der Prüfmappe und vor dem Sicherungspunkt „Stand vor Lauf" — spielt FlowForge
+ihn einmal ab und merkt sich das Ergebnis. Bauer und Prüfer bekommen „vorher schon
+rot: …" in ihren Auftrag, und das Tor (§4.1) meldet nur **neu** Kaputtes als
+Fehlschlag; Altlasten werden stattdessen zu einer offenen Aufgaben-Karte (Herkunft
+FlowForge, stabiler Titel — derselbe Befund legt nicht bei jedem Lauf eine neue an)
+und verbrennen keine Reparatur-Runde. Verglichen wird über die Fehlerzeilen beider
+Ausgaben, normalisiert um Zahlen, Pfadtrenner und Leerraum — Laufzeiten und
+Testzahlen sollen keinen Scheinbefund erzeugen. Ehrliche Grenzen: Ist die Prüfmappe
+beim Laufstart leer (voriger Lauf abgebrochen), gibt es keine Baseline; Prüfdateien
+gezogener Prüfkarten kommen erst nach der Messung in die Mappe und zählen nicht mit;
+ein Lauf ohne Prüf-Block misst gar nichts.
 
 **Gesamtprüfung** (seit 12.08.2026, umgebaut 13.08.2026): eigener Prüf-Block für
 zwischendurch — prüft mit **frisch geschriebenen** Prüfungen, ob das Projekt als
@@ -929,6 +977,18 @@ alle Verwaltungsdateien, §3.1). Durchsetzung beim Bauer-Block: Fehlt die Starta
 seinem Lauf, bekommt er genau eine Nachbesserungs-Runde (unabhängig von den Reparatur-Runden);
 fehlt sie danach immer noch, macht der Lauf weiter und vermerkt das ehrlich im Ticker und am
 Block-Ergebnis.
+
+**Rauchtest nach dem Bauer** (seit Bauschritt 35): Direkt nach einem gelungenen Bau-Block
+startet FlowForge die Startanleitung **selbst** einmal kurz und stoppt sie wieder — ohne
+Motor, ohne Tokens und still (kein Eintrag im App-Tab, keine Zustandsanzeige, kein
+Browser-Fenster). Geprüft wird nur „läuft an": Ein Befehl, der mit Fehlercode stirbt, ist rot;
+bei einer Web-Adresse muss sie innerhalb von 25 Sekunden antworten; ohne Adresse genügt
+„läuft noch oder sauber durchgelaufen" nach 6 Sekunden Anlauf; eine Datei-Adresse muss
+existieren. Ist es rot, geht die Ausgabe als Rückmeldung an den Bauer und derselbe Block läuft
+genau **eine** Nachbesserungs-Runde erneut — bevor der Prüfer eine ganze Runde damit
+verbringt; danach macht der Lauf ehrlich vermerkt weiter. Läuft die App gerade im App-Tab,
+entfällt der Rauchtest (FlowForge nimmt ihr den Port nicht weg), ebenso bei einer
+Startanleitung ohne Befehl und Datei-Adresse.
 
 Ausgeführt wird die Anleitung **im Tab „App"** der Projektansicht (seit Bauschritt 32; das
 frühere externe Konsolenfenster gibt es nicht mehr — Entscheidung Georg, 15.08.2026). Der

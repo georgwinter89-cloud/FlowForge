@@ -813,6 +813,48 @@ export const texte = {
       'Startanleitung des Projekts fehlt noch. Lege sie jetzt mit dem Werkzeug ' +
       'startanleitung_setzen an (beschreibung, dazu befehl und/oder adresse). ' +
       'Ändere sonst nichts am Projekt.',
+    // Tor ohne KI (BAUPLAN 35): Der Prüfbefehl ist das Pflicht-Artefakt des
+    // Prüfers — ohne ihn kann FlowForge in Reparatur-Runden nicht selbst
+    // nachprüfen und muss jedes Mal einen Prüfer-Agenten bezahlen.
+    pruefbefehlNachforderung:
+      '\n\nNachforderung von FlowForge: Du hast in diesem Lauf schon geprüft, aber keinen ' +
+      'gültigen Prüfbefehl hinterlegt. Prüfe jetzt NICHTS neu und führe keine Tests erneut ' +
+      'aus: Lege allein den Startbefehl deiner Prüfmappe mit dem Werkzeug pruefbefehl_setzen ' +
+      'fest (ein einzelner Aufruf, der alle deine Prüfungen ausführt und bei einem Fehlschlag ' +
+      'mit Fehlercode endet). Wiederhole danach deinen Prüfbeleg von eben unverändert — ' +
+      'dieselben Beanstandungs- und Prüfkarten-Zeilen und dasselbe Urteil in der letzten ' +
+      'Zeile. Dein Prüfbeleg von eben:\n',
+    // Rot-Fall des Tors: Das Protokoll geht neben der Kritik an den Bauer —
+    // die Beanstandungs-Zeilen allein sagen nicht, wo es klemmt.
+    torProtokoll: (protokoll) =>
+      '\n\nDas hat FlowForge selbst gemessen: Der Prüfbefehl des Prüfers wurde ohne Agenten ' +
+      'abgespielt und ist rot. Nimm dieses Protokoll als Tatsache — es stammt aus einem ' +
+      'echten Lauf, nicht aus einer Einschätzung:\n' + protokoll,
+    // Grün-Fall des Tors: Der Prüfer-Agent prüft nur noch, was seine Tests
+    // nicht abdecken — der Rest ist deterministisch belegt.
+    torGruenNachpruefung: (befehl, kritik) =>
+      '\n\nDies ist eine Nachprüfung — und FlowForge hat deinen Prüfbefehl vorher selbst ' +
+      `abgespielt: „${befehl}" läuft GRÜN durch. Alle Beanstandungen, die deine Prüfungen ` +
+      'abdecken, gelten damit als behoben; führe sie nicht erneut aus. Prüfe in dieser Runde ' +
+      'NUR die Beanstandungen nach, die deine Prüfungen NICHT abdecken — keine erneute ' +
+      'Vollprüfung, keine neuen Prüffelder. Ist damit alles erledigt, urteile ' +
+      'PRUEFUNG: BESTANDEN. Deine Beanstandungen von letzter Runde:\n' + kritik,
+    // Rauchtest (BAUPLAN 35): Die Startanleitung startet nicht — das merkt
+    // FlowForge selbst, bevor der Prüfer eine Runde kostet.
+    rauchtestRueckmeldung: (ausgabe) =>
+      '\n\nNachforderung von FlowForge: Dein Auftrag ist umgesetzt, aber die Startanleitung ' +
+      'des Projekts läuft nicht an — FlowForge hat sie selbst einmal kurz gestartet und wieder ' +
+      'gestoppt. Bring das in Ordnung: Entweder der Code startet nicht (dann repariere ihn) ' +
+      'oder die Startanleitung stimmt nicht mehr (dann setze sie mit startanleitung_setzen neu). ' +
+      'Baue sonst nichts Neues. Die Ausgabe des Startversuchs:\n' + ausgabe,
+    // Baseline (BAUPLAN 35): ehrlich, was schon vor dem Lauf kaputt war —
+    // damit niemand Altlasten für seine eigene Arbeit hält.
+    baselineRot: (befehl, ausgabe) =>
+      `\n\nStand vor diesem Lauf: FlowForge hat den aufbewahrten Prüfbefehl „${befehl}" vor ` +
+      'dem Start abgespielt — er war schon damals ROT. Diese Fehlschläge sind Altlasten, nicht ' +
+      'deine: Du musst sie in diesem Paket nicht beheben (FlowForge legt sie als Aufgaben-Karte ' +
+      'ab), und sie zählen nicht als Fehlschlag deiner Arbeit. Was neu dazukommt, zählt sehr ' +
+      'wohl. Das war vorher schon rot:\n' + ausgabe,
     // Übergabe an den nächsten Anlauf desselben Blocks nach einem Übertrag.
     uebertragFortsetzung: (uebergabe) =>
       '\n\nÜbergabe deines Vorgängers: Genau dieser Auftrag lief schon in einem früheren ' +
@@ -1285,6 +1327,81 @@ export const texte = {
     fehlerAdresse:
       'Die adresse muss mit http:// oder https:// beginnen — oder eine Datei im Projektordner sein (relativer Pfad, kein Ausbruch per „..").'
   },
+  // Prüfbefehl-Werkzeug (BAUPLAN 35): Texte an den Agenten.
+  agentenPruefbefehl: {
+    anweisungen:
+      'Mit pruefbefehl_setzen hinterlegst du den Startbefehl deiner Prüfmappe. FlowForge spielt ' +
+      'ihn in Reparatur-Runden selbst ab — ohne dich zu starten und ohne Kontingent zu kosten. ' +
+      'Nutze es, wenn dein Arbeitsauftrag den Prüfbefehl verlangt — niemals über die Datei ' +
+      'pruefbefehl.json.',
+    werkzeugBeschreibung:
+      'Hinterlegt den Befehl, mit dem sich die Prüfungen in pruefung/ von außen starten lassen — ' +
+      'Pflicht-Artefakt jedes Prüf-Auftrags. FlowForge führt ihn in Reparatur-Runden selbst aus, ' +
+      'bevor es dich erneut startet: Bleibt er rot, geht das Fehlerprotokoll ohne dich zurück an ' +
+      'den Bauer. Genau EIN Befehl, der ohne Rückfrage und ohne Tastatureingabe durchläuft.',
+    befehlParam:
+      'Der Befehl, der im Projektordner alle deine Prüfungen ausführt und bei einem Fehlschlag ' +
+      'mit einem Fehlercode endet (z.B. „npx vitest run pruefung" oder „python pruefung/pruefe.py"). ' +
+      'Ein einzelner Befehl — keine Verkettung mit &, |, ; und keine Unterausführung.',
+    gesetzt: (befehl) =>
+      `Prüfbefehl festgelegt: ${befehl} — FlowForge spielt ihn in Reparatur-Runden selbst ab.`,
+    fehlerLeer: 'Der befehl fehlt. Gib genau einen Befehl an, der deine Prüfungen ausführt.',
+    fehlerZuLang:
+      'Der befehl ist zu lang. Halte ihn kurz und konkret — ein Aufruf, der alle Prüfungen startet.',
+    fehlerVerkettung:
+      'Der befehl darf nur ein einzelner Aufruf sein: keine Verkettung (&, &&, |, ;), keine ' +
+      'Umleitung (>, <) und keine Unterausführung ($(…), Backticks). Braucht deine Prüfung ' +
+      'mehrere Schritte, lege ein Skript in pruefung/ ab und rufe nur dieses auf.',
+    fehlerWerkzeug: (werkzeug) =>
+      `„${werkzeug}" ist als Prüfbefehl nicht zugelassen. FlowForge führt den Prüfbefehl ohne ` +
+      'Rückfrage aus und lässt deshalb nur Test-Werkzeuge zu (node, npm, npx, pnpm, yarn, ' +
+      'vitest, jest, mocha, tsc, python, py, pytest, deno, bun, go, cargo, dotnet, mvn, gradle, ' +
+      'make, rspec, phpunit). Rufe deine Prüfungen über eines davon auf.'
+  },
+  // Tor ohne KI (BAUPLAN 35): FlowForge spielt Prüfbefehl und Rauchtest selbst
+  // ab. Diese Texte gehen als Beleg bzw. Rückmeldung in den Lauf — sie müssen
+  // dieselben Marken tragen wie ein echter Prüfbeleg (BEANSTANDUNG, PRUEFUNG).
+  tor: {
+    belegKopf: (befehl, code) =>
+      `Prüfbefehl von FlowForge abgespielt (ohne Prüfer-Agent): ${befehl}\n` +
+      `Ergebnis: rot — der Befehl endete mit Rückgabecode ${code}.\n`,
+    belegKopfZeitlimit: (befehl) =>
+      `Prüfbefehl von FlowForge abgespielt (ohne Prüfer-Agent): ${befehl}\n` +
+      'Ergebnis: rot — der Befehl lief in das Zeitlimit und wurde abgebrochen.\n',
+    // Bewusst „grundsätzlich": FlowForge kann ein Fehlerprotokoll nicht
+    // einstufen — nur der Prüfer kann das. Damit bleibt die lokale
+    // Vorreparatur (BAUPLAN 20) hier außen vor, statt blind zu raten.
+    beanstandung: (zeile) => `BEANSTANDUNG (grundsätzlich): ${zeile}`,
+    beanstandungOhneZeilen: (befehl) =>
+      `BEANSTANDUNG (grundsätzlich): Der Prüfbefehl „${befehl}" schlägt fehl, ohne eine ` +
+      'erkennbare Fehlerzeile auszugeben — sieh im vollständigen Protokoll nach.',
+    weitere: (anzahl) =>
+      `(${anzahl} weitere Fehlerzeile${anzahl === 1 ? '' : 'n'} stehen im Protokoll unten.)`,
+    urteil: 'PRUEFUNG: FEHLGESCHLAGEN',
+    protokoll: (ausgabe) => `\n\nVollständige Ausgabe des Prüfbefehls:\n${ausgabe}`,
+    rauchtestDateiFehlt: (adresse) =>
+      `Die Startanleitung zeigt auf die Datei „${adresse}" — die gibt es im Projektordner nicht.`,
+    rauchtestKeineAntwort: (adresse) =>
+      `Der Befehl lief an, aber unter ${adresse} antwortete nichts.`,
+    rauchtestOhneAusgabe:
+      'Der Startversuch schlug fehl, ohne eine Ausgabe zu hinterlassen — der Befehl der Startanleitung läuft so nicht an.',
+    // Altlast-Karte (BAUPLAN 35): War der Prüfbefehl schon vor dem Lauf rot,
+    // wird daraus eine offene Aufgaben-Karte statt einer Reparatur-Runde.
+    // Der Titel bleibt bewusst stabil (ohne Datum), damit derselbe Befund
+    // nicht bei jedem Lauf eine neue Karte anlegt.
+    altlastTitel: 'Altlast: Prüfungen waren schon vor dem Lauf rot',
+    altlastThema: 'Altlasten',
+    // Die Karten-Längengrenze (400 Zeichen) ist hart — deshalb wird hier
+    // gedeckelt, statt die Karte am Ende abgewiesen zu bekommen.
+    altlastText: (befehl, zeilen) => {
+      const kopf =
+        `Der aufbewahrte Prüfbefehl „${befehl}" war schon vor dem Lauf rot — das stammt nicht ` +
+        'aus dem aktuellen Paket. Rot war: '
+      const platz = Math.max(0, 400 - kopf.length)
+      const rest = String(zeilen ?? '').replace(/\s+/g, ' ').trim()
+      return kopf + (rest.length > platz ? rest.slice(0, Math.max(0, platz - 1)) + '…' : rest)
+    }
+  },
   // App-Werkzeuge des Co-Piloten (BAUPLAN 33): Texte an den Agenten.
   agentenApp: {
     anweisungen:
@@ -1509,6 +1626,10 @@ export const texte = {
     // Verfahren.
     kartenZuteilung:
       'Der Agent möchte den nachfolgenden Blöcken Karten zuteilen — üblich ist das nur in Paket schneiden und Diagnose. Erlaubst du es, bekommen die genannten Blöcke nur ihre zugeteilten Karten in den Auftrag (die Status-Karte immer).',
+    // Prüfbefehl (BAUPLAN 35): rückfragefrei nur in Prüf-Blöcken — er gehört
+    // zur Prüfmappe, und FlowForge spielt ihn später ohne Rückfrage ab.
+    pruefbefehl:
+      'Der Agent möchte den Prüfbefehl des Projekts festlegen — den Befehl, den FlowForge in Reparatur-Runden selbst abspielt, um ohne KI nachzuprüfen. Üblich ist das nur im Prüfer. Erlaubst du es, wird der Befehl trotzdem hart geprüft: nur ein einzelnes Test-Werkzeug, keine Verkettung.',
     abgelehntFuerAgent:
       'Der Nutzer hat das nicht erlaubt. Suche einen anderen Weg innerhalb des Projektordners — oder beende den Auftrag mit einer kurzen Erklärung.',
     gitGesperrtFuerAgent:
@@ -1719,6 +1840,37 @@ export const texte = {
       `Die Startanleitung fehlt — „${block}" bekommt eine Nachbesserungs-Runde.`,
     startanleitungWeiterOhne:
       'Die Startanleitung fehlt weiterhin — der Lauf macht weiter, „App starten" bleibt aus.',
+    // Tor ohne KI (BAUPLAN 35): Prüfbefehl, Rauchtest und Baseline laufen ohne
+    // Motor — jede Zeile hier steht für gesparte Tokens und ist deshalb
+    // sichtbar im Ticker und damit im Laufbericht.
+    pruefbefehlGesetzt: (befehl) =>
+      `Prüfbefehl festgelegt: ${befehl} — FlowForge kann jetzt ohne KI nachprüfen.`,
+    pruefbefehlAbgelehnt: (grund) => `Prüfbefehl abgelehnt: ${grund}`,
+    pruefbefehlNachgefordert: (block) =>
+      `Der Prüfbefehl fehlt — „${block}" bekommt eine Nachbesserungs-Runde (er prüft nichts neu).`,
+    pruefbefehlWeiterOhne:
+      'Der Prüfbefehl fehlt weiterhin — Reparatur-Runden brauchen wieder einen Prüfer-Agenten.',
+    torSpielt: (befehl) => `Prüfbefehl wird abgespielt (ohne KI, 0 Tokens): ${befehl}`,
+    torRot: (anzahl) =>
+      `Prüfbefehl abgespielt: rot (${anzahl} ${anzahl === 1 ? 'Fehlerzeile' : 'Fehlerzeilen'}) — zurück zum Bauer ohne Prüfer-Agent.`,
+    torRotZeitlimit:
+      'Prüfbefehl abgespielt: rot (Zeitlimit überschritten) — zurück zum Bauer ohne Prüfer-Agent.',
+    torGruen:
+      'Prüfbefehl abgespielt: grün — der Prüfer prüft nur noch die grundsätzlichen Beanstandungen.',
+    torAltlasten: (anzahl) =>
+      `Prüfbefehl abgespielt: rot, aber nur mit ${anzahl === 1 ? 'dem Fehlschlag' : `den ${anzahl} Fehlschlägen`}, ${anzahl === 1 ? 'der' : 'die'} schon vor dem Lauf da ${anzahl === 1 ? 'war' : 'waren'} — das zählt nicht als neuer Fehlschlag.`,
+    baselineSpielt: (befehl) => `Stand vor dem Lauf wird gemessen (ohne KI): ${befehl}`,
+    baselineGruen: 'Stand vor dem Lauf: alle aufbewahrten Prüfungen grün.',
+    baselineRot: (anzahl) =>
+      `Stand vor dem Lauf: schon rot (${anzahl} ${anzahl === 1 ? 'Fehlerzeile' : 'Fehlerzeilen'}) — das sind Altlasten, keine Fehlschläge dieses Laufs.`,
+    baselineAltlastKarte: (titel) => `Altlast als Aufgaben-Karte abgelegt: „${titel}"`,
+    rauchtestGruen: 'Rauchtest der Startanleitung: die App läuft an.',
+    rauchtestRot: (block) =>
+      `Rauchtest der Startanleitung: die App läuft NICHT an — „${block}" bekommt eine Nachbesserungs-Runde, bevor der Prüfer etwas kostet.`,
+    rauchtestWeiterOhne:
+      'Die Startanleitung läuft weiterhin nicht an — der Lauf macht ehrlich vermerkt weiter.',
+    rauchtestUebersprungen:
+      'Rauchtest übersprungen: Die App läuft gerade im App-Tab — FlowForge nimmt ihr den Port nicht weg.',
     sicherungspunktAngelegt: 'Sicherungspunkt angelegt.',
     zurueckgesetzt: 'Projektordner auf den letzten Sicherungspunkt zurückgesetzt.',
     fertigIn: (sekunden) => `Fertig nach ${sekunden} Sekunden.`,
@@ -1955,7 +2107,10 @@ export const texte = {
       fehlgeschlagen: 'fehlgeschlagen',
       'pruefung-bestanden': 'Prüfung bestanden',
       'pruefung-nicht-bestanden': 'Prüfung nicht bestanden',
-      'startanleitung-fehlt': 'Startanleitung fehlte'
+      'startanleitung-fehlt': 'Startanleitung fehlte',
+      // Rauchtest (BAUPLAN 35): Die App ließ sich nicht starten — kein
+      // Fehlschlag des Bauers, aber auch kein sauberes „erledigt".
+      'startanleitung-laeuft-nicht': 'Startanleitung lief nicht an'
     },
     details: 'Einzelheiten',
     schliessen: 'Zuklappen',

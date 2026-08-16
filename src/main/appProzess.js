@@ -101,8 +101,9 @@ export function appLaeuft(projektPfad) {
 }
 
 // Eine Anfrage an die Adresse — jede Antwort (auch ein Fehlercode) heißt:
-// der Server ist da und der Browser kann öffnen.
-function einmalAnfragen(adresse) {
+// der Server ist da und der Browser kann öffnen. Der Rauchtest (BAUPLAN 35)
+// nutzt dieselbe Frage, nur mit eigenem Zeitrahmen.
+export function einmalAnfragen(adresse) {
   return new Promise((aufloesen) => {
     const modul = adresse.toLowerCase().startsWith('https') ? https : http
     let anfrage

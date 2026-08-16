@@ -29,6 +29,7 @@ import {
   zwischenBloecke
 } from '../shared/kettenRegeln.js'
 import { prueferKritik, mitteGekuerzt } from '../shared/kantenRegeln.js'
+import { fehlerZeilen, neueFehler, grundsaetzlicheKritik } from '../shared/torRegeln.js'
 import { diffTextBauen, diffBilanz } from '../shared/laufDiff.js'
 import { einstellungenLaden, ABO_MODUS_ERLAUBT } from './einstellungen.js'
 import {
@@ -62,6 +63,14 @@ import {
   FORTSETZUNG_WAECHTER_PROZENT
 } from './motor/schnittstelle.js'
 import { startanleitungVorhanden } from './startanleitung.js'
+import {
+  pruefbefehlLaden,
+  pruefbefehlVorhanden,
+  pruefbefehlLeeren,
+  pruefbefehlArchivieren,
+  pruefbefehlArchivLaden
+} from './pruefbefehl.js'
+import { befehlAbspielen, rauchtest } from './torProzess.js'
 import { kartenZeile } from './motor/kartenWerkzeuge.js'
 import {
   sicherungspunktAnlegen,
@@ -360,6 +369,25 @@ function gekuerzt(text) {
   return mitteGekuerzt(text, LIEFERUNG_MAX).text
 }
 
+// Tor ohne KI (BAUPLAN 35): So viel Befehls-Ausgabe geht als Tatsache in einen
+// Auftrag — großzügig genug für ein echtes Testprotokoll, klein genug, dass es
+// den Kontext des Bauers nicht flutet.
+const TOR_PROTOKOLL_MAX = 6000
+const BASELINE_MAX = 3000
+// So viele Fehlerzeilen werden zu Beanstandungs-Zeilen; der Rest steht im
+// Protokoll darunter (sonst wird aus einer kaputten Suite eine Bleiwüste).
+const TOR_BEANSTANDUNGEN_MAX = 8
+
+// Hat die Prüfmappe überhaupt Dateien? Ohne sie misst ein aufbewahrter
+// Prüfbefehl nichts Sinnvolles (die Baseline bliebe ein Scheinbefund).
+function pruefmappeHatDateien(projektPfad) {
+  try {
+    return fs.readdirSync(path.join(projektPfad, 'pruefung')).length > 0
+  } catch {
+    return false
+  }
+}
+
 // fortsetzung (BAUPLAN 11): gespeicherter Laufstand einer Unterbrechung — die
 // dort fertigen Blöcke laufen nicht erneut, ihre Lieferungen sind wieder da.
 // Kommt nur über laufFortsetzen() herein.
@@ -523,12 +551,65 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
   // Wurzeln, ihre Nachkommen werden transitiv gemerkt und am Lauf-Ende beendet.
   prozessgruppeAnlegen('lauf:' + projektPfad, projektPfad)
 
+  // Baseline „vorher schon rot" (BAUPLAN 35): Gibt es aus einem früheren Lauf
+  // einen aufbewahrten Prüfbefehl, spielt FlowForge ihn EINMAL ab, bevor
+  // irgendetwas passiert — 0 Tokens, aber die Antwort auf die teuerste Frage
+  // einer Reparatur-Runde: „war das schon vorher kaputt?" Was hier rot ist,
+  // zählt später nicht als Fehlschlag dieses Laufs.
+  // Der Zeitpunkt ist entscheidend: VOR der Leerung der Prüfmappe — der
+  // aufbewahrte Befehl zeigt ja genau auf die Prüfungen, die gleich weg sind.
+  // Ehrliche Grenze: Ist die Mappe leer (voriger Lauf abgebrochen), misst die
+  // Baseline nichts Sinnvolles; dann bleibt sie aus. Ebenso bei einer
+  // Wiederaufnahme (der Stand vor dem Lauf ist längst gemessen) und in Läufen
+  // ohne Prüf-Block (Sonderläufe, reine Lese-Ketten) — da gäbe es kein Tor,
+  // für das sie zählen könnte.
+  let baseline = null // { befehl, ausgabe, zeilen }
+  let baselineTicker = null
+  if (
+    !fortsetzung &&
+    kette.some((eintrag) => defVon(eintrag.blockId)?.prueft) &&
+    pruefmappeHatDateien(projektPfad)
+  ) {
+    const alterBefehl = pruefbefehlArchivLaden(projektPfad)
+    if (alterBefehl) {
+      const messung = await befehlAbspielen(projektPfad, alterBefehl, {
+        abbrechen: () => lauf.sanft || lauf.hart
+      })
+      const zeilen =
+        messung.code === 0 || messung.abgebrochen
+          ? []
+          : fehlerZeilen(messung.ausgabe).map((f) => f.zeile)
+      if (messung.abgebrochen) {
+        // Georg hat gestoppt, bevor die Messung durch war — dann gibt es keine
+        // Baseline, statt einer erfundenen.
+      } else if (messung.code === 0) {
+        baselineTicker = [texte.ticker.baselineSpielt(alterBefehl), texte.ticker.baselineGruen]
+      } else {
+        // Für den späteren Vergleich genügen die Fehlerzeilen — die volle
+        // Ausgabe wandert nur gedeckelt in die Aufträge und den Laufstand.
+        baseline = {
+          befehl: alterBefehl,
+          ausgabe: mitteGekuerzt(messung.ausgabe, BASELINE_MAX).text,
+          zeilen
+        }
+        baselineTicker = [
+          texte.ticker.baselineSpielt(alterBefehl),
+          texte.ticker.baselineRot(zeilen.length)
+        ]
+      }
+    }
+  }
+
   // Lauf-Mappe statt Projekt-Mappe (Entscheidung Georg, 13.08.2026, BAUPLAN 17):
   // Die Prüfmappe pruefung/ gehört zum Lauf — ein neuer Lauf startet mit leerer
   // Mappe, der Prüfer baut seine Prüfungen frisch fürs aktuelle Paket. Geleert
   // wird VOR dem Sicherungspunkt „Stand vor Lauf", damit auch „Sofort abbrechen"
   // die alten Prüfungen nicht zurückholt. Die Wiederaufnahme eines
   // unterbrochenen Laufs leert nicht — dessen Prüfungen gehören ja zu ihm.
+  // Der Prüfbefehl (BAUPLAN 35) gehört genauso zum Lauf: Er zeigt auf genau
+  // diese Prüfungen und wird mit ihnen zusammen geleert; sein Gedächtnis über
+  // Läufe hinweg ist das Archiv, aus dem eben die Baseline kam.
+  if (!fortsetzung) pruefbefehlLeeren(projektPfad)
   let pruefmappeGeleert = false
   if (!fortsetzung) {
     try {
@@ -950,6 +1031,43 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
   if (lokaleHelferHinweis) tickern(lokaleHelferHinweis)
   if (pruefmappeGeleert) tickern(texte.ticker.pruefmappeGeleert)
   if (pruefkartenEingelegt > 0) tickern(texte.ticker.pruefkartenEingelegt(pruefkartenEingelegt))
+  // Baseline (BAUPLAN 35): schon vor dem ersten Block gemessen, hier erst
+  // sichtbar — den Ticker gibt es erst ab jetzt.
+  for (const zeile of baselineTicker ?? []) tickern(zeile)
+  // Altlasten werden Aufgaben-Karte, keine Reparatur-Runde: Der Befund landet
+  // dort, wo Georg ihn wiederfindet, und rutscht über die Kartenauswahl in die
+  // nächsten Bau-Läufe. Der Titel ist bewusst stabil — derselbe Befund soll
+  // nicht bei jedem Lauf eine neue Karte anlegen.
+  if (baseline) {
+    try {
+      const vorhanden = kartenLaden(projektPfad)
+      const schonDa =
+        vorhanden.ok &&
+        vorhanden.karten.some(
+          (karte) =>
+            karte.sorte === 'aufgabe' && !karte.erledigt && karte.titel === texte.tor.altlastTitel
+        )
+      if (!schonDa) {
+        const angelegt = karteAnlegen(
+          projektPfad,
+          {
+            sorte: 'aufgabe',
+            titel: texte.tor.altlastTitel,
+            text: texte.tor.altlastText(baseline.befehl, baseline.zeilen.slice(0, 3).join(' · ')),
+            thema: texte.tor.altlastThema
+          },
+          { quelle: 'flowforge', laufId: bericht.id, laufStart: bericht.gestartetAm }
+        )
+        if (angelegt.ok) {
+          senden({ art: 'karten', karten: angelegt.karten })
+          tickern(texte.ticker.baselineAltlastKarte(angelegt.karte.titel))
+        }
+      }
+    } catch {
+      // Eine Karte, die nicht entsteht, darf den Lauf nicht aufhalten — der
+      // Baseline-Hinweis geht ohnehin in die Aufträge.
+    }
+  }
   if (ausWarteschlange) tickern(texte.ticker.ausWarteschlangeGestartet)
   // Sichtbarer Hinweis (SPEC §5, BAUPLAN 12): parallele Läufe vervielfachen den
   // Verbrauch — ehrlich im Ticker und damit auch im Laufbericht.
@@ -1004,7 +1122,22 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           vorFazit: '',
           beanstandungNachforderung: '',
           beanstandungNachgefordert: false,
-          fanOutGemeldet: new Set()
+          fanOutGemeldet: new Set(),
+          // Tor ohne KI (BAUPLAN 35):
+          // torProtokoll — die Ausgabe eines roten Prüfbefehls, die dieser
+          //   Block im nächsten Anlauf als Tatsache in den Auftrag bekommt;
+          // letztesTorProtokoll — am Prüf-Knoten gemerkt, damit die
+          //   Rückführung sie an ihr Ziel weiterreichen kann;
+          // torGruenBefehl — der Prüfbefehl lief vor diesem Anlauf grün durch:
+          //   der Prüfer prüft dann nur noch die grundsätzlichen Punkte nach;
+          // pruefbefehlNachforderung — der Prüfbeleg, den der Prüfer beim
+          //   Nachtragen des Prüfbefehls unverändert wiederholen soll;
+          // rauchtestRueckmeldung — die Startanleitung lief nicht an.
+          torProtokoll: '',
+          letztesTorProtokoll: '',
+          torGruenBefehl: '',
+          pruefbefehlNachforderung: '',
+          rauchtestRueckmeldung: ''
         }
       ])
     )
@@ -1110,6 +1243,11 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     // Startanleitungs-Pflicht (SPEC §8): genau eine Nachbesserungs-Runde pro
     // Lauf — unabhängig von den Reparatur-Runden des Prüfers.
     let startanleitungNachgefordert = false
+    // Tor ohne KI (BAUPLAN 35): Auch der Prüfbefehl und der Rauchtest bekommen
+    // je genau EINE Nachbesserungs-Runde pro Lauf. Ohne dieses Budget liefe ein
+    // Projekt, dessen App grundsätzlich nicht startet, endlos im Kreis.
+    let pruefbefehlNachgefordert = false
+    let rauchtestNachgefordert = false
     // Automatischer Übertrag (SPEC §5): Zähler gegen die Übertragsgrenze,
     // gemeinsam für alle Blöcke des Laufs.
     let uebertraege = 0
@@ -1150,7 +1288,10 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
               nk.diffBasis !== undefined ||
               nk.vorFazit ||
               nk.beanstandungNachforderung ||
-              nk.beanstandungNachgefordert
+              nk.beanstandungNachgefordert ||
+              nk.torProtokoll ||
+              nk.pruefbefehlNachforderung ||
+              nk.rauchtestRueckmeldung
             )
           })
           .map((id) => {
@@ -1163,7 +1304,15 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
                 diffAnfordern: nk.diffAnfordern || Boolean(nk.diffText),
                 vorFazit: nk.vorFazit,
                 beanstandungNachforderung: nk.beanstandungNachforderung,
-                beanstandungNachgefordert: nk.beanstandungNachgefordert
+                beanstandungNachgefordert: nk.beanstandungNachgefordert,
+                // Tor ohne KI (BAUPLAN 35): Diese Zusätze sind teuer erarbeitet
+                // (ein echter Befehlslauf) — nach einem App-Neustart stünde der
+                // Bauer sonst wieder ohne Protokoll da. Der torGruenBefehl
+                // wandert bewusst NICHT mit: Nach einer Unterbrechung ist die
+                // Messung veraltet, das Tor läuft dann eben erneut.
+                torProtokoll: nk.torProtokoll,
+                pruefbefehlNachforderung: nk.pruefbefehlNachforderung,
+                rauchtestRueckmeldung: nk.rauchtestRueckmeldung
               }
             ]
           }),
@@ -1191,7 +1340,13 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         sonderlauf,
         rundenUebrig,
         uebertraege,
-        startanleitungNachgefordert
+        startanleitungNachgefordert,
+        // Tor ohne KI (BAUPLAN 35): Baseline und verbrauchte Nachforderungen
+        // wandern mit — sonst würde nach einem App-Neustart neu gemessen und
+        // eine schon verbrauchte Nachbesserungs-Runde erneut gewährt.
+        baseline,
+        pruefbefehlNachgefordert,
+        rauchtestNachgefordert
       })
     }
 
@@ -1228,6 +1383,13 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           if (typeof kante.beanstandungNachforderung === 'string')
             nk.beanstandungNachforderung = kante.beanstandungNachforderung
           nk.beanstandungNachgefordert = Boolean(kante.beanstandungNachgefordert)
+          // Tor ohne KI (BAUPLAN 35): ebenso tolerant gegenüber alten
+          // Laufständen — ohne Eintrag läuft alles wie vor diesem Schritt.
+          if (typeof kante.torProtokoll === 'string') nk.torProtokoll = kante.torProtokoll
+          if (typeof kante.pruefbefehlNachforderung === 'string')
+            nk.pruefbefehlNachforderung = kante.pruefbefehlNachforderung
+          if (typeof kante.rauchtestRueckmeldung === 'string')
+            nk.rauchtestRueckmeldung = kante.rauchtestRueckmeldung
         }
       for (const [id, u] of Array.isArray(fortsetzung.uebergaben) ? fortsetzung.uebergaben : [])
         if (knoten.has(id)) {
@@ -1237,6 +1399,18 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       if (Number.isInteger(fortsetzung.rundenUebrig)) rundenUebrig = fortsetzung.rundenUebrig
       if (Number.isInteger(fortsetzung.uebertraege)) uebertraege = fortsetzung.uebertraege
       startanleitungNachgefordert = Boolean(fortsetzung.startanleitungNachgefordert)
+      // Tor ohne KI (BAUPLAN 35): Die Baseline wurde beim ursprünglichen Start
+      // gemessen — sie gilt für den ganzen Lauf und wird nicht neu erhoben.
+      if (fortsetzung.baseline && typeof fortsetzung.baseline.befehl === 'string')
+        baseline = {
+          befehl: fortsetzung.baseline.befehl,
+          ausgabe: String(fortsetzung.baseline.ausgabe ?? ''),
+          zeilen: Array.isArray(fortsetzung.baseline.zeilen)
+            ? fortsetzung.baseline.zeilen.filter((zeile) => typeof zeile === 'string')
+            : []
+        }
+      pruefbefehlNachgefordert = Boolean(fortsetzung.pruefbefehlNachgefordert)
+      rauchtestNachgefordert = Boolean(fortsetzung.rauchtestNachgefordert)
       // Karten-Zuteilung (BAUPLAN 29): tolerant gegenüber alten Laufständen —
       // ohne Eintrag gilt schlicht die volle Auswahl.
       for (const [id, ids] of Array.isArray(fortsetzung.kartenZuteilung)
@@ -1534,6 +1708,13 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
             ? await standWeichtAb(projektPfad)
             : false
       }
+      // Tor ohne KI (BAUPLAN 35): Steht eine Nachprüfung an und liegt ein
+      // Prüfbefehl vor, prüft FlowForge zuerst selbst nach. Ist es rot, ist
+      // dieser Block-Anlauf hier schon zu Ende — ohne Motor, ohne Tokens.
+      if (k.def.prueft && k.nachpruefung) {
+        const torErgebnis = await torAbspielen(k)
+        if (torErgebnis) return torErgebnis
+      }
       // Hängt die Verbrauchs-Summen dieses Blocks an ein endgültiges Ergebnis.
       function mitBlockVerbrauch(ergebnis) {
         return {
@@ -1590,10 +1771,32 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         if (k.rueckmeldung) auftrag += texte.agentenUebergabe.prueferRueckmeldung(k.rueckmeldung)
         // Nachprüfung: ehrlich unterschieden, ob der Bauer oder die lokale
         // Vorreparatur (BAUPLAN 20) die Beanstandungen behoben hat.
-        if (k.nachpruefung)
-          auftrag += k.lokaleNachpruefung
-            ? texte.agentenUebergabe.lokaleNachpruefung(k.nachpruefung)
-            : texte.agentenUebergabe.prueferNachpruefung(k.nachpruefung)
+        // Tor ohne KI (BAUPLAN 35): Lief der Prüfbefehl vorher grün durch,
+        // prüft der Prüfer nur noch die grundsätzlichen Beanstandungen nach —
+        // die testgedeckten sind deterministisch belegt. Nach einer LOKALEN
+        // Reparatur gilt das bewusst NICHT: Ein kleines Modell könnte den Test
+        // statt des Codes angefasst haben, da bleibt die volle Nachprüfung.
+        if (k.nachpruefung) {
+          if (k.torGruenBefehl && !k.lokaleNachpruefung)
+            auftrag += texte.agentenUebergabe.torGruenNachpruefung(
+              k.torGruenBefehl,
+              grundsaetzlicheKritik(k.nachpruefung) ?? k.nachpruefung
+            )
+          else
+            auftrag += k.lokaleNachpruefung
+              ? texte.agentenUebergabe.lokaleNachpruefung(k.nachpruefung)
+              : texte.agentenUebergabe.prueferNachpruefung(k.nachpruefung)
+        }
+        // Tor ohne KI (BAUPLAN 35): Was FlowForge selbst gemessen hat, geht als
+        // Tatsache in den Auftrag — das Fehlerprotokoll eines roten Prüfbefehls
+        // und der Startversuch einer Startanleitung, die nicht anläuft.
+        if (k.torProtokoll) auftrag += texte.agentenUebergabe.torProtokoll(k.torProtokoll)
+        if (k.rauchtestRueckmeldung)
+          auftrag += texte.agentenUebergabe.rauchtestRueckmeldung(k.rauchtestRueckmeldung)
+        // Baseline: Bauer und Prüfer erfahren, was schon vor dem Lauf rot war —
+        // sonst hält jemand eine Altlast für sein eigenes Werk.
+        if (baseline && (k.def.prueft || k.def.startanleitungPflicht))
+          auftrag += texte.agentenUebergabe.baselineRot(baseline.befehl, baseline.ausgabe)
         // Diff + Vor-Fazit (BAUPLAN 34, Retained Reasoning light): Der frische
         // Agent erkundet nicht neu — er weiß, was in diesem Lauf schon
         // geschehen ist und warum. Das Frische-Prinzip bleibt: Er erbt kein
@@ -1607,6 +1810,11 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         // Prüfer liefert sie nach, statt eine Reparatur-Runde zu verbrennen.
         if (k.beanstandungNachforderung)
           auftrag += texte.agentenUebergabe.beanstandungNachforderung(k.beanstandungNachforderung)
+        // Prüfbefehl-Nachforderung (BAUPLAN 35): nur nachtragen, nichts neu
+        // prüfen — dasselbe Muster wie die Startanleitungs-Nachforderung.
+        if (k.pruefbefehlNachforderung)
+          auftrag +=
+            texte.agentenUebergabe.pruefbefehlNachforderung + k.pruefbefehlNachforderung
         if (k.startanleitungNachforderung)
           auftrag += texte.agentenUebergabe.startanleitungNachforderung
         if (k.uebergabe) auftrag += texte.agentenUebergabe.uebertragFortsetzung(k.uebergabe)
@@ -1764,6 +1972,78 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       )
       if (vergleich.dateien.some((datei) => datei.zuGross)) tickern(texte.ticker.diffGekuerzt)
       return text
+    }
+
+    // Tor ohne KI (BAUPLAN 35): Vor JEDER Nachprüfung — der Reparatur-Runde des
+    // Prüfers wie der Nachprüfung einer lokalen Vorreparatur — spielt FlowForge
+    // den Prüfbefehl selbst ab, bevor ein Prüfer-Agent auch nur startet.
+    // Liefert ein fertiges Block-Ergebnis, wenn das Tor rot ist (dann läuft
+    // kein Agent, und der Block kostet 0 Tokens) — sonst null, dann prüft der
+    // Agent wie bisher weiter.
+    async function torAbspielen(k) {
+      k.torGruenBefehl = ''
+      if (lauf.sanft || lauf.hart || endZustand) return null
+      const befehl = pruefbefehlLaden(projektPfad)
+      if (!befehl) return null
+      tickern(texte.ticker.torSpielt(befehl))
+      const messung = await befehlAbspielen(projektPfad, befehl, {
+        abbrechen: () => lauf.sanft || lauf.hart
+      })
+      // Abgebrochen heißt: Georg hat den Lauf gestoppt, nicht „die Prüfung ist
+      // rot" — daraus wird kein Urteil gebaut.
+      if (messung.abgebrochen) return null
+      if (messung.code === 0) {
+        k.torGruenBefehl = befehl
+        tickern(texte.ticker.torGruen)
+        return null
+      }
+      // Baseline „vorher schon rot": Nur NEU Kaputtes zählt als Fehlschlag —
+      // Altlasten sind schon als Aufgaben-Karte abgelegt und verbrennen keine
+      // Reparatur-Runde. Ein Zeitlimit zählt dagegen immer als rot: Ein
+      // Testlauf, der nicht endet, belegt gar nichts.
+      const zeilen = baseline
+        ? neueFehler(baseline.zeilen.join('\n'), messung.ausgabe)
+        : fehlerZeilen(messung.ausgabe).map((f) => f.zeile)
+      if (baseline && zeilen.length === 0 && !messung.zeitlimit) {
+        // Bewusst ohne torGruenBefehl: Der Befehl ist nicht grün, nur die
+        // Fehler sind alt — der Prüfer prüft normal nach (er kennt die
+        // Baseline aus seinem Auftrag), aber ohne Rückführung.
+        tickern(texte.ticker.torAltlasten(baseline.zeilen.length))
+        return null
+      }
+      const genommen = zeilen.slice(0, TOR_BEANSTANDUNGEN_MAX)
+      const beleg =
+        (messung.zeitlimit
+          ? texte.tor.belegKopfZeitlimit(befehl)
+          : texte.tor.belegKopf(befehl, messung.code)) +
+        '\n' +
+        (genommen.length
+          ? genommen.map((zeile) => texte.tor.beanstandung(zeile)).join('\n')
+          : texte.tor.beanstandungOhneZeilen(befehl)) +
+        (zeilen.length > genommen.length
+          ? '\n' + texte.tor.weitere(zeilen.length - genommen.length)
+          : '') +
+        '\n\n' +
+        texte.tor.urteil
+      // Das volle Protokoll geht neben der Kritik an den Bauer — die
+      // Beanstandungs-Zeilen allein sagen nicht, wo es klemmt.
+      k.letztesTorProtokoll = mitteGekuerzt(messung.ausgabe, TOR_PROTOKOLL_MAX).text
+      tickern(
+        messung.zeitlimit ? texte.ticker.torRotZeitlimit : texte.ticker.torRot(zeilen.length)
+      )
+      // Ein vollwertiges Block-Ergebnis: Die Urteils-Auswertung, die
+      // Rückführung und die Reparatur-Runden-Zählung greifen unverändert —
+      // nur eben ohne einen einzigen Token.
+      return {
+        zustand: 'erfolgreich',
+        ergebnisText: beleg,
+        fehlertext: '',
+        fehlerArt: null,
+        verbrauch: null,
+        blockTokens: 0,
+        blockKosten: null,
+        blockAufschluesselung: null
+      }
     }
 
     // Übergaben aus den Lieferungen der Vorfahren einsammeln — deterministisch
@@ -1955,6 +2235,11 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       k.diffAnfordern = false
       k.vorFazit = ''
       k.beanstandungNachforderung = ''
+      // Tor-Zusätze dieses Anlaufs (BAUPLAN 35) ebenso.
+      k.torProtokoll = ''
+      k.rauchtestRueckmeldung = ''
+      k.pruefbefehlNachforderung = ''
+      k.torGruenBefehl = ''
 
       // Abschlusstext als Lieferung für die Nachfahren ablegen und für die
       // Karten-Anzeige merken.
@@ -2009,6 +2294,60 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         tickern(texte.ticker.startanleitungWeiterOhne)
       }
 
+      // Rauchtest der Startanleitung (BAUPLAN 35): FlowForge startet die
+      // gebaute App einmal kurz und stoppt sie wieder — läuft sie gar nicht an,
+      // erfährt das der Bauer sofort und ohne einen Token, statt dass der
+      // Prüfer eine ganze Runde damit verbringt. Genau eine Nachbesserungs-
+      // Runde pro Lauf; danach macht der Lauf ehrlich vermerkt weiter.
+      if (
+        k.def.startanleitungPflicht &&
+        k.status === 'fertig' &&
+        !lauf.sanft &&
+        !lauf.hart &&
+        !endZustand
+      ) {
+        const probe = await rauchtest(projektPfad, {
+          abbrechen: () => lauf.sanft || lauf.hart
+        })
+        if (probe.geprueft && probe.gruen) tickern(texte.ticker.rauchtestGruen)
+        else if (probe.grund === 'appLaeuft') tickern(texte.ticker.rauchtestUebersprungen)
+        else if (probe.geprueft && !probe.gruen) {
+          blockErgebnis.zustand = 'startanleitung-laeuft-nicht'
+          if (!rauchtestNachgefordert) {
+            rauchtestNachgefordert = true
+            k.rauchtestRueckmeldung = mitteGekuerzt(
+              String(probe.ausgabe ?? '').trim() || texte.tor.rauchtestOhneAusgabe,
+              TOR_PROTOKOLL_MAX
+            ).text
+            k.status = 'offen'
+            tickern(texte.ticker.rauchtestRot(k.def.name))
+            return
+          }
+          tickern(texte.ticker.rauchtestWeiterOhne)
+        }
+      }
+
+      // Prüfbefehl als Pflicht-Artefakt (BAUPLAN 35): Ohne ihn muss FlowForge
+      // jede Reparatur-Runde wieder mit einem Prüfer-Agenten bezahlen. Fehlt
+      // er, läuft der Prüfer genau einmal mit einer Nachforderung erneut — er
+      // prüft dabei nichts neu, sondern trägt nur nach und wiederholt sein
+      // Urteil. Das steht bewusst VOR der Urteils-Auswertung: Sonst wäre die
+      // Rückführung schon angestoßen, wenn die Nachforderung greift.
+      if (
+        k.def.pruefbefehlPflicht &&
+        k.status === 'fertig' &&
+        !pruefbefehlVorhanden(projektPfad)
+      ) {
+        if (!pruefbefehlNachgefordert && !lauf.sanft && !lauf.hart && !endZustand) {
+          pruefbefehlNachgefordert = true
+          k.pruefbefehlNachforderung = gekuerzt(String(ergebnis.ergebnisText ?? ''))
+          k.status = 'offen'
+          tickern(texte.ticker.pruefbefehlNachgefordert(k.def.name))
+          return
+        }
+        tickern(texte.ticker.pruefbefehlWeiterOhne)
+      }
+
       // Prüfer-Blöcke: Urteil auswerten, ggf. Fehlschlag-Rückführung.
       if (k.def.prueft) {
         const bestanden = pruefUrteil(ergebnis.ergebnisText)
@@ -2027,6 +2366,11 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           }
           tickern(texte.ticker.pruefungBestanden)
           pruefkarteNachBestandenerPruefung(id, ergebnis.ergebnisText)
+          // Tor ohne KI (BAUPLAN 35): Ein Prüfbefehl, der zu einer bestandenen
+          // Prüfung gehört, taugt als Maßstab — aufbewahrt wird er außerhalb
+          // des Projektordners und liefert beim nächsten Laufstart die
+          // Baseline „vorher schon rot".
+          pruefbefehlArchivieren(projektPfad)
         } else {
           tickern(bestanden === false ? texte.ticker.pruefungNichtBestanden : texte.ticker.pruefungOhneErgebnis)
           // Kanten-Gate (BAUPLAN 34): Ein Urteil FEHLGESCHLAGEN ohne eine
@@ -2189,6 +2533,14 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
             // das „warum" — er erkundet nicht neu und entscheidet nicht anders.
             ziel.diffAnfordern = true
             ziel.vorFazit = ziel.lieferung ?? ''
+            // Tor ohne KI (BAUPLAN 35): Kam das Urteil vom abgespielten
+            // Prüfbefehl, bekommt das Ziel das volle Fehlerprotokoll dazu —
+            // die Beanstandungs-Zeilen allein sagen nicht, wo es klemmt.
+            // NICHT nach einer gescheiterten lokalen Nachprüfung: Dort wurde
+            // eben zurückgerollt, das Protokoll beschriebe einen Stand, den es
+            // nicht mehr gibt.
+            ziel.torProtokoll = warLokaleNachpruefung ? '' : k.letztesTorProtokoll
+            k.letztesTorProtokoll = ''
             // Für den Prüfer zählt ab jetzt „was sich seit meinem Urteil
             // geändert hat" — seine Nachprüfung bekommt denselben Dienst.
             k.diffBasis = await letzterPunktId(projektPfad)

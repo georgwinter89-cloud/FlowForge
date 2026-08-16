@@ -1699,7 +1699,8 @@ body {
   color: var(--signal-text);
 }
 
-.marke-startanleitung-fehlt {
+.marke-startanleitung-fehlt,
+.marke-startanleitung-laeuft-nicht {
   border-color: var(--lesend);
   color: var(--lesend);
 }
