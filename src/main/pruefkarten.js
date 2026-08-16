@@ -112,23 +112,8 @@ export function pruefkartenArchivLoeschen(projektPfad, kartenId) {
   }
 }
 
-// Titel und Text der Prüfkarte aus dem Abschlusstext des Prüfers: die Zeilen
-// „PRUEFKARTE-TITEL: …" und „PRUEFKARTE: …" (die jeweils letzte zählt).
-// Fehlen sie (z.B. bei Übungs-Prüfern), liefert der Prüfbeleg selbst — ohne
-// Marker- und Urteilszeilen — den Text; die harten Längengrenzen setzt
-// pruefkarteAnlegen durch.
-export function pruefkarteAusErgebnis(ergebnisText) {
-  const text = String(ergebnisText ?? '')
-  const titelTreffer = [...text.matchAll(/^PR(?:UE|Ü)FKARTE-TITEL:\s*(.+)$/gim)]
-  const textTreffer = [...text.matchAll(/^PR(?:UE|Ü)FKARTE:\s*(.+)$/gim)]
-  const titel = titelTreffer.length ? titelTreffer[titelTreffer.length - 1][1].trim() : null
-  let inhalt = textTreffer.length ? textTreffer[textTreffer.length - 1][1].trim() : null
-  if (!inhalt)
-    inhalt =
-      text
-        .replace(/^PR(?:UE|Ü)FKARTE(?:-TITEL)?:.*$/gim, '')
-        .replace(/PR(?:UE|Ü)FUNG:?\s*(BESTANDEN|FEHLGESCHLAGEN)/gi, '')
-        .replace(/\s+/g, ' ')
-        .trim() || null
-  return { titel, text: inhalt }
-}
+// Titel und Text der Prüfkarte kommen seit dem Lieferschein (BAUPLAN 42) aus
+// den gemeldeten Feldern pruefkarteTitel/pruefkarteText — die Regel dafür
+// steht in lieferschein.js (pruefkarteAusMeldungen), die harten Längengrenzen
+// setzt pruefkarteAnlegen durch. Fehlen die Felder, greift der Ersatz aus
+// texte.pruefkarten.

@@ -13,4 +13,13 @@ export const app = {
   isPackaged: false
 }
 
-export default { app }
+// Damit sich auch lauf.js laden lässt (Ladbarkeits-Prüfung seit BAUPLAN 42):
+// Es importiert BrowserWindow und Notification, ruft sie beim Laden aber nicht.
+export const BrowserWindow = { getAllWindows: () => [] }
+export function Notification() {}
+Notification.isSupported = () => false
+export const ipcMain = { handle: () => {}, on: () => {} }
+export const dialog = {}
+export const shell = {}
+
+export default { app, BrowserWindow, Notification, ipcMain, dialog, shell }

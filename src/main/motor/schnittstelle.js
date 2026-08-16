@@ -33,9 +33,15 @@
 //   mit denselben harten Regeln wie für Menschen (BAUPLAN 7). Erfolgreiche
 //   Änderungen melden sich als Ereignis { art: 'karten', karten }.
 //
+//     lieferscheinWerkzeuge  Lieferschein (BAUPLAN 42): die Melde-Werkzeuge,
+//                            die DIESE Kette braucht (je liefert-Etikett eines).
+//                            Der Motor registriert genau sie; freigeschaltet ist
+//                            je Block nur sein eigenes.
+//
 //   Rückgabe = {
 //     blockAusfuehren({ auftrag, blockName, nurLesen, darfPruefen, pruefOrdner,
-//                       lokaleKi, modell, unterModell, modellName, uebertrag })
+//                       lokaleKi, liefert, lieferscheinFrei,
+//                       modell, unterModell, modellName, uebertrag })
 //           Führt genau einen Block als frischen Agenten in der Lauf-Session
 //           aus. Der Arbeitsauftrag wird beim Agent-Aufruf von FlowForge
 //           selbst eingesetzt; die Sperren (nurLesen, Prüfmappen-Besitz,
@@ -51,14 +57,18 @@
 //           testModus, anweisung }: Läuft die Lauf-Session über die Schwelle,
 //           wird unterbrochen; der ergebnisText ist dann die Übergabe an den
 //           nächsten Anlauf, und die Session ist danach verbraucht (tot).
-//           Promise<{ zustand, fehlertext, fehlerArt, ergebnisText, verbrauch,
-//                     sessionKennung }>
+//           Promise<{ zustand, fehlertext, fehlerArt, ergebnisText, meldungen,
+//                     verbrauch, sessionKennung }>
 //           zustand: 'erfolgreich' | 'fehlgeschlagen' | 'sanft-gestoppt'
 //                  | 'hart-abgebrochen' | 'uebertrag' | 'fortsetzung-gescheitert'
 //           fehlerArt (nur bei 'fehlgeschlagen'): 'kontingent' | 'obergrenze'
 //                  | 'anmeldung' | 'ueberlastet' | null
-//           ergebnisText: Fazit des Block-Agenten — daraus liest FlowForge
-//                  z.B. Prüfer-Urteile (PRUEFUNG: BESTANDEN/…)
+//           meldungen: die geprüften Lieferschein-Meldungen dieses Anlaufs
+//                  (BAUPLAN 42) — Urteil, Beanstandungen, Prüfkarte und
+//                  Übergaben liest FlowForge ausschließlich daraus.
+//           ergebnisText: freier Abschlusstext des Block-Agenten — nur noch
+//                  Übergabe beim Übertrag und Beleg in der Nachforderung;
+//                  ausgewertet wird er nicht mehr.
 //     istTot()          Session nimmt keine Blöcke mehr an → neuen Motor
 //                       starten (mit fortsetzen = sessionKennung)
 //     sessionKennung    Kennung der Lauf-Session (für Laufstand/Wiederaufnahme)

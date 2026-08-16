@@ -204,13 +204,13 @@ export const texte = {
     beschreibungFeld: 'Kurzbeschreibung für die Bibliothek',
     auftragFeld: 'Arbeitsauftrag an den Agenten',
     auftragHinweis:
-      'Das ist die Anweisung, die der Agent bekommt. Sag klar, was er tun soll, was nicht — und was am Ende in seinem Abschlusstext stehen soll.',
+      'Das ist die Anweisung, die der Agent bekommt. Sag klar, was er tun soll, was nicht — und was am Ende in seiner Ergebnis-Meldung stehen soll. Wie gemeldet wird, sagt FlowForge dem Agenten von selbst; du beschreibst nur den Inhalt.',
     brauchtFeld: 'braucht — Übergaben, die der Block von vorherigen Blöcken benötigt',
     brauchtHinweis:
       'Nur eintragen, was wirklich nötig ist: Der Block lässt sich dann nur hinter Blöcke stecken, die das liefern. Ohne „braucht" kann er auch am Anfang stehen.',
-    liefertFeld: 'liefert — Etikett für den Abschlusstext dieses Blocks',
+    liefertFeld: 'liefert — Etikett für das Ergebnis dieses Blocks',
     liefertHinweis:
-      'Unter diesem Etikett bekommen spätere Blöcke den Abschlusstext gereicht. Nutze möglichst die vorgeschlagenen Etiketten — dann passt der Block zu den vorhandenen.',
+      'Unter diesem Etikett bekommen spätere Blöcke die Ergebnis-Meldung dieses Blocks gereicht. Nutze möglichst die vorgeschlagenen Etiketten — dann passt der Block zu den vorhandenen, und bei „Arbeitspaket", „Prüfbeleg", „Umsetzungsbericht", „Angriffsliste" und „Befundliste" meldet der Agent sogar in geprüften Feldern statt als Fließtext.',
     etikettPlatzhalter: 'Etikett eintippen oder Vorschlag wählen …',
     etikettHinzufuegen: 'Hinzufügen',
     nurLesenFeld: 'Sperre „darf nur lesen"',
@@ -303,6 +303,11 @@ export const texte = {
     fehlerWaehrendWarteschlange:
       'Dieser Workflow wartet in der Warteschlange auf seinen Start. Nimm ihn erst aus der Warteschlange, wenn du ihn ändern willst.',
     unbekannterBlock: 'Diesen Block kennt FlowForge nicht.',
+    // Kanten-Ehrlichkeit (BAUPLAN 34): Passen nicht alle Beanstandungen in die
+    // Rückmeldung, steht das dort — still schneiden wäre genau der Kanten-Verlust.
+    kritikWeggelassen: (anzahl) =>
+      `(${anzahl} weitere Beanstandung${anzahl === 1 ? '' : 'en'} passte nicht mehr in die ` +
+      'Rückmeldung — sieh im Prüfbeleg nach, wenn diese hier behoben sind.)',
     // Zusatzname je Blockkarte (BAUPLAN 41): unterscheidbar machen und dem
     // Zuschnitt sagen, wonach zu schneiden ist.
     zusatzLabel: 'Zusatzname',
@@ -857,20 +862,16 @@ export const texte = {
     // Das eigene Fazit der letzten Runde ist das „warum" zum Diff.
     vorFazit: (fazit) =>
       '\n\nDein eigenes Fazit aus der letzten Runde (so hast du es damals begründet):\n' + fazit,
-    // Kanten-Gate (BAUPLAN 34): Ein Urteil FEHLGESCHLAGEN ohne eine einzige
-    // Beanstandungs-Zeile ist wertlos — der Bauer wüsste nicht, was zu tun ist.
-    // FlowForge fordert kurz nach, statt eine Reparatur-Runde zu verbrennen.
-    beanstandungNachforderung: (belegVorher) =>
-      '\n\nNachforderung von FlowForge: Du hast in diesem Lauf schon geprüft und mit ' +
-      '„PRUEFUNG: FEHLGESCHLAGEN" geurteilt — aber dein Prüfbeleg enthält keine einzige ' +
-      'Zeile im Muster „BEANSTANDUNG (mechanisch): …" oder „BEANSTANDUNG ' +
-      '(grundsätzlich): …". Ohne diese Zeilen weiß der Bauer nicht, was er beheben soll. ' +
-      'Prüfe jetzt NICHTS neu und führe keine Tests erneut aus: Formuliere allein aus ' +
-      'deinem Beleg unten jede Beanstandung als eigene Zeile in genau diesem Muster ' +
-      '(mit Fundort; im Zweifel „grundsätzlich"), und wiederhole danach unverändert die ' +
-      'Prüfkarten-Zeilen und als allerletzte Zeile PRUEFUNG: FEHLGESCHLAGEN. Findest du ' +
-      'beim Lesen, dass es in Wahrheit nichts zu beanstanden gibt, urteile ehrlich ' +
-      'PRUEFUNG: BESTANDEN. Dein Prüfbeleg von eben:\n' + belegVorher,
+    // Lieferschein (BAUPLAN 42): Ein neuer Anlauf desselben Blocks braucht eine
+    // neue Meldung — die alte gehörte zum vorherigen Stand. Bei Nachforderungen
+    // (Startanleitung, Prüfbefehl, Rauchtest) hat sich inhaltlich meist nichts
+    // geändert; damit das nicht neu erarbeitet werden muss, steht die eigene
+    // Meldung von eben im Auftrag.
+    meldungWiederholen: (vorher) =>
+      '\n\nZur Ergebnis-Meldung: Deine Meldung aus dem letzten Anlauf ist mit ihm verfallen — ' +
+      'melde am Ende dieses Anlaufs erneut. Hat sich inhaltlich nichts geändert, melde ' +
+      'unverändert dasselbe wie eben; sonst passe genau das an, was jetzt anders ist. Deine ' +
+      'Meldung von eben:\n' + vorher,
     startanleitungNachforderung:
       '\n\nNachforderung von FlowForge: Dieser Auftrag ist schon umgesetzt, aber die ' +
       'Startanleitung des Projekts fehlt noch. Lege sie jetzt mit dem Werkzeug ' +
@@ -884,9 +885,7 @@ export const texte = {
       'gültigen Prüfbefehl hinterlegt. Prüfe jetzt NICHTS neu und führe keine Tests erneut ' +
       'aus: Lege allein den Startbefehl deiner Prüfmappe mit dem Werkzeug pruefbefehl_setzen ' +
       'fest (ein einzelner Aufruf, der alle deine Prüfungen ausführt und bei einem Fehlschlag ' +
-      'mit Fehlercode endet). Wiederhole danach deinen Prüfbeleg von eben unverändert — ' +
-      'dieselben Beanstandungs- und Prüfkarten-Zeilen und dasselbe Urteil in der letzten ' +
-      'Zeile. Dein Prüfbeleg von eben:\n',
+      'mit Fehlercode endet).',
     // Rot-Fall des Tors: Das Protokoll geht neben der Kritik an den Bauer —
     // die Beanstandungs-Zeilen allein sagen nicht, wo es klemmt.
     torProtokoll: (protokoll) =>
@@ -948,8 +947,9 @@ export const texte = {
       'Antworte danach nur mit: OK',
     blockAgentSystem: (projektPfad, titelMax, textMax) =>
       'Du bist ein Block-Agent von FlowForge und führst genau den Arbeitsauftrag aus, den ' +
-      'du bekommst — nicht mehr und nicht weniger. Antworte auf Deutsch. Dein Abschlusstext ' +
-      'ist das Fazit, das FlowForge als Ergebnis dieses Blocks übernimmt.\n' +
+      'du bekommst — nicht mehr und nicht weniger. Antworte auf Deutsch. Dein Ergebnis meldest ' +
+      'du am Ende über das melde-Werkzeug, das dein Auftrag nennt — nur was dort steht, kommt ' +
+      'bei FlowForge und den folgenden Blöcken an.\n' +
       'Halte dein Arbeitsgedächtnis schlank — es ist der teuerste Teil des Laufs: Breites ' +
       'Suchen und Einlesen delegierst du an Unteraufgaben (Agent-Werkzeug), die dir nur ihr ' +
       'kompaktes Fazit zurückgeben. Lies keine Datei doppelt und nichts auf Vorrat.\n' +
@@ -1297,13 +1297,15 @@ export const texte = {
       '- auftrag: der Arbeitsauftrag an den Agenten, auf Deutsch, in Du-Form (höchstens ' +
       '4000 Zeichen). Sag klar, was er tun soll und was ausdrücklich nicht. Beginne mit ' +
       'seiner Rolle („Du bist …"), verlange „Antworte auf Deutsch", und beende den ' +
-      'Auftrag mit einer Anweisung für den Abschlusstext: kompakt (höchstens etwa 25 ' +
-      'Zeilen), denn er ist die Übergabe an die folgenden Blöcke. Ist nurLesen true, ' +
-      'schreibe ausdrücklich hinein: „Du darfst nichts verändern — nur lesen."\n' +
+      'Auftrag mit einer Anweisung, was inhaltlich in seine Ergebnis-Meldung gehört — ' +
+      'kompakt (höchstens etwa 25 Zeilen), denn sie ist die Übergabe an die folgenden ' +
+      'Blöcke. WIE gemeldet wird, sagt FlowForge dem Agenten selbst; schreibe darüber ' +
+      'nichts. Ist nurLesen true, schreibe ausdrücklich hinein: „Du darfst nichts ' +
+      'verändern — nur lesen."\n' +
       '- braucht: Etiketten der Übergaben, die dieser Block von vorherigen Blöcken ' +
       'zwingend benötigt (höchstens 5, je höchstens 40 Zeichen). Nur was wirklich nötig ' +
       'ist — ein Block ohne braucht kann am Anfang des Workflows stehen.\n' +
-      '- liefert: Etiketten für den Abschlusstext dieses Blocks, wenn spätere Blöcke ihn ' +
+      '- liefert: Etiketten für das Ergebnis dieses Blocks, wenn spätere Blöcke es ' +
       'nutzen sollen (höchstens 5).\n' +
       '- Verwende bei braucht/liefert möglichst diese vorhandenen Etiketten, statt neue ' +
       'zu erfinden: ' +
@@ -1444,26 +1446,233 @@ export const texte = {
       'vitest, jest, mocha, tsc, python, py, pytest, deno, bun, go, cargo, dotnet, mvn, gradle, ' +
       'make, rspec, phpunit). Rufe deine Prüfungen über eines davon auf.'
   },
+  // Lieferschein (BAUPLAN 42): Jeder Block meldet sein Ergebnis über ein
+  // Werkzeug — gemeinsamer Rahmen für alle, darunter je liefert-Etikett ein
+  // eigener Teil. Hier stehen Werkzeug-Beschreibungen, Feldtexte, Ablehnungen
+  // und die Beschriftungen der lesbaren Fassung.
+  lieferschein: {
+    serverHinweis:
+      'Mit den melde-Werkzeugen gibst du dein Blockergebnis an FlowForge zurück. Genau eines ' +
+      'davon ist für deinen Block freigeschaltet — dein Arbeitsauftrag nennt es. Ohne diese ' +
+      'Meldung gilt dein Block als nicht erledigt; dein Abschlusstext wird NICHT ausgewertet.',
+    // Diesen Zusatz hängt FlowForge an JEDEN Blockauftrag — auch an
+    // selbstgebaute Blöcke, die das Werkzeug sonst nicht kennen könnten.
+    auftragZusatz: (werkzeug, etikett) =>
+      '\n\nSo meldest du dein Ergebnis (Pflicht, von FlowForge): Rufe zum Schluss genau EINMAL ' +
+      `das Werkzeug ${werkzeug} auf` +
+      (etikett ? ` — es ist deine Lieferung „${etikett}" an die folgenden Blöcke.` : '.') +
+      ' Fülle alle Felder aus, die zu deiner Arbeit etwas zu sagen haben: fazit ist ein einziger ' +
+      'Satz (er steht im Ticker und im Bericht), getan und offen sind kurze Stichpunkte, und ' +
+      'anmerkung ist das Freifeld für alles, was in kein Feld passt und der nächste Block ' +
+      'trotzdem wissen sollte. Dein Abschlusstext wird von FlowForge nicht mehr ausgewertet — ' +
+      'was nicht in der Meldung steht, kommt nirgends an. Weist FlowForge deine Meldung ab, ' +
+      'lies die Begründung und rufe das Werkzeug korrigiert erneut auf.',
+    mehrereWerkzeuge: (werkzeuge) =>
+      ` Dein Block liefert mehreres — rufe jedes dieser Werkzeuge einmal auf: ${werkzeuge.join(', ')}.`,
+    angenommen: (etikett) =>
+      etikett
+        ? `Meldung angenommen — deine Lieferung „${etikett}" ist bei FlowForge eingegangen.`
+        : 'Meldung angenommen — dein Blockergebnis ist bei FlowForge eingegangen.',
+    // Nachforderung (dasselbe erprobte Muster wie Startanleitung und Prüfbefehl):
+    // genau eine Runde, danach gilt der Block als fehlgeschlagen.
+    nachforderung: (werkzeug, abschlusstext) =>
+      '\n\nNachforderung von FlowForge: Du hast in diesem Lauf schon gearbeitet, aber dein ' +
+      `Ergebnis nie gemeldet — das Werkzeug ${werkzeug} wurde nicht (oder nicht vollständig) ` +
+      'aufgerufen. Arbeite jetzt NICHTS neu und ändere nichts am Projekt: Trage allein die ' +
+      'Meldung nach, und zwar aus dem, was du eben getan hast. Dein Abschlusstext von eben:\n' +
+      abschlusstext,
+    ohneMeldung:
+      'Der Block hat sein Ergebnis auch nach der Nachforderung nicht gemeldet — ohne Meldung ' +
+      'gibt es keine Lieferung an die folgenden Blöcke.',
+    felder: {
+      fazit: 'fazit',
+      getan: 'getan',
+      offen: 'offen',
+      anmerkung: 'anmerkung',
+      inhalt: 'inhalt',
+      ziel: 'ziel',
+      fertigKriterien: 'fertigKriterien',
+      schritte: 'schritte',
+      fundstellen: 'fundstellen',
+      nichtDabei: 'nichtDabei',
+      beanstandungen: 'beanstandungen',
+      fundort: 'fundort',
+      rotVorGruen: 'rotVorGruen',
+      geprueft: 'geprueft',
+      pruefkarteTitel: 'pruefkarteTitel',
+      pruefkarteText: 'pruefkarteText',
+      kriterien: 'kriterien',
+      dateien: 'dateien',
+      angriffsliste: 'angriffsliste',
+      funde: 'funde'
+    },
+    // Ablehnungen nennen immer die Ist-Länge bzw. die erlaubten Werte — der
+    // Agent soll korrigieren können, ohne zu raten.
+    feldFehlt: (feld) => `Das Feld ${feld} fehlt oder ist leer — es ist Pflicht.`,
+    feldZuLang: (feld, max, ist) =>
+      `Das Feld ${feld} ist zu lang: ${ist} Zeichen, erlaubt sind höchstens ${max}. Fasse dich kürzer.`,
+    eintragZuLang: (feld, max, ist) =>
+      `Ein Eintrag in ${feld} ist zu lang: ${ist} Zeichen, erlaubt sind höchstens ${max} je Eintrag.`,
+    zuVieleEintraege: (feld, max, ist) =>
+      `${feld} hat ${ist} Einträge — erlaubt sind höchstens ${max}. Fasse zusammen, was zusammengehört.`,
+    unbekannteArt: (art) => `Unbekannte Meldungsart „${art}".`,
+    etikettFehlt: (etiketten) =>
+      `Dein Block liefert mehreres — gib im Feld etikett an, worum es geht: ${etiketten.join(', ')}.`,
+    etikettUnbekannt: (gewaehlt, etiketten) =>
+      `„${gewaehlt}" liefert dieser Block nicht. ` +
+      (etiketten.length ? `Möglich ist: ${etiketten.join(', ')}.` : 'Dieser Block liefert nichts an folgende Blöcke.'),
+    arbeitspaketOhneKriterien:
+      'Ein Arbeitspaket ohne Fertig-Kriterien ist keins: Der Prüfer hätte keinen Maßstab und der ' +
+      'Bauer kein Ziel. Trage in fertigKriterien mindestens eine prüfbare Aussage ein.',
+    urteilFehlt: (werte) => `Das Feld urteil fehlt oder ist unbekannt. Erlaubt ist genau: ${werte.join(' oder ')}.`,
+    urteilOhneBeanstandung:
+      'Urteil „fehlgeschlagen" ohne eine einzige Beanstandung: Damit wüsste der Bauer nicht, was ' +
+      'er beheben soll. Trage jede Beanstandung einzeln ein (mit Einstufung und Fundort) — oder ' +
+      'urteile ehrlich „bestanden".',
+    bestandenMitBeanstandung:
+      'Urteil „bestanden", aber es stehen Beanstandungen in der Meldung. Entweder ist die Prüfung ' +
+      'bestanden (dann gehören die Punkte in anmerkung, nicht in beanstandungen) oder sie ist ' +
+      'fehlgeschlagen (dann urteile so).',
+    einstufungFehlt: (werte) =>
+      `Jede Beanstandung braucht eine einstufung: ${werte.join(' oder ')}. „mechanisch" ist ein eng ` +
+      'umrissener, mechanisch behebbarer Fehler (Tippfehler, falscher Wert, vergessener Randfall); ' +
+      'alles, was Umbau, neue Struktur oder eine Entscheidung braucht, ist „grundsaetzlich". Im ' +
+      'Zweifel „grundsaetzlich".',
+    schwereFehlt: (werte) => `Jeder Fund braucht eine schwere: ${werte.join(', ')}.`,
+    dateiArtFehlt: (werte) => `Jede Datei braucht eine art: ${werte.join(', ')}.`,
+    pruefkarteUnvollstaendig:
+      'Für die Prüfkarte brauchst du beides: pruefkarteTitel (kurzer Name des Geprüften) und ' +
+      'pruefkarteText (was geprüft wurde und woran man erkennt, dass es in Ordnung ist).',
+    kriteriumUnvollstaendig:
+      'Jeder Eintrag in kriterien braucht beides: kriterium (das Fertig-Kriterium) und ' +
+      'wieUmgesetzt (wie du es umgesetzt hast).',
+    fundUnvollstaendig:
+      'Jeder Eintrag in angriffsliste braucht beides: fund (der Fund des Angreifers) und umgang ' +
+      '(wie du ihn ausgeräumt hast oder warum er dieses Paket nicht trifft).',
+    keineFunde: 'Keine wesentlichen Funde.',
+    einstufungen: { mechanisch: 'mechanisch', grundsaetzlich: 'grundsätzlich' },
+    schweren: { hoch: 'hoch', mittel: 'mittel', niedrig: 'niedrig' },
+    urteile: { bestanden: 'bestanden', fehlgeschlagen: 'fehlgeschlagen' },
+    dateiArten: { neu: 'neu', geaendert: 'geändert', geloescht: 'gelöscht' },
+    labels: {
+      fazit: 'Fazit',
+      getan: 'Erledigt',
+      offen: 'Offen geblieben',
+      anmerkung: 'Anmerkung',
+      ziel: 'Ziel des Pakets',
+      fertigKriterien: 'Fertig-Kriterien',
+      schritte: 'Umsetzungsschritte',
+      fundstellen: 'Voraussichtlich betroffen',
+      nichtDabei: 'Nicht Teil des Pakets',
+      urteil: 'Urteil',
+      beanstandungen: 'Beanstandungen',
+      rotVorGruen: 'Rot-vor-Grün-Beleg',
+      geprueft: 'Geprüfte Kriterien',
+      kriterien: 'Kriterium für Kriterium',
+      dateien: 'Angelegte und geänderte Dateien',
+      angriffsliste: 'Umgang mit der Angriffsliste',
+      funde: 'Funde'
+    },
+    // Werkzeug-Beschreibungen (sie stehen im Werkzeugkasten des Agenten).
+    werkzeuge: {
+      rahmen:
+        'Meldet dein Blockergebnis an FlowForge — Pflicht zum Abschluss deines Blocks. Der Rahmen ' +
+        '(fazit, getan, offen, anmerkung) plus ein Freitext-Feld für deine eigentliche Lieferung.',
+      arbeitspaket:
+        'Meldet das geschnittene Arbeitspaket an FlowForge — Pflicht zum Abschluss deines Blocks. ' +
+        'Es ist die Lieferung an Angreifer, Bauer und Prüfer: An den Fertig-Kriterien misst der ' +
+        'Prüfer später das Ergebnis.',
+      pruefbeleg:
+        'Meldet deinen Prüfbeleg an FlowForge — Pflicht zum Abschluss deines Blocks. Aus dem ' +
+        'Urteil und den Beanstandungen steuert FlowForge die Reparatur-Runden; aus der Prüfkarte ' +
+        'entsteht bei bestandener Prüfung das Prüf-Gedächtnis des Projekts.',
+      umsetzungsbericht:
+        'Meldet deinen Umsetzungsbericht an FlowForge — Pflicht zum Abschluss deines Blocks. Er ' +
+        'ist die Lieferung an den Prüfer: je Fertig-Kriterium, wie du es umgesetzt hast.',
+      angriffsliste:
+        'Meldet deine Angriffsliste an FlowForge — Pflicht zum Abschluss deines Blocks. Sie ist ' +
+        'die Lieferung an den Bauer. Nichts gefunden? Dann melde eine leere Liste — das ist ein ' +
+        'gutes Ergebnis, erfinde keine Funde.',
+      befundliste:
+        'Meldet deine Befundliste an FlowForge — Pflicht zum Abschluss deines Blocks. Nichts ' +
+        'Wesentliches gefunden? Dann melde eine leere Liste — erfinde keine Funde.'
+    },
+    param: {
+      fazit: 'Dein Ergebnis in EINEM Satz — er steht im Ticker, am Block und im Laufbericht.',
+      getan: 'Kurze Stichpunkte: was du in diesem Block wirklich erledigt hast.',
+      offen: 'Kurze Stichpunkte: was offen geblieben ist oder bewusst nicht getan wurde.',
+      anmerkung:
+        'Freifeld: alles, was in kein anderes Feld passt und der nächste Block trotzdem wissen ' +
+        'sollte. Leer lassen, wenn es nichts gibt.',
+      etikett: 'Nur nötig, wenn dein Block mehreres liefert: worum es bei dieser Meldung geht.',
+      inhalt: 'Deine eigentliche Lieferung als Fließtext — so ausführlich wie nötig, so kurz wie möglich.',
+      ziel: 'Das Ziel des Arbeitspakets in einem Satz.',
+      fertigKriterien:
+        'Prüfbare Aussagen, an denen ein Prüfer das Ergebnis messen kann — bei gebündelten ' +
+        'Aufgaben eigene Kriterien je Teilstück. Mindestens eine.',
+      schritte: 'Umsetzungsschritte in sinnvoller Reihenfolge.',
+      fundstellen: 'Voraussichtlich betroffene Dateien und Stellen.',
+      nichtDabei: 'Was ausdrücklich NICHT Teil des Pakets ist.',
+      urteil:
+        'bestanden = alle Fertig-Kriterien halten · fehlgeschlagen = mindestens eines hält nicht ' +
+        '(dann gehört jede Beanstandung einzeln in beanstandungen).',
+      beanstandungen:
+        'Je Beanstandung ein Eintrag: was nicht hält (text), wo (fundort) und wie schwer sie zu ' +
+        'beheben ist (einstufung). Die Einstufung entscheidet, ob eine kleine lokale KI die ' +
+        'Reparatur zuerst versuchen darf.',
+      beanstandungText: 'Was nicht hält — konkret genug, dass der Bauer es beheben kann.',
+      beanstandungEinstufung:
+        'mechanisch = eng umrissen und mechanisch behebbar (Tippfehler, falscher Wert, vergessener ' +
+        'Randfall) · grundsaetzlich = braucht Umbau, neue Struktur oder eine Entscheidung. Im Zweifel grundsaetzlich.',
+      fundort: 'Wo genau — Datei und Stelle.',
+      rotVorGruen:
+        'Der Rot-vor-Grün-Beleg: die tatsächlichen Ausgaben des Tests mit verfälschter Erwartung ' +
+        '(rot) und danach unverändert echt (grün), kurz zitiert.',
+      geprueft: 'Welche Fertig-Kriterien du wie geprüft hast.',
+      pruefkarteTitel:
+        'Kurzer Name des Geprüften — daraus legt FlowForge bei bestandener Prüfung die Prüfkarte an.',
+      pruefkarteText:
+        'Was geprüft wurde und woran man erkennt, dass es in Ordnung ist — ein bis zwei Sätze in ' +
+        'Alltagssprache.',
+      kriterien: 'Je Fertig-Kriterium des Arbeitspakets ein Eintrag: welches, und wie du es umgesetzt hast.',
+      kriterium: 'Das Fertig-Kriterium aus dem Arbeitspaket.',
+      wieUmgesetzt: 'Wie du es umgesetzt hast — mit Fundort.',
+      dateien: 'Jede Datei, die du angelegt, geändert oder gelöscht hast.',
+      dateiPfad: 'Pfad relativ zum Projektordner.',
+      dateiArt: 'neu, geaendert oder geloescht.',
+      angriffsliste:
+        'Nur wenn dir eine Angriffsliste vorlag: je Fund, wie du ihn ausgeräumt hast — oder warum ' +
+        'er dieses Paket nicht trifft.',
+      fund: 'Der Fund aus der Angriffsliste.',
+      umgang: 'Wie du damit umgegangen bist.',
+      funde: 'Je Fund ein Eintrag — nach Schwere sortiert, mit Fundort. Leere Liste ist erlaubt.',
+      fundText: 'Der Fund in ein bis zwei Sätzen.',
+      schwere: 'hoch, mittel oder niedrig.'
+    }
+  },
   // Tor ohne KI (BAUPLAN 35): FlowForge spielt Prüfbefehl und Rauchtest selbst
-  // ab. Diese Texte gehen als Beleg bzw. Rückmeldung in den Lauf — sie müssen
-  // dieselben Marken tragen wie ein echter Prüfbeleg (BEANSTANDUNG, PRUEFUNG).
+  // ab. Das Ergebnis wird seit BAUPLAN 42 direkt als strukturierter Prüfbeleg
+  // gemeldet — nicht mehr als Text mit Marken.
   tor: {
     belegKopf: (befehl, code) =>
-      `Prüfbefehl von FlowForge abgespielt (ohne Prüfer-Agent): ${befehl}\n` +
-      `Ergebnis: rot — der Befehl endete mit Rückgabecode ${code}.\n`,
+      `Prüfbefehl von FlowForge abgespielt (ohne Prüfer-Agent): „${befehl}" — rot, ` +
+      `Rückgabecode ${code}.`,
     belegKopfZeitlimit: (befehl) =>
-      `Prüfbefehl von FlowForge abgespielt (ohne Prüfer-Agent): ${befehl}\n` +
-      'Ergebnis: rot — der Befehl lief in das Zeitlimit und wurde abgebrochen.\n',
-    // Bewusst „grundsätzlich": FlowForge kann ein Fehlerprotokoll nicht
+      `Prüfbefehl von FlowForge abgespielt (ohne Prüfer-Agent): „${befehl}" — rot, der Befehl ` +
+      'lief in das Zeitlimit und wurde abgebrochen.',
+    // Fundort einer Tor-Beanstandung: FlowForge kennt keine Datei, wohl aber
+    // den Befehl, der die Zeile ausgegeben hat.
+    beanstandungFundort: (befehl) => `Prüfbefehl: ${befehl}`,
+    beanstandungOhneZeilen: (befehl) =>
+      `Der Prüfbefehl „${befehl}" schlägt fehl, ohne eine erkennbare Fehlerzeile auszugeben — ` +
+      'sieh im vollständigen Protokoll nach.',
+    weitere: (anzahl) =>
+      `${anzahl} weitere Fehlerzeile${anzahl === 1 ? '' : 'n'} stehen im vollständigen Protokoll, ` +
+      'das der Bauer zusätzlich bekommt.',
+    // Bewusst „grundsaetzlich": FlowForge kann ein Fehlerprotokoll nicht
     // einstufen — nur der Prüfer kann das. Damit bleibt die lokale
     // Vorreparatur (BAUPLAN 20) hier außen vor, statt blind zu raten.
-    beanstandung: (zeile) => `BEANSTANDUNG (grundsätzlich): ${zeile}`,
-    beanstandungOhneZeilen: (befehl) =>
-      `BEANSTANDUNG (grundsätzlich): Der Prüfbefehl „${befehl}" schlägt fehl, ohne eine ` +
-      'erkennbare Fehlerzeile auszugeben — sieh im vollständigen Protokoll nach.',
-    weitere: (anzahl) =>
-      `(${anzahl} weitere Fehlerzeile${anzahl === 1 ? '' : 'n'} stehen im Protokoll unten.)`,
-    urteil: 'PRUEFUNG: FEHLGESCHLAGEN',
+    einstufung: 'grundsaetzlich',
     protokoll: (ausgabe) => `\n\nVollständige Ausgabe des Prüfbefehls:\n${ausgabe}`,
     rauchtestDateiFehlt: (adresse) =>
       `Die Startanleitung zeigt auf die Datei „${adresse}" — die gibt es im Projektordner nicht.`,
@@ -1725,6 +1934,12 @@ export const texte = {
     // Verfahren.
     kartenZuteilung:
       'Der Agent möchte den nachfolgenden Blöcken Karten zuteilen — üblich ist das nur in Paket schneiden und Diagnose. Erlaubst du es, bekommen die genannten Blöcke nur ihre zugeteilten Karten in den Auftrag (die Status-Karte immer).',
+    // Lieferschein (BAUPLAN 42): rückfragefrei ist je Block genau das Werkzeug
+    // zu seinem liefert-Etikett — ein fremdes Melde-Werkzeug fragt nach.
+    lieferschein: (werkzeug) =>
+      `Der Agent möchte sein Ergebnis mit „${werkzeug}" melden — dieses Melde-Werkzeug gehört ` +
+      'aber nicht zu dem, was dieser Block laut Schaubild liefert. Erlaubst du es, kommt die ' +
+      'Meldung trotzdem nur bei den Blöcken an, die das passende Etikett brauchen.',
     // Prüfbefehl (BAUPLAN 35): rückfragefrei nur in Prüf-Blöcken — er gehört
     // zur Prüfmappe, und FlowForge spielt ihn später ohne Rückfrage ab.
     pruefbefehl:
@@ -1742,7 +1957,7 @@ export const texte = {
     // Prüfmappen-Sperre (Feedback Georg, 12.08.2026): die Testdateien im
     // Prüfordner gehören dem Prüfer — kein anderer Block ändert sie.
     pruefmappeGesperrtFuerAgent:
-      'Der Prüfordner „pruefung" gehört dem Prüfer: Nur Prüf-Blöcke dürfen dort Dateien anlegen oder ändern. Lass die Prüfmappe unverändert — wenn eine Prüfung deiner Meinung nach falsch ist, schreibe das in deinen Abschlusstext.',
+      'Der Prüfordner „pruefung" gehört dem Prüfer: Nur Prüf-Blöcke dürfen dort Dateien anlegen oder ändern. Lass die Prüfmappe unverändert — wenn eine Prüfung deiner Meinung nach falsch ist, schreibe das ins Feld anmerkung deiner Ergebnis-Meldung.',
     // Prüfordner je Prüfer (BAUPLAN 41): Auch ein Prüfer schreibt nur in
     // seinen eigenen Unterordner — sonst archiviert er fremde Tests.
     fremderPruefordnerFuerAgent: (ordner) =>
@@ -2031,19 +2246,23 @@ export const texte = {
     pruefungBestanden: 'Prüfung bestanden.',
     pruefungNichtBestanden: 'Prüfung nicht bestanden.',
     pruefungOhneErgebnis:
-      'Der Prüfer hat kein eindeutiges Ergebnis geliefert — das gilt als nicht bestanden.',
+      'Der Prüfer hat keinen Prüfbeleg gemeldet — das gilt als nicht bestanden.',
     rueckfuehrung: (name, runde, gesamt) =>
       `Zurück zu „${name}" — Reparatur-Runde ${runde} von ${gesamt}.`,
+    // Lieferschein (BAUPLAN 42): Was ein Block gemeldet hat, steht im Ticker —
+    // und damit im Laufbericht.
+    meldungAngekommen: (name, fazit) => `„${name}" meldet: ${fazit}`,
+    meldungAbgewiesen: (name, grund) => `Meldung von „${name}" abgewiesen — ${grund}`,
+    meldungNachgefordert: (name) =>
+      `„${name}" hat sein Ergebnis nicht gemeldet — FlowForge fordert die Meldung einmal nach.`,
+    meldungFehlt: (name, etiketten) =>
+      `„${name}" hat auch nach der Nachforderung nichts gemeldet` +
+      (etiketten.length ? ` (es fehlt: ${etiketten.join(', ')})` : '') +
+      ' — der Block gilt als fehlgeschlagen.',
     // Kanten-Ehrlichkeit (BAUPLAN 34): Was an den Kanten passiert, steht im
     // Ticker — und damit im Laufbericht.
     beanstandungenUebergeben: (anzahl, name) =>
       `${anzahl} ${anzahl === 1 ? 'Beanstandung' : 'Beanstandungen'} an „${name}" übergeben.`,
-    beanstandungenNachgefordert: (name) =>
-      `Urteil „nicht bestanden" ohne eine einzige Beanstandungs-Zeile — „${name}" liefert sie ` +
-      'nach, bevor eine Reparatur-Runde verbraucht wird.',
-    beanstandungenOhneMarken: (name) =>
-      `„${name}" hat auch nach der Nachforderung keine Beanstandungs-Zeilen geliefert — ` +
-      'weitergereicht wird der ganze Prüfbeleg.',
     beanstandungenTeilweise: (weggelassen) =>
       `${weggelassen} ${weggelassen === 1 ? 'Beanstandung passte' : 'Beanstandungen passten'} ` +
       'nicht mehr in die Rückmeldung — sie kommen in der nächsten Runde dran.',
@@ -2223,8 +2442,8 @@ export const texte = {
       'sortiert hast). Der Nutzer bekommt eine Tabelle, ändert oder lehnt einzelne Zeilen ' +
       'ab, und FlowForge wendet seine Entscheidung an. Gibt es nichts zu sortieren, machst ' +
       'du keinen Vorschlag und sagst das ehrlich. ' +
-      'Dein Abschlusstext (3 bis 6 Sätze): welche Themen es jetzt gibt, wie viele Karten ' +
-      'du vorgeschlagen hast und was der Nutzer davon übernommen oder abgelehnt hat.'
+      'Ins Feld inhalt deiner Meldung gehören 3 bis 6 Sätze: welche Themen es jetzt gibt, wie ' +
+      'viele Karten du vorgeschlagen hast und was der Nutzer davon übernommen oder abgelehnt hat.'
   },
   laufberichte: {
     ueberschrift: 'Laufberichte',
@@ -2250,7 +2469,11 @@ export const texte = {
       'startanleitung-fehlt': 'Startanleitung fehlte',
       // Rauchtest (BAUPLAN 35): Die App ließ sich nicht starten — kein
       // Fehlschlag des Bauers, aber auch kein sauberes „erledigt".
-      'startanleitung-laeuft-nicht': 'Startanleitung lief nicht an'
+      'startanleitung-laeuft-nicht': 'Startanleitung lief nicht an',
+      // Lieferschein (BAUPLAN 42): Der Block hat gearbeitet, sein Ergebnis aber
+      // auch nach der Nachforderung nicht gemeldet — ohne Meldung gibt es keine
+      // Lieferung an die folgenden Blöcke.
+      'ohne-meldung': 'Ergebnis nicht gemeldet'
     },
     details: 'Einzelheiten',
     schliessen: 'Zuklappen',

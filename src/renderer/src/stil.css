@@ -1727,9 +1727,60 @@ body {
 }
 
 .marke-startanleitung-fehlt,
-.marke-startanleitung-laeuft-nicht {
+.marke-startanleitung-laeuft-nicht,
+.marke-ohne-meldung {
   border-color: var(--lesend);
   color: var(--lesend);
+}
+
+/* Lieferschein (BAUPLAN 42): das Blockergebnis als gegliederte Abschnitte
+   statt als Textblock — jede Beanstandung mit Fundort. */
+
+.lieferschein + .lieferschein {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--rand-kontrolle);
+}
+
+.lieferschein-etikett {
+  margin: 0 0 2px;
+  color: var(--akzent-text);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.lieferschein-fazit {
+  margin: 0 0 6px;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.lieferschein-urteil {
+  margin: 0 0 6px;
+  font-weight: 700;
+}
+
+.lieferschein-urteil.urteil-bestanden {
+  color: var(--lesend);
+}
+
+.lieferschein-urteil.urteil-fehlgeschlagen {
+  color: var(--warnung, var(--schreibend));
+}
+
+.lieferschein-abschnitt {
+  margin-top: 6px;
+}
+
+.lieferschein-liste {
+  margin: 2px 0 0;
+  padding-left: 16px;
+}
+
+.lieferschein-liste li {
+  margin-bottom: 2px;
 }
 
 .block-ergebnis-text {

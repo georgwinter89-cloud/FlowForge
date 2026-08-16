@@ -18,6 +18,7 @@ import {
   schaubildReihenfolge,
   vorfahrenSortiert
 } from '../../shared/kettenRegeln.js'
+import { beanstandungZeile, fundZeile } from '../../shared/lieferschein.js'
 import { BlockChips } from './Blockbibliothek.jsx'
 import Bestaetigung from './Bestaetigung.jsx'
 import VerbrauchZeile from './VerbrauchZeile.jsx'
@@ -438,8 +439,102 @@ function KartenVorschlag({ eintrag, onAntwort }) {
   )
 }
 
+// Lieferschein (BAUPLAN 42, SPEC §6): Das Blockergebnis steht als gegliederte
+// Abschnitte da statt als Textblock — jede Beanstandung mit Fundort. Alte
+// Berichte tragen keine Meldungen; dort zeigt die Anzeige weiter den Text.
+const tl = texte.lieferschein
+
+function Abschnitt({ label, zeilen }) {
+  if (!zeilen?.length) return null
+  return (
+    <div className="lieferschein-abschnitt">
+      <p className="bericht-abschnitt">{label}</p>
+      <ul className="lieferschein-liste">
+        {zeilen.map((zeile, i) => (
+          <li key={i}>{zeile}</li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+function LieferscheinAnsicht({ meldungen }) {
+  return (
+    <>
+      {meldungen.map((m, i) => (
+        <div className="lieferschein" key={i}>
+          {m.etikett && <p className="lieferschein-etikett">{m.etikett}</p>}
+          <p className="lieferschein-fazit">{m.fazit}</p>
+          {m.art === 'arbeitspaket' && (
+            <>
+              <p className="bericht-zeile">
+                {tl.labels.ziel}: {m.ziel}
+              </p>
+              <Abschnitt label={tl.labels.fertigKriterien} zeilen={m.fertigKriterien} />
+              <Abschnitt label={tl.labels.schritte} zeilen={m.schritte} />
+              <Abschnitt label={tl.labels.fundstellen} zeilen={m.fundstellen} />
+              <Abschnitt label={tl.labels.nichtDabei} zeilen={m.nichtDabei} />
+            </>
+          )}
+          {m.art === 'pruefbeleg' && (
+            <>
+              <p className={'lieferschein-urteil urteil-' + m.urteil}>
+                {tl.labels.urteil}: {tl.urteile[m.urteil] ?? m.urteil}
+              </p>
+              <Abschnitt label={tl.labels.geprueft} zeilen={m.geprueft} />
+              <Abschnitt
+                label={tl.labels.beanstandungen}
+                zeilen={(m.beanstandungen ?? []).map(beanstandungZeile)}
+              />
+              {m.rotVorGruen && (
+                <div className="lieferschein-abschnitt">
+                  <p className="bericht-abschnitt">{tl.labels.rotVorGruen}</p>
+                  <p className="bericht-zeile">{m.rotVorGruen}</p>
+                </div>
+              )}
+            </>
+          )}
+          {m.art === 'umsetzungsbericht' && (
+            <>
+              <Abschnitt
+                label={tl.labels.kriterien}
+                zeilen={(m.kriterien ?? []).map((k) => `${k.kriterium} → ${k.wieUmgesetzt}`)}
+              />
+              <Abschnitt
+                label={tl.labels.dateien}
+                zeilen={(m.dateien ?? []).map(
+                  (d) => `${d.pfad} (${tl.dateiArten[d.art] ?? d.art})`
+                )}
+              />
+              <Abschnitt
+                label={tl.labels.angriffsliste}
+                zeilen={(m.angriffsliste ?? []).map((a) => `${a.fund} → ${a.umgang}`)}
+              />
+            </>
+          )}
+          {m.art === 'funde' &&
+            ((m.funde ?? []).length ? (
+              <Abschnitt label={tl.labels.funde} zeilen={m.funde.map(fundZeile)} />
+            ) : (
+              <p className="bericht-zeile">{tl.keineFunde}</p>
+            ))}
+          {m.art === 'rahmen' && m.inhalt && <p className="bericht-zeile">{m.inhalt}</p>}
+          <Abschnitt label={tl.labels.getan} zeilen={m.getan} />
+          <Abschnitt label={tl.labels.offen} zeilen={m.offen} />
+          {m.anmerkung && (
+            <div className="lieferschein-abschnitt">
+              <p className="bericht-abschnitt">{tl.labels.anmerkung}</p>
+              <p className="bericht-zeile">{m.anmerkung}</p>
+            </div>
+          )}
+        </div>
+      ))}
+    </>
+  )
+}
+
 // Ein Block-Ergebnis in den Bericht-Details (BAUPLAN 15): Zeile mit Ausgang,
-// der Abschlusstext klappt auf Klick auf.
+// der Lieferschein klappt auf Klick auf.
 function BlockErgebnisZeile({ eintrag }) {
   const [offen, setOffen] = useState(false)
   return (
@@ -472,7 +567,11 @@ function BlockErgebnisZeile({ eintrag }) {
           {eintrag.kostenUsd != null && (
             <p className="feld-hinweis">{tb.apiKosten(eintrag.kostenUsd)}</p>
           )}
-          {eintrag.ergebnisText}
+          {(eintrag.meldungen ?? []).length > 0 ? (
+            <LieferscheinAnsicht meldungen={eintrag.meldungen} />
+          ) : (
+            eintrag.ergebnisText
+          )}
         </div>
       )}
     </div>
@@ -843,7 +942,13 @@ function SchaubildKarte({
           {ergebnisOffen && (
             <div className="block-ergebnis-text">
               <p className="feld-hinweis">{zeitText(letztesErgebnis.zeit)}</p>
-              {letztesErgebnis.ergebnisText}
+              {/* Lieferschein (BAUPLAN 42): gegliedert statt Textblock — alte
+                  Läufe haben keine Meldungen und zeigen weiter ihren Text. */}
+              {(letztesErgebnis.meldungen ?? []).length > 0 ? (
+                <LieferscheinAnsicht meldungen={letztesErgebnis.meldungen} />
+              ) : (
+                letztesErgebnis.ergebnisText
+              )}
             </div>
           )}
         </div>

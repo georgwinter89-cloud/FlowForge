@@ -41,7 +41,21 @@ import {
   laufstandPasst
 } from '../shared/kettenRegeln.js'
 import { prueferKritik, mitteGekuerzt } from '../shared/kantenRegeln.js'
-import { fehlerZeilen, neueFehler, grundsaetzlicheKritik } from '../shared/torRegeln.js'
+import {
+  werkzeugeFuerKette,
+  werkzeugeFuerBlock,
+  meldungVollstaendig,
+  fehlendeLieferungen,
+  lieferscheinText,
+  urteilAusMeldungen,
+  beanstandungenAusMeldungen,
+  beanstandungenEinstufen,
+  grundsaetzlicheBeanstandungen,
+  pruefkarteAusMeldungen,
+  RAHMEN_WERKZEUG,
+  BEANSTANDUNG_MAX
+} from '../shared/lieferschein.js'
+import { fehlerZeilen, neueFehler } from '../shared/torRegeln.js'
 import { diffTextBauen, diffBilanz } from '../shared/laufDiff.js'
 import { einstellungenLaden, ABO_MODUS_ERLAUBT } from './einstellungen.js'
 import {
@@ -60,14 +74,12 @@ import {
   pruefkarteEinlegen,
   pruefkartenArchivHatDateien,
   pruefkartenArchivAuffrischen,
-  pruefungenArchivieren,
-  pruefkarteAusErgebnis
+  pruefungenArchivieren
 } from './pruefkarten.js'
 import { starteLaufMotor } from './motor/claudeCodeMotor.js'
 import {
   lokaleHelferPruefen,
   lokalReparieren,
-  beanstandungenEinstufen,
   LOKALE_REPARATUR_VERSUCHE
 } from './motor/lokaleHelfer.js'
 import {
@@ -319,12 +331,40 @@ export function projektZustaende(pfade) {
   return { ok: true, zustaende }
 }
 
-// Prüfer-Urteil aus dem Abschlusstext lesen: die letzte Marke zählt.
-// true = bestanden, false = nicht bestanden, null = keine eindeutige Marke.
-function pruefUrteil(ergebnisText) {
-  const treffer = [...String(ergebnisText).matchAll(/PR(?:UE|Ü)FUNG:?\s*(BESTANDEN|FEHLGESCHLAGEN)/gi)]
-  if (!treffer.length) return null
-  return treffer[treffer.length - 1][1].toUpperCase() === 'BESTANDEN'
+// Prüfer-Urteil (BAUPLAN 42): aus dem gemeldeten Feld statt aus einer
+// Marker-Zeile im Fließtext. true = bestanden, false = nicht bestanden,
+// null = kein Prüfbeleg gemeldet.
+
+// Alle Meldungen eines Blocks als ein lesbarer Text — für den Laufbericht, die
+// Anzeige an der Blockkarte und die Wiederhol-Vorlage in Nachforderungen.
+function meldungenText(meldungen) {
+  return (meldungen ?? []).map((m) => lieferscheinText(m)).join('\n\n')
+}
+
+// Die Lieferungen eines Blocks je Etikett — genau das, was ein Nachfolger mit
+// passendem braucht in seinen Auftrag bekommt. Meldungen ohne Etikett (Blöcke,
+// die nichts liefern) tauchen hier bewusst nicht auf.
+function lieferungenAusMeldungen(meldungen) {
+  const je = {}
+  for (const meldung of meldungen ?? [])
+    if (meldung?.etikett) je[meldung.etikett] = lieferscheinText(meldung)
+  return je
+}
+
+// Neue Meldungen eines Anlaufs über die bisherigen legen: Nach einem Übertrag
+// ersetzt die Meldung des Nachfolgers die des unterbrochenen Vorgängers
+// (BAUPLAN 42) — je Etikett gewinnt die jüngste.
+function meldungenZusammenfuehren(bisher, neue) {
+  if (!neue?.length) return bisher
+  const zusammen = [...bisher]
+  for (const meldung of neue) {
+    const idx = zusammen.findIndex(
+      (m) => m.etikett === meldung.etikett && m.art === meldung.art
+    )
+    if (idx >= 0) zusammen[idx] = meldung
+    else zusammen.push(meldung)
+  }
+  return zusammen
 }
 
 // Die Begründung des Prüfers geht als Rückmeldung an den Block, zu dem die
@@ -1130,10 +1170,28 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           pruefOrdner: ordnerVon(eintrag),
           status: 'offen', // 'offen' | 'laeuft' | 'fertig'
           lieferung: null,
+          // Lieferschein (BAUPLAN 42):
+          // meldungen — die geprüften Meldungen des laufenden/letzten Anlaufs;
+          // meldungenVorher — die des Anlaufs davor (Vorlage für Nachforderungen,
+          //   damit nichts neu erarbeitet werden muss);
+          // lieferungen — je liefert-Etikett der lesbare Text für die Übergabe;
+          // meldungWiederholen — dieser Anlauf läuft nur wegen einer
+          //   Nachforderung: Der Auftrag legt die eigene Meldung von eben bei.
+          meldungen: [],
+          meldungenVorher: [],
+          lieferungen: {},
+          meldungWiederholen: false,
+          // Hat der Block gar nichts gemeldet, liegt sein freier Abschlusstext
+          // der Nachforderung bei — daraus trägt er nach, ohne die Arbeit zu
+          // wiederholen.
+          nachforderungBeleg: '',
           rueckmeldung: '',
           // Reparatur-Runde beim Prüfer (Entscheidung Georg, 12.08.2026): seine
-          // eigene Kritik der letzten Runde — er prüft dann nur diese Punkte nach.
+          // eigene Kritik der letzten Runde — er prüft dann nur diese Punkte
+          // nach. Seit BAUPLAN 42 daneben die Beanstandungen als Felder: Der
+          // Grün-Fall des Tors filtert daraus die grundsätzlichen heraus.
           nachpruefung: '',
+          nachpruefungBeanstandungen: [],
           startanleitungNachforderung: false,
           uebergabe: '',
           uebergabeVerloren: false,
@@ -1156,18 +1214,18 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           // diffBasisVerschmutzt — der Ordner wich beim ersten Start schon ab;
           // diffAnfordern/diffText — der Diff für den nächsten Anlauf;
           // vorFazit — das eigene Fazit der letzten Runde als das „warum";
-          // beanstandungNachforderung — der Prüfbeleg ohne Beanstandungs-Zeilen,
-          //   den der Prüfer in der Nachforderung nachbessern soll;
           // fanOutGemeldet — je Etikett nur einmal „zusammengeführt" tickern;
           // verdraengungGemeldet — dasselbe für die verdrängte Lieferung
           //   (BAUPLAN 40).
+          // Das Kanten-Gate „Urteil ohne Beanstandung" aus BAUPLAN 34 ist mit
+          // dem Lieferschein (42) entfallen: Diese Meldung weist FlowForge schon
+          // am Werkzeug ab, der Prüfer korrigiert sofort — es kostet keinen
+          // zweiten Anlauf mehr.
           diffBasis: undefined,
           diffBasisVerschmutzt: false,
           diffAnfordern: false,
           diffText: '',
           vorFazit: '',
-          beanstandungNachforderung: '',
-          beanstandungNachgefordert: false,
           fanOutGemeldet: new Set(),
           verdraengungGemeldet: new Set(),
           // Tor ohne KI (BAUPLAN 35):
@@ -1304,6 +1362,10 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     const startanleitungNachgefordert = new Set()
     const pruefbefehlNachgefordert = new Set()
     const rauchtestNachgefordert = new Set()
+    // Lieferschein (BAUPLAN 42): dasselbe erprobte Muster — meldet ein Block
+    // sein Ergebnis nicht, wird genau einmal nachgefordert; danach gilt er als
+    // fehlgeschlagen. Einen Rückfall auf den Abschlusstext gibt es nicht mehr.
+    const meldungNachgefordert = new Set()
     // Automatischer Übertrag (SPEC §5): Zähler gegen die Übertragsgrenze,
     // gemeinsam für alle Blöcke des Laufs.
     let uebertraege = 0
@@ -1332,25 +1394,37 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         lieferungen: kettenIds
           .filter((id) => knoten.get(id).lieferung != null)
           .map((id) => [id, knoten.get(id).lieferung]),
+        // Lieferschein (BAUPLAN 42): Die geprüften Meldungen wandern mit — an
+        // ihnen hängen Urteil, Beanstandungen und die Übergaben je Etikett.
+        // Ohne sie stünde ein wiederaufgenommener Lauf mit fertigen Blöcken
+        // da, deren Lieferung niemand mehr lesen kann.
+        meldungen: kettenIds
+          .filter((id) => knoten.get(id).meldungen.length > 0)
+          .map((id) => [id, knoten.get(id).meldungen]),
         rueckmeldungen: kettenIds
           .filter((id) => knoten.get(id).rueckmeldung)
           .map((id) => [id, knoten.get(id).rueckmeldung]),
         nachpruefungen: kettenIds
           .filter((id) => knoten.get(id).nachpruefung)
           .map((id) => [id, knoten.get(id).nachpruefung]),
+        // Lieferschein (BAUPLAN 42): Die Beanstandungen als Felder — daraus
+        // filtert der Grün-Fall des Tors die grundsätzlichen heraus.
+        nachpruefungFelder: kettenIds
+          .filter((id) => knoten.get(id).nachpruefungBeanstandungen.length > 0)
+          .map((id) => [id, knoten.get(id).nachpruefungBeanstandungen]),
         nachforderungen: kettenIds.filter((id) => knoten.get(id).startanleitungNachforderung),
-        // Kanten-Ehrlichkeit (BAUPLAN 34): Diff-Basis, Vor-Fazit und eine
-        // offene Beanstandungs-Nachforderung wandern mit — sonst stünde der
-        // Bauer nach einem App-Neustart wieder ohne sie da. Der Diff-TEXT
-        // selbst nicht: Er wird beim nächsten Anlauf ohnehin frisch gerechnet.
+        // Kanten-Ehrlichkeit (BAUPLAN 34): Diff-Basis und Vor-Fazit wandern mit
+        // — sonst stünde der Bauer nach einem App-Neustart wieder ohne sie da.
+        // Der Diff-TEXT selbst nicht: Er wird beim nächsten Anlauf ohnehin
+        // frisch gerechnet.
         kanten: kettenIds
           .filter((id) => {
             const nk = knoten.get(id)
             return (
               nk.diffBasis !== undefined ||
               nk.vorFazit ||
-              nk.beanstandungNachforderung ||
-              nk.beanstandungNachgefordert ||
+              nk.meldungWiederholen ||
+              nk.meldungenVorher.length > 0 ||
               nk.torProtokoll ||
               nk.pruefbefehlNachforderung ||
               nk.rauchtestRueckmeldung
@@ -1365,8 +1439,12 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
                 diffBasisVerschmutzt: nk.diffBasisVerschmutzt,
                 diffAnfordern: nk.diffAnfordern || Boolean(nk.diffText),
                 vorFazit: nk.vorFazit,
-                beanstandungNachforderung: nk.beanstandungNachforderung,
-                beanstandungNachgefordert: nk.beanstandungNachgefordert,
+                // Lieferschein (BAUPLAN 42): Die Vorlage für eine offene
+                // Nachforderung wandert mit — sonst müsste der Block sein
+                // Ergebnis nach einem App-Neustart neu erarbeiten.
+                meldungWiederholen: nk.meldungWiederholen,
+                meldungenVorher: nk.meldungenVorher,
+                nachforderungBeleg: nk.nachforderungBeleg,
                 // Tor ohne KI (BAUPLAN 35): Diese Zusätze sind teuer erarbeitet
                 // (ein echter Befehlslauf) — nach einem App-Neustart stünde der
                 // Bauer sonst wieder ohne Protokoll da. Der torGruenBefehl
@@ -1411,7 +1489,10 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         // eine schon verbrauchte Nachbesserungs-Runde erneut gewährt.
         baseline: [...baseline],
         pruefbefehlNachgefordert: [...pruefbefehlNachgefordert],
-        rauchtestNachgefordert: [...rauchtestNachgefordert]
+        rauchtestNachgefordert: [...rauchtestNachgefordert],
+        // Lieferschein (BAUPLAN 42): eine verbrauchte Meldungs-Nachforderung
+        // wird nach einem Neustart nicht erneut gewährt.
+        meldungNachgefordert: [...meldungNachgefordert]
       })
     }
 
@@ -1430,10 +1511,23 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         if (knoten.has(id)) knoten.get(id).status = 'fertig'
       for (const [id, text] of Array.isArray(fortsetzung.lieferungen) ? fortsetzung.lieferungen : [])
         if (knoten.has(id) && typeof text === 'string') knoten.get(id).lieferung = text
+      // Lieferschein (BAUPLAN 42): Die geprüften Meldungen kommen zurück —
+      // daran hängen Urteil, Beanstandungen und die Übergaben je Etikett.
+      for (const [id, liste] of Array.isArray(fortsetzung.meldungen) ? fortsetzung.meldungen : [])
+        if (knoten.has(id) && Array.isArray(liste)) {
+          const k = knoten.get(id)
+          k.meldungen = liste
+          k.lieferungen = lieferungenAusMeldungen(liste)
+        }
       for (const [id, text] of Array.isArray(fortsetzung.rueckmeldungen) ? fortsetzung.rueckmeldungen : [])
         if (knoten.has(id) && typeof text === 'string') knoten.get(id).rueckmeldung = text
       for (const [id, text] of Array.isArray(fortsetzung.nachpruefungen) ? fortsetzung.nachpruefungen : [])
         if (knoten.has(id) && typeof text === 'string') knoten.get(id).nachpruefung = text
+      for (const [id, liste] of Array.isArray(fortsetzung.nachpruefungFelder)
+        ? fortsetzung.nachpruefungFelder
+        : [])
+        if (knoten.has(id) && Array.isArray(liste))
+          knoten.get(id).nachpruefungBeanstandungen = liste
       for (const id of Array.isArray(fortsetzung.nachforderungen) ? fortsetzung.nachforderungen : [])
         if (knoten.has(id)) knoten.get(id).startanleitungNachforderung = true
       // Kanten-Ehrlichkeit (BAUPLAN 34): tolerant gegenüber alten Laufständen —
@@ -1445,14 +1539,17 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           nk.diffBasisVerschmutzt = Boolean(kante.diffBasisVerschmutzt)
           nk.diffAnfordern = Boolean(kante.diffAnfordern)
           if (typeof kante.vorFazit === 'string') nk.vorFazit = kante.vorFazit
-          if (typeof kante.beanstandungNachforderung === 'string')
-            nk.beanstandungNachforderung = kante.beanstandungNachforderung
-          nk.beanstandungNachgefordert = Boolean(kante.beanstandungNachgefordert)
+          // Lieferschein (BAUPLAN 42): offene Nachforderung samt Vorlage.
+          nk.meldungWiederholen = Boolean(kante.meldungWiederholen)
+          if (Array.isArray(kante.meldungenVorher)) nk.meldungenVorher = kante.meldungenVorher
+          if (typeof kante.nachforderungBeleg === 'string')
+            nk.nachforderungBeleg = kante.nachforderungBeleg
           // Tor ohne KI (BAUPLAN 35): ebenso tolerant gegenüber alten
           // Laufständen — ohne Eintrag läuft alles wie vor diesem Schritt.
           if (typeof kante.torProtokoll === 'string') nk.torProtokoll = kante.torProtokoll
-          if (typeof kante.pruefbefehlNachforderung === 'string')
-            nk.pruefbefehlNachforderung = kante.pruefbefehlNachforderung
+          // Seit BAUPLAN 42 ein Ja/Nein: Der Prüfbeleg, den der Prüfer beim
+          // Nachtragen wiederholen soll, steckt in meldungenVorher.
+          nk.pruefbefehlNachforderung = Boolean(kante.pruefbefehlNachforderung)
           if (typeof kante.rauchtestRueckmeldung === 'string')
             nk.rauchtestRueckmeldung = kante.rauchtestRueckmeldung
         }
@@ -1494,6 +1591,8 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         rauchtestNachgefordert,
         (def) => def?.startanleitungPflicht
       )
+      // Lieferschein (BAUPLAN 42): gilt für jeden Block.
+      budgetUebernehmen(fortsetzung.meldungNachgefordert, meldungNachgefordert, () => true)
       // Tor ohne KI (BAUPLAN 35): Die Baseline wurde beim ursprünglichen Start
       // gemessen — sie gilt für den ganzen Lauf und wird nicht neu erhoben.
       // Seit BAUPLAN 41 je Prüf-Instanz; ein alter Stand trug genau eine, die
@@ -1577,6 +1676,9 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         fortsetzen,
         lokaleHelfer,
         nurLesenBefehle: Boolean(einstellungen.nurLesenBefehle),
+        // Lieferschein (BAUPLAN 42): Beim Laufstart steht das Schaubild fest —
+        // registriert werden genau die Melde-Werkzeuge dieser Kette.
+        lieferscheinWerkzeuge: werkzeugeFuerKette(kette.map((eintrag) => defVon(eintrag.blockId))),
         ...(bekanntesKontextFenster > 0 ? { kontextFenster: bekanntesKontextFenster } : {}),
         aufEreignis(e) {
           // Ticker-Zeilen bekommen den Blocknamen vorangestellt, sobald
@@ -1769,6 +1871,11 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           // Häkchen je Block (BAUPLAN 20): abgewählt = lokal_recherchieren
           // wird für die Agenten dieses Blocks hart abgelehnt.
           lokaleKi: k.eintrag.lokaleKi !== false,
+          // Lieferschein (BAUPLAN 42): was dieser Block liefert — daraus ergibt
+          // sich das Etikett seiner Meldung — und welches Melde-Werkzeug für
+          // ihn freigeschaltet ist. Fremde lösen die Rechte-Rückfrage aus.
+          liefert: k.def.liefert ?? [],
+          lieferscheinFrei: [...werkzeugeFuerBlock(k.def)],
           // Modellklasse je Block (BAUPLAN 37): die Wahl an der Blockkarte,
           // sonst die Voreinstellung des Blocks. Der Motor trägt sie beim
           // Agent-Aufruf ein; das Modell der Unteraufgaben hängt zusätzlich
@@ -1806,6 +1913,25 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         })
     }
 
+    // Lieferschein (BAUPLAN 42): der Werkzeug-Hinweis für genau diesen Block.
+    // Er hängt NICHT im Blockkatalog, sondern kommt von FlowForge — nur so
+    // meldet auch ein selbstgebauter Block, ohne dass sein Autor das Werkzeug
+    // kennen muss (Prüfstein „Kein Kennzeichen ohne Editor-Feld", BAUPLAN-Regel).
+    function lieferscheinZusatz(k) {
+      const werkzeuge = [...werkzeugeFuerBlock(k.def)]
+      if (werkzeuge.length === 0) return ''
+      // Der Rahmen trägt bei genau einem lockeren Etikett dessen Namen — bei
+      // mehreren sagt der Zusatz, dass das Etikett mitgegeben werden muss.
+      const etiketten = k.def.liefert ?? []
+      const einzeln =
+        werkzeuge.length === 1 && etiketten.length === 1 ? etiketten[0] : null
+      let zusatz = texte.lieferschein.auftragZusatz(werkzeuge[0], einzeln)
+      if (werkzeuge.length > 1) zusatz += texte.lieferschein.mehrereWerkzeuge(werkzeuge)
+      else if (werkzeuge[0] === RAHMEN_WERKZEUG && etiketten.length > 1)
+        zusatz += texte.lieferschein.etikettFehlt(etiketten)
+      return zusatz
+    }
+
     // Welche Baseline gehört in den Auftrag dieses Blocks? Ein Prüfer sieht
     // seine eigene (er urteilt über seinen Zweig), ein Bau-Block alle.
     function baselineFuer(k) {
@@ -1820,6 +1946,13 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     // Überträge und Kontingent-/Server-Pausen durchstehen — bis ein endgültiges
     // Ergebnis da ist. Läuft für parallele Blöcke gleichzeitig.
     async function knotenAusfuehren(k) {
+      // Lieferschein (BAUPLAN 42): Ein neuer Anlauf des Blocks (Reparatur-Runde,
+      // Nachforderung) beginnt ohne Meldung — sonst gälte still das Urteil des
+      // letzten Anlaufs weiter. Die alte bleibt als Vorlage erhalten. Ein
+      // ÜBERTRAG verlässt diese Funktion nicht: Dort bleibt die Meldung stehen
+      // und wird vom Nachfolger je Etikett überschrieben.
+      if (k.meldungen.length) k.meldungenVorher = k.meldungen
+      k.meldungen = []
       // Verbrauch aller Sessions dieses Block-Anlaufs (auch über Überträge und
       // Pausen hinweg) — landet sichtbar am Block-Ergebnis im Laufbericht.
       let blockTokens = 0
@@ -1850,7 +1983,12 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       // dieser Block-Anlauf hier schon zu Ende — ohne Motor, ohne Tokens.
       if (k.def.prueft && k.nachpruefung) {
         const torErgebnis = await torAbspielen(k)
-        if (torErgebnis) return torErgebnis
+        if (torErgebnis) {
+          // Auch das Tor liefert eine Meldung — sie ersetzt die des letzten
+          // Anlaufs, damit Urteil und Beanstandungen aus einer Quelle kommen.
+          k.meldungen = meldungenZusammenfuehren(k.meldungen, torErgebnis.meldungen)
+          return torErgebnis
+        }
       }
       // Hängt die Verbrauchs-Summen dieses Blocks an ein endgültiges Ergebnis.
       function mitBlockVerbrauch(ergebnis) {
@@ -1930,7 +2068,10 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           if (k.torGruenBefehl && !k.lokaleNachpruefung)
             auftrag += texte.agentenUebergabe.torGruenNachpruefung(
               k.torGruenBefehl,
-              grundsaetzlicheKritik(k.nachpruefung) ?? k.nachpruefung
+              // Grün-Fall: nur noch die grundsätzlichen Beanstandungen — aus den
+              // gemeldeten Feldern gefiltert (BAUPLAN 42), nicht aus Textzeilen.
+              prueferKritik(grundsaetzlicheBeanstandungen(k.nachpruefungBeanstandungen)).text ||
+                k.nachpruefung
             )
           else
             auftrag += k.lokaleNachpruefung
@@ -1958,17 +2099,29 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
             ? texte.agentenUebergabe.aenderungenSeitUrteil(k.diffText)
             : texte.agentenUebergabe.eigeneAenderungen(k.diffText)
         if (k.vorFazit) auftrag += texte.agentenUebergabe.vorFazit(k.vorFazit)
-        // Kanten-Gate (BAUPLAN 34): Urteil ohne Beanstandungs-Zeile — der
-        // Prüfer liefert sie nach, statt eine Reparatur-Runde zu verbrennen.
-        if (k.beanstandungNachforderung)
-          auftrag += texte.agentenUebergabe.beanstandungNachforderung(k.beanstandungNachforderung)
         // Prüfbefehl-Nachforderung (BAUPLAN 35): nur nachtragen, nichts neu
         // prüfen — dasselbe Muster wie die Startanleitungs-Nachforderung.
-        if (k.pruefbefehlNachforderung)
-          auftrag +=
-            texte.agentenUebergabe.pruefbefehlNachforderung + k.pruefbefehlNachforderung
+        if (k.pruefbefehlNachforderung) auftrag += texte.agentenUebergabe.pruefbefehlNachforderung
         if (k.startanleitungNachforderung)
           auftrag += texte.agentenUebergabe.startanleitungNachforderung
+        // Lieferschein (BAUPLAN 42): So meldet dieser Block sein Ergebnis —
+        // FlowForge hängt den Zusatz an JEDEN Auftrag, auch an selbstgebaute
+        // Blöcke, deren Autor das Werkzeug gar nicht kennen kann.
+        auftrag += lieferscheinZusatz(k)
+        // Läuft der Block nur wegen einer Nachforderung erneut, hat sich
+        // inhaltlich meist nichts geändert: Seine eigene Meldung von eben liegt
+        // bei, damit er sie nicht neu erarbeiten muss.
+        if (k.meldungWiederholen && k.meldungenVorher.length)
+          auftrag += texte.agentenUebergabe.meldungWiederholen(
+            gekuerzt(meldungenText(k.meldungenVorher))
+          )
+        // Hat er gar nichts gemeldet, ist die Nachforderung deutlicher: sein
+        // freier Abschlusstext liegt bei, mehr hat FlowForge nicht bekommen.
+        else if (k.meldungWiederholen && k.nachforderungBeleg)
+          auftrag += texte.lieferschein.nachforderung(
+            [...werkzeugeFuerBlock(k.def)].join(' bzw. '),
+            k.nachforderungBeleg
+          )
         if (k.uebergabe) auftrag += texte.agentenUebergabe.uebertragFortsetzung(k.uebergabe)
         else if (k.uebergabeVerloren) auftrag += texte.agentenUebergabe.uebertragOhneUebergabe
         // Lokaler Bauer (BAUPLAN 22): Bau-Blöcke bekommen die Zerlege-Anweisung
@@ -1990,6 +2143,11 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         const uebertragErlaubt =
           workflow.uebertragGrenze == null || uebertraege < workflow.uebertragGrenze
         const ergebnis = await blockAusfuehren(k, auftrag, uebertragErlaubt)
+        // Lieferschein (BAUPLAN 42): Die Meldungen dieses Anlaufs übernehmen —
+        // je Etikett ersetzt die jüngste die ältere. Genau das ist die Regel
+        // „nach einem Übertrag ersetzt die Meldung des Nachfolgers die des
+        // unterbrochenen Vorgängers": Der Übertrag bleibt in dieser Schleife.
+        k.meldungen = meldungenZusammenfuehren(k.meldungen, ergebnis.meldungen)
         if (ergebnis.verbrauch) {
           // Gezählt wird der ehrliche Anteil dieses Blocks: der Zuwachs des
           // Koordinator-Fadens plus der Verbrauch seiner Agenten (Block-Agent
@@ -2176,19 +2334,33 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         return null
       }
       const genommen = zeilen.slice(0, TOR_BEANSTANDUNGEN_MAX)
-      const beleg =
-        (messung.zeitlimit
-          ? texte.tor.belegKopfZeitlimit(befehl)
-          : texte.tor.belegKopf(befehl, messung.code)) +
-        '\n' +
-        (genommen.length
-          ? genommen.map((zeile) => texte.tor.beanstandung(zeile)).join('\n')
-          : texte.tor.beanstandungOhneZeilen(befehl)) +
-        (zeilen.length > genommen.length
-          ? '\n' + texte.tor.weitere(zeilen.length - genommen.length)
-          : '') +
-        '\n\n' +
-        texte.tor.urteil
+      const kopf = messung.zeitlimit
+        ? texte.tor.belegKopfZeitlimit(befehl)
+        : texte.tor.belegKopf(befehl, messung.code)
+      // Lieferschein (BAUPLAN 42): Das Tor meldet direkt strukturiert — sonst
+      // hielte FlowForge diesen Block für „hat nichts gemeldet" und forderte
+      // bei einem Prüfer nach, der nie gestartet ist.
+      const torMeldung = {
+        art: 'pruefbeleg',
+        etikett: 'Prüfbeleg',
+        fazit: kopf,
+        getan: [],
+        offen: [],
+        anmerkung:
+          zeilen.length > genommen.length ? texte.tor.weitere(zeilen.length - genommen.length) : '',
+        urteil: 'fehlgeschlagen',
+        beanstandungen: (genommen.length
+          ? genommen
+          : [texte.tor.beanstandungOhneZeilen(befehl)]
+        ).map((zeile) => ({
+          einstufung: texte.tor.einstufung,
+          text: zeile.slice(0, BEANSTANDUNG_MAX),
+          fundort: texte.tor.beanstandungFundort(befehl)
+        })),
+        rotVorGruen: '',
+        geprueft: [],
+        pruefkarte: null
+      }
       // Das volle Protokoll geht neben der Kritik an den Bauer — die
       // Beanstandungs-Zeilen allein sagen nicht, wo es klemmt.
       k.letztesTorProtokoll = mitteGekuerzt(messung.ausgabe, TOR_PROTOKOLL_MAX).text
@@ -2200,7 +2372,8 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       // nur eben ohne einen einzigen Token.
       return {
         zustand: 'erfolgreich',
-        ergebnisText: beleg,
+        ergebnisText: lieferscheinText(torMeldung),
+        meldungen: [torMeldung],
         fehlertext: '',
         fehlerArt: null,
         verbrauch: null,
@@ -2233,7 +2406,11 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           nummer: nummerVon.get(vorfahre.instanzId),
           naehe: distanz.get(vorfahre.instanzId) ?? Number.MAX_SAFE_INTEGER,
           liefert: vk.def.liefert,
-          text: vk.lieferung
+          text: vk.lieferung,
+          // Lieferschein (BAUPLAN 42): je Etikett ein eigener Text. Ein Block
+          // mit zwei Etiketten reichte bisher beiden Nachfolgern denselben
+          // Abschlusstext — jetzt bekommt jeder genau seine Lieferung.
+          texte: vk.lieferungen ?? {}
         })
       }
       // Optionale Bedarfe (z.B. Angriffsliste beim Bauer) sind in den Gruppen
@@ -2242,19 +2419,20 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       const bezeichnung = (l) => texte.ticker.blockBezeichnung(l.nummer, l.name)
       const eintraege = []
       for (const gruppe of gruppen) {
-        gruppe.angekommen.forEach((lieferung, index) =>
+        gruppe.angekommen.forEach((lieferung, index) => {
+          const text = lieferung.texte?.[gruppe.etikett] ?? lieferung.text
           eintraege.push(
             gruppe.angekommen.length === 1
-              ? texte.agentenUebergabe.eintrag(gruppe.etikett, lieferung.name, lieferung.text)
+              ? texte.agentenUebergabe.eintrag(gruppe.etikett, lieferung.name, text)
               : texte.agentenUebergabe.eintragMehrfach(
                   gruppe.etikett,
                   index + 1,
                   gruppe.angekommen.length,
                   lieferung.name,
-                  lieferung.text
+                  text
                 )
           )
-        )
+        })
         // Beide Meldungen einmal je Block und Etikett — uebergabenText läuft in
         // jeder Reparatur-Runde erneut und würde den Ticker sonst fluten.
         if (gruppe.angekommen.length > 1 && !k.fanOutGemeldet.has(gruppe.etikett)) {
@@ -2357,7 +2535,7 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     // entsteht automatisch eine Prüfkarte; dahinter bewahrt FlowForge die
     // frischen Prüfdateien dieses Laufs auf. Angepasste Fassungen eingelegter
     // alter Prüfungen ersetzen ihr Archiv — die Karte veraltet nicht.
-    function pruefkarteNachBestandenerPruefung(instanzId, ergebnisText) {
+    function pruefkarteNachBestandenerPruefung(instanzId, meldungen) {
       try {
         // Aufbewahrt wird ausschließlich der eigene Prüfordner (BAUPLAN 41) —
         // sonst nähme der erste bestehende Prüfer die Tests aller mit.
@@ -2367,7 +2545,9 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         for (const anhang of pruefkartenVonInstanz.get(instanzId) ?? [])
           if (vorhandene.has(anhang.id))
             pruefkartenArchivAuffrischen(projektPfad, anhang.id, pruefOrdner)
-        const roh = pruefkarteAusErgebnis(ergebnisText)
+        // Prüfkarte aus dem gemeldeten Feld (BAUPLAN 42) statt aus zwei
+        // Marker-Zeilen im Fließtext. Fehlt sie, greift wie bisher der Ersatz.
+        const roh = pruefkarteAusMeldungen(meldungen) ?? {}
         const zeitText = new Date().toLocaleString('de-DE', {
           dateStyle: 'short',
           timeStyle: 'short'
@@ -2444,11 +2624,52 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         return
       }
 
+      // Lieferschein (BAUPLAN 42): Ohne vollständige Meldung ist der Block
+      // nicht fertig — es gibt keinen Rückfall auf den Abschlusstext. Genau
+      // eine Nachforderung (erprobtes Muster wie Startanleitung und
+      // Prüfbefehl), danach gilt der Block als fehlgeschlagen.
+      if (!meldungVollstaendig(k.def, k.meldungen)) {
+        const fehlende = fehlendeLieferungen(k.def, k.meldungen)
+        // Auch der Anlauf ohne Meldung steht im Bericht: Er hat Kontingent
+        // gekostet, und Georg soll sehen, woran es lag.
+        bericht.blockErgebnisse.push({
+          instanzId: id,
+          block: k.def.name,
+          zusatz: zusatznameBereinigen(k.eintrag.zusatz),
+          zeit: jetztIso(),
+          zustand: 'ohne-meldung',
+          ergebnisText: String(ergebnis.ergebnisText ?? '').slice(0, 4000),
+          meldungen: k.meldungen,
+          tokens: ergebnis.blockTokens ?? null,
+          aufschluesselung: ergebnis.blockAufschluesselung ?? null,
+          kostenUsd: ergebnis.blockKosten ?? null,
+          modelle: ergebnis.blockModelle ?? null
+        })
+        k.status = 'offen'
+        if (!meldungNachgefordert.has(id) && !lauf.sanft && !lauf.hart && !endZustand) {
+          meldungNachgefordert.add(id)
+          k.meldungWiederholen = true
+          tickern(texte.ticker.meldungNachgefordert(k.name))
+          // Der Auftrag legt den freien Abschlusstext bei — daraus trägt der
+          // Agent die Meldung nach, ohne die Arbeit zu wiederholen.
+          k.meldungenVorher = k.meldungen.length ? k.meldungen : k.meldungenVorher
+          k.nachforderungBeleg = gekuerzt(String(ergebnis.ergebnisText ?? ''))
+          return
+        }
+        tickern(texte.ticker.meldungFehlt(k.name, fehlende))
+        if (!endZustand) {
+          endZustand = 'fehlgeschlagen'
+          fehlertext = texte.lieferschein.ohneMeldung
+        }
+        return
+      }
+
       // Block ist wirklich fertig: mitgeschleppte Zusätze für den nächsten
       // Anlauf sind damit erledigt.
       k.status = 'fertig'
       k.rueckmeldung = ''
       k.nachpruefung = ''
+      k.nachpruefungBeanstandungen = []
       k.startanleitungNachforderung = false
       k.uebergabe = ''
       k.uebergabeVerloren = false
@@ -2456,17 +2677,22 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       k.diffText = ''
       k.diffAnfordern = false
       k.vorFazit = ''
-      k.beanstandungNachforderung = ''
+      // Lieferschein-Zusätze dieses Anlaufs (BAUPLAN 42) ebenso.
+      k.meldungWiederholen = false
+      k.nachforderungBeleg = ''
       // Tor-Zusätze dieses Anlaufs (BAUPLAN 35) ebenso.
       k.torProtokoll = ''
       k.rauchtestRueckmeldung = ''
-      k.pruefbefehlNachforderung = ''
+      k.pruefbefehlNachforderung = false
       k.torGruenBefehl = ''
 
-      // Abschlusstext als Lieferung für die Nachfahren ablegen und für die
-      // Karten-Anzeige merken.
-      const abschlusstext = String(ergebnis.ergebnisText ?? '')
-      const lieferung = mitteGekuerzt(abschlusstext, LIEFERUNG_MAX)
+      // Die gemeldeten Lieferungen für die Nachfahren ablegen und für die
+      // Karten-Anzeige merken (BAUPLAN 42): Was der Nachfolger bekommt, ist der
+      // geprüfte Lieferschein — nicht mehr ein Fließtext, aus dem FlowForge
+      // sich etwas heraussucht.
+      k.lieferungen = lieferungenAusMeldungen(k.meldungen)
+      const gesamtText = meldungenText(k.meldungen)
+      const lieferung = mitteGekuerzt(gesamtText, LIEFERUNG_MAX)
       k.lieferung = lieferung.text
       // Kürzung sichtbar (BAUPLAN 34): Eine stillschweigend gestutzte Übergabe
       // ist genau die Art Kanten-Verlust, die dieser Schritt abstellt.
@@ -2479,7 +2705,12 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         zusatz: zusatznameBereinigen(k.eintrag.zusatz),
         zeit: jetztIso(),
         zustand: 'erfolgreich',
-        ergebnisText: abschlusstext.slice(0, 4000),
+        // Der lesbare Lieferschein — alte Berichte tragen hier den früheren
+        // Abschlusstext, die Anzeige kommt mit beidem zurecht.
+        ergebnisText: gesamtText.slice(0, 4000),
+        // Anzeige strukturierter Ergebnisse (SPEC §6, BAUPLAN 42): die Felder
+        // selbst, damit der Laufbericht gegliederte Abschnitte zeigen kann.
+        meldungen: k.meldungen,
         // Verbrauch dieses Anlaufs — so sieht Georg im Laufbericht, was jeder
         // Block gekostet hat (Koordinator-Zuwachs plus seine Agenten).
         tokens: ergebnis.blockTokens ?? null,
@@ -2514,6 +2745,9 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         if (!startanleitungNachgefordert.has(id) && !lauf.sanft && !lauf.hart && !endZustand) {
           startanleitungNachgefordert.add(id)
           k.startanleitungNachforderung = true
+          // Lieferschein (BAUPLAN 42): Der neue Anlauf meldet erneut — mit
+          // seiner eigenen Meldung von eben als Vorlage.
+          k.meldungWiederholen = true
           k.status = 'offen'
           tickern(texte.ticker.startanleitungNachgefordert(k.name))
           return
@@ -2548,6 +2782,7 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
               String(probe.ausgabe ?? '').trim() || texte.tor.rauchtestOhneAusgabe,
               TOR_PROTOKOLL_MAX
             ).text
+            k.meldungWiederholen = true
             k.status = 'offen'
             tickern(texte.ticker.rauchtestRot(k.name))
             return
@@ -2571,7 +2806,8 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       ) {
         if (!pruefbefehlNachgefordert.has(id) && !lauf.sanft && !lauf.hart && !endZustand) {
           pruefbefehlNachgefordert.add(id)
-          k.pruefbefehlNachforderung = gekuerzt(String(ergebnis.ergebnisText ?? ''))
+          k.pruefbefehlNachforderung = true
+          k.meldungWiederholen = true
           k.status = 'offen'
           tickern(texte.ticker.pruefbefehlNachgefordert(k.name))
           return
@@ -2580,8 +2816,10 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       }
 
       // Prüfer-Blöcke: Urteil auswerten, ggf. Fehlschlag-Rückführung.
+      // Seit BAUPLAN 42 kommt das Urteil aus dem gemeldeten Feld — ein Prüfer
+      // ohne Prüfbeleg ist oben schon an der Meldungs-Pflicht hängengeblieben.
       if (k.def.prueft) {
-        const bestanden = pruefUrteil(ergebnis.ergebnisText)
+        const bestanden = urteilAusMeldungen(k.meldungen)
         blockErgebnis.zustand = bestanden === true ? 'pruefung-bestanden' : 'pruefung-nicht-bestanden'
         if (bestanden === true) {
           // Bestandene Nachprüfung einer lokalen Reparatur (BAUPLAN 20):
@@ -2596,7 +2834,7 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
             tickern(texte.ticker.lokaleReparaturGehalten)
           }
           tickern(texte.ticker.pruefungBestanden)
-          pruefkarteNachBestandenerPruefung(id, ergebnis.ergebnisText)
+          pruefkarteNachBestandenerPruefung(id, k.meldungen)
           // Tor ohne KI (BAUPLAN 35): Ein Prüfbefehl, der zu einer bestandenen
           // Prüfung gehört, taugt als Maßstab — aufbewahrt wird er außerhalb
           // des Projektordners und liefert beim nächsten Laufstart die
@@ -2604,29 +2842,12 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           pruefbefehlArchivieren(projektPfad, id)
         } else {
           tickern(bestanden === false ? texte.ticker.pruefungNichtBestanden : texte.ticker.pruefungOhneErgebnis)
-          // Kanten-Gate (BAUPLAN 34): Ein Urteil FEHLGESCHLAGEN ohne eine
-          // einzige Beanstandungs-Zeile ist für den Bauer wertlos — FlowForge
-          // fordert einmal beim Prüfer nach (kostet KEINE Reparatur-Runde),
-          // statt eine zu verbrennen. Bewusst nur bei einem eindeutigen
-          // Fehlurteil: Ein Prüfer ganz ohne Urteils-Marke ist abgebrochen
-          // oder verunglückt — da hilft Nachfordern nicht.
-          const belegKritik = prueferKritik(ergebnis.ergebnisText)
-          if (
-            bestanden === false &&
-            belegKritik.anzahl === 0 &&
-            !k.beanstandungNachgefordert &&
-            !lauf.sanft &&
-            !lauf.hart &&
-            !endZustand
-          ) {
-            k.beanstandungNachgefordert = true
-            k.beanstandungNachforderung = gekuerzt(String(ergebnis.ergebnisText ?? ''))
-            k.status = 'offen'
-            tickern(texte.ticker.beanstandungenNachgefordert(k.name))
-            return
-          }
-          if (belegKritik.anzahl === 0 && k.beanstandungNachgefordert)
-            tickern(texte.ticker.beanstandungenOhneMarken(k.name))
+          // Kanten-Ehrlichkeit (BAUPLAN 34/42): Die Beanstandungen kommen aus
+          // den gemeldeten Feldern. Das Kanten-Gate „Urteil ohne Beanstandung"
+          // braucht es nicht mehr — genau diese Meldung weist FlowForge schon
+          // am Werkzeug ab, der Prüfer korrigiert sofort im selben Anlauf.
+          const beanstandungen = beanstandungenAusMeldungen(k.meldungen)
+          const belegKritik = prueferKritik(beanstandungen)
           const zielId = rueckfuehrungsZiel(workflow.bloecke, workflow.pfeile, id)
 
           // Lokale Vorreparatur (BAUPLAN 20): Mechanische Beanstandungen
@@ -2665,9 +2886,7 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
             // Beanstandungen mechanisch markiert sind, lohnt die lokale Wette.
             k.lokaleVersuche = 0
             k.lokaleKritik =
-              beanstandungenEinstufen(ergebnis.ergebnisText) === 'mechanisch'
-                ? belegKritik.text
-                : null
+              beanstandungenEinstufen(beanstandungen) === 'mechanisch' ? belegKritik.text : null
             if (!k.lokaleKritik) tickern(texte.ticker.lokaleReparaturNichtMechanisch(zielK.name))
           }
           if (lokalErlaubt && k.lokaleKritik) {
@@ -2784,8 +3003,11 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
             k.diffBasis = await letzterPunktId(projektPfad)
             k.diffAnfordern = true
             // Der Prüfer selbst prüft in der nächsten Runde nur seine
-            // Beanstandungen nach — keine erneute Vollprüfung.
+            // Beanstandungen nach — keine erneute Vollprüfung. Die Felder
+            // wandern mit (BAUPLAN 42): Der Grün-Fall des Tors filtert daraus
+            // die grundsätzlichen heraus.
             k.nachpruefung = kritik
+            k.nachpruefungBeanstandungen = beanstandungen
             tickern(texte.ticker.rueckfuehrung(ziel.name, genutzt, rundenStandard))
             if (belegKritik.anzahl > 0)
               tickern(texte.ticker.beanstandungenUebergeben(belegKritik.anzahl, ziel.name))

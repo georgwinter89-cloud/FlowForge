@@ -13,9 +13,9 @@ import {
   pruefbefehlPruefen,
   fehlerZeilen,
   neueFehler,
-  grundsaetzlicheKritik,
   PRUEFBEFEHL_MAX
 } from '../src/shared/torRegeln.js'
+import { grundsaetzlicheBeanstandungen } from '../src/shared/lieferschein.js'
 import {
   pruefbefehlSetzen,
   pruefbefehlLaden,
@@ -109,24 +109,26 @@ describe('BAUPLAN 35 · Baseline „vorher schon rot"', () => {
   })
 })
 
-describe('BAUPLAN 35 · Grün-Fall: nur noch die grundsätzlichen Beanstandungen', () => {
-  const kritik = [
-    'BEANSTANDUNG (mechanisch): In js/render.js Zeile 42 steht 0.5 statt 0.05.',
-    'BEANSTANDUNG (grundsätzlich): Die Tunnel-Logik braucht einen Umbau.'
-  ].join('\n')
+describe('BAUPLAN 35/42 · Grün-Fall: nur noch die grundsätzlichen Beanstandungen', () => {
+  // Seit dem Lieferschein (BAUPLAN 42) steht die Einstufung als Feld in der
+  // Meldung — gefiltert wird danach, nicht nach einer Marker-Zeile im Text.
+  const beanstandungen = [
+    { einstufung: 'mechanisch', text: 'In js/render.js Zeile 42 steht 0.5 statt 0.05.', fundort: '' },
+    { einstufung: 'grundsaetzlich', text: 'Die Tunnel-Logik braucht einen Umbau.', fundort: '' }
+  ]
 
   it('filtert die mechanischen heraus, wenn der Prüfbefehl grün ist', () => {
-    const uebrig = grundsaetzlicheKritik(kritik)
-    expect(uebrig).toContain('Tunnel-Logik')
-    expect(uebrig).not.toContain('0.5 statt 0.05')
+    const uebrig = grundsaetzlicheBeanstandungen(beanstandungen)
+    expect(uebrig).toHaveLength(1)
+    expect(uebrig[0].text).toContain('Tunnel-Logik')
   })
 
-  it('liefert null, wenn nur mechanische Beanstandungen offen waren', () => {
-    expect(grundsaetzlicheKritik('BEANSTANDUNG (mechanisch): Tippfehler.')).toBeNull()
+  it('liefert eine leere Liste, wenn nur mechanische Beanstandungen offen waren', () => {
+    expect(grundsaetzlicheBeanstandungen([beanstandungen[0]])).toHaveLength(0)
   })
 
-  it('erkennt die Marke auch ohne Umlaut und mit Aufzählungszeichen', () => {
-    expect(grundsaetzlicheKritik('- BEANSTANDUNG (grundsaetzlich): Umbau.')).not.toBeNull()
+  it('kommt mit fehlender Liste zurecht', () => {
+    expect(grundsaetzlicheBeanstandungen(undefined)).toEqual([])
   })
 })
 

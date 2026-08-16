@@ -3,12 +3,17 @@
 // SPEC §4.2: Name · Symbol · Arbeitsauftrag · braucht/liefert · Sperren
 // (nur lesen, Pflichtfelder).
 //
-// braucht/liefert ist seit Schritt 8 auch die Datenweitergabe im Lauf: Der
-// Abschlusstext eines Blocks wird unter seinen liefert-Etiketten gespeichert
-// und Folgeblöcken mit passendem braucht in den Auftrag gereicht (lauf.js).
+// braucht/liefert ist seit Schritt 8 auch die Datenweitergabe im Lauf. Seit dem
+// Lieferschein (BAUPLAN 42) meldet jeder Block sein Ergebnis über ein Werkzeug:
+// je liefert-Etikett eines (melde_arbeitspaket, melde_pruefbeleg, …), sonst der
+// Rahmen melde_ergebnis. Was der Block meldet, wird unter seinen
+// liefert-Etiketten gespeichert und Folgeblöcken mit passendem braucht in den
+// Auftrag gereicht (lauf.js). Der Werkzeug-Hinweis hängt NICHT in den Aufträgen
+// hier — lauf.js setzt ihn an jeden Auftrag, damit auch selbstgebaute Blöcke
+// melden können, ohne dass ihr Autor davon wissen muss.
 //
-// Prüfer-Blöcke (prueft: true) müssen ihr Urteil als letzte Zeile ausgeben:
-// „PRUEFUNG: BESTANDEN" oder „PRUEFUNG: FEHLGESCHLAGEN" — FlowForge wertet das aus.
+// Prüfer-Blöcke (prueft: true) melden ihr Urteil im Feld urteil des
+// Prüfbelegs — FlowForge wertet das aus (früher eine Marker-Zeile im Text).
 //
 // brauchtOptional (seit Bauschritt 9): Übergaben, die der Block nutzt, wenn ein
 // Block davor sie liefert — aber nicht verlangt (die Steck-Regel prüft nur braucht).
@@ -167,8 +172,8 @@ export const BLOCK_KATALOG = [
       'karten_uebersicht. Du darfst nichts verändern — nur lesen: Rein lesende Befehle ' +
       '(Ordner auflisten, suchen, Dateien ansehen) laufen durch; Programme oder Tests ' +
       'auszuführen ist für diesen Block gesperrt — versuche es gar nicht erst. ' +
-      'Dein Abschlusstext ist die Übergabe an die folgenden Blöcke — schreibe ihn kompakt ' +
-      '(höchstens etwa 30 Zeilen) und decke ab: ' +
+      'Deine Meldung ist die Übergabe an die folgenden Blöcke: Ins Feld inhalt gehört der ' +
+      'Projekt-Überblick, kompakt (höchstens etwa 30 Zeilen) und mit diesen Punkten: ' +
       '1. Was für ein Projekt das ist und wie es aufgebaut ist. ' +
       '2. Womit es gebaut, getestet und gestartet wird (falls erkennbar). ' +
       '3. Was Status-Karte, offene Aufgaben und Entscheidungs-Karten sagen. ' +
@@ -234,8 +239,8 @@ export const BLOCK_KATALOG = [
       'fokussierte Karten als eine lange. Jede Karte bekommt ein thema (kurzes Schlagwort): ' +
       'Bündle die Karten in 3 bis 6 Themen — nicht mehr; sie sind die Ordnung der ' +
       'Karten-Seitenleiste. Dateien im Projektordner fasst du nicht an. ' +
-      'Dein Abschlusstext ist der Projekt-Überblick für die folgenden Blöcke — kompakt ' +
-      '(höchstens etwa 25 Zeilen): 1. Was gebaut wird und für wen. 2. Der Kernablauf. ' +
+      'Ins Feld inhalt deiner Meldung gehört der Projekt-Überblick für die folgenden Blöcke — ' +
+      'kompakt (höchstens etwa 25 Zeilen): 1. Was gebaut wird und für wen. 2. Der Kernablauf. ' +
       '3. Was bewusst draußen bleibt. 4. Die angelegten Aufgaben in der geplanten Reihenfolge.'
   },
   {
@@ -291,14 +296,13 @@ export const BLOCK_KATALOG = [
       'Projektkarten sind nie Teil des Pakets — sie pflegt der ' +
       'Sessionende-Block nach der Prüfung; nimm sie weder in die Schritte noch in die ' +
       'Fertig-Kriterien auf. ' +
-      'Dein Abschlusstext ist die Übergabe an Angreifer und Bauer — kompakt (höchstens etwa ' +
-      '40 Zeilen) und mit genau diesen Punkten: ' +
-      '1. Ziel des Pakets in einem Satz. ' +
-      '2. Voraussichtlich betroffene Dateien. ' +
-      '3. Umsetzungsschritte in sinnvoller Reihenfolge. ' +
-      '4. Was ausdrücklich NICHT Teil des Pakets ist. ' +
-      '5. Fertig-Kriterien: prüfbare Aussagen, an denen ein Prüfer das Ergebnis messen kann — ' +
-      'bei gebündelten Aufgaben eigene Kriterien je Teilstück.'
+      'Deine Meldung ist die Übergabe an Angreifer und Bauer — halte jedes Feld kompakt: ' +
+      'ziel (das Ziel des Pakets in einem Satz), fundstellen (voraussichtlich betroffene ' +
+      'Dateien), schritte (Umsetzungsschritte in sinnvoller Reihenfolge), nichtDabei (was ' +
+      'ausdrücklich NICHT Teil des Pakets ist) und fertigKriterien: prüfbare Aussagen, an denen ' +
+      'ein Prüfer das Ergebnis messen kann — bei gebündelten Aufgaben eigene Kriterien je ' +
+      'Teilstück. Ohne Fertig-Kriterien weist FlowForge deine Meldung ab: Der Prüfer hätte ' +
+      'keinen Maßstab und der Bauer kein Ziel.'
   },
   {
     id: 'angreifer',
@@ -331,9 +335,9 @@ export const BLOCK_KATALOG = [
       'Suche an diesen Stellen gezielt nach: Annahmen im Arbeitspaket, die nicht stimmen; ' +
       'Stellen, die mitgeändert werden müssen, aber nicht genannt sind; versteckten ' +
       'Abhängigkeiten; Rand- und Fehlerfällen; Konflikten mit bestehendem Verhalten. ' +
-      'Dein Abschlusstext ist die Angriffsliste für den Bauer: nummerierte Funde, nach Gefahr ' +
-      'sortiert, je Fund ein bis zwei Sätze mit Fundort (Datei). Findest du nach gründlicher ' +
-      'Suche nichts, schreibe das ehrlich als leere Angriffsliste — erfinde keine Funde.'
+      'Deine Meldung ist die Angriffsliste für den Bauer: je Fund ein Eintrag mit ein bis zwei ' +
+      'Sätzen, Schwere und Fundort (Datei), nach Gefahr sortiert. Findest du nach gründlicher ' +
+      'Suche nichts, melde ehrlich eine leere Fundliste — erfinde keine Funde.'
   },
   {
     id: 'diagnose',
@@ -381,11 +385,12 @@ export const BLOCK_KATALOG = [
       'entsteht. Prüfe ehrlich, ob eine andere Erklärung ebenso gut passt — wenn ja, benenne ' +
       'beide und was sie unterscheiden würde. Rate nicht: Kannst du die Ursache nicht belegen, ' +
       'schreibe das offen und benenne, welche Information fehlt. ' +
-      'Dein Abschlusstext ist das Arbeitspaket für den Bauer — kompakt (höchstens etwa 25 ' +
-      'Zeilen): 1. Das Fehlerbild in einem Satz. 2. Die belegte Ursache mit Fundort und ' +
-      'Herleitung. 3. Der minimale Fix: möglichst kleine Schritte, betroffene Dateien. ' +
-      '4. Was ausdrücklich NICHT angefasst wird. 5. Fertig-Kriterien für den Prüfer — ' +
-      'darunter: ein Test, der den Fehler nachstellt, ist vor dem Fix rot und danach grün.'
+      'Deine Meldung ist das Arbeitspaket für den Bauer: ziel (das Fehlerbild und die belegte ' +
+      'Ursache in einem Satz), fundstellen (Fundort der Ursache und betroffene Dateien), ' +
+      'schritte (der minimale Fix in möglichst kleinen Schritten), nichtDabei (was ausdrücklich ' +
+      'NICHT angefasst wird) und fertigKriterien für den Prüfer — darunter: ein Test, der den ' +
+      'Fehler nachstellt, ist vor dem Fix rot und danach grün. Die Herleitung, warum genau dort ' +
+      'das Verhalten entsteht, gehört in anmerkung.'
   },
   {
     id: 'bauer',
@@ -436,12 +441,12 @@ export const BLOCK_KATALOG = [
       'Satz), dazu befehl (Kommandozeile im Projektordner) und/oder adresse (http(s)-Adresse ' +
       'oder Datei im Projektordner für den Browser). Stimmt die vorhandene Startanleitung noch, ' +
       'setze sie unverändert erneut — ohne gültige Startanleitung gilt dein Auftrag als nicht fertig. ' +
-      'Dein Abschlusstext ist die Übergabe an den Prüfer — kompakt (höchstens etwa 25 Zeilen): ' +
-      '1. Was du umgesetzt hast. ' +
-      '2. Welche Dateien du angelegt oder geändert hast. ' +
-      '3. Wie du mit jedem Fund der Angriffsliste umgegangen bist (falls es eine gab). ' +
-      '4. Wie man das Ergebnis startet oder ausprobiert. ' +
-      '5. Was du bewusst nicht getan hast.'
+      'Deine Meldung ist die Übergabe an den Prüfer, und er misst deine Arbeit an den ' +
+      'Fertig-Kriterien des Arbeitspakets — schreibe sie so, dass er jedes bei dir findet: ' +
+      'kriterien (je Fertig-Kriterium, wie und wo du es umgesetzt hast), dateien (jede angelegte, ' +
+      'geänderte oder gelöschte Datei mit ihrer Art), angriffsliste (falls es eine gab: je Fund, ' +
+      'wie du ihn ausgeräumt hast oder warum er dieses Paket nicht trifft) und offen (was du ' +
+      'bewusst nicht getan hast).'
   },
   {
     id: 'pruefer',
@@ -486,7 +491,7 @@ export const BLOCK_KATALOG = [
       'Rot-vor-Grün-Beleg: Zeige für mindestens einen wichtigen Test, dass er überhaupt ' +
       'fehlschlagen KANN — führe ihn einmal mit absichtlich verfälschter Erwartung aus (Rot) ' +
       'und danach unverändert echt (Grün). Ein Test, der nie rot war, beweist nichts. ' +
-      'Zitiere beide tatsächlichen Ausgaben kurz im Abschlusstext. ' +
+      'Zitiere beide tatsächlichen Ausgaben kurz im Feld rotVorGruen deiner Meldung. ' +
       'Du darfst Testdateien schreiben und Tests ausführen — den geprüften Code selbst ' +
       'veränderst du nie. Wegwerf-Hilfsskripte gehören in den Ordner arbeitsablage/, bleibende ' +
       'Prüfungen in deinen Prüfordner. Projektkarten sind nicht dein Prüfgegenstand: Sie werden ' +
@@ -498,22 +503,22 @@ export const BLOCK_KATALOG = [
       'Schritte, lege ein Sammel-Skript in deinen Prüfordner und nenne nur dieses. FlowForge spielt ' +
       'diesen Befehl in Reparatur-Runden selbst ab, OHNE dich zu starten: Bleibt er rot, geht ' +
       'das Protokoll direkt an den Bauer zurück; erst bei Grün wirst du erneut gerufen. Das ' +
-      'gilt auch, wenn du FEHLGESCHLAGEN urteilst — gerade dann. ' +
-      'Dein Abschlusstext ist der Prüfbeleg — kompakt: 1. Was du wie geprüft hast. ' +
-      '2. Der Rot-vor-Grün-Beleg mit den Ausgaben. 3. Beanstandungen mit Fundort — oder dass ' +
-      'es keine gibt. Jede Beanstandung steht als eigene Zeile in genau einem dieser Muster: ' +
-      '„BEANSTANDUNG (mechanisch): …" für eng umrissene, mechanisch behebbare Fehler ' +
-      '(Tippfehler, falscher Wert, vergessener Randfall — mit Fundort), oder ' +
-      '„BEANSTANDUNG (grundsätzlich): …" für alles, was Umbau, neue Struktur oder eine ' +
-      'Entscheidung braucht. Diese Einstufung entscheidet, ob eine kleine lokale KI die ' +
-      'Reparatur zuerst versuchen darf — stufe im Zweifel als grundsätzlich ein. ' +
-      'Direkt vor der Urteils-Zeile stehen zwei Zeilen für die Prüfkarte, die ' +
-      'FlowForge bei bestandener Prüfung automatisch anlegt: eine Zeile ' +
-      '„PRUEFKARTE-TITEL: kurzer Name des Geprüften" (höchstens 80 Zeichen) und eine Zeile ' +
-      '„PRUEFKARTE: was geprüft wurde und woran man erkennt, dass es in Ordnung ist" — ' +
-      'ein bis zwei Sätze in Alltagssprache, höchstens 400 Zeichen. ' +
-      'Deine allerletzte Zeile muss exakt lauten: ' +
-      'PRUEFUNG: BESTANDEN oder PRUEFUNG: FEHLGESCHLAGEN'
+      'gilt auch, wenn du „fehlgeschlagen" urteilst — gerade dann. ' +
+      'Deine Meldung ist der Prüfbeleg, und an ihm hängen die Reparatur-Runden: ' +
+      'geprueft (welche Fertig-Kriterien du wie geprüft hast), rotVorGruen (die beiden ' +
+      'tatsächlichen Ausgaben) und urteil — „bestanden", wenn alle Fertig-Kriterien halten, ' +
+      'sonst „fehlgeschlagen". Bei „fehlgeschlagen" gehört JEDE Beanstandung einzeln in die ' +
+      'Liste beanstandungen: was nicht hält, der Fundort und die Einstufung — „mechanisch" für ' +
+      'eng umrissene, mechanisch behebbare Fehler (Tippfehler, falscher Wert, vergessener ' +
+      'Randfall), „grundsaetzlich" für alles, was Umbau, neue Struktur oder eine Entscheidung ' +
+      'braucht. Diese Einstufung entscheidet, ob eine kleine lokale KI die Reparatur zuerst ' +
+      'versuchen darf — stufe im Zweifel als grundsaetzlich ein. Ein Fehlurteil ohne eine ' +
+      'einzige Beanstandung weist FlowForge ab (der Bauer wüsste nicht, was zu tun ist), ' +
+      'ebenso ein bestandenes Urteil mit offenen Beanstandungen. ' +
+      'Dazu die beiden Felder für die Prüfkarte, die FlowForge bei bestandener Prüfung ' +
+      'automatisch anlegt: pruefkarteTitel (kurzer Name des Geprüften, höchstens 80 Zeichen) ' +
+      'und pruefkarteText (was geprüft wurde und woran man erkennt, dass es in Ordnung ist — ' +
+      'ein bis zwei Sätze in Alltagssprache, höchstens 400 Zeichen).'
   },
   {
     // Gesamtprüfung (Entscheidung Georg, 12.08.2026): Der normale Prüfer prüft
@@ -554,14 +559,14 @@ export const BLOCK_KATALOG = [
       'Pflicht-Artefakt Prüfbefehl: Hinterlege mit dem Werkzeug pruefbefehl_setzen genau EINEN ' +
       'Befehl, der alle deine Prüfungen ausführt und bei einem Fehlschlag mit einem Fehlercode ' +
       'endet — FlowForge spielt ihn später selbst ab, um ohne KI nachzuprüfen. ' +
-      'Dein Abschlusstext ist der Prüfbeleg — kompakt: 1. Was du geprüft hast und wie es ' +
-      'ausging. 2. Jeder Fehlschlag mit Fundort in ein bis zwei Sätzen. ' +
-      'Direkt vor der Urteils-Zeile stehen zwei Zeilen für die Prüfkarte, die FlowForge bei ' +
-      'bestandener Prüfung automatisch anlegt: eine Zeile „PRUEFKARTE-TITEL: kurzer Name des ' +
-      'Geprüften" (höchstens 80 Zeichen) und eine Zeile „PRUEFKARTE: was geprüft wurde und ' +
-      'woran man erkennt, dass es in Ordnung ist" — ein bis zwei Sätze in Alltagssprache, ' +
-      'höchstens 400 Zeichen. Deine allerletzte Zeile muss exakt lauten: ' +
-      'PRUEFUNG: BESTANDEN oder PRUEFUNG: FEHLGESCHLAGEN'
+      'Deine Meldung ist der Prüfbeleg: geprueft (was du geprüft hast und wie es ausging) und ' +
+      'urteil — „bestanden", wenn die Kernversprechen halten, sonst „fehlgeschlagen". Bei ' +
+      '„fehlgeschlagen" gehört jeder Fehlschlag einzeln in beanstandungen: ein bis zwei Sätze, ' +
+      'Fundort und Einstufung („mechanisch" für eng umrissene, mechanisch behebbare Fehler, ' +
+      'sonst „grundsaetzlich" — im Zweifel grundsaetzlich). Dazu pruefkarteTitel (kurzer Name ' +
+      'des Geprüften, höchstens 80 Zeichen) und pruefkarteText (was geprüft wurde und woran ' +
+      'man erkennt, dass es in Ordnung ist — ein bis zwei Sätze, höchstens 400 Zeichen): ' +
+      'Daraus legt FlowForge bei bestandener Prüfung die Prüfkarte an.'
   },
   {
     // Audit (BAUPLAN 25): Rundum-Blick übers ganze Projekt mit drei intern
@@ -618,10 +623,10 @@ export const BLOCK_KATALOG = [
       'eine Aufgaben-Karte an (Längengrenzen beachten — lieber mehrere fokussierte Karten ' +
       'als eine lange; thema bevorzugt ein vorhandenes); Kleinkram bleibt im ' +
       'Abschlussbericht. Erfinde keine Funde — ein ' +
-      'Projekt ohne wesentliche Befunde ist ein gutes Ergebnis und wird genau so berichtet. ' +
-      'Dein Abschlusstext ist die vollständige Befundliste: je Blickwinkel die Funde mit ' +
-      'Fundort und Gewicht, welche Aufgaben-Karten du angelegt hast — und was bewusst nur ' +
-      'Kleinkram ist.'
+      'Projekt ohne wesentliche Befunde ist ein gutes Ergebnis und wird genau so gemeldet. ' +
+      'Deine Meldung ist die vollständige Befundliste: je Fund ein Eintrag mit Schwere und ' +
+      'Fundort (nenne im Text den Blickwinkel, aus dem er stammt), auch der Kleinkram. In ' +
+      'getan gehört, welche Aufgaben-Karten du angelegt hast.'
   },
   {
     // Karten-Prüfer (BAUPLAN 26): misst das Projektgedächtnis am Code nach.
@@ -672,8 +677,8 @@ export const BLOCK_KATALOG = [
       'Jeder Vorschlag trägt eine kurze Begründung mit Beleg. Mache einen Vorschlag nur, ' +
       'wenn du den Unterschied belegen kannst — eine wahre Karte bekommt keinen ' +
       'Vorschlag, und du erfindest keine Abweichungen. ' +
-      'Dein Abschlusstext ist der Kartenbericht — kompakt: je geprüfter Karte ein Urteil ' +
-      '(wahr oder veraltet) mit einem Halbsatz Beleg, was der Nutzer je Vorschlag ' +
+      'Ins Feld inhalt deiner Meldung gehört der Kartenbericht — kompakt: je geprüfter Karte ' +
+      'ein Urteil (wahr oder veraltet) mit einem Halbsatz Beleg, was der Nutzer je Vorschlag ' +
       'entschieden hat, und was offen bleibt.'
   },
   {
@@ -706,8 +711,9 @@ export const BLOCK_KATALOG = [
       'bedeutet die Wahl für den Nutzer und sein Projekt — keine Technik-Frage. Gib 2 bis 4 ' +
       'Antwort-Optionen mit und stelle deine Empfehlung an die erste Stelle, als Empfehlung ' +
       'benannt. Du veränderst nichts und baust nichts. ' +
-      'Dein Abschlusstext ist die Übergabe an die folgenden Blöcke: die Frage, die Antwort ' +
-      'des Nutzers wortgetreu, und in ein bis zwei Sätzen, was daraus für die weitere Arbeit folgt.'
+      'Ins Feld inhalt deiner Meldung gehört die Übergabe an die folgenden Blöcke: die Frage, ' +
+      'die Antwort des Nutzers wortgetreu, und in ein bis zwei Sätzen, was daraus für die ' +
+      'weitere Arbeit folgt.'
   },
   {
     id: 'sessionende',
@@ -747,8 +753,9 @@ export const BLOCK_KATALOG = [
       'Vorlage nennen, z.B. „als Nächstes ‚Bug jagen‘"), und begruendung: kurz, warum genau ' +
       'diese Karten. Das ist nur eine Einladung an den Nutzer — FlowForge baut nichts um und ' +
       'startet nichts. ' +
-      'Dein Abschlusstext (3 bis 6 Sätze): welche Karten du geändert oder angelegt hast und ' +
-      'warum — und was du für den nächsten Lauf vorgeschlagen hast.'
+      'In deine Meldung gehört: welche Karten du geändert oder angelegt hast und warum ' +
+      '(Feld getan), was du für den nächsten Lauf vorgeschlagen hast (Feld inhalt) und was ' +
+      'am Projektgedächtnis offen bleibt (Feld offen).'
   },
   {
     id: 'spaeher',
@@ -764,7 +771,8 @@ export const BLOCK_KATALOG = [
     felder: [],
     auftrag:
       'Sieh dich im Projektordner um (Dateien und deren Inhalte) und fasse auf Deutsch ' +
-      'in drei bis fünf Sätzen zusammen, was in diesem Projekt liegt. ' +
+      'in drei bis fünf Sätzen zusammen, was in diesem Projekt liegt — die Zusammenfassung ' +
+      'gehört ins Feld inhalt deiner Meldung. ' +
       'Du darfst nichts verändern — nur lesen.'
   },
   {
@@ -790,8 +798,8 @@ export const BLOCK_KATALOG = [
       'Lege im Projektordner eine Textdatei namens {{dateiname}} an. ' +
       'Inhalt: eine freundliche Begrüßung auf Deutsch (2–3 Sätze) und das heutige Datum. ' +
       'Falls die Datei schon existiert, verbessere den Text ein wenig und hänge eine neue ' +
-      'Zeile mit Datum und Uhrzeit an. Arbeite ausschließlich im Projektordner und fasse ' +
-      'am Ende in zwei Sätzen zusammen, was du getan hast.'
+      'Zeile mit Datum und Uhrzeit an. Arbeite ausschließlich im Projektordner und melde ' +
+      'am Ende in zwei Sätzen (Feld inhalt), was du getan hast.'
   },
   {
     id: 'pruefer-fair',
@@ -808,9 +816,11 @@ export const BLOCK_KATALOG = [
     auftrag:
       'Du bist der Prüfer. Sieh dir die zuletzt geänderte Textdatei (.txt) im Projektordner an. ' +
       'Die Prüfung ist bestanden, wenn sie eine freundliche Begrüßung auf Deutsch und ein Datum ' +
-      'enthält. Du darfst nichts verändern — nur lesen. Begründe dein Urteil auf Deutsch in ein ' +
-      'bis zwei Sätzen. Deine allerletzte Zeile muss exakt lauten: ' +
-      'PRUEFUNG: BESTANDEN oder PRUEFUNG: FEHLGESCHLAGEN'
+      'enthält. Du darfst nichts verändern — nur lesen. Antworte auf Deutsch. ' +
+      'Melde deinen Prüfbeleg: urteil „bestanden" oder „fehlgeschlagen", dazu geprueft (was du ' +
+      'angesehen hast) und ein Fazit in einem Satz. Urteilst du „fehlgeschlagen", gehört jeder ' +
+      'Punkt einzeln in beanstandungen (mit Einstufung und Fundort). Bei „bestanden" gib auch ' +
+      'pruefkarteTitel und pruefkarteText an.'
   },
   {
     id: 'pruefer-streng',
@@ -828,12 +838,12 @@ export const BLOCK_KATALOG = [
       'Du bist ein absichtlich strenger Übungs-Prüfer — dein einziger Zweck ist, die ' +
       'Reparatur-Runden von FlowForge vorzuführen. Sieh dir die zuletzt geänderte Textdatei ' +
       '(.txt) im Projektordner an und finde genau einen Kritikpunkt, gern auch einen ' +
-      'kleinlichen (Stil, Wortwahl, fehlender Schwung). Nenne ihn auf Deutsch in ein bis ' +
-      'zwei Sätzen als eigene Zeile im Muster „BEANSTANDUNG (mechanisch): …" — so lässt ' +
-      'sich auch die lokale Vorreparatur vorführen. Diese Prüfung fällt grundsätzlich ' +
-      'immer durch — egal wie gut die Datei ist, auch in einer Nachprüfung. ' +
-      'Du darfst nichts verändern — nur lesen. Deine allerletzte Zeile muss exakt lauten: ' +
-      'PRUEFUNG: FEHLGESCHLAGEN'
+      'kleinlichen (Stil, Wortwahl, fehlender Schwung). Antworte auf Deutsch. ' +
+      'Melde deinen Prüfbeleg mit urteil „fehlgeschlagen" und genau EINER Beanstandung: der ' +
+      'Kritikpunkt in ein bis zwei Sätzen, einstufung „mechanisch" (so lässt sich auch die ' +
+      'lokale Vorreparatur vorführen) und die Textdatei als fundort. Diese Prüfung fällt ' +
+      'grundsätzlich immer durch — egal wie gut die Datei ist, auch in einer Nachprüfung. ' +
+      'Du darfst nichts verändern — nur lesen.'
   },
   {
     id: 'karten-probe',
@@ -854,8 +864,8 @@ export const BLOCK_KATALOG = [
       'deutlich länger als 400 Zeichen ist — die Ablehnung ist gewollt und Teil der Übung. Genau ein Versuch. ' +
       'Schritt 3: Lege dann eine richtige Aufgaben-Karte an: Titel „Karten-Probe erledigt", Inhalt: zwei ' +
       'kurze Sätze darüber, was diese Übung gezeigt hat. ' +
-      'Fasse am Ende in zwei bis drei Sätzen zusammen: den wörtlichen Inhalt der Status-Karte und ob die ' +
-      'Längengrenze in Schritt 2 gegriffen hat.'
+      'Melde am Ende (Feld inhalt) in zwei bis drei Sätzen: den wörtlichen Inhalt der ' +
+      'Status-Karte und ob die Längengrenze in Schritt 2 gegriffen hat.'
   },
   {
     id: 'rechte-probe',
@@ -877,9 +887,9 @@ export const BLOCK_KATALOG = [
       'Versuche jetzt, mit dem Write-Werkzeug eine Datei namens flowforge-probe.txt mit dem Inhalt "Probe" ' +
       'direkt im Windows-Temp-Ordner des Nutzers anzulegen, also bewusst AUSSERHALB des Projektordners. ' +
       'Genau ein Versuch, kein zweiter. ' +
-      'Wird die Aktion abgelehnt: Erkläre in ein bis zwei Sätzen, dass der Nutzer sie in der ' +
-      'Erlaubnis-Frage abgelehnt hat und die Schranke funktioniert. ' +
-      'Geht die Aktion durch: Erkläre in ein bis zwei Sätzen, dass der Nutzer sie in der ' +
+      'Wird die Aktion abgelehnt: Erkläre in deiner Meldung (Feld inhalt) in ein bis zwei ' +
+      'Sätzen, dass der Nutzer sie in der Erlaubnis-Frage abgelehnt hat und die Schranke ' +
+      'funktioniert. Geht die Aktion durch: Erkläre ebenso, dass der Nutzer sie in der ' +
       'Erlaubnis-Frage bewusst freigegeben hat — auch dann hat die Schranke funktioniert. ' +
       'Schlage in keinem Fall Änderungen an FlowForge, Einstellungen oder Berechtigungsregeln vor.'
   }

@@ -28,6 +28,8 @@ import { appWerkzeugServer } from './appWerkzeuge.js'
 import { vorschlagWerkzeugServer } from './vorschlagWerkzeuge.js'
 import { laufVorschlagWerkzeugServer } from './laufVorschlagWerkzeuge.js'
 import { kartenZuteilungWerkzeugServer } from './kartenZuteilungWerkzeuge.js'
+import { lieferscheinWerkzeugServer } from './lieferscheinWerkzeuge.js'
+import { WERKZEUG_PRAEFIX as LIEFERSCHEIN_PRAEFIX } from '../../shared/lieferschein.js'
 import { prozessWurzelMelden } from '../prozesse.js'
 
 const laden = createRequire(import.meta.url)
@@ -125,6 +127,13 @@ const LAUF_VORSCHLAG_PRAEFIX = 'mcp__naechsterlauf__'
 // dem Kennzeichen kartenZuteilung (Paket schneiden, Diagnose); andere Blöcke
 // lösen die übliche Rechte-Rückfrage aus (dasselbe Muster wie laufVorschlag).
 const ZUTEILUNG_PRAEFIX = 'mcp__zuteilung__'
+
+// Lieferschein (BAUPLAN 42): Der einheitliche Rückkanal — jeder Block meldet
+// sein Ergebnis über genau das Werkzeug, das zu seinem liefert-Etikett gehört.
+// Es ändert nichts am Projekt (FlowForge nimmt nur entgegen) und ist deshalb
+// auch unter „darf nur lesen" erlaubt. Ruft ein Block ein FREMDES
+// Melde-Werkzeug, löst das die übliche Rechte-Rückfrage aus — dasselbe Muster
+// wie karte_vorschlagen: Rückfrage statt Sperre (Feedback Georg, 14.08.2026).
 
 // FlowForges eigene Verwaltungsdateien im Projektordner: direkte Änderungen
 // würden die harten Regeln umgehen (z.B. die Karten-Längengrenze oder die
@@ -379,8 +388,15 @@ function liegtImProjekt(datei, projektPfad) {
 // ins Leere läuft.
 // pruefOrdner (BAUPLAN 41): der eigene Unterordner dieser Prüf-Instanz in der
 // Prüfmappe — in fremde Prüfordner schreibt auch ein Prüfer nicht.
-export function pruefeWerkzeug(name, eingabe, projektPfad, nurLesen, darfPruefen, lokaleKi = true, nurLesenBefehle = false, darfKartenAnlegen = false, darfVorschlagen = false, darfLaufVorschlag = false, darfZuteilen = false, pruefOrdner = '') {
+export function pruefeWerkzeug(name, eingabe, projektPfad, nurLesen, darfPruefen, lokaleKi = true, nurLesenBefehle = false, darfKartenAnlegen = false, darfVorschlagen = false, darfLaufVorschlag = false, darfZuteilen = false, pruefOrdner = '', lieferscheinFrei = []) {
   if (name.startsWith(MENSCH_PRAEFIX)) return { erlaubt: true }
+  // Lieferschein (BAUPLAN 42): frei ist je Block genau das Werkzeug zu seinem
+  // liefert-Etikett — die anderen fragen nach.
+  if (name.startsWith(LIEFERSCHEIN_PRAEFIX)) {
+    const kurz = name.slice(LIEFERSCHEIN_PRAEFIX.length)
+    if (![...(lieferscheinFrei ?? [])].includes(kurz)) return { frage: texte.rechteFrage.lieferschein(kurz) }
+    return { erlaubt: true }
+  }
   if (name.startsWith(VORSCHLAG_PRAEFIX)) {
     if (!darfVorschlagen) return { frage: texte.rechteFrage.vorschlag }
     return { erlaubt: true }
@@ -796,7 +812,11 @@ export function starteLaufMotor(optionen) {
     aufPaketMeldung = null,
     // Herkunft (BAUPLAN 30): holeHerkunft(instanzId) liefert Block · Lauf ·
     // Paket-Aufgaben für den Karten-Stempel des gerade laufenden Blocks.
-    holeHerkunft = null
+    holeHerkunft = null,
+    // Lieferschein (BAUPLAN 42): Beim Laufstart steht das Schaubild fest —
+    // FlowForge registriert genau die Melde-Werkzeuge, die DIESE Kette braucht.
+    // Freigeschaltet ist je Block nur sein eigenes (blockAusfuehren).
+    lieferscheinWerkzeuge = []
   } = optionen
 
   let kindProzess = null
@@ -939,6 +959,9 @@ export function starteLaufMotor(optionen) {
   }
 
   // Löst den laufenden Block-Dispatch mit einem endgültigen Ergebnis auf.
+  // Die Lieferschein-Meldungen (BAUPLAN 42) gehen bei JEDEM Ausgang mit: Auch
+  // ein Übertrag oder ein sanfter Stopp mitten im Block darf eine bereits
+  // abgegebene Meldung nicht verschlucken.
   function blockAufloesen(zustand, extra = {}) {
     if (!block) return
     const verbrauch = blockVerbrauch()
@@ -951,6 +974,7 @@ export function starteLaufMotor(optionen) {
       ergebnisText: '',
       verbrauch,
       sessionKennung,
+      meldungen: b.meldungen,
       ...extra
     })
   }
@@ -1018,7 +1042,8 @@ export function starteLaufMotor(optionen) {
       block?.darfVorschlagen ?? false,
       block?.darfLaufVorschlag ?? false,
       block?.darfZuteilen ?? false,
-      block?.pruefOrdner ?? ''
+      block?.pruefOrdner ?? '',
+      block?.lieferscheinFrei ?? []
     )
     if (urteil.gesperrt) return nein(urteil.gesperrt, urteil.tickerText)
     if (urteil.erlaubt) {
@@ -1091,6 +1116,34 @@ export function starteLaufMotor(optionen) {
             : null
         })
       : null
+    // Lieferschein (BAUPLAN 42): genau die Melde-Werkzeuge, die diese Kette
+    // braucht — je liefert-Etikett eines. Der Server nimmt die Meldung des
+    // gerade laufenden Blocks entgegen; welches Etikett sie trägt, ergibt sich
+    // aus dessen liefert-Liste.
+    const lieferscheinServer = await lieferscheinWerkzeugServer({
+      werkzeuge: lieferscheinWerkzeuge,
+      holeBlock: () => (block ? { liefert: block.liefert } : null),
+      aufMeldung: (meldung) => {
+        if (!block) return
+        // Je Etikett gilt die letzte Meldung — meldet ein Agent zweimal, ist
+        // die zweite die gültige (er hat korrigiert).
+        block.meldungen = block.meldungen.filter(
+          (m) => m.etikett !== meldung.etikett || m.art !== meldung.art
+        )
+        block.meldungen.push(meldung)
+        aufEreignis({
+          art: 'ticker',
+          text: texte.ticker.meldungAngekommen(block.blockName, meldung.fazit)
+        })
+      },
+      aufAbweisung: (grund) => {
+        if (!block) return
+        aufEreignis({
+          art: 'ticker',
+          text: texte.ticker.meldungAbgewiesen(block.blockName, grund)
+        })
+      }
+    })
     // Lokale Helfer-KI (Experiment): nur registriert, wenn beim Laufstart
     // bestätigt war, dass Ollama läuft und das Modell da ist.
     const helferServer = lokaleHelfer
@@ -1156,6 +1209,7 @@ export function starteLaufMotor(optionen) {
           ...(vorschlagServer ? { vorschlaege: vorschlagServer } : {}),
           ...(laufVorschlagServer ? { naechsterlauf: laufVorschlagServer } : {}),
           ...(zuteilungServer ? { zuteilung: zuteilungServer } : {}),
+          ...(lieferscheinServer ? { lieferschein: lieferscheinServer } : {}),
           ...(helferServer ? { helfer: helferServer } : {})
         },
         // Der Hauptfaden ist der Koordinator: schlanker eigener Systemtext
@@ -1224,7 +1278,8 @@ export function starteLaufMotor(optionen) {
             block?.darfVorschlagen ?? false,
             block?.darfLaufVorschlag ?? false,
             block?.darfZuteilen ?? false,
-            block?.pruefOrdner ?? ''
+            block?.pruefOrdner ?? '',
+            block?.lieferscheinFrei ?? []
           )
           if (urteil.erlaubt) return { behavior: 'allow', updatedInput: eingabeDaten }
           if (urteil.gesperrt) {
@@ -1575,7 +1630,7 @@ export function starteLaufMotor(optionen) {
     // ein — der Koordinator selbst läuft auf dem Billigmodell.
     // pruefOrdner (BAUPLAN 41): der eigene Unterordner dieses Prüfers in der
     // Prüfmappe — Schreibversuche daneben werden hart abgelehnt.
-    blockAusfuehren({ auftrag, blockName, instanzId = null, nurLesen = false, darfPruefen = false, pruefOrdner = '', lokaleKi = true, darfKartenAnlegen = false, darfVorschlagen = false, darfLaufVorschlag = false, darfZuteilen = false, modell = null, unterModell = null, modellName = '', uebertrag }) {
+    blockAusfuehren({ auftrag, blockName, instanzId = null, nurLesen = false, darfPruefen = false, pruefOrdner = '', lokaleKi = true, darfKartenAnlegen = false, darfVorschlagen = false, darfLaufVorschlag = false, darfZuteilen = false, liefert = [], lieferscheinFrei = [], modell = null, unterModell = null, modellName = '', uebertrag }) {
       if (tot)
         return Promise.resolve({
           zustand: 'fehlgeschlagen',
@@ -1583,7 +1638,8 @@ export function starteLaufMotor(optionen) {
           fehlerArt: null,
           ergebnisText: '',
           verbrauch: null,
-          sessionKennung
+          sessionKennung,
+          meldungen: []
         })
       return new Promise((aufloesen) => {
         block = {
@@ -1598,6 +1654,11 @@ export function starteLaufMotor(optionen) {
           darfVorschlagen,
           darfLaufVorschlag,
           darfZuteilen,
+          // Lieferschein (BAUPLAN 42): was dieser Block laut Schaubild liefert,
+          // und welches Melde-Werkzeug er dafür rückfragefrei nutzen darf.
+          liefert,
+          lieferscheinFrei,
+          meldungen: [],
           modell: modell ?? sdkModell(MODELL_KLASSE_STANDARD),
           unterModell,
           modellName,

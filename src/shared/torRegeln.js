@@ -86,14 +86,8 @@ export function neueFehler(baselineAusgabe, jetztAusgabe) {
 }
 
 // Grün-Fall (BAUPLAN 35): Der Prüfbefehl lief durch — mechanische, von Tests
-// gedeckte Beanstandungen gelten damit als erledigt. Der Prüfer-Agent bekommt
-// nur noch die grundsätzlichen zum Nachprüfen. Liefert null, wenn keine
-// grundsätzliche Zeile übrig bleibt (dann prüft er nur noch formal nach).
-const GRUNDSAETZLICH = /^\s*(?:[-*•]\s*|\d+[.)]\s*)?BEANSTANDUNG\s*\(\s*grunds(?:ae|ä)tzlich/i
-
-export function grundsaetzlicheKritik(kritik) {
-  const zeilen = String(kritik ?? '')
-    .split(/\r?\n/)
-    .filter((zeile) => GRUNDSAETZLICH.test(zeile))
-  return zeilen.length ? zeilen.join('\n') : null
-}
+// gedeckte Beanstandungen gelten damit als erledigt; der Prüfer-Agent bekommt
+// nur noch die grundsätzlichen zum Nachprüfen. Seit dem Lieferschein
+// (BAUPLAN 42) liest FlowForge dafür die Einstufung aus dem gemeldeten Feld
+// statt aus einer Marker-Zeile — die Regel steht in lieferschein.js
+// (grundsaetzlicheBeanstandungen).

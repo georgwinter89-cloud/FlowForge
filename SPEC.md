@@ -83,9 +83,10 @@ sagen hat, legt mehrere fokussierte Karten an. Die Status-Karte wird beim Anlege
 automatisch erzeugt und kann weder gelöscht noch doppelt angelegt werden. Weitere Sorten erst, wenn der Alltag sie einfordert.
 
 **Prüfkarten** (seit Bauschritt 18): legt ausschließlich FlowForge an — automatisch nach
-jeder bestandenen Prüfung. Titel und Text kommen aus den Zeilen „PRUEFKARTE-TITEL:" und
-„PRUEFKARTE:" des Prüfbelegs (Alltagssprache: was geprüft wurde, woran „in Ordnung"
-erkennbar ist); fehlen sie, baut FlowForge einen Ersatz aus dem Prüfbeleg. Dahinter
+jeder bestandenen Prüfung. Titel und Text kommen aus den Feldern `pruefkarteTitel`
+und `pruefkarteText` des gemeldeten Prüfbelegs (§4.3, Alltagssprache: was geprüft
+wurde, woran „in Ordnung" erkennbar ist); fehlen sie, setzt FlowForge einen
+Ersatztext ein. Dahinter
 bewahrt FlowForge die Prüfdateien dieses Laufs im verwalteten Bereich **außerhalb des
 Projektordners** auf (wie die Sicherungspunkte) — kein Agent sieht das Archiv, es kostet
 keinen Lauf Kontext. Der Nutzer kann Prüfkarten bearbeiten und löschen; **Löschen räumt
@@ -153,6 +154,9 @@ Jeder Workflow-Lauf hinterlässt automatisch einen kompakten, strukturierten Ber
 Blöcke, Ergebnisse, Fehlschläge). Reines Nachschlagewerk in der App — wird **niemals automatisch
 in den Kontext künftiger Sessions geladen** und nie von Hand gepflegt. Zusätzlich ist das
 Ergebnis des letzten Laufs direkt an jeder Block-Karte auf der Leinwand aufklappbar.
+Seit Bauschritt 42 wird das Blockergebnis **gegliedert** angezeigt — Fazit, Urteil,
+Beanstandungen mit Fundort, Erledigt/Offen, Anmerkung — statt als Textblock
+(Läufe von davor zeigen weiterhin ihren Text).
 Seit Bauschritt 41 steht je Block **Katalogname und Zusatzname** (§4.1) getrennt im
 Bericht — angezeigt zusammen („Prüfer · Datenbank"), gezählt wird der Blocktyp (§3.4).
 Der Verbrauch steht je Block und für den ganzen Lauf im Bericht — seit 13.08.2026 mit
@@ -308,13 +312,14 @@ Seite aufs Projekt vorgefiltert zeigt (eigener Baustein, nicht Teil der Leinwand
   sie nacheinander (jede Unteraufgabe steht sichtbar im Ticker, seit Bauschritt 25
   samt ihrem Ziel), das Ergebnis ist dasselbe.
 - **Fehlschlag-Rückführung:** „bei Fehlschlag zurück zu Block X" (braucht der Prüfer sofort).
-  Die Rückmeldung an den Zielblock enthält seit Bauschritt 34 **alle Beanstandungs-Zeilen
-  vollständig** (großzügig gedeckelt; passt eine nicht mehr hinein, steht das sichtbar
-  dabei) statt eines abgeschnittenen Belegs — die Beanstandungen stehen im Prüfbeleg am
-  Ende und fielen vorher regelmäßig weg. Urteilt ein Prüfer „nicht bestanden", **ohne
-  eine einzige Beanstandungs-Zeile** zu liefern, fordert FlowForge sie einmal bei ihm
-  nach (wie die Startanleitungs-Nachforderung, ohne Reparatur-Runde zu verbrauchen);
-  bleibt sie aus, wandert ehrlich vermerkt der ganze Prüfbeleg weiter.
+  Urteil und Beanstandungen kommen seit Bauschritt 42 aus den **gemeldeten Feldern**
+  des Prüfbelegs (§4.3). Die Rückmeldung an den Zielblock enthält **alle
+  Beanstandungen vollständig**, je eine Zeile mit Einstufung und Fundort
+  (großzügig gedeckelt; passt eine nicht mehr hinein, steht das sichtbar dabei).
+  Ein Urteil „fehlgeschlagen" **ohne eine einzige Beanstandung** kommt gar nicht
+  mehr durch: FlowForge weist die Meldung schon am Werkzeug ab (sichtbar im
+  Ticker), und der Prüfer korrigiert im selben Anlauf — die Nachforderung aus
+  Bauschritt 34 ist damit überflüssig geworden.
   Sind alle Beanstandungen mechanisch, versucht zuerst die lokale Vorreparatur (§4.3) —
   ohne reguläre Runden zu verbrauchen.
   **Tor ohne KI vor dem Prüfer-Agenten** (seit Bauschritt 35): Vor jeder Nachprüfung — der
@@ -381,7 +386,7 @@ recherchiert der Agent selbst, nur Entscheidungen gehen an den Nutzer; Folgen-Fr
 in Alltagssprache, keine Technik-Fragen. Fertig erst, wenn keine Frage mehr offen
 ist und der Nutzer das zusammengefasste Verständnis bestätigt hat; dann legt das
 Interview das Ergebnis als erste Karten an (Entscheidungen, Aufgaben, Status);
-der Abschlusstext ist der Projekt-Überblick für die Folgeblöcke.
+gemeldet wird der Projekt-Überblick für die Folgeblöcke.
 
 **Diagnose:** belegt die Ursache eines Fehlers (nur lesend, mit Fundort und
 Herleitung), bevor etwas angefasst wird, und liefert als Arbeitspaket den
@@ -390,10 +395,47 @@ minimalen Fix samt Fertig-Kriterien (inkl. Rot-vor-Grün-Test des Fehlers).
 **Frage an den Menschen:** stellt genau eine Folgen-Frage mit Antwort-Optionen
 und Empfehlung über das Gespräch (§6) und liefert die Antwort an die Folgeblöcke.
 
+**Lieferschein — Blockergebnisse als geprüfte Felder** (seit Bauschritt 42):
+Jeder Block meldet sein Ergebnis über ein **Werkzeug**, nicht als Fließtext. Beim
+Laufstart steht das Schaubild fest, also registriert FlowForge genau die
+Melde-Werkzeuge, die diese Kette braucht — **eines je liefert-Etikett**
+(`melde_arbeitspaket`, `melde_pruefbeleg`, `melde_umsetzungsbericht`,
+`melde_angriffsliste`, `melde_befundliste`), für alles Übrige den Rahmen
+`melde_ergebnis`. Freigeschaltet ist je Block nur das zu seinem Etikett passende;
+ein fremdes löst die übliche Rechte-Rückfrage aus. Gemeinsamer Rahmen für alle:
+`fazit` (ein Satz für Ticker, Blockkarte und Bericht), `getan`, `offen` und
+`anmerkung` — das Freifeld gegen die Formular-Falle, für alles, was in kein Feld
+passt und der nächste Block trotzdem wissen sollte. Darunter je Etikett ein
+eigener Teil: Arbeitspaket (Ziel, Fertig-Kriterien, Schritte, Fundstellen, nicht
+dabei), Prüfbeleg (Urteil als Auswahl, Beanstandungen mit Einstufung und Fundort,
+Rot-vor-Grün, geprüfte Kriterien, Prüfkarte), Umsetzungsbericht (je Kriterium wie
+umgesetzt, Dateiliste mit Art, Angriffsliste behandelt) und Angriffs-/Befundliste
+(Funde mit Schwere und Fundort). **Bewusst locker** bleiben Spec-Interview,
+Kontext laden, Frage an den Menschen und der Karten-Prüfer: Rahmen plus ein
+Freitext-Feld — enge Schemata kosten Nuance bei explorativer Arbeit.
+**Drei Durchsetzungs-Ebenen:** das Schema (Struktur, Typen, Auswahlwerte),
+FlowForge im Code (Längen, Anzahl, Plausibilität — ein Urteil „fehlgeschlagen"
+ohne eine einzige Beanstandung wird abgewiesen, ebenso ein „bestanden" mit
+offenen Beanstandungen, und ein Arbeitspaket ohne Fertig-Kriterien) und die
+Kanten-Prüfung nach dem Block (deckt die Lieferung, was er laut Schaubild
+liefert). Jede Abweisung steht im Ticker; der Agent korrigiert sofort im selben
+Anlauf. **Meldet ein Block nichts**, greift das erprobte Nachforderungs-Muster
+(einmal je Block, sein eigener Abschlusstext liegt bei) — danach gilt der Block
+als fehlgeschlagen. Einen Rückfall auf den Abschlusstext gibt es nicht: Er wird
+nirgends mehr ausgewertet. Läuft ein Block erneut (Reparatur-Runde,
+Nachforderung), verfällt seine alte Meldung und er meldet neu — bei einer
+Nachforderung liegt seine eigene Meldung von eben als Vorlage bei. Nach einem
+**Übertrag** ersetzt die Meldung des Nachfolgers die des unterbrochenen
+Vorgängers. Ehrliche Folge: Läufe aus der Zeit vor Bauschritt 42 lassen sich im
+Laufbericht weiterhin lesen, aber nicht gegliedert anzeigen.
+Den Werkzeug-Hinweis hängt FlowForge an **jeden** Auftrag — auch an
+selbstgebaute Blöcke, deren Autor das Werkzeug nicht kennen kann.
+
 **Übergaben:** braucht/liefert ist nicht nur eine Steck-Regel, sondern die
-Datenweitergabe im Lauf — der Abschlusstext eines Blocks wird unter seinen
+Datenweitergabe im Lauf — der Lieferschein eines Blocks wird unter seinen
 liefert-Etiketten gespeichert und jedem Nachfahren entlang der Pfeile mit
-passendem braucht in den Auftrag gereicht. Liefern mehrere Vorfahren dasselbe
+passendem braucht in den Auftrag gereicht (seit Bauschritt 42 je Etikett der
+passende Teil, nicht mehr ein Text für alle). Liefern mehrere Vorfahren dasselbe
 Etikett, gewinnt der nächstgelegene — liegen mehrere **gleich nah** (zwei Angreifer
 vor dem Bauer), bekommt der Nachfolger seit Bauschritt 34 **alle** nummeriert
 („Angriffsliste (1 von 2) von …"), und der Ticker sagt es; früher gewann still einer
@@ -408,9 +450,10 @@ dem Kennzeichen **„führt zusammen"**: Sie bekommen **alle** Vorfahren mit pas
 Etikett nummeriert, denn Zusammenführen ist ihre Aufgabe (Blöcke dafür gibt es mit
 Bauschritt 47). Dieselbe Entscheidung speist die braucht-Chips am Schaubild (§4.1) —
 sie zeigen nie einen anderen Lieferanten, als der Lauf nimmt. Gekürzt wird auf 8.000 Zeichen je
-Übergabe — seit Bauschritt 34 **in der Mitte statt hinten**, damit die Marker-Zeilen
-am Ende (BEANSTANDUNG, PRUEFKARTE, PRUEFUNG) überleben; jede Kürzung steht sichtbar
-im Ticker und damit im Laufbericht. Daneben gibt es
+Übergabe — **in der Mitte statt hinten**, damit Anfang und Fazit überleben; jede
+Kürzung steht sichtbar im Ticker und damit im Laufbericht. Die Feldgrenzen des
+Lieferscheins halten die Übergaben ohnehin klein, die Kürzung ist seit Bauschritt
+42 nur noch die Notbremse. Daneben gibt es
 **optionale Bedarfe** („falls da"): Der Bauer verlangt nur das Arbeitspaket;
 eine Angriffsliste wird mitgereicht und muss eingearbeitet werden, wenn ein
 Block davor eine liefert — so kommt „Bug jagen" ohne Angreifer aus.
@@ -423,16 +466,16 @@ mindestens ein Test wird einmal mit absichtlich verfälschter Erwartung ausgefü
 (Rot) und danach unverändert echt (Grün) — ein Test, der nie rot war, beweist nichts.
 Überstrenge Fallen (pixelgenaue Vergleiche, Wortverbote, Datei-Inventuren) sind per
 Auftrag untersagt.
-Jede Beanstandung markiert er als eigene Zeile „BEANSTANDUNG (mechanisch): …"
-(Tippfehler, falscher Wert, vergessener Randfall) oder „BEANSTANDUNG
-(grundsätzlich): …" (braucht Umbau oder Entscheidungen) — diese Vorsortierung
-steuert die lokale Vorreparatur (§unten); im Zweifel gilt grundsätzlich.
+Jede Beanstandung meldet er einzeln — mit Fundort und der Einstufung
+**mechanisch** (Tippfehler, falscher Wert, vergessener Randfall) oder
+**grundsätzlich** (braucht Umbau oder Entscheidungen); diese Vorsortierung
+steuert die lokale Vorreparatur (§unten), im Zweifel gilt grundsätzlich.
 In einer **Reparatur-Runde prüft er nur seine Beanstandungen der letzten Runde
 nach** — keine erneute Vollprüfung. Ehrlichkeits-Notiz: „Prüfer ≠ Bauer" heißt
 technisch „frischer Agent ohne das Arbeitswissen des Bauers" — jeder Block läuft
 als frischer Agent in der Lauf-Session (§5); es ist kein anderes Gehirn.
-Prüfer-Blöcke melden ihr Urteil als letzte Zeile ihres Abschlusstexts
-(„PRUEFUNG: BESTANDEN/FEHLGESCHLAGEN").
+Prüfer-Blöcke melden ihr Urteil im Feld `urteil` ihres Prüfbelegs
+(bestanden/fehlgeschlagen) — daran hängen Rückführung und Reparatur-Runden.
 
 **Prüfordner je Prüf-Instanz** (seit Bauschritt 41): Die Prüfmappe `pruefung/`
 bleibt die gemeinsame Werkbank des Laufs, aber jeder **schreibende** Prüfer
@@ -519,7 +562,8 @@ Befehle (Befehls-Ausführung nur, falls die §7-Einstellung „Nur-lesende Blöc
 dürfen Befehle ausführen" an ist — sie gilt für alle nur-lesenden Blöcke, auch
 das Audit), darf aber Karten anlegen — ein eigenes Kennzeichen am Block (analog
 „darfPruefen"), durchgesetzt am Werkzeugaufruf; genau karte_anlegen ist
-freigeschaltet. Die vollständige Befundliste steht im Abschlusstext.
+freigeschaltet. Die vollständige Befundliste meldet es über `melde_befundliste`
+(§4.3) — je Fund Schwere und Fundort.
 
 **Karten-Prüfer** (seit Bauschritt 26): misst am Code nach, ob die
 Projektkarten noch wahr sind — oder schon veraltet. Manueller Ein-Block-Lauf;
@@ -1103,6 +1147,13 @@ Startanleitung) bleiben für diese Blöcke gesperrt; ein ausgeführtes Skript ka
 aber Dateien verändern — deshalb steht die aktive Einstellung sichtbar am
 Laufstart im Ticker.
 
+**Melde-Werkzeuge** (Lieferschein, §4.3, seit Bauschritt 42): Sein Ergebnis zu
+melden ändert nichts am Projekt — FlowForge nimmt nur entgegen. Das Werkzeug zum
+eigenen liefert-Etikett ist deshalb frei, auch unter „darf nur lesen" (gerade
+Angreifer und Audit melden ja etwas). Ruft ein Block ein **fremdes**
+Melde-Werkzeug, folgt die übliche Rechte-Rückfrage — dasselbe Muster wie bei
+`karte_vorschlagen` (Rückfrage statt Sperre).
+
 ## 8. Ergebnis erleben
 
 Jeder Bau-Workflow muss eine **Startanleitung** als Pflicht-Artefakt hinterlassen (seit
@@ -1114,8 +1165,11 @@ alle Verwaltungsdateien, §3.1). Durchsetzung beim Bauer-Block: Fehlt die Starta
 seinem Lauf, bekommt er genau eine Nachbesserungs-Runde (unabhängig von den Reparatur-Runden);
 fehlt sie danach immer noch, macht der Lauf weiter und vermerkt das ehrlich im Ticker und am
 Block-Ergebnis. Seit Bauschritt 41 zählen diese Nachbesserungs-Runden — Startanleitung,
-Rauchtest und Prüfbefehl — **je Block** statt je Lauf: Sonst verbrauchte der erste Bauer
-oder Prüfer sie, und ein zweiter bekäme nie eine.
+Rauchtest, Prüfbefehl und (seit 42) die Ergebnis-Meldung — **je Block** statt je Lauf:
+Sonst verbrauchte der erste Bauer oder Prüfer sie, und ein zweiter bekäme nie eine.
+Läuft ein Block wegen einer solchen Nachforderung erneut, muss er sein Ergebnis
+erneut melden; seine Meldung von eben liegt dem Auftrag als Vorlage bei, damit
+nichts neu erarbeitet werden muss (§4.3).
 
 **Rauchtest nach dem Bauer** (seit Bauschritt 35): Direkt nach einem gelungenen Bau-Block
 startet FlowForge die Startanleitung **selbst** einmal kurz und stoppt sie wieder — ohne

@@ -248,18 +248,11 @@ const WERKZEUGE = [
 // regulären Reparatur-Runden des Workflows.
 export const LOKALE_REPARATUR_VERSUCHE = 2
 
-// Opus sortiert vor (BAUPLAN 20): Der Prüfer markiert jede Beanstandung als
-// „BEANSTANDUNG (mechanisch): …" oder „BEANSTANDUNG (grundsätzlich): …".
-// Nur wenn ALLE Beanstandungen mechanisch sind, lohnt die lokale Wette —
-// sonst muss der Motor-Bauer ohnehin ran, und jeder lokale Versuch kostete
-// nur eine zusätzliche Nachprüfung. Ohne Marken wird sicher eskaliert.
-export function beanstandungenEinstufen(pruefbeleg) {
-  const marken = [
-    ...String(pruefbeleg ?? '').matchAll(/BEANSTANDUNG\s*\((mechanisch|grunds(?:ä|ae)tzlich)\)/gi)
-  ]
-  if (marken.length === 0) return 'unmarkiert'
-  return marken.every((m) => m[1].toLowerCase() === 'mechanisch') ? 'mechanisch' : 'grundsaetzlich'
-}
+// Opus sortiert vor (BAUPLAN 20): Der Prüfer stuft jede Beanstandung als
+// „mechanisch" oder „grundsaetzlich" ein. Nur wenn ALLE mechanisch sind, lohnt
+// die lokale Wette. Seit dem Lieferschein (BAUPLAN 42) steht die Einstufung als
+// Feld in der Meldung — die Regel dafür wohnt in lieferschein.js
+// (beanstandungenEinstufen).
 
 // Tabu-Zonen der Schreib-Werkzeuge (Vorreparatur UND lokaler Bauer) —
 // dieselben harten Sperren wie beim Bauer, durchgesetzt im FlowForge-Code

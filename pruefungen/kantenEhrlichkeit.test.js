@@ -1,65 +1,47 @@
-// Prüfungen zur Kanten-Ehrlichkeit (BAUPLAN 34).
-// Rot-vor-Grün: Die ersten beiden Fälle schlugen mit der alten Regel fehl —
-// prueferKritik schnitt bei 600 Zeichen ab, und die Beanstandungen stehen laut
-// Prüfer-Auftrag am ENDE des Belegs; der Bauer bekam einen Torso ohne
-// Beanstandung. Der Kürzungs-Fall schlug fehl, weil hinten abgeschnitten wurde
-// und damit genau die Marker-Zeilen verschwanden, die FlowForge auswertet.
+// Prüfungen zur Kanten-Ehrlichkeit (BAUPLAN 34), seit BAUPLAN 42 auf den
+// Lieferschein umgestellt: Die Beanstandungen stehen nicht mehr als
+// Marker-Zeilen im Fließtext, sondern als geprüfte Felder — prueferKritik baut
+// die Rückmeldung daraus. Was bleibt, ist die Mengen-Frage: alle
+// Beanstandungen vollständig, und eine Kürzung ist sichtbar.
 import { describe, it, expect } from 'vitest'
-import {
-  beanstandungenHerausziehen,
-  prueferKritik,
-  mitteGekuerzt
-} from '../src/shared/kantenRegeln.js'
+import { prueferKritik, mitteGekuerzt } from '../src/shared/kantenRegeln.js'
 import { vorfahrenDistanzen } from '../src/shared/kettenRegeln.js'
 import { zeilenVergleich, dateiUnterschied, diffTextBauen, inZeilen } from '../src/shared/laufDiff.js'
 
-const langerVorspann = 'Ich habe die Fertig-Kriterien einzeln geprüft. '.repeat(30)
-const beleg =
-  langerVorspann +
-  '\nRot-vor-Grün: Test rot mit verfälschter Erwartung, danach grün.\n' +
-  'BEANSTANDUNG (mechanisch): In js/render.js Zeile 42 steht 0.5 statt 0.05.\n' +
-  'BEANSTANDUNG (grundsätzlich): Die Tunnel-Logik braucht einen Umbau.\n' +
-  'PRUEFKARTE-TITEL: Tunnelfahrt\n' +
-  'PRUEFKARTE: Geprüft wird, dass der Zug im Tunnel abdunkelt.\n' +
-  'PRUEFUNG: FEHLGESCHLAGEN'
+const beanstandungen = [
+  {
+    einstufung: 'mechanisch',
+    text: 'In js/render.js Zeile 42 steht 0.5 statt 0.05.',
+    fundort: 'js/render.js:42'
+  },
+  { einstufung: 'grundsaetzlich', text: 'Die Tunnel-Logik braucht einen Umbau.', fundort: 'js/tunnel.js' }
+]
 
-describe('BAUPLAN 34 · Prüferkritik vollständig statt 600 Zeichen', () => {
-  it('zieht alle Beanstandungen heraus, auch weit hinter Zeichen 600', () => {
-    expect(beleg.indexOf('BEANSTANDUNG')).toBeGreaterThan(600)
-    const kritik = prueferKritik(beleg)
+describe('BAUPLAN 34/42 · Prüferkritik vollständig aus den gemeldeten Feldern', () => {
+  it('reicht alle Beanstandungen mit Einstufung und Fundort weiter', () => {
+    const kritik = prueferKritik(beanstandungen)
     expect(kritik.anzahl).toBe(2)
-    expect(kritik.rueckfall).toBe(false)
+    expect(kritik.weggelassen).toBe(0)
     expect(kritik.text).toContain('0.5 statt 0.05')
     expect(kritik.text).toContain('Tunnel-Logik braucht einen Umbau')
+    // Einstufung und Fundort stehen mit in der Zeile — ohne sie wüsste der
+    // Bauer nicht, wo er ansetzen soll.
+    expect(kritik.text).toContain('mechanisch')
+    expect(kritik.text).toContain('js/render.js:42')
   })
 
-  it('hält eine umgebrochene Beanstandung zusammen', () => {
-    const funde = beanstandungenHerausziehen(
-      'BEANSTANDUNG (mechanisch): Der Wert in\n  js/render.js ist falsch.\n\nsonstiger Text'
-    )
-    expect(funde).toEqual(['BEANSTANDUNG (mechanisch): Der Wert in js/render.js ist falsch.'])
-  })
-
-  it('erkennt Aufzählungszeichen vor der Marke', () => {
-    expect(beanstandungenHerausziehen('- BEANSTANDUNG (mechanisch): Tippfehler.')).toHaveLength(1)
-    expect(beanstandungenHerausziehen('1. BEANSTANDUNG (grundsätzlich): Umbau.')).toHaveLength(1)
-  })
-
-  it('meldet den Rückfall, wenn der Beleg keine einzige Marke enthält', () => {
-    const kritik = prueferKritik('Der Test lief nicht durch.\nPRUEFUNG: FEHLGESCHLAGEN')
+  it('meldet null Beanstandungen bei leerer Liste', () => {
+    const kritik = prueferKritik([])
     expect(kritik.anzahl).toBe(0)
-    expect(kritik.rueckfall).toBe(true)
-    expect(kritik.text).toContain('Der Test lief nicht durch.')
-    // Das Kanten-Gate hängt genau an dieser Null — sonst würde eine
-    // Reparatur-Runde ohne Auftrag verbrannt.
-    expect(kritik.text).not.toContain('FEHLGESCHLAGEN')
+    expect(kritik.text).toBe('')
   })
 
   it('kürzt bei sehr vielen Beanstandungen sichtbar, statt still zu schneiden', () => {
-    const viele = Array.from(
-      { length: 40 },
-      (_, i) => `BEANSTANDUNG (mechanisch): Fundstelle ${i} — ` + 'x'.repeat(200)
-    ).join('\n')
+    const viele = Array.from({ length: 40 }, (_, i) => ({
+      einstufung: 'mechanisch',
+      text: `Fundstelle ${i} — ` + 'x'.repeat(200),
+      fundort: ''
+    }))
     const kritik = prueferKritik(viele)
     expect(kritik.anzahl).toBe(40)
     expect(kritik.weggelassen).toBeGreaterThan(0)
@@ -67,20 +49,19 @@ describe('BAUPLAN 34 · Prüferkritik vollständig statt 600 Zeichen', () => {
   })
 })
 
-describe('BAUPLAN 34 · Kürzung schema-bewusst (in der Mitte, nicht hinten)', () => {
-  it('lässt die Marker-Zeilen am Ende überleben', () => {
-    const lang = 'A'.repeat(9000) + '\nBEANSTANDUNG (mechanisch): letzte Zeile zählt.\nPRUEFUNG: FEHLGESCHLAGEN'
+describe('BAUPLAN 34 · Kürzung in der Mitte, nicht hinten', () => {
+  it('behält Anfang und Ende und sagt, wie viel wegfiel', () => {
+    const lang = 'A'.repeat(9000) + 'ENDE-DES-TEXTES'
     const gekuerzt = mitteGekuerzt(lang, 8000)
     expect(gekuerzt.gekuerzt).toBe(true)
     expect(gekuerzt.auf).toBeLessThanOrEqual(8000)
-    expect(gekuerzt.text).toContain('PRUEFUNG: FEHLGESCHLAGEN')
-    expect(gekuerzt.text).toContain('BEANSTANDUNG (mechanisch): letzte Zeile zählt.')
     expect(gekuerzt.text.startsWith('AAA')).toBe(true)
+    expect(gekuerzt.text).toContain('ENDE-DES-TEXTES')
     expect(gekuerzt.text).toContain('herausgekürzt')
   })
 
   it('lässt kurze Texte unangetastet', () => {
-    const kurz = 'Alles erledigt.\nPRUEFUNG: BESTANDEN'
+    const kurz = 'Alles erledigt.'
     expect(mitteGekuerzt(kurz, 8000)).toEqual({
       text: kurz,
       gekuerzt: false,
@@ -89,7 +70,7 @@ describe('BAUPLAN 34 · Kürzung schema-bewusst (in der Mitte, nicht hinten)', (
     })
   })
 
-  it('behält auch ohne Marken ein Stück vom Ende', () => {
+  it('hält den Deckel auch bei kleinem Platz ein', () => {
     const lang = 'A'.repeat(5000) + 'ENDE-DES-TEXTES'
     const gekuerzt = mitteGekuerzt(lang, 1000)
     expect(gekuerzt.text).toContain('ENDE-DES-TEXTES')
