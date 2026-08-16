@@ -10,6 +10,12 @@ Schritt 6 vorgezogen, parallele Zweige als Schritt 13 — Details SPEC §4.1)
 (Alltagstest). Nach jedem Schritt gibt es eine installierbare Version. Ein Schritt pro
 Bausession, nichts stapeln. Jeder Block-Arbeitsauftrag gilt erst als fertig, wenn er
 einzeln im Ein-Block-Workflow erprobt wurde (nie im Ernstfall zum ersten Mal).
+**Kein Kennzeichen ohne Editor-Feld** (Entscheidung Georg, 16.08.2026): Jede neue
+Block-Fähigkeit ist ein Kennzeichen, kein Sonderfall — und wird im selben Bauschritt
+im Block-Editor wählbar gemacht. Prüfstein: Kann Georg den Block nachbauen? Kann ein
+Katalog-Block etwas, das ein selbstgebauter nicht kann, ist es ein Sonderfall und
+gehört repariert (Rückstand aus 14: heute darf ein eigener Block von 12 Kennzeichen
+nur `nurLesen` setzen — aufgeholt in Schritt 48).
 
 ## Bauschritte
 
@@ -1134,6 +1140,13 @@ Block bekommt im Editor die Klasse „sparsam" und läuft so.
 ### 38 — Runden-Ende: Follow-Up-Karten und „Paket zerlegen"
 (Entscheidung Georg: Karte + Paket zerlegen; die Kleinkram-Regel [Stil-Funde als
 Hinweis statt Runde] wurde nicht gewählt.)
+**Reihenfolge geändert (Entscheidung Georg, 16.08.2026): Dieser Schritt läuft NACH
+Schritt 42.** Die Follow-Up-Karten entstehen „aus den offenen Beanstandungen" — die
+liest FlowForge heute per Textsuche aus dem Prüfbeleg (`beanstandungenHerausziehen`).
+Schritt 42 ersetzt dieses Format mit hartem Schnitt durch gemeldete Felder; würde 38
+vorher gebaut, wäre es sofort danach umzubauen. Nach 42 liegen die Beanstandungen
+ohnehin einzeln vor (mit Einstufung und Fundort) — die Karten-Erzeugung wird dadurch
+einfacher, nicht schwerer.
 - **Follow-Up-Karten mechanisch:** Kommt nach verbrauchten Reparatur-Runden die
   Folgen-Frage, legt FlowForge — ohne Agent — aus den offenen Beanstandungen
   Aufgaben-Karten an (je Beanstandung eine, 400-Zeichen-Grenze, Herkunft „von
@@ -1174,6 +1187,280 @@ Rundumblick; die volle Lesetiefe je Blickwinkel bleibt.)
 Ticker „Audit mit 2 Blickwinkeln: Fehler & Randfälle, Verständlichkeit & Wildwuchs",
 der Lauf ist sichtbar günstiger; mit allen drei Häkchen läuft es wie bisher.
 
+## Erweiterungspaket 40–48: Feste Form, Zuschnitt, Parallelität
+
+(Planungs-Runde 16.08.2026 nach Abschluss von Schritt 35. Ausgangspunkt: Georgs
+Alltagsbefund, dass „Paket schneiden" Aufgaben liegen lässt, und der Wunsch, den
+Zuschnitt selbst vorzugeben. Grundlage: eine Prompt-Inventur des ganzen Projekts,
+eine Web-Recherche zur 2026er Schema-Praxis [n8n, Copilot Studio, Claude Structured
+Outputs] und eine Angriffsliste mit 24 Funden gegen den Entwurf — davon 6
+blockierende, die die Reihenfolge unten bestimmen. Drei Entscheidungen Georgs gegen
+die Empfehlung des Entwurfs: **volle Parallelität** statt sequenziellem Zuschnitt,
+**harter Schnitt** bei den Marker-Formaten statt Übergangsphase, und die
+Vollständigkeitsprüfung **gegen das gemeldete Paket** statt gegen die Kartenauswahl.
+Leitgedanke des Pakets: Die Leinwand gibt die Struktur vor, der Agent füllt sie aus,
+und FlowForge prüft das Ergebnis — statt es aus Fließtext zu erraten.)
+
+### 40 — Kanten ohne Verlust: Fan-in unabhängig von der Distanz
+(Angriffsfund 1 von 6, blockierend: Bauschritt 34 hat den Fan-out repariert, den
+Fan-in nur halb.)
+- `uebergabenText` (lauf.js) sammelt gleiche Etiketten nur bei **exakt gleicher
+  Distanz**; ein näherer Vorfahre **ersetzt still** einen entfernteren. Setzt Georg
+  einen Angreifer nur auf einen von drei Zweigen, ist dessen Bauer zwei Schritte vom
+  Zusammenführungs-Block entfernt, die anderen einen — und seine Lieferung
+  verschwindet **ohne Ticker-Zeile**. Genau der Verlust, den 34 abstellen sollte.
+- Neu: Verdrängt eine Lieferung eine andere gleichen Etiketts, steht das im Ticker
+  („Prüfbeleg von X wurde durch den näheren von Y verdrängt"). Für Blöcke mit dem
+  Kennzeichen `fuehrtZusammen` (Schritt 47) gilt die Distanz-Regel gar nicht: sie
+  bekommen **alle** Vorfahren mit passendem Etikett nummeriert.
+- Muss zuerst: Schritt 43 (Empfänger im Auftrag) würde dem Block sonst zusagen, wohin
+  seine Lieferung geht, während der Code sie wegwirft — ein stiller Fehlschlag, den
+  SPEC durchgängig verbietet.
+- Nachzuziehen: SPEC §4.3 (Übergaben: Verdrängung sichtbar, Ausnahme fuehrtZusammen).
+**Alltagstest:** Georg baut zwei Zweige unterschiedlicher Länge, die beide dasselbe
+liefern, und führt sie zusammen: Im Ticker steht, dass beide angekommen sind — heute
+verschwindet einer wortlos.
+
+### 41 — Instanz-Identität: Zusatznamen, und alles je Instanz statt je Projekt
+(Angriffsfunde 2–4 von 6, blockierend. Der Sammelschritt, ohne den mehrere gleiche
+Blöcke in einem Lauf nicht auseinanderzuhalten sind.)
+- **Zusatzname an der Block-Karte:** freies Feld auf der Leinwand, die Sorte bleibt.
+  Aus „Bauer" wird „Bauer · Datenbank". Der Name macht zwei Dinge: Er macht Instanzen
+  unterscheidbar (technisch nötig) und sagt dem Zuschnitt, wonach zu schneiden ist
+  (fachlich der Gewinn). Er wird **überall durchgereicht**, wo heute nur der
+  Katalogname steht: Übergaben (`eintragMehrfach`), `nachfahrenNamen`, Ticker,
+  Block-Ergebnisse, Laufbericht.
+- **Metriken bleiben vergleichbar:** Katalogname und Zusatzname stehen **getrennt** im
+  Bericht — sonst zerfällt „Blocktyp" in beliebig viele Typen und der Wochenverlauf
+  vergleicht ab dann Äpfel mit Birnen (SPEC §3.4 verbietet Rückrechnung).
+- **Was heute je Projekt oder je Lauf zählt, zählt künftig je Instanz:** der
+  Prüfbefehl (`pruefbefehl.json` → je Prüf-Instanz, samt Pflichtprüfung und Archiv —
+  sonst besteht ein Prüfer die Pflicht, weil ein anderer gesetzt hat, und das Tor aus
+  35 urteilt über einen fremden Zweig), die Prozessgruppen von Tor und Rauchtest
+  (`'tor:' + projektPfad` → je Instanz, sonst erschießt ein fertiger Testlauf den
+  laufenden des anderen und erzeugt ein falsches Rot), die Prüfmappen-Unterordner
+  (je Prüfer einer — **und `pruefungenArchivieren` muss auf den eigenen Unterordner
+  eingeschränkt werden**, sonst archiviert jeder Prüfer die Tests aller hinter seiner
+  Prüfkarte), das Reparatur-Runden-Budget (heute ein Zähler für den ganzen Lauf → je
+  Rückführungs-Ziel) und die Nachforderungs-Budgets für Startanleitung und Rauchtest
+  (heute je Lauf → je Block).
+- Ein geänderter Zusatzname muss den Laufstand ungültig machen (heute prüft die
+  Wiederaufnahme nur Ketten-IDs und Pfeile).
+- Nachzuziehen: SPEC §4.1 (Zusatzname), §3.4 (Metriken getrennt), §4.3 (Prüfbefehl
+  je Instanz), §5 (Runden-Budget je Ziel).
+**Alltagstest:** Georg legt zwei Prüfer hinter einen Bauer, benennt sie verschieden
+und lässt laufen: Im Ticker und im Laufbericht sind beide unterscheidbar, jeder hat
+seinen eigenen Prüfordner, und die Metriken zeigen weiterhin einen Blocktyp „Prüfer".
+
+### 42 — Lieferschein: Blockergebnisse als geprüfte Felder (harter Schnitt)
+(Entscheidung Georg, 16.08.2026: harter Schnitt statt Übergangsphase. Grundlage:
+2026er Schema-First-Praxis; Angriffsfund 5 von 6 hat die Bauform erzwungen.)
+- **Der Rückkanal wird einheitlich.** Heute meldet ein Agent teils über Werkzeuge
+  (21 Stück, hart validiert) und teils über drei Marker-Zeilen im Abschlusstext
+  (`PRUEFUNG:`, `BEANSTANDUNG (…):`, `PRUEFKARTE:`), die FlowForge per Textsuche
+  liest. An diesen drei Zeilen hängen vier tragende Mechaniken — Urteil,
+  Reparatur-Runde, lokale Vorreparatur und das Prüfkarten-Archiv. Vergisst das Modell
+  eine Zeile, fehlt sie einfach. Bauschritt 34 und 35 waren beide Reparaturen an
+  dieser Naht.
+- **Ein Werkzeug je liefert-Etikett**, nicht je Blocksorte: Die MCP-Server werden
+  einmal je Motor gebaut und ein Lauf-Motor bedient alle Blöcke (BAUPLAN 19) — ein
+  Werkzeug, das sein Schema je Block wechselt, ist damit unmöglich. Beim Laufstart
+  steht das Schaubild fest, also registriert FlowForge genau die Werkzeuge, die
+  **diese Kette** braucht. Freigeschaltet ist je Block nur das zu seinem Etikett
+  passende; die anderen lösen die übliche Rechte-Rückfrage aus.
+- **Gemeinsamer Rahmen für alle:** `fazit` (ein Satz für Ticker und Karte), `getan`,
+  `offen`, `anmerkung` (das Freifeld gegen die Formular-Falle — was in kein Feld
+  passt und der nächste Block trotzdem wissen sollte). Darunter je Etikett ein
+  eigener Teil: Arbeitspaket (Ziel, Fertig-Kriterien, Fundstellen, nicht dabei),
+  Prüfbeleg (Urteil als Auswahl, Beanstandungen mit Einstufung und Fundort,
+  Rot-vor-Grün, geprüfte Kriterien, Prüfkarte), Umsetzungsbericht (je Kriterium wie
+  umgesetzt, Dateiliste mit Art, Angriffsliste behandelt), Angriffs-/Befundliste
+  (Funde mit Schwere und Fundort).
+- **Drei Durchsetzungs-Ebenen:** Schema (Struktur, Typen, Auswahlwerte — Claudes
+  strenger Modus kennt **keine** Längengrenzen, deshalb reicht es nicht), FlowForge
+  im Code (Längen, Anzahl, Plausibilität — z.B. Urteil „fehlgeschlagen" ohne eine
+  einzige Beanstandung), Kanten-Prüfung (deckt die Lieferung den Bedarf des
+  Nachfolgers — ein Arbeitspaket ohne Fertig-Kriterien ist keins).
+- **Bewusst locker bleiben** Spec-Interview, Kontext laden und Frage an den Menschen:
+  Rahmen plus ein Freitext-Feld. Enge Schemata kosten Nuance bei explorativer Arbeit
+  (mehrfach belegt in der Recherche); das Spec-Interview legt sein Ergebnis ohnehin
+  als hart validierte Karten an.
+- **Harter Schnitt:** Die Marker-Erkennung in `kantenRegeln.js` und
+  `pruefkarten.js` entfällt, `pruefUrteil` und `beanstandungenEinstufen` lesen Felder,
+  der synthetische Tor-Beleg aus Schritt 35 meldet direkt strukturiert. **Vorher
+  umzustellen:** die Übungs-Prüfer (`pruefer-fair`, `pruefer-streng`) und jeder
+  selbstgebaute Prüf-Block — sonst melden sie ins Leere. Ehrliche Folge: Läufe aus
+  der Zeit davor lassen sich nicht mehr nachlesen wie heute.
+- **Meldet ein Block nichts**, greift das erprobte Nachforderungs-Muster (einmal je
+  Block), danach gilt der Block als fehlgeschlagen — es gibt keinen Rückfall mehr auf
+  den Abschlusstext. Nach einem Übertrag ersetzt die Meldung des Nachfolgers die des
+  unterbrochenen Vorgängers.
+- Nachzuziehen: SPEC §4.3 (Übergaben als Felder), §4.1 (Rückführung aus Feldern),
+  §3.1 (Prüfkarte aus Feld), §6 (Anzeige strukturierter Ergebnisse).
+**Alltagstest:** Georg fährt „Feature hinzufügen": Im Laufbericht steht der Prüfbeleg
+als gegliederte Abschnitte statt als Textblock, jede Beanstandung mit Fundort. Ein
+Prüfer, der sein Urteil vergisst, wird sichtbar nachgefordert statt still übergangen.
+
+### 43 — Empfänger im Auftrag
+(Setzt 40 und 41 voraus: Ohne verlustfreies Fan-in wäre die Zusage an den Block
+unwahr, ohne Zusatznamen nicht eindeutig.)
+- Acht Stellen im Blockkatalog nennen heute andere Blöcke namentlich („Dein
+  Abschlusstext ist die Übergabe an den Prüfer", „das übernimmt der
+  Sessionende-Block") — Annahmen über ein Schaubild, das dem Nutzer gehört. Liegt ein
+  Bauer ohne Prüfer auf der Leinwand, schreibt er trotzdem für ihn.
+- Neu: FlowForge stellt jedem Auftrag drei aus dem Schaubild gerechnete Angaben
+  voran — die **Empfänger** (Block, Etikett, wozu), die **Kette** in einer Zeile und
+  die **Position**. Quelle ist das Schaubild, nicht der Koordinator (der bleibt
+  schlank, BAUPLAN 19). Kommt niemand, steht genau das da.
+- **Formulierungsregel, verbindlich:** immer aus der Empfängersicht („Er misst deine
+  Arbeit an den Fertig-Kriterien — schreib den Bericht so, dass er jedes bei dir
+  findet"), nie als „danach kommt noch wer" — sonst schiebt der Agent Verantwortung
+  weiter. Die Aufträge anderer Blöcke werden **nicht** mitgegeben (lädt zum
+  Vorwegnehmen fremder Arbeit ein).
+- **Nicht ersetzt werden Zuständigkeits-Grenzen:** „Projektkarten fasst du nicht an"
+  ist keine Empfänger-Angabe und bleibt im Auftrag — sonst pflegen Bauer und Prüfer
+  plötzlich Karten.
+- Nachzuziehen: SPEC §4.3 (Auftrags-Vorspann).
+**Alltagstest:** Georg baut einen Bauer ohne Prüfer dahinter und lässt ihn laufen: Im
+Laufbericht steht im Auftrag „geht an niemanden — du bist der letzte Schritt", nicht
+mehr die Behauptung, ein Prüfer käme.
+
+### 44 — Zuschnitt: benannte Ziele, Datenvertrag, Vollständigkeit
+(Georgs Ausgangsproblem. Entscheidung Georg: Vollständigkeit gegen das **gemeldete
+Paket**, nicht gegen die Kartenauswahl — sonst feuerte die Prüfung bei jedem Lauf mit
+vielen offenen Karten, obwohl Paket schneiden laut SPEC §4.3 bewusst nur
+Zusammengehöriges nimmt.)
+- **Zuteilung je Instanz:** `karten_zuteilen` adressiert heute per Blockname und gibt
+  bei mehreren gleichnamigen Instanzen allen dieselbe Zuteilung. Mit den Zusatznamen
+  aus 41 wird die Adressierung eindeutig.
+- **Ein Paket je benanntem Ziel:** Paket schneiden liefert nicht mehr ein
+  Arbeitspaket, sondern je Nachfolger eines — mit eigenen Fertig-Kriterien.
+- **Datenvertrag als Teil des Pakets:** welche Dateien angefasst werden dürfen,
+  welche Bausteine entstehen, was rein- und rausgeht. Derselbe Gedanke wie die
+  festgenagelten Schnittstellen für lokale Teilaufträge (Schritt 22), eine Ebene
+  höher. Die Dateiliste wird sofort als **Schreibsperre** durchgesetzt (Muster:
+  Prüfmappe, Verwaltungsdateien) — auch solange noch nichts parallel läuft.
+  Ehrliche Grenze, die in die SPEC gehört: Die Sperre greift an den
+  Schreib-Werkzeugen, **nicht** an ausgeführten Befehlen (`npm run build` schreibt,
+  wohin es will) und nicht am eigenen Schreibpfad der lokalen KI. Erst Schritt 46
+  schließt diese Lücke.
+- **Vollständigkeit:** FlowForge prüft, ob jede Aufgabe aus dem **gemeldeten Paket**
+  (`paket_melden`) in mindestens einem Zuschnitt vorkommt und ob jedes benannte Ziel
+  eines bekommen hat. Fehlt etwas, greift das Nachforderungs-Muster: Der Block läuft
+  einmal kurz erneut und trägt nur nach.
+- Nachzuziehen: SPEC §4.3 (Zuschnitt je Ziel, Datenvertrag), §4.1 (Vollständigkeit),
+  §7 (Dateiliste als Sperre, samt Grenze).
+**Alltagstest:** Georg legt drei benannte Bauer hinter Paket schneiden und startet:
+Jeder bekommt sein eigenes Paket mit Dateiliste. Er nimmt eine Aufgabe ins Paket, die
+der Agent übergeht — FlowForge fordert sichtbar nach. Ein Bauer, der außerhalb seiner
+Dateiliste schreiben will, wird gestoppt.
+
+### 45 — Sicherungspunkte je Schreiber
+(Angriffsfund 6 von 6, blockierend — und die eigentliche Voraussetzung für 46. Der
+Grund für die Ein-Schreiber-Regel ist nicht die Dateikollision, sondern der
+**projektweite Rollback**.)
+- `aufLetztenPunktZuruecksetzen` setzt den ganzen Ordner zurück, und ausgelöst wird
+  das nicht nur bei Fehlschlägen: **jedes verworfene lokale Teilstück** rollt zurück
+  (Schritt 20/22). Zwei parallele Bauer mit lokaler Helfer-KI zerstören sich damit
+  gegenseitig — A verwirft ein Teilstück, B verliert seine seitdem geschriebene
+  Arbeit, ohne Meldung. Disjunkte Dateilisten helfen dagegen **nicht**: Das
+  Sicherungspunkt-System kennt keine Teilbäume.
+- Neu: Ein Schreiber, der in einer Welle läuft, bekommt seinen **eigenen Punkt-Strang**
+  (eigener Zweig im versteckten Git-Verzeichnis); Rollback und Diff arbeiten nur auf
+  seinen Dateien. Am Ende der Welle wird zu einem gemeinsamen Punkt zusammengeführt —
+  konfliktfrei, weil die Dateilisten disjunkt sind (durchgesetzt in 44).
+- Der Diff aus Schritt 34 wird auf die eigene Dateiliste gefiltert: Jeder Bauer sieht
+  nur seine Änderungen — sauberer als heute, wo ein nur-lesender Block mit
+  Befehlsrecht mit im Diff steckt.
+- Nachzuziehen: SPEC §3.3 (Punkt-Strang je Schreiber, Zusammenführung am Wellen-Ende).
+**Alltagstest:** Georg lässt zwei Bauer nacheinander mit eingeschalteter lokaler KI
+laufen, bei denen die Vorreparatur zurückrollt: Die Arbeit des jeweils anderen bleibt
+unangetastet — heute verschwindet sie.
+
+### 46 — Parallel bauen: die Ein-Schreiber-Regel öffnen
+(Entscheidung Georg, 16.08.2026, gegen die Empfehlung des Entwurfs: voller Umbau
+statt sequenziellem Zuschnitt. Der Entwurf riet zu 44 ohne Parallelität, weil dort
+schon der ganze fachliche Nutzen liegt und die Parallelität nur Zeit spart.)
+- SPEC §5 wird **bedingt** geöffnet: mehrere schreibende Blöcke gleichzeitig, wenn
+  ihre Dateilisten aus dem Datenvertrag überschneidungsfrei sind. Überschneiden sie
+  sich, weist FlowForge das schon beim Zuschnitt zurück — bevor ein Token fließt.
+- **Die Lücke aus 44 schließen:** Für Blöcke in einer Welle werden Befehle
+  rückfragepflichtig (auch die sonst rückfragefreien Entwickler-Werkzeuge), und der
+  Schreibpfad der lokalen Helfer-KI bekommt die Dateiliste als Tabu-Liste. Ohne das
+  ist „parallel, weil disjunkt" eine Zusicherung, die der Code nicht hält.
+- **Laufstand-Granularität:** Fertig-Meldung und Sicherungspunkt müssen dieselbe
+  Körnung haben. Stürzt die App mitten in der Welle ab, dürfen nicht zwei Blöcke als
+  „fertig" gelten, deren Arbeit der Rollback entfernt hat — die Welle ist als Ganzes
+  fertig oder gar nicht.
+- **Folgen-Frage je Zweig:** Heute hält ein einziger offener Entscheidungs-Slot den
+  ganzen Planer an, und „Stand wiederherstellen" setzt den **ganzen** Ordner zurück —
+  auch die erfolgreichen Zweige. Beides wird zweigbezogen; der Dialog sagt, was er
+  trifft.
+- **Tor und Rauchtest** (Schritt 35) laufen erst, wenn die Welle steht — sonst messen
+  sie einen Zwischenstand, in dem nebenan halb geschrieben wurde.
+- Nachzuziehen: SPEC §5 (bedingte Öffnung, Welle), §4.1 (Folgen-Frage je Zweig),
+  §7 (Befehls-Rückfrage in Wellen), §8 (Rauchtest nach der Welle).
+**Alltagstest:** Georg fährt einen Lauf mit drei Bauern: Im Liveticker arbeiten alle
+drei gleichzeitig, der Lauf ist deutlich kürzer als mit einem Bauer nach dem anderen.
+Ein Bauer, dessen Zuschnitt sich mit einem anderen überschneidet, wird schon vor dem
+Start freundlich abgelehnt.
+
+### 47 — Integrator: die Nähte zwischen parallel gebauten Teilen
+(Entscheidung Georg: eigene **Blockart**, nicht ein fester Block — eine geteilte
+Recherche zusammenzuführen ist etwas anderes als Code.)
+- Neues Kennzeichen `fuehrtZusammen`: Der Block erwartet **mehrere** Lieferungen
+  desselben Etiketts und macht eine daraus. Das ändert drei Dinge in FlowForge — die
+  Distanz-Regel gilt nicht (Schritt 40), der Übergabe-Deckel liegt höher (drei
+  Berichte à 8.000 Zeichen passen sonst nicht), und die Steck-Prüfung verlangt
+  **mindestens zwei** eingehende Lieferungen des Etiketts (sonst „führt zusammen",
+  was nie geteilt war).
+- Der Inhalt steckt im Auftragstext wie bei jedem Block: Der Katalog liefert
+  „Integrator (Code)" — prüft jede Naht gegen die Datenverträge und repariert, was
+  nicht zusammenpasst — und „Integrator (Recherche)". Eigene baut Georg selbst
+  (Schritt 48).
+- Er baut **keine Features nach** (was ein Bauer schuldig blieb, geht als
+  Beanstandung zurück) und wirft **keine Festlegungen um** (der Vertrag steht).
+- **Gebündelte Rückführung, ohne Agent:** Schicken zwei Prüfer denselben Bauer
+  zurück, sammelt FlowForge ihre Beanstandungen (die seit 42 als Felder vorliegen)
+  und schickt ihn **einmal** mit allen zurück — eine Reparatur-Runde statt zwei.
+  Reine Mechanik, 0 Tokens, wie das Tor aus Schritt 35.
+- Nachzuziehen: SPEC §4.3 (Integrator), §4.1 (gebündelte Rückführung).
+**Alltagstest:** Georg lässt drei Bauer an einem Feature arbeiten und dahinter einen
+Integrator: Im Abschlussbericht steht, welche Nähte er geprüft und was er angepasst
+hat. Zwei Prüfer, die denselben Bauer beanstanden, lösen **eine** Reparatur-Runde aus.
+
+### 48 — Block-Editor holt auf, Etiketten-Bibliothek
+(Wunsch Georg, 16.08.2026: Alle neuen Mechaniken müssen auch selbstgebauten Blöcken
+offenstehen — und Etiketten sollen bearbeitbar sein wie Blöcke.)
+- **Der Rückstand:** Der Katalog kennt 12 Kennzeichen (plus `modell` aus 37,
+  `fuehrtZusammen` aus 47); ein eigener Block darf nur `nurLesen` setzen —
+  `prueft`, `uebung` und Formularfelder sind fest verdrahtet (blockRegeln.js). Die
+  Vorsicht stammt aus Schritt 14 und ist überholt: Seit Schritt 19 sitzen die Sperren
+  am Werkzeugaufruf und kennen den laufenden Block, ein eigener Prüfer bekäme also
+  dieselben Schranken wie der Katalog-Prüfer.
+- **Verträglichkeitsprüfung statt zwölf freier Häkchen:** Manche Kombinationen sind
+  strukturell unerfüllbar — `prueft` mit `nurLesen` (kann keine Tests schreiben),
+  `startanleitungPflicht` mit `nurLesen` (Werkzeug gesperrt, Nachforderung nie
+  erfüllbar), `pruefbefehlPflicht` ohne `prueft` (löst bei jedem Setzen eine
+  Rechte-Rückfrage aus). Der Editor lehnt sie mit Klartext-Begründung ab. Der
+  KI-Assistent schlägt die Kennzeichen vor und begründet jedes in Folgen-Sprache;
+  die Häkchen selbst stehen zugeklappt unter „Feinheiten".
+- **Etiketten-Bibliothek:** Etiketten (braucht/liefert) werden bearbeitbar wie Blöcke
+  — global im Datenordner, mit **optionalem** Schema. Ein Etikett anzulegen bleibt
+  Tippen; erst wer Struktur will, definiert eine (flach, höchstens ~8 Felder, per
+  Assistent gebaut und in Alltagssprache gegengelesen). Ohne Schema greift der
+  gemeinsame Rahmen aus 42 plus Freitext.
+- Katalog-Etiketten sind **kopierbar, nicht überschreibbar** (sonst brechen die
+  Vorlagen still). Etiketten brauchen eine eigene Kennung und Namens-Eindeutigkeit —
+  heute sind sie überall reine Zeichenketten — und eine Lösch-Sperre, solange ein
+  Block sie nutzt (Muster: `projekteMitBlock`).
+- Nachzuziehen: SPEC §4.5 (Editor mit allen Kennzeichen, Etiketten-Bibliothek),
+  §4.2 (Etikett mit Form).
+**Alltagstest:** Georg baut sich per Assistent einen eigenen Prüf-Block und ein
+eigenes Etikett „Marktanalyse" mit drei Feldern, steckt beides in eine Kette und lässt
+sie laufen: Sein Block meldet über den Lieferschein wie ein Katalog-Block, und eine
+unvollständige Marktanalyse wird sichtbar zurückgewiesen.
+
 ## Reihenfolge-Begründung (kurz)
 Motor-Durchstich früh (3), weil dort das größte technische Risiko liegt — inklusive
 Rechte-Durchsetzung und Verbrauchs-Messung, den zwei größten Adapter-Risiken.
@@ -1185,3 +1472,13 @@ echte Arbeitsaufträge (8/9) — jede Vorlage steht auf einzeln erprobten Blöck
 Parallele Zweige (13) erst nach echten Blöcken und Projekt-Parallelität (12): Der
 Ablaufplaner für gleichzeitige Blöcke zahlt sich erst aus, wenn es Blöcke gibt, deren
 Parallel-Lauf echte Zeit spart.
+
+Im Paket 40–48 bestimmt die Angriffsliste die Reihenfolge, nicht der Nutzen: Die
+Kanten müssen verlustfrei sein (40), bevor ein Auftrag verspricht, wohin eine
+Lieferung geht (43); Instanzen müssen unterscheidbar sein (41), bevor mehrere gleiche
+Blöcke in einem Lauf stehen (44); der Lieferschein (42) muss die Beanstandungen als
+Felder liefern, bevor FlowForge sie bündeln (47) oder zu Karten machen kann (38); und
+die Sicherungspunkte müssen je Schreiber getrennt sein (45), bevor zwei gleichzeitig
+schreiben dürfen (46) — sonst rollt der eine die Arbeit des anderen weg. 44 bringt
+den fachlichen Nutzen (Zuschnitt, Datenvertrag, Vollständigkeit) schon vollständig;
+46 fügt nur Geschwindigkeit hinzu — wer das Paket abkürzen will, hört nach 44 auf.
