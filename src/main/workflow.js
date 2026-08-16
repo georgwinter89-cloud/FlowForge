@@ -8,6 +8,7 @@ import crypto from 'node:crypto'
 import { texte } from '../shared/texte.js'
 import {
   blockDefinition,
+  blockModellKlasse,
   REPARATUR_RUNDEN_STANDARD,
   REPARATUR_RUNDEN_MAX,
   UEBERTRAG_GRENZE_STANDARD,
@@ -60,6 +61,10 @@ function bereinigen(roh) {
       // erbt den globalen Schalter. Abgewählt wird es als echte Sperre
       // durchgesetzt (lauf.js/Motor); nur die Abwahl ist eine Information.
       lokaleKi: eintrag?.lokaleKi !== false,
+      // Modellklasse je Blockkarte (BAUPLAN 37): Die Wahl an der Karte
+      // gewinnt; ohne Wahl (neue Karte, Altbestand, von außen verbogene
+      // Datei) gilt die Voreinstellung des Blocks.
+      modell: blockModellKlasse(def, eintrag),
       // Prüfkarten am Prüf-Block (BAUPLAN 18): ids der Karten, deren
       // aufbewahrte Prüfungen dieser Prüfer zusätzlich ausführt. Gelöschte
       // Karten werden erst beim Anzeigen/Laufstart still ignoriert — die

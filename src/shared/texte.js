@@ -191,7 +191,7 @@ export const texte = {
     ueberschriftBearbeiten: 'Block bearbeiten',
     schritt1Titel: 'Was soll der Block tun?',
     schritt2Titel: 'Was braucht und liefert er?',
-    schritt3Titel: 'Welche Sperren gelten?',
+    schritt3Titel: 'Sperren & Modell',
     schritt4Titel: 'Probelauf-Vorschau',
     kiFeld: 'Beschreib in deinen Worten, was der Block tun soll',
     kiPlatzhalter: 'z.B. Ein Block, der alle Texte im Projekt auf Rechtschreibfehler durchsieht',
@@ -216,6 +216,11 @@ export const texte = {
     nurLesenFeld: 'Sperre „darf nur lesen"',
     nurLesenHinweis:
       'Der Block darf dann nichts verändern: kein Schreiben, keine verändernden Befehle (rein lesende laufen durch), kein Internet — nur lesen. Die sichere Wahl für alles, was nur ansehen und berichten soll. Nur-lesende Blöcke dürfen außerdem parallel zu einem schreibenden laufen.',
+    // Modellklasse eigener Blöcke (BAUPLAN 37): Voreinstellung des Blocks —
+    // auf der Leinwand bleibt sie je Karte änderbar.
+    modellFeld: 'Modell (Voreinstellung dieses Blocks)',
+    modellHinweis:
+      'Womit dieser Block normalerweise arbeitet. „Standard" ist das große Modell — nimm es für alles, wo wirklich gedacht, gebaut oder geprüft wird. Sparsamere Modelle kosten viel weniger und reichen für Zusammenfassen, Nachfragen und Aufräumen. Auf der Leinwand kannst du die Wahl je Blockkarte noch ändern.',
     vorschauHinweis:
       'So liegt der Block in der Bibliothek — und genau diesen Arbeitsauftrag bekommt der Agent. Passt alles? Dann speichern.',
     vorschauAuftrag: 'Arbeitsauftrag an den Agenten',
@@ -302,6 +307,15 @@ export const texte = {
     lokaleKiLabel: 'lokale KI erlaubt',
     lokaleKiHinweis:
       'Abgewählt: Dieser Block nutzt die lokale Helfer-KI nicht — weder für Recherchen noch für die lokale Vorreparatur. Wirkt nur, wenn die lokale KI in den Einstellungen überhaupt eingeschaltet ist.',
+    // Modellklasse je Block (BAUPLAN 37): frei wählbar an jeder Blockkarte.
+    modellLabel: 'Modell',
+    modellNamen: {
+      standard: 'Standard (Opus)',
+      sparsam: 'sparsam (Sonnet)',
+      'sehr-sparsam': 'sehr sparsam (Haiku)'
+    },
+    modellHinweis:
+      'Womit dieser Block arbeitet. „Standard" ist das große Modell — richtig überall, wo wirklich gedacht wird (Bauen, Prüfen, Zuschneiden). Sparsamere Modelle kosten deutlich weniger, machen aber mehr Fehler: Zu sparsam gewählt, siehst du es an mehr Reparatur-Runden in den Metriken.',
     uebertragGrenzeLabel: 'Überträge höchstens',
     uebertragGrenzeHinweis:
       'Läuft der Kontext eines Blocks voll (~85 %), übergibt der Agent an eine frische Session und arbeitet nahtlos weiter. So oft darf das pro Lauf passieren — Feld leer lassen heißt: unbegrenzt.',
@@ -1283,7 +1297,16 @@ export const texte = {
       '\n- Zusätzlich ein Feld "bereich": die Kategorie (Klappe) der Blockbibliothek, ' +
       'in der der Block liegen soll. Erlaubte Werte, jeweils mit ihrer Bedeutung: ' +
       bereiche.map((b) => `"${b.schluessel}" (${b.name})`).join(', ') +
-      '. Wähle die passende — passt keine wirklich, nimm "eigene". Erfinde keinen neuen Wert.'
+      '. Wähle die passende — passt keine wirklich, nimm "eigene". Erfinde keinen neuen Wert.',
+    // Modell-Zusatz (BAUPLAN 37): die KI schlägt die Modellklasse mit vor;
+    // der Nutzer sieht und ändert sie im Editor.
+    modellZusatz: (klassen) =>
+      '\n- Zusätzlich ein Feld "modell": die Modellklasse, mit der der Block arbeitet. ' +
+      'Erlaubte Werte: ' +
+      klassen.map((k) => `"${k.schluessel}" (${k.name})`).join(', ') +
+      '. Nimm "standard" für alles, wo wirklich gedacht, gebaut oder geprüft wird; ' +
+      '"sparsam" für Zusammenfassen, Nachfragen, Aufräumen und andere Zuarbeit; ' +
+      '"sehr-sparsam" nur für ganz mechanische Aufgaben. Im Zweifel "standard".'
   },
   // Startanleitung & „App starten"-Knopf (SPEC §8, BAUPLAN 10).
   // App-Tab (BAUPLAN 32, SPEC §8): Ausgabe der laufenden App in FlowForge,
@@ -1538,6 +1561,15 @@ export const texte = {
       `Ollama läuft, aber das Modell „${modell}" ist nicht heruntergeladen.`,
     lokaleHelferStatusVorhandene: (modelle) => `Vorhanden: ${modelle.join(', ')}.`,
     lokaleHelferStatusAus: 'Ollama ist unter dieser Adresse gerade nicht erreichbar.',
+    // Unteraufgaben-Modell (BAUPLAN 37): der Motor-Zwilling der lokalen
+    // Helfer-KI — Zuarbeit muss nicht auf dem großen Modell laufen.
+    unteraufgabenUeberschrift: 'Modell der Unteraufgaben',
+    unteraufgabenSparsam: 'Sparsam (Standard)',
+    unteraufgabenSparsamHinweis:
+      'Wenn ein Block breit suchen oder viel einlesen muss, gibt er das an Unteraufgaben ab — Späher des Angreifers, Einlese-Helfer von Bauer, Prüfer und Diagnose. Die laufen dann auf dem kleineren Modell (Sonnet): deutlich billiger, und der Block selbst liest ihr Fazit ohnehin gegen. Läuft ein Block schon sparsamer, wird er nicht teurer gemacht.',
+    unteraufgabenWieBlock: 'Wie der Block selbst',
+    unteraufgabenWieBlockHinweis:
+      'Unteraufgaben laufen auf demselben Modell wie ihr Block. Teurer, aber die Zuarbeit ist genauso gründlich wie der Block. Die drei Blickwinkel des Audits folgen ohnehin immer ihrem Block.',
     uebertragUeberschrift: 'Sessions & Übertrag',
     uebertragTest: 'Test-Schalter: Übertrag schon bei etwa 10 %',
     uebertragTestHinweis:
@@ -1719,7 +1751,11 @@ export const texte = {
     laufSessionGestartet: (modell) =>
       `Motor gestartet (${modell}) — eine Lauf-Session für den ganzen Lauf; jeder Block läuft darin als eigener Agent.`,
     laufSessionFortgesetzt: 'Lauf-Session fortgesetzt statt neu gestartet.',
-    blockAgentGestartet: (name) => `„${name}" läuft als frischer Agent in der Lauf-Session.`,
+    blockAgentGestartet: (name, modellName) =>
+      `„${name}" läuft als frischer Agent in der Lauf-Session` +
+      (modellName ? ` — Modell: ${modellName}.` : '.'),
+    unteraufgabenSparsam: (modellName) =>
+      `Unteraufgaben der Block-Agenten (Späher, Einlese-Helfer) laufen ${modellName}.`,
     koordinatorGestoppt:
       'Werkzeug-Versuch des Koordinators gestoppt — Arbeit erledigen nur die Block-Agenten.',
     parallelEigeneSession: (name) =>

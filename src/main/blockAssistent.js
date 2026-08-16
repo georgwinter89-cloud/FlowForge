@@ -4,7 +4,14 @@
 // änderbar; die harten Regeln greifen erst beim Speichern (eigeneBloecke.js).
 import { app } from 'electron'
 import { texte } from '../shared/texte.js'
-import { bekannteEtiketten, BEREICHE, BEREICH_EIGENE } from '../shared/blockKatalog.js'
+import {
+  bekannteEtiketten,
+  BEREICHE,
+  BEREICH_EIGENE,
+  MODELL_KLASSEN,
+  MODELL_KLASSE_STANDARD,
+  modellKlasseGueltig
+} from '../shared/blockKatalog.js'
 import {
   BLOCK_NAME_MAX,
   BLOCK_BESCHREIBUNG_MAX,
@@ -48,6 +55,9 @@ function vorschlagSaeubern(roh) {
     // Bereich (BAUPLAN 30): nur bekannte Klappen-Schlüssel — alles andere
     // fällt auf „eigene" zurück; einen freien Namen tippt der Nutzer selbst.
     bereich: bereichSaeubern(roh.bereich),
+    // Modellklasse (BAUPLAN 37): nur die drei bekannten Klassen — alles
+    // andere fällt auf Standard zurück, nie auf ein stilles Billigmodell.
+    modell: modellKlasseGueltig(roh.modell) ?? MODELL_KLASSE_STANDARD,
     nurLesen: Boolean(roh.nurLesen)
   }
 }
@@ -69,6 +79,15 @@ function bereicheFuerAssistent() {
   }))
 }
 
+// Die Modellklassen mit ihrem Klartext-Namen — so kennt der Assistent die
+// Bedeutung der Schlüssel (texte.kette.modellNamen).
+function modellKlassenFuerAssistent() {
+  return MODELL_KLASSEN.map((schluessel) => ({
+    schluessel,
+    name: texte.kette.modellNamen[schluessel] ?? schluessel
+  }))
+}
+
 export async function blockVorschlagErstellen(beschreibung) {
   const wunsch = String(beschreibung ?? '').trim()
   if (!wunsch) return { ok: false, fehler: texte.blockEditor.fehlerBeschreibungFehlt }
@@ -81,7 +100,8 @@ export async function blockVorschlagErstellen(beschreibung) {
   const antwort = await starteMotorFrage({
     frage:
       texte.agentenBlockAssistent.auftrag(wunsch, bekannteEtiketten()) +
-      texte.agentenBlockAssistent.bereichZusatz(bereicheFuerAssistent()),
+      texte.agentenBlockAssistent.bereichZusatz(bereicheFuerAssistent()) +
+      texte.agentenBlockAssistent.modellZusatz(modellKlassenFuerAssistent()),
     modus: einstellungen.motorModus,
     apiSchluessel: einstellungen.apiSchluessel,
     ausgabenObergrenzeUsd: einstellungen.ausgabenObergrenzeUsd,

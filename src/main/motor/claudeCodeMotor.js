@@ -7,6 +7,12 @@ import path from 'node:path'
 import { texte } from '../../shared/texte.js'
 import { TITEL_MAX, TEXT_MAX } from '../../shared/kartenRegeln.js'
 import {
+  KOORDINATOR_MODELL,
+  EINMAL_FRAGE_MODELL,
+  MODELL_KLASSE_STANDARD,
+  sdkModell
+} from '../../shared/blockKatalog.js'
+import {
   KONTEXT_FENSTER_STANDARD,
   kontextBand,
   UEBERTRAG_SCHWELLE_PROZENT,
@@ -675,6 +681,9 @@ export async function starteMotorFrage({ frage, modus, apiSchluessel, ausgabenOb
       env: umgebung,
       pathToClaudeCodeExecutable: claudeExePfad(),
       settingSources: [],
+      // Nebenrollen billigst (BAUPLAN 37): Ein Formular ausfüllen ist keine
+      // Aufgabe fürs große Modell.
+      model: EINMAL_FRAGE_MODELL,
       // Ein paar Runden Spielraum: Versucht der Motor doch ein Werkzeug, wird
       // es abgelehnt und er antwortet danach direkt.
       maxTurns: 4,
@@ -822,6 +831,11 @@ export function starteLaufMotor(optionen) {
   // Anteile. Stände gehören zum Motor: Ein neuer Motor (paralleler Zweig,
   // frische Session nach Übertrag) fängt ehrlich wieder bei null an.
   const modellStand = new Map()
+  // Modell des Koordinator-Fadens (BAUPLAN 37): Seit die Blöcke ihr eigenes
+  // Modell bekommen, meldet der Motor mehrere Modelle mit verschiedenen
+  // Fenstergrößen. Der Übertrag misst aber den Koordinator — also muss sein
+  // Fenster vom Block-Fenster getrennt bleiben. Kommt aus der Startmeldung.
+  let koordinatorModell = ''
 
   // Der gerade laufende Block-Dispatch — es läuft höchstens einer zugleich.
   // Parallele Zweige bekommen eigene Motoren (lauf.js).
@@ -841,6 +855,18 @@ export function starteLaufMotor(optionen) {
     for (const id of block.blockTaskIds)
       groesster = Math.max(groesster, block.unterVerbrauch.get(id) ?? 0)
     return groesster
+  }
+
+  // Kontextfenster des Block-Agenten: das größte bekannte Fenster unter den
+  // Modellen dieses Blocks ohne das des Koordinators. Ist keines bekannt,
+  // bleibt es beim Koordinator-Fenster — der Hinweis wäre sonst gar nicht da.
+  function agentFenster() {
+    let groesstes = 0
+    for (const modell of block?.modellTokens?.keys() ?? []) {
+      if (koordinatorModell && modell === koordinatorModell) continue
+      groesstes = Math.max(groesstes, kontextFensterFuerModell(modell))
+    }
+    return groesstes > 0 ? groesstes : bekanntesFenster
   }
 
   // Anteile je Modell an diesem Block, größter zuerst.
@@ -874,7 +900,7 @@ export function starteLaufMotor(optionen) {
       ...(() => {
         const eigene = agentTokens()
         if (!eigene) return { agentTokens: 0, agentProzentVon: null, agentProzentBis: null }
-        const agentBand = kontextBand(eigene, bekanntesFenster)
+        const agentBand = kontextBand(eigene, agentFenster())
         return { agentTokens: eigene, agentProzentVon: agentBand.von, agentProzentBis: agentBand.bis }
       })()
     }
@@ -925,9 +951,15 @@ export function starteLaufMotor(optionen) {
         if (!block || block.auftragEingesetzt) return nein(texte.agentenLaufSession.nurEinAgent)
         block.auftragEingesetzt = true
         block.blockTaskIds.add(hookDaten.tool_use_id)
-        aufEreignis({ art: 'ticker', text: texte.ticker.blockAgentGestartet(block.blockName) })
+        aufEreignis({
+          art: 'ticker',
+          text: texte.ticker.blockAgentGestartet(block.blockName, block.modellName)
+        })
         // Der echte Arbeitsauftrag wird hier eingesetzt — der Koordinator
-        // hat nur das Wort AUFTRAG geschrieben und bleibt schlank.
+        // hat nur das Wort AUFTRAG geschrieben und bleibt schlank. Die
+        // Modellklasse des Blocks kommt hier ebenfalls hinein (BAUPLAN 37):
+        // Der Koordinator läuft auf dem Billigmodell, und ohne diese Angabe
+        // würde der Block-Agent es erben.
         return {
           hookSpecificOutput: {
             hookEventName: 'PreToolUse',
@@ -936,6 +968,7 @@ export function starteLaufMotor(optionen) {
               description: block.blockName,
               subagent_type: 'block',
               run_in_background: false,
+              model: block.modell,
               prompt: block.auftrag
             }
           }
@@ -959,8 +992,22 @@ export function starteLaufMotor(optionen) {
       block?.darfZuteilen ?? false
     )
     if (urteil.gesperrt) return nein(urteil.gesperrt, urteil.tickerText)
-    if (urteil.erlaubt)
+    if (urteil.erlaubt) {
+      // Unteraufgaben-Modell (BAUPLAN 37): Startet der Block-Agent einen
+      // Helfer (Späher, Einlese-Helfer, Audit-Blickwinkel), trägt FlowForge
+      // dessen Modell ein — je nach Einstellung sparsam oder die Klasse des
+      // Blocks. Immer ausdrücklich: Ohne Angabe hängt es an der Agent-Art,
+      // welches Modell greift, und das Hauptmodell ist das des Koordinators.
+      if ((name === 'Agent' || name === 'Task') && block?.unterModell)
+        return {
+          hookSpecificOutput: {
+            hookEventName: 'PreToolUse',
+            permissionDecision: 'allow',
+            updatedInput: { ...eingabeDaten, model: block.unterModell }
+          }
+        }
       return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'allow' } }
+    }
     return {}
   }
 
@@ -1054,6 +1101,12 @@ export function starteLaufMotor(optionen) {
         // Wiederaufnahme: dieselbe Lauf-Session weiterführen — der
         // Koordinator kennt die bisherigen Blöcke und Fazite noch.
         ...(fortsetzen ? { resume: fortsetzen } : {}),
+        // Nebenrollen billigst (BAUPLAN 37): Der Hauptfaden ist der
+        // Koordinator — er schreibt nur AUFTRAG und OK und läuft deshalb auf
+        // dem kleinsten Modell. ACHTUNG: Damit ist das Hauptmodell der
+        // Session das Billigmodell; jeder Agent-Aufruf MUSS sein Modell
+        // ausdrücklich mitbekommen (Hook oben), sonst erbt er es.
+        model: KOORDINATOR_MODELL,
         // Denk-Ansicht (BAUPLAN 24): Ohne diese Option kämen von den
         // Block-Agenten nur Werkzeug-Blöcke an — ihr Denken bliebe unsichtbar.
         // Die Option leitet nur weiter, was ohnehin entsteht: kein Denk-Budget,
@@ -1079,6 +1132,10 @@ export function starteLaufMotor(optionen) {
         agents: {
           block: {
             description: 'Führt genau einen Block-Arbeitsauftrag von FlowForge aus.',
+            // Zweite Leitplanke gegen das Erben des Koordinator-Modells
+            // (BAUPLAN 37): Sollte der Hook einmal nicht greifen, läuft ein
+            // Block-Agent auf der Standardklasse — nie still auf Haiku.
+            model: sdkModell(MODELL_KLASSE_STANDARD),
             prompt:
               texte.agentenLaufSession.blockAgentSystem(projektPfad, TITEL_MAX, TEXT_MAX) +
               (helferServer
@@ -1250,6 +1307,11 @@ export function starteLaufMotor(optionen) {
                 : texte.ticker.laufSessionGestartet(nachricht.model ?? 'Claude')
             })
           }
+          // Das Modell des Hauptfadens ist das des Koordinators (BAUPLAN 37) —
+          // gemerkt, damit die Fenster-Buchführung es von den Block-Modellen
+          // trennen kann.
+          if (typeof nachricht.model === 'string' && nachricht.model)
+            koordinatorModell = nachricht.model
           // Kontextfenster ab der Startmeldung (Befund Georg, 13.08.2026):
           // das Motor-Wissen liefert die gemerkte bzw. an der Modellkennung
           // erkennbare Größe. Vorwissen aus früheren Sessions geht vor.
@@ -1355,8 +1417,15 @@ export function starteLaufMotor(optionen) {
           for (const [modell, m] of Object.entries(nachricht.modelUsage ?? {})) {
             hatModelUsage = true
             if (m.contextWindow > 0) {
-              bekanntesFenster = m.contextWindow
               kontextFensterMerken(modell, m.contextWindow)
+              // Nur das Fenster des Koordinators steuert die Übertrags-
+              // Schwelle (BAUPLAN 37): Vorher gewann hier das zuletzt
+              // gemeldete Modell — mit gemischten Modellen wäre das mal
+              // 200.000, mal 1.000.000, und der Übertrag käme zu früh oder zu
+              // spät. Ist das Koordinator-Modell (noch) unbekannt, gilt wie
+              // bisher das zuletzt Gemeldete.
+              if (!koordinatorModell || modell === koordinatorModell)
+                bekanntesFenster = m.contextWindow
             }
             summe.eingabe += m.inputTokens ?? 0
             summe.ausgabe += m.outputTokens ?? 0
@@ -1463,7 +1532,11 @@ export function starteLaufMotor(optionen) {
     // darfZuteilen + instanzId (BAUPLAN 29): karten_zuteilen nur für
     // Auftragsquellen-Blöcke; die Instanz-Kennung ordnet Zuteilung und
     // Projektwissen dem gerade laufenden Block zu.
-    blockAusfuehren({ auftrag, blockName, instanzId = null, nurLesen = false, darfPruefen = false, lokaleKi = true, darfKartenAnlegen = false, darfVorschlagen = false, darfLaufVorschlag = false, darfZuteilen = false, uebertrag }) {
+    // modell/unterModell/modellName (BAUPLAN 37): die Modellklasse dieser
+    // Blockkarte als SDK-Alias, das Modell ihrer Unteraufgaben und der
+    // Klartext-Name für den Ticker. FlowForge trägt beides beim Agent-Aufruf
+    // ein — der Koordinator selbst läuft auf dem Billigmodell.
+    blockAusfuehren({ auftrag, blockName, instanzId = null, nurLesen = false, darfPruefen = false, lokaleKi = true, darfKartenAnlegen = false, darfVorschlagen = false, darfLaufVorschlag = false, darfZuteilen = false, modell = null, unterModell = null, modellName = '', uebertrag }) {
       if (tot)
         return Promise.resolve({
           zustand: 'fehlgeschlagen',
@@ -1485,6 +1558,9 @@ export function starteLaufMotor(optionen) {
           darfVorschlagen,
           darfLaufVorschlag,
           darfZuteilen,
+          modell: modell ?? sdkModell(MODELL_KLASSE_STANDARD),
+          unterModell,
+          modellName,
           uebertrag: uebertrag ?? { aktiv: false, testModus: false, anweisung: '' },
           aufloesen,
           blockTaskIds: new Set(),

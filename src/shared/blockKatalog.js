@@ -41,6 +41,63 @@ export const UEBERTRAG_SCHWELLE_PROZENT = 85
 export const BEREICHE = ['auftrag', 'bauen', 'pruefen', 'gedaechtnis']
 export const BEREICH_EIGENE = 'eigene'
 
+// Modellklasse je Block (BAUPLAN 37, Entscheidung Georg: frei je Block wählbar
+// — auch Bauer und Prüfer). Jeder Katalog-Block trägt eine Voreinstellung im
+// Feld `modell`; die Blockkarte im Schaubild darf sie überschreiben, eigene
+// Blöcke wählen sie im Block-Editor. Reihenfolge = teuer nach sparsam; daran
+// hängt die Regel „Unteraufgaben nur herabstufen, nie verteuern".
+export const MODELL_KLASSEN = ['standard', 'sparsam', 'sehr-sparsam']
+export const MODELL_KLASSE_STANDARD = 'standard'
+
+// Übersetzung in die Modell-Aliase des Motors (SDK: sonnet/opus/haiku/fable).
+// „Standard" ist bewusst fest auf Opus genagelt statt „was die CLI gerade als
+// Standard nimmt": Seit der Koordinator auf Haiku läuft (s.u.), würde ein
+// nicht gesetztes Modell an die Block-Agenten vererbt — dann bekäme jeder
+// Bauer still das Billigmodell. Ein gesetzter Wert ist die einzige sichere
+// Variante, und er macht Läufe über Monate hinweg vergleichbar.
+const SDK_MODELL = { standard: 'opus', sparsam: 'sonnet', 'sehr-sparsam': 'haiku' }
+
+// Nebenrollen billigst (BAUPLAN 37): Der Koordinator der Lauf-Session schreibt
+// nur AUFTRAG und OK — er braucht kein großes Modell. Die Einmal-Frage des
+// Block-Editors füllt ein Formular aus und läuft sparsam.
+export const KOORDINATOR_MODELL = SDK_MODELL['sehr-sparsam']
+export const EINMAL_FRAGE_MODELL = SDK_MODELL.sparsam
+
+export function modellKlasseGueltig(roh) {
+  return MODELL_KLASSEN.includes(roh) ? roh : null
+}
+
+// Welche Klasse gilt für diesen Block? Die Wahl an der Blockkarte gewinnt,
+// sonst die Voreinstellung des Katalog-/Eigen-Blocks, sonst Standard.
+export function blockModellKlasse(def, eintrag = null) {
+  return (
+    modellKlasseGueltig(eintrag?.modell) ??
+    modellKlasseGueltig(def?.modell) ??
+    MODELL_KLASSE_STANDARD
+  )
+}
+
+export function sdkModell(klasse) {
+  return SDK_MODELL[klasse] ?? SDK_MODELL[MODELL_KLASSE_STANDARD]
+}
+
+// Modell der Unteraufgaben eines Block-Agenten (BAUPLAN 37): Späher des
+// Angreifers, Einlese-Helfer von Bauer/Prüfer/Diagnose — der Motor-Zwilling
+// der lokalen Helfer-KI. Rückgabe ist immer ein konkretes Modell, nie „erben":
+// Was ein Block-Agent ohne Angabe startet, bekäme sonst je nach Agent-Art das
+// Hauptmodell (Haiku) untergeschoben.
+// Zwei Ausnahmen: Das Audit folgt der Klasse seines Blocks (Georgs „bewusst
+// teuer" betraf die Lesetiefe — das Modell wählt er jetzt selbst), und ein
+// Block, der ohnehin schon sparsamer läuft, wird nicht heraufgestuft.
+export function unterModellFuer(def, klasse, einstellung) {
+  const eigen = sdkModell(klasse)
+  if (def?.unteraufgabenWieBlock) return eigen
+  if (einstellung !== 'sparsam') return eigen
+  const sparsamRang = MODELL_KLASSEN.indexOf('sparsam')
+  if (MODELL_KLASSEN.indexOf(klasse) >= sparsamRang) return eigen
+  return SDK_MODELL.sparsam
+}
+
 export const BLOCK_KATALOG = [
   {
     // Seit 12.08.2026 (Entscheidung Georg) nicht mehr Teil der Vorlagen: Jeder
@@ -48,6 +105,10 @@ export const BLOCK_KATALOG = [
     // nur eine volle Extra-Session. Bleibt in der Bibliothek für Schaubilder,
     // die ihn noch nutzen oder bewusst wollen.
     id: 'kontext-laden',
+    // Modellklasse (BAUPLAN 37): Voreinstellung des Katalog-Blocks — die
+    // Blockkarte im Schaubild darf sie überschreiben. Überblick verschaffen
+    // und zusammenfassen ist Nebenrollen-Arbeit, deshalb sparsam.
+    modell: 'sparsam',
     name: 'Kontext laden',
     symbol: '📖',
     beschreibung:
@@ -75,6 +136,7 @@ export const BLOCK_KATALOG = [
   },
   {
     id: 'spec-interview',
+    modell: 'standard',
     name: 'Spec-Interview',
     symbol: '🎙️',
     beschreibung:
@@ -138,6 +200,7 @@ export const BLOCK_KATALOG = [
   },
   {
     id: 'paket-schneiden',
+    modell: 'standard',
     name: 'Paket schneiden',
     symbol: '✂️',
     beschreibung:
@@ -199,6 +262,7 @@ export const BLOCK_KATALOG = [
   },
   {
     id: 'angreifer',
+    modell: 'standard',
     name: 'Angreifer',
     symbol: '⚔️',
     beschreibung:
@@ -233,6 +297,7 @@ export const BLOCK_KATALOG = [
   },
   {
     id: 'diagnose',
+    modell: 'standard',
     name: 'Diagnose',
     symbol: '🩺',
     beschreibung:
@@ -284,6 +349,7 @@ export const BLOCK_KATALOG = [
   },
   {
     id: 'bauer',
+    modell: 'standard',
     name: 'Bauer',
     symbol: '🔨',
     beschreibung:
@@ -339,6 +405,7 @@ export const BLOCK_KATALOG = [
   },
   {
     id: 'pruefer',
+    modell: 'standard',
     name: 'Prüfer',
     symbol: '🔬',
     beschreibung:
@@ -415,6 +482,7 @@ export const BLOCK_KATALOG = [
     // Seit der Lauf-Mappe (BAUPLAN 17) schreibt er seine Prüfungen frisch,
     // statt eine gewachsene Projekt-Mappe abzuspielen.
     id: 'gesamtpruefung',
+    modell: 'standard',
     name: 'Gesamtprüfung',
     symbol: '🏁',
     beschreibung:
@@ -465,6 +533,12 @@ export const BLOCK_KATALOG = [
     // die Kartenauswahl der nächsten Bau-Läufe. audit: true schaltet den
     // Kosten-Hinweis am Start frei (volle Lesetiefe, bewusst teuer).
     id: 'audit',
+    modell: 'standard',
+    // Die drei Blickwinkel-Prüfer sind der Kern dieses Blocks, keine
+    // Zuarbeit — sie folgen der Modellklasse des Audits selbst und werden
+    // von der Einstellung „Unteraufgaben sparsam" nicht herabgestuft
+    // (BAUPLAN 37; Georgs „bewusst teuer" betraf die Lesetiefe).
+    unteraufgabenWieBlock: true,
     name: 'Audit',
     symbol: '🧭',
     beschreibung:
@@ -516,6 +590,7 @@ export const BLOCK_KATALOG = [
     // durchgesetzt am Werkzeugaufruf); der Nutzer entscheidet je Karte:
     // übernehmen, bearbeiten, ablehnen. Angewendet wird nur von FlowForge.
     id: 'karten-pruefer',
+    modell: 'sparsam',
     name: 'Karten-Prüfer',
     symbol: '📇',
     beschreibung:
@@ -563,6 +638,7 @@ export const BLOCK_KATALOG = [
   },
   {
     id: 'frage-mensch',
+    modell: 'sparsam',
     name: 'Frage an den Menschen',
     symbol: '💬',
     beschreibung:
@@ -595,6 +671,7 @@ export const BLOCK_KATALOG = [
   },
   {
     id: 'sessionende',
+    modell: 'sparsam',
     name: 'Sessionende',
     symbol: '🌙',
     beschreibung:

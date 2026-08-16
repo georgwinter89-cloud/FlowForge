@@ -3,8 +3,10 @@ import { texte } from '../../shared/texte.js'
 import {
   bekannteEtiketten,
   blockKategorie,
+  blockModellKlasse,
   BEREICHE,
   BEREICH_EIGENE,
+  MODELL_KLASSEN,
   freieBereiche
 } from '../../shared/blockKatalog.js'
 import {
@@ -20,6 +22,7 @@ import { BlockChips, bereichName } from './Blockbibliothek.jsx'
 
 const t = texte.blockEditor
 const tf = texte.kartenFormular
+const tkette = texte.kette
 
 function Zaehler({ wert, max }) {
   const uebrig = max - wert.trim().length
@@ -116,6 +119,9 @@ export default function BlockEditor({ block, onSpeichern, onAbbrechen }) {
     // Name; „Eigene" bleibt leer (Platzhalter erklärt das). Beim Speichern
     // macht pruefeBereich aus einem Anzeigenamen wieder den Schlüssel.
     bereich: bereichAnzeige(block?.bereich),
+    // Modellklasse (BAUPLAN 37): Voreinstellung des eigenen Blocks —
+    // Altbestand ohne Feld läuft auf Standard.
+    modell: blockModellKlasse(block),
     nurLesen: block?.nurLesen ?? true
   })
   const vorschlaege = bekannteEtiketten()
@@ -289,17 +295,36 @@ export default function BlockEditor({ block, onSpeichern, onAbbrechen }) {
             )}
 
             {schritt === 3 && (
-              <label className="feld feld-schalter">
-                <input
-                  type="checkbox"
-                  checked={werte.nurLesen}
-                  onChange={(e) => setzen('nurLesen', e.target.checked)}
-                />
-                <span>
-                  {t.nurLesenFeld}
-                  <span className="feld-hinweis">{t.nurLesenHinweis}</span>
-                </span>
-              </label>
+              <>
+                <label className="feld feld-schalter">
+                  <input
+                    type="checkbox"
+                    checked={werte.nurLesen}
+                    onChange={(e) => setzen('nurLesen', e.target.checked)}
+                  />
+                  <span>
+                    {t.nurLesenFeld}
+                    <span className="feld-hinweis">{t.nurLesenHinweis}</span>
+                  </span>
+                </label>
+                {/* Modellklasse (BAUPLAN 37): „Kein Kennzeichen ohne
+                    Editor-Feld" — was ein Katalog-Block kann, kann ein
+                    eigener auch. */}
+                <label className="feld">
+                  <span>{t.modellFeld}</span>
+                  <select
+                    value={werte.modell}
+                    onChange={(e) => setzen('modell', e.target.value)}
+                  >
+                    {MODELL_KLASSEN.map((klasse) => (
+                      <option key={klasse} value={klasse}>
+                        {tkette.modellNamen[klasse]}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="feld-hinweis">{t.modellHinweis}</span>
+                </label>
+              </>
             )}
 
             {schritt === 4 && (

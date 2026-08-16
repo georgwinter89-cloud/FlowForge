@@ -3,7 +3,12 @@
 // Hauptprozess. Ein eigener Block folgt der Block-Anatomie (SPEC §4.2):
 // Name · Symbol · Arbeitsauftrag · braucht/liefert · Sperre „darf nur lesen".
 import { texte } from './texte.js'
-import { BEREICHE, BEREICH_EIGENE } from './blockKatalog.js'
+import {
+  BEREICHE,
+  BEREICH_EIGENE,
+  MODELL_KLASSE_STANDARD,
+  modellKlasseGueltig
+} from './blockKatalog.js'
 
 export const BLOCK_NAME_MAX = 40
 export const BLOCK_SYMBOL_MAX = 8
@@ -85,6 +90,11 @@ export function pruefeEigenenBlock(roh) {
       braucht: braucht.etiketten,
       liefert: liefert.etiketten,
       bereich: bereich.bereich,
+      // Modellklasse (BAUPLAN 37): Voreinstellung des eigenen Blocks — die
+      // Blockkarte im Schaubild darf sie überschreiben. Unbekanntes oder
+      // fehlendes Feld (Altbestand) fällt auf Standard zurück, nie auf ein
+      // stilles Billigmodell.
+      modell: modellKlasseGueltig(roh?.modell) ?? MODELL_KLASSE_STANDARD,
       nurLesen: Boolean(roh?.nurLesen),
       // Fest verdrahtet: kein Prüfer, keine Übung, keine Formularfelder —
       // viele Stellen (Leinwand, Regeln, Lauf) verlassen sich darauf.

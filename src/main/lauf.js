@@ -16,7 +16,13 @@ import path from 'node:path'
 import crypto from 'node:crypto'
 import { BrowserWindow, Notification } from 'electron'
 import { texte } from '../shared/texte.js'
-import { blockDefinition, UEBERTRAG_GRENZE_STANDARD } from '../shared/blockKatalog.js'
+import {
+  blockDefinition,
+  blockModellKlasse,
+  sdkModell,
+  unterModellFuer,
+  UEBERTRAG_GRENZE_STANDARD
+} from '../shared/blockKatalog.js'
 import {
   pruefeSchaubild,
   pruefeVersorgung,
@@ -1033,6 +1039,10 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
   // Einstellung aktiv, steht das sichtbar am Laufstart — im Ticker und damit
   // auch im Laufbericht.
   if (einstellungen.nurLesenBefehle) tickern(texte.ticker.nurLesenBefehleAktiv)
+  // Unteraufgaben-Modell (BAUPLAN 37): Stuft FlowForge die Zuarbeit herab,
+  // steht das sichtbar am Laufstart — im Ticker und damit im Laufbericht.
+  if (einstellungen.unteraufgabenModell !== 'wieBlock')
+    tickern(texte.ticker.unteraufgabenSparsam(texte.kette.modellNamen.sparsam))
   if (lokaleHelferHinweis) tickern(lokaleHelferHinweis)
   if (pruefmappeGeleert) tickern(texte.ticker.pruefmappeGeleert)
   if (pruefkartenEingelegt > 0) tickern(texte.ticker.pruefkartenEingelegt(pruefkartenEingelegt))
@@ -1671,6 +1681,17 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           // Häkchen je Block (BAUPLAN 20): abgewählt = lokal_recherchieren
           // wird für die Agenten dieses Blocks hart abgelehnt.
           lokaleKi: k.eintrag.lokaleKi !== false,
+          // Modellklasse je Block (BAUPLAN 37): die Wahl an der Blockkarte,
+          // sonst die Voreinstellung des Blocks. Der Motor trägt sie beim
+          // Agent-Aufruf ein; das Modell der Unteraufgaben hängt zusätzlich
+          // an der Einstellung „Unteraufgaben der Block-Agenten".
+          modell: sdkModell(blockModellKlasse(k.def, k.eintrag)),
+          unterModell: unterModellFuer(
+            k.def,
+            blockModellKlasse(k.def, k.eintrag),
+            einstellungen.unteraufgabenModell
+          ),
+          modellName: texte.kette.modellNamen[blockModellKlasse(k.def, k.eintrag)] ?? '',
           uebertrag
         })
         .catch((fehler) => ({

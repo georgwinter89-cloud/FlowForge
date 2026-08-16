@@ -4,6 +4,8 @@ import {
   blockDefinition,
   vorlageDefinition,
   blockKategorie,
+  blockModellKlasse,
+  MODELL_KLASSEN,
   REPARATUR_RUNDEN_MAX,
   UEBERTRAG_GRENZE_MAX
 } from '../../shared/blockKatalog.js'
@@ -659,6 +661,7 @@ function SchaubildKarte({
   onSpeichern,
   onZurueckZu,
   onLokaleKi,
+  onModell,
   onEntfernen,
   onGreifen,
   onPfeilStart,
@@ -668,6 +671,9 @@ function SchaubildKarte({
   // Prüfkarten auf den Prüfer ziehen (BAUPLAN 18): nur Prüf-Blockkarten sind
   // Drop-Ziel — und nur, solange das Schaubild bearbeitbar ist.
   const nimmtKarten = bearbeitbar && def.prueft
+  // Modellklasse (BAUPLAN 37): Wahl an der Karte, sonst Voreinstellung des
+  // Blocks — dieselbe Auflösung wie im Hauptprozess.
+  const modellKlasse = blockModellKlasse(def, eintrag)
   return (
     <div
       className={
@@ -720,6 +726,23 @@ function SchaubildKarte({
           onChange={(e) => onLokaleKi(e.target.checked)}
         />
         {tk.lokaleKiLabel}
+      </label>
+      {/* Modellklasse je Block (BAUPLAN 37): frei wählbar — auch bei Bauer
+          und Prüfer. Wählt Georg zu sparsam, zeigen die Metriken die Folge
+          (mehr Reparatur-Runden), gesperrt wird nichts. */}
+      <label className="feld feld-kompakt" title={tk.modellHinweis}>
+        {tk.modellLabel}
+        <select
+          disabled={!bearbeitbar}
+          value={modellKlasse}
+          onChange={(e) => onModell(e.target.value)}
+        >
+          {MODELL_KLASSEN.map((klasse) => (
+            <option key={klasse} value={klasse}>
+              {tk.modellNamen[klasse]}
+            </option>
+          ))}
+        </select>
       </label>
       {def.felder.map((feld) => (
         <label key={feld.id} className="feld feld-kompakt">
@@ -1257,6 +1280,14 @@ export default function Leinwand({
   function lokaleKiSetzen(instanzId, erlaubt) {
     const bloecke = workflow.bloecke.map((b) =>
       b.instanzId === instanzId ? { ...b, lokaleKi: erlaubt } : b
+    )
+    ketteSpeichern({ ...workflow, bloecke })
+  }
+
+  // Modellklasse je Block (BAUPLAN 37): Wahl an der Blockkarte.
+  function modellSetzen(instanzId, klasse) {
+    const bloecke = workflow.bloecke.map((b) =>
+      b.instanzId === instanzId ? { ...b, modell: klasse } : b
     )
     ketteSpeichern({ ...workflow, bloecke })
   }
@@ -1866,6 +1897,7 @@ export default function Leinwand({
                 onSpeichern={() => ketteSpeichern(workflowRef.current)}
                 onZurueckZu={(ziel) => zurueckZuSetzen(eintrag.instanzId, ziel)}
                 onLokaleKi={(erlaubt) => lokaleKiSetzen(eintrag.instanzId, erlaubt)}
+                onModell={(klasse) => modellSetzen(eintrag.instanzId, klasse)}
                 onEntfernen={() => entfernen(eintrag.instanzId)}
                 onGreifen={(e) => karteGreifen(e, eintrag)}
                 onPfeilStart={(e) => pfeilBeginnen(e, eintrag)}

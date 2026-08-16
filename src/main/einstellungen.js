@@ -22,6 +22,13 @@ const STANDARD = {
   // Garantie „ein Skriptlauf kann nichts verändern" fällt damit; deshalb
   // Standard aus. Schreib-Werkzeuge bleiben unter der Sperre.
   nurLesenBefehle: false,
+  // Unteraufgaben-Modell (BAUPLAN 37): Späher des Angreifers und die
+  // Einlese-Helfer von Bauer, Prüfer und Diagnose sind Zuarbeit — sie lesen,
+  // suchen und fassen zusammen. 'sparsam' gibt ihnen das kleinere Modell (der
+  // Motor-Zwilling der lokalen Helfer-KI), 'wieBlock' lässt sie auf der Klasse
+  // ihres Blocks laufen. Standard sparsam: Zuarbeit ist der billigste Ort zum
+  // Sparen, und die Abnahme des Block-Agenten bleibt der Schiedsrichter.
+  unteraufgabenModell: 'sparsam',
   // Test-Schalter (BAUPLAN 11): Übertrag schon nach ~10 Prozentpunkten
   // Kontext-Verbrauch statt erst bei 85 % — nur zum Ausprobieren.
   uebertragTest: false,
@@ -71,6 +78,9 @@ export function einstellungenSpeichern(neu) {
     ausgabenObergrenzeUsd: Number.isFinite(obergrenze) && obergrenze > 0 ? obergrenze : STANDARD.ausgabenObergrenzeUsd,
     rechteAutomatisch: Boolean(neu.rechteAutomatisch),
     nurLesenBefehle: Boolean(neu.nurLesenBefehle),
+    // Nur die zwei bekannten Werte; alles andere (auch ein fehlendes Feld
+    // älterer Aufrufer) fällt auf den Standard zurück.
+    unteraufgabenModell: neu.unteraufgabenModell === 'wieBlock' ? 'wieBlock' : 'sparsam',
     uebertragTest: Boolean(neu.uebertragTest),
     lokaleHelferAktiv: Boolean(neu.lokaleHelferAktiv),
     // Fehlt das Feld (ältere Aufrufer), bleibt der Standard an — sonst fiele

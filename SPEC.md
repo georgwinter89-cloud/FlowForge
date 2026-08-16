@@ -1,6 +1,6 @@
 # FlowForge — Produkt-Spezifikation V1
 
-Stand: 15.08.2026 (Bauschritt 33) · Ursprung: Grilling-Session vom 07.08.2026 (von Georg freigegeben) ·
+Stand: 16.08.2026 (Bauschritt 37) · Ursprung: Grilling-Session vom 07.08.2026 (von Georg freigegeben) ·
 fortlaufend gepflegt — dieses Dokument beschreibt die Gegenwart, Verhaltensänderungen
 werden hier nachgezogen (Historie liefert git).
 
@@ -33,6 +33,28 @@ Sitzungen hinweg Software entsteht — ohne dass dem Agenten der Kontext überl�
     Block-Agenten können Recherche-, Entwurfs- und kleine Bau-Aufträge an eine lokale KI
     über Ollama abgeben (§4.3 „Lokale Helfer-KI") — eigene kleine Helfer-Kreisläufe von
     FlowForge, kein Motor. Der Motor selbst bleibt die Claude-CLI.
+  - **Modellklasse je Block** (seit Bauschritt 37, Entscheidung Georg: frei je Block
+    wählbar — auch Bauer und Prüfer, gegen die Empfehlung „nur Nebenrollen fest"; die
+    Folge einer zu sparsamen Wahl sind mehr Reparatur-Runden, und genau die zeigen die
+    Kennzahlen aus §3.4). Drei Klassen: **Standard (Opus)** · **sparsam (Sonnet)** ·
+    **sehr sparsam (Haiku)**. Jeder Katalog-Block trägt eine Voreinstellung — Standard
+    für Bauer, Prüfer, Gesamtprüfung, Diagnose, Paket schneiden, Angreifer und Audit;
+    sparsam für Sessionende, Frage an den Menschen, Karten-Prüfer (inkl. Sortiermodus)
+    und Kontext laden. An jeder **Blockkarte im Schaubild** ist sie umstellbar (wie das
+    Häkchen „lokale KI erlaubt", gespeichert je Karte in workflow.json); eigene Blöcke
+    wählen ihre Voreinstellung im Block-Editor (§4.5). FlowForge trägt die Wahl beim
+    Start des Block-Agenten ein; Ticker und Laufbericht nennen sie (§3.2).
+    **Nebenrollen billigst:** Der Koordinator der Lauf-Session (§5) läuft immer auf
+    Haiku, die Einmal-Frage des Block-Editors auf Sonnet. „Standard" ist bewusst fest
+    auf Opus genagelt statt „was die CLI gerade als Standard nimmt" — sonst erbte jeder
+    Block-Agent still das Billigmodell des Koordinators, und Läufe wären über Monate
+    nicht vergleichbar. **Unteraufgaben** der Block-Agenten (Späher des Angreifers,
+    Einlese-Helfer von Bauer, Prüfer und Diagnose) haben eine eigene Einstellung
+    („sparsam" — Standard — oder „wie der Block"): der Motor-Zwilling der lokalen
+    Helfer-KI. Ein Block, der schon sparsamer läuft, wird dabei nie teurer gemacht, und
+    die drei Blickwinkel des Audits folgen immer der Klasse ihres Blocks (Georgs
+    „bewusst teuer" betraf die Lesetiefe, §4.3). Ehrliche Grenze: Im Abo-Modus zählt
+    Kontingent, keine Dollar — Sonnet und Haiku entlasten es trotzdem.
   - **V2-Motoren:** eigene Agenten-Kreisläufe gegen beliebige Anbieter-APIs sowie ein
     vollwertiger lokaler Motor (z.B. über Ollama). Die restliche App merkt nicht,
     welcher Motor dranhängt.
@@ -228,6 +250,10 @@ Seite aufs Projekt vorgefiltert zeigt (eigener Baustein, nicht Teil der Leinwand
   bei der lokalen KI, nur für den Motor — Erstläufe, Ø Tokens, Ø Kosten, Wiederholungen
   und bei Prüf-Blöcken die Erstbestehen-Quote als „schafft es"-Signal. Einträge ohne
   Modell (Läufe vor Bauschritt 36, Anläufe ohne Motor) stehen als „(ohne Modell)".
+  Ehrlichkeits-Notiz seit Bauschritt 37: Ein Block-Anlauf mischt fast immer mehrere
+  Modelle — den Koordinator (Haiku), den Block-Agenten (seine Klasse) und seine
+  Unteraufgaben. Gezählt wird das Modell mit dem größten Token-Anteil, also praktisch
+  immer das des Block-Agenten; die vollen Anteile stehen im Laufbericht (§3.2).
 
 ## 4. Workflows & Blöcke
 
@@ -294,7 +320,7 @@ Seite aufs Projekt vorgefiltert zeigt (eigener Baustein, nicht Teil der Leinwand
 
 Name · Symbol · **Arbeitsauftrag** (Anweisung an den Agenten) · **braucht / liefert**
 (z.B. „braucht: Angriffsliste, liefert: geprüften Code") · optionale **Sperren**
-(„darf nur lesen", „Pflichtfeld leer = Lauf hält an").
+(„darf nur lesen", „Pflichtfeld leer = Lauf hält an") · **Modellklasse** (§2).
 
 Kernprinzip (Life-OS-Lehre): **Blöcke erzwingen, statt zu bitten** — Sperren und Pflichtfelder
 blockieren den Weiterlauf, Regeln stehen nicht nur als Text im Prompt.
@@ -424,7 +450,10 @@ Verständlichkeit & Wildwuchs · Sicherheit & Datenverlust — möglichst gleich
 Georg, 14.08.2026 — gegen die Zügel-Empfehlung): keine Stichproben-Zügel wie beim
 Angreifer; dafür steht die Kosten-Folge sichtbar am Start im Ticker (ein
 Audit-Lauf kann mehrere hunderttausend Tokens kosten). Die lokale Helfer-KI
-bleibt als Recherche-Entlastung erlaubt (Häkchen je Block gilt). Je
+bleibt als Recherche-Entlastung erlaubt (Häkchen je Block gilt). Seit
+Bauschritt 37 wählt der Nutzer das **Modell** des Audits selbst (§2) — die drei
+Blickwinkel folgen ihm und werden von der Unteraufgaben-Einstellung nicht
+herabgestuft; „bewusst teuer" betraf die Lesetiefe, nicht die Modellklasse. Je
 **wesentlichem** Befund legt das Audit eine offene Aufgaben-Karte an (übliche
 Längengrenzen; Kleinkram bleibt im Abschlussbericht) — die Befunde rutschen
 damit automatisch in die Kartenauswahl der nächsten Bau-Läufe, Paket schneiden
@@ -696,10 +725,12 @@ Angreifer durch die Diagnose.
   Bibliothek jedes Projekts); sie sind nie Prüfer und haben keine Formularfelder. Seit
   Bauschritt 30 wählt jeder eigene Block eine **Kategorie** in der Bibliothek (eine der
   vier festen, „Eigene" oder eine frei benannte, höchstens 30 Zeichen — global gespeichert
-  wie der Block selbst; Altbestand ohne Kategorie liegt unter „Eigene"); Stepper und
-  KI-Assistent kennen das Feld.
+  wie der Block selbst; Altbestand ohne Kategorie liegt unter „Eigene") und seit
+  Bauschritt 37 seine **Modellklasse** als Voreinstellung (§2; Altbestand ohne Feld
+  läuft auf Standard, auf der Leinwand bleibt sie je Karte änderbar); Stepper und
+  KI-Assistent kennen beide Felder.
 - **Erstellungsassistent in 4 Schritten:** Was soll der Block tun? → Was braucht/liefert er? →
-  Welche Sperren gelten (nur „darf nur lesen")? → Probelauf-Vorschau (der exakte
+  Sperren („darf nur lesen") und Modellklasse → Probelauf-Vorschau (der exakte
   Arbeitsauftrag, den der Agent bekäme). Eine **Stepper-Leiste** zeigt die Schritte
   (erledigte sind anklickbar), und die Blockkarte liegt auf allen Schritten als
   **Live-Vorschau** rechts daneben — so, wie sie in der Bibliothek läge. Bearbeiten
@@ -733,7 +764,12 @@ Angreifer durch die Diagnose.
   Sperren („darf nur lesen", Prüfmappen-Besitz, Git-/Verwaltungsdatei-Sperren) erkennt
   FlowForge am Werkzeugaufruf (Unteraufgaben-Kennung) und setzt die Regeln des gerade
   laufenden Blocks für dessen Agenten und Helfer durch; der Koordinator darf
-  ausschließlich delegieren. Reparatur-Runden laufen als neuer Agent mit der
+  ausschließlich delegieren. Seit Bauschritt 37 läuft er außerdem auf dem
+  **kleinsten Modell** (er schreibt nur „AUFTRAG" und „OK"); jeder Block-Agent
+  bekommt beim Aufruf seine Modellklasse (§2) ausdrücklich mit, damit er das
+  Billigmodell nicht erbt. Weil der Übertrag den Koordinator-Faden misst, zählt für
+  die Schwelle auch nur **sein** Kontextfenster — das Fenster des Block-Agenten steht
+  getrennt daneben. Reparatur-Runden laufen als neuer Agent mit der
   Prüferkritik im Auftrag. **Parallele Zweige** laufen als eigene Sessions, weil die
   Lauf-Session einen Block nach dem anderen verarbeitet — ehrlich im Ticker vermerkt.
 - **Reparatur-Runde mit Diff und Vor-Fazit** (seit Bauschritt 34): Der frische Agent einer
@@ -860,7 +896,8 @@ Angreifer durch die Diagnose.
 - **Zwei Füllstände** (seit Bauschritt 36): Der Balken misst die **Lauf-Session** (den
   Koordinator) — er steuert den Übertrag. Daneben steht als Hinweis der Füllstand des
   **gerade arbeitenden Block-Agenten**, der die eigentliche Arbeit macht und sein eigenes
-  Fenster hat. Der Hinweis steuert nichts.
+  Fenster hat — seit Bauschritt 37 gemessen am Fenster **seines** Modells, nicht mehr an
+  dem des Koordinators. Der Hinweis steuert nichts.
 - **Stopp in zwei Stufen:** „Sanft anhalten" (laufender Block macht fertig, Halt am
   Sicherungspunkt) und „Sofort abbrechen" (Block gilt als nicht gelaufen; der Projektordner
   springt automatisch auf den letzten Sicherungspunkt zurück).
@@ -905,6 +942,8 @@ Angreifer durch die Diagnose.
   Kurzregeln und einen **Abschnitts-Index mit Zeilenbereichen** (beim Start des
   Chats aus der gebündelten Datei erzeugt), damit er gezielt liest — kein zweites
   Bedien-Dokument (Doku-Regel); (b) **das Projekt** (s.o.).
+  **Modell:** Der Chat läuft unverändert auf dem Standard-Modell des Motors — die
+  Modellklassen (§2) gelten für Blöcke, nicht für das Gespräch mit dir.
   **Was er darf — zwei Betriebsarten**, Schalter sichtbar über dem Eingabefeld, je
   Chat und jederzeit umschaltbar: Standard ist **nur-lesend** (übliche Lese-Regeln;
   Karten anlegen erlaubt — „leg das als Aufgabe an" ist der Normalweg, der nächste

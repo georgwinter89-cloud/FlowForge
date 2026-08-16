@@ -10,6 +10,7 @@ export default function Einstellungen({ onSchliessen }) {
   const [obergrenze, setObergrenze] = useState(5)
   const [rechteAutomatisch, setRechteAutomatisch] = useState(false)
   const [nurLesenBefehle, setNurLesenBefehle] = useState(false)
+  const [unteraufgabenModell, setUnteraufgabenModell] = useState('sparsam')
   const [uebertragTest, setUebertragTest] = useState(false)
   const [lokaleHelferAktiv, setLokaleHelferAktiv] = useState(false)
   const [lokaleHelferQuote, setLokaleHelferQuote] = useState(true)
@@ -28,6 +29,9 @@ export default function Einstellungen({ onSchliessen }) {
       setObergrenze(e.einstellungen.ausgabenObergrenzeUsd)
       setRechteAutomatisch(Boolean(e.einstellungen.rechteAutomatisch))
       setNurLesenBefehle(Boolean(e.einstellungen.nurLesenBefehle))
+      setUnteraufgabenModell(
+        e.einstellungen.unteraufgabenModell === 'wieBlock' ? 'wieBlock' : 'sparsam'
+      )
       setUebertragTest(Boolean(e.einstellungen.uebertragTest))
       setLokaleHelferAktiv(Boolean(e.einstellungen.lokaleHelferAktiv))
       setLokaleHelferQuote(e.einstellungen.lokaleHelferQuote !== false)
@@ -60,6 +64,7 @@ export default function Einstellungen({ onSchliessen }) {
       ausgabenObergrenzeUsd: Number(obergrenze),
       rechteAutomatisch,
       nurLesenBefehle,
+      unteraufgabenModell,
       uebertragTest,
       lokaleHelferAktiv,
       lokaleHelferQuote,
@@ -165,6 +170,35 @@ export default function Einstellungen({ onSchliessen }) {
             <span>
               {t.nurLesenBefehle}
               <span className="feld-hinweis"> — {t.nurLesenBefehleHinweis}</span>
+            </span>
+          </label>
+        </div>
+        {/* Unteraufgaben-Modell (BAUPLAN 37): Zuarbeit der Block-Agenten —
+            der Motor-Zwilling der lokalen Helfer-KI. */}
+        <p className="bericht-abschnitt">{t.unteraufgabenUeberschrift}</p>
+        <div className="feld">
+          <label className="wahl-zeile">
+            <input
+              type="radio"
+              name="unteraufgaben"
+              checked={unteraufgabenModell === 'sparsam'}
+              onChange={() => setUnteraufgabenModell('sparsam')}
+            />
+            <span>
+              {t.unteraufgabenSparsam}
+              <span className="feld-hinweis"> — {t.unteraufgabenSparsamHinweis}</span>
+            </span>
+          </label>
+          <label className="wahl-zeile">
+            <input
+              type="radio"
+              name="unteraufgaben"
+              checked={unteraufgabenModell === 'wieBlock'}
+              onChange={() => setUnteraufgabenModell('wieBlock')}
+            />
+            <span>
+              {t.unteraufgabenWieBlock}
+              <span className="feld-hinweis"> — {t.unteraufgabenWieBlockHinweis}</span>
             </span>
           </label>
         </div>
