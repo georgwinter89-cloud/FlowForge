@@ -115,7 +115,11 @@ import {
   wiederherstellen,
   letzterPunktId,
   standWeichtAb,
-  punkteVergleichen
+  punkteVergleichen,
+  strangOeffnen,
+  strangZusammenfuehren,
+  straengeAufraeumen,
+  sicherungspunkteLaden
 } from './sicherungspunkte.js'
 import { workflowLaden } from './workflow.js'
 import { laufstandSpeichern, laufstandLaden, laufstandLoeschen } from './laufstand.js'
@@ -126,6 +130,389 @@ import { metrikUrteilSchreiben } from './metriken.js'
 import { prozessgruppeAnlegen, prozessgruppeAbraeumen } from './prozesse.js'
 
 const BERICHTE_ORDNER = 'laufberichte'
+const PRUEFMAPPE = 'pruefung'
+
+// ——— Wirkbereich je Block-Instanz (BAUPLAN 45) ————————————————————————————
+// „Welche Dateien gehören diesem Schreiber?" — die eine Antwort, aus der
+// Punkt-Strang, gefilterter Rollback und gefilterter Diff gerechnet werden:
+//   Prüfer          → sein eigener Prüfordner (je Instanz seit BAUPLAN 41). Er
+//                     bekommt per Definition keine Dateiliste; sein Ordner IST
+//                     sein Vertrag.
+//   Umsetzer        → die Dateiliste aus dem Datenvertrag (BAUPLAN 44).
+//   alles andere    → null (nur-lesend, Schreiber ohne Arbeitspaket, alter
+//                     Laufstand). null heißt: kein Strang, kein Filter, exakt
+//                     das Verhalten von vor Bauschritt 45 — und genau das steht
+//                     dann auch im Ticker, damit niemand eine Trennung annimmt,
+//                     die es nicht gibt.
+// Reine Rechnung und exportiert, damit sich die Regel ohne laufenden Lauf
+// prüfen lässt.
+export function wirkbereichVon(def, pruefOrdner, dateiListe) {
+  if (def?.prueft) return pruefOrdner ? [PRUEFMAPPE + '/' + pruefOrdner + '/'] : null
+  if (def?.nurLesen) return null
+  return dateiListe?.length ? [...dateiListe] : null
+}
+
+// Womit der Änderungs-Überblick gefiltert wird (BAUPLAN 45) — mit dem
+// Wirkbereich, aber NUR beim Umsetzer. Der Wirkbereich eines Prüfers ist seine
+// Prüfmappe, und die ist im Diff ohnehin ausgeschlossen (BAUPLAN 34: Seine
+// eigenen Tests sind keine Bauer-Änderung). Filterte man seinen Diff darauf,
+// bliebe von „das hat sich seit deinem Urteil geändert" nichts übrig — und der
+// Prüfer ginge blind in die Nachprüfung, ohne dass irgendwo etwas rot würde.
+export function diffFilterVon(def, wirkbereich) {
+  if (def?.prueft) return null
+  return wirkbereich?.length ? wirkbereich : null
+}
+
+// Was aus einem Punkte-Vergleich in den Auftrag geht (BAUPLAN 45). Eigene
+// Rechenstelle, weil der wichtigste Fall genau der unscheinbarste ist: Hat der
+// Block in dieser Runde AUSSCHLIESSLICH außerhalb seiner Dateiliste gewirkt
+// (ausgeführte Befehle schreiben an der Sperre vorbei, BAUPLAN 44), bleibt nach
+// dem Filtern keine einzige Datei übrig. Ein leerer Rückgabewert hieße dann für
+// den Agenten „nichts hat sich geändert" — der Hinweis muss auch ohne Diff-Rumpf
+// mit, sonst ist der Filter wieder ein stiller Verlust.
+export function diffAuftragsText(dateien, ausserhalb, { verschmutzt = false } = {}) {
+  const zusatz = ausserhalb > 0 ? texte.agentenUebergabe.diffAusserhalb(ausserhalb) : ''
+  if (!dateien?.length) return zusatz
+  return diffTextBauen(dateien, { verschmutzt }) + zusatz
+}
+
+// Wie der Punkt am Blockende heißt (BAUPLAN 45). Eigene, ausdrücklich geprüfte
+// Rechenstelle: Die Beschriftung folgt dem tatsächlichen Ausgang, nicht der
+// Absicht — „fertig" nur, wenn der Block auch fertig wurde; ein Prüfer, der
+// zurückweist, ist es nicht. Im Rumpf des Ablaufplaners ließe sich diese Zusage
+// nur nachlesen, nicht ausführen.
+export function blockendeBeschriftung(status, name) {
+  return status === 'fertig'
+    ? texte.sicherungen.beschriftungNachBlock(name)
+    : texte.sicherungen.beschriftungRundeBeendet(name)
+}
+
+// Die GESCHÜTZTEN Bereiche eines Blocks: die Wirkbereiche der ANDEREN
+// Instanzen des Laufs. Bewusst die Umkehrung (BAUPLAN 45): Den Rollback auf die
+// eigene Dateiliste zu beschränken wäre falsch, weil ausgeführte Befehle und der
+// Schreibpfad der lokalen KI an der Dateilisten-Sperre vorbeischreiben
+// (BAUPLAN 44) — deren Gebastel bliebe sonst liegen und der Agent baute darauf
+// weiter. Der Rollback fasst also alles an, nur nicht das Revier der anderen.
+//
+// Prüfordner zählen IMMER: Dort liegt die aufbewahrte Arbeit eines fremden
+// Prüfers, auch wenn er gerade nicht läuft. Die Dateiliste eines Umsetzers zählt
+// nur, solange er WIRKLICH gleichzeitig schreibt — sonst schützte sie genau das
+// Gebastel, das ein Rollback wegräumen soll. Heute läuft nie ein zweiter
+// Schreiber (SPEC §5); ab Bauschritt 46 füllt sich diese Zeile von selbst.
+// andere: [{ instanzId, def, pruefOrdner, dateiListe, laeuft }]
+export function geschuetzteBereicheVon(eigeneInstanzId, andere) {
+  const bereiche = []
+  for (const eintrag of andere ?? []) {
+    if (eintrag.instanzId === eigeneInstanzId) continue
+    if (!eintrag.def?.prueft && !eintrag.laeuft) continue
+    bereiche.push(...(wirkbereichVon(eintrag.def, eintrag.pruefOrdner, eintrag.dateiListe) ?? []))
+  }
+  return [...new Set(bereiche)]
+}
+
+// Die drei Nähte, an denen die Stränge am Lauf hängen (BAUPLAN 45). Sie stehen
+// als eigene, exportierte Stellen hier oben und nicht im Rumpf des
+// Ablaufplaners — und das ist keine Ordnungsliebe: Der Rumpf braucht Fenster,
+// Schaubild und laufende Motoren, ausführen lässt er sich in einer Prüfung
+// nicht. Eine Zusicherung, die stattdessen nur den Quelltext abklopft, bleibt
+// grün, während der Ticker eine Trennung behauptet, die es gar nicht gibt —
+// genau die Lage, die dieser Bauschritt verhindern soll. Hier greift eine
+// Prüfung die echten Sicherungspunkte ab und liest denselben Ticker wie Georg.
+//
+// `k` ist der Knoten des Laufs; er wird an Ort und Stelle fortgeschrieben
+// (k.wirkbereich, k.strang, k.strangGemeldet), genau wie im Ablaufplaner.
+
+// Kennt der gemeinsame Stand die Spitze dieses Strangs schon? Dann hält der
+// Strang nichts mehr fest, was verlorengehen könnte — er ist ein
+// liegengebliebener Zeiger, genau wie die Stränge, die straengeAufraeumen beim
+// Laufstart wegräumt. Gemessen an der Liste, die Georg sieht: Sie wandert von
+// 'haupt' aus über ALLE Elternpfade, Zusammenführungen eingeschlossen — steht
+// die Spitze darin, ist sie eingeholt.
+//
+// Im Zweifel „nicht eingeholt": Ein Strang zu viel kostet nichts, ein
+// abgeschnittener Rückroll-Punkt ist verlorene Arbeit.
+export async function strangEingeholt(projektPfad, strang) {
+  if (!strang) return true
+  const spitze = await letzterPunktId(projektPfad, strang)
+  if (!spitze) return true
+  if (spitze === (await letzterPunktId(projektPfad))) return true
+  const liste = await sicherungspunkteLaden(projektPfad)
+  return liste.punkte.some((punkt) => punkt.id === spitze)
+}
+
+// Ein Schreiber mit Wirkbereich bekommt seinen eigenen Strang; alle seine
+// Sicherungspunkte laufen darauf, Rückroll und Änderungs-Überblick werten nur
+// ihn aus. Der Zweigname trägt NUR die Instanz-Kennung — der Zusatzname
+// (BAUPLAN 41) ist ein freies Feld („Bauer · Datenbank") und ergäbe keine
+// gültige Referenz; er steht in der Beschriftung des Punkts.
+//
+// Der Strang endet am Blockende — mit EINER Ausnahme: Schickt eine lokale
+// Vorreparatur ihren Prüfer sofort in die Nachprüfung, bleibt er über das
+// Blockende hinweg offen (k.strangOffenHalten), weil sein Ankerpunkt das Ziel
+// des Rückrolls ist, den die Nachprüfung womöglich auslöst. Dadurch können
+// mehrere Stränge gleichzeitig offen liegen: Ein wartender Prüfer belegt den
+// Schreiber-Platz nicht, ein anderer Block fährt inzwischen seine Runde. Das ist
+// zulässig, weil ein Strang nur ein Zeiger ist und der Projektordner die
+// Wahrheit bleibt. Entsprechend können nach einem Absturz auch mehrere Stränge
+// liegenbleiben — straengeAufraeumen holt beim nächsten Laufstart jeden davon
+// ein und sagt es im Ticker.
+export async function strangOeffnenAn(projektPfad, k, { instanzId, bezeichnung, dateiListe, tickern }) {
+  // Je Anlauf frisch: Zwischen zwei Runden kann eine Lieferung angekommen sein,
+  // die den Datenvertrag erst füllt.
+  k.wirkbereich = wirkbereichVon(k.def, k.pruefOrdner, dateiListe)
+  // Die Bitte „lass meinen Strang über das Blockende hinaus offen" gilt immer
+  // nur für den EINEN Anlauf, der sie gestellt hat. Ein neuer Anlauf beginnt
+  // hier — ab jetzt endet der Strang wieder ganz normal am Blockende. Für DIESES
+  // Öffnen zählt sie aber noch: Sie ist der Grund, warum der Strang überhaupt
+  // noch dasteht.
+  const wartete = k.strangOffenHalten === true
+  k.strangOffenHalten = false
+  if (k.def?.nurLesen) return k.strang ?? null
+  // Ein Strang, der aus dem vorigen Anlauf desselben Blocks noch offen liegt,
+  // wird NICHT neu geöffnet: strangOeffnen setzt den Zweig mit force auf den
+  // gemeinsamen Stand — und schnitte damit genau den Rückroll-Punkt ab, den
+  // dieser Anlauf noch braucht (die gescheiterte Nachprüfung nach lokaler
+  // Vorreparatur rollt auf ihn zurück).
+  //
+  // Das gilt ausdrücklich AUCH, wenn der Strang gar keinen eigenen Punkt trägt
+  // und deshalb als eingeholt gilt: Hat der Prüfer in seinem Anlauf nichts
+  // geschrieben, entsteht kein neuer Ankerpunkt, der Strang zeigt auf den
+  // gemeinsamen Stand von damals — und sobald ein anderer Block danach
+  // zusammenführt, sieht er aus wie ein liegengebliebener Zeiger. Neu angesetzt
+  // stünde er dann auf der Spitze MIT dem Gebastel, und der Rückroll fände
+  // nichts mehr zurückzunehmen. Gemessen genau so. Stehengelassen greift
+  // stattdessen die Bremse für den überholten Anker: Zurückgenommen wird nur der
+  // eigene Wirkbereich, die fertige Arbeit des anderen Blocks bleibt, und der
+  // Ticker sagt beides.
+  //
+  // Nur ein Strang, den KEIN wartender Anlauf mehr braucht (sein Zusammenführen
+  // ist gescheitert) und den der gemeinsame Stand längst eingeholt hat, wird neu
+  // angesetzt — dieselbe Lage, die straengeAufraeumen beim Laufstart wegräumt.
+  // Sonst läse der Änderungs-Überblick dieses Blocks „bis" von einem überholten
+  // Punkt, und ein Rückroll nähme die inzwischen zusammengeführte Arbeit fremder
+  // Blöcke mit.
+  if (k.strang && (wartete || !(await strangEingeholt(projektPfad, k.strang)))) return k.strang
+  // Die Ticker-Zeile kommt einmal je Block, nicht in jeder Reparatur-Runde
+  // erneut — wie bei der Dateilisten-Zeile. Gemerkt wird aber, WAS gemeldet
+  // wurde: Trägt eine Lieferung den Datenvertrag erst in einer späteren Runde
+  // nach, kippt die Lage, und das gehört gesagt.
+  function melden(lage, text) {
+    if (k.strangGemeldet === lage) return
+    k.strangGemeldet = lage
+    tickern(text)
+  }
+  if (!k.wirkbereich) {
+    // Verschwindet der Datenvertrag in einer späteren Runde wieder, bleibt ein
+    // schon offener Strang stehen — er ist ein Zeiger, kein Zustand, und den
+    // Block jetzt mitten im Lauf ohne Trennung weiterlaufen zu lassen brächte
+    // niemandem etwas.
+    if (k.strang) return k.strang
+    melden('ohne', texte.ticker.strangOhneWirkbereich(bezeichnung))
+    return null
+  }
+  const strang = 'strang/' + instanzId
+  const geoeffnet = await strangOeffnen(projektPfad, strang)
+  // Klemmt das Öffnen, läuft der Block ohne Trennung weiter — wie vor
+  // Bauschritt 45. Das wird GESAGT: Ein stummer Fehlschlag wäre genau die
+  // Annahme einer Trennung, die es nicht gibt. Der nächste Anlauf versucht es
+  // erneut; 'ohne' als gemeldete Lage lässt die Zeile dann wieder zu, sobald
+  // es klappt. Klemmt dagegen das NEU-Ansetzen eines eingeholten Strangs,
+  // bleibt der alte in Gebrauch: Er ist eingeholt, also verliert er nichts.
+  if (!geoeffnet.ok) {
+    if (k.strang) return k.strang
+    melden('ohne', texte.ticker.strangNichtGeoeffnet(bezeichnung))
+    return null
+  }
+  k.strang = strang
+  melden('mit', texte.ticker.strangGeoeffnet(bezeichnung))
+  return strang
+}
+
+// Zusammenführung am Blockende: EIN Punkt auf dem gemeinsamen Stand, der den
+// Strang einholt. Dieser Punkt IST der Punkt des Blocks — deshalb trägt er
+// dessen Beschriftung, und deshalb legt der Fertig-Zweig im Ablaufplaner keinen
+// zweiten mehr an: Beide hielten denselben Ordnerstand, und Georgs
+// Wiederherstellen-Liste wäre je Lauf doppelt so lang, ohne dass es zwischen
+// den Paaren etwas zu wählen gäbe. Die Beschriftung folgt dem tatsächlichen
+// Ausgang — ein Prüfer, der zurückweist, ist nicht „fertig".
+//
+// Getickert wird nur, wenn der Block wirklich fertig ist — die stillen
+// Zusammenführungen zwischen zwei Reparatur-Runden sind Buchführung und würden
+// den Ticker zuschütten. Ein FEHLSCHLAG dagegen wird immer gesagt: Solange der
+// Strang nicht eingeholt ist, hängen seine Punkte am gemeinsamen Stand vorbei.
+//
+// EINE Ausnahme hält den Strang über das Blockende hinweg offen: die
+// unmittelbar folgende Nachprüfung einer lokalen Vorreparatur (k.strangOffenHalten).
+// Zusammenführen heißt, den jetzigen Arbeitsordner als neue gemeinsame Spitze
+// einzufrieren. Steht darin gerade das Gebastel der lokalen KI, wäre genau das
+// ab sofort „der Stand vor der Reparatur" — der Rückroll der gescheiterten
+// Nachprüfung fände nichts mehr zurückzunehmen und meldete es nicht einmal.
+// Gemessen genau so, bevor diese Bedingung dazukam.
+//
+// Warum die Ausnahme so eng ist und nicht schlicht am Status 'offen' hängt:
+// Jeder ANDERE Weg zurück auf 'offen' (Reparatur-Runde, Nachforderung) beginnt
+// einen wirklich neuen Anlauf, und an dessen Startpunkt steht der Arbeitsordner
+// auf einem Stand, der eingefroren werden DARF — bei der Eskalation ist das
+// genau der Ankerpunkt, auf den eben zurückgerollt wurde. Bliebe der Strang
+// auch dort liegen, zeigte er in den nächsten Anlauf hinein auf einen Punkt aus
+// dem Anlauf davor: Der Änderungs-Überblick des Prüfers läse beide Enden auf
+// demselben Punkt und fiele lautlos auf leer, und ein Rückroll (harter Stopp)
+// zielte auf einen Stand, der die inzwischen fertige Arbeit anderer Blöcke gar
+// nicht kennt. Beides gemessen, bevor die Ausnahme eng gefasst wurde.
+//
+// `endgueltig` ist das Sicherheitsnetz am Laufende: Dort wird ALLES geschlossen,
+// auch was noch auf 'offen' steht — dann läuft nichts mehr nach, und ein
+// liegengebliebener Strang wäre beim nächsten Laufstart nur noch Aufräumarbeit.
+export async function strangSchliessenAn(
+  projektPfad,
+  k,
+  { bezeichnung, tickern, endgueltig = false }
+) {
+  if (!k.strang) return true
+  if (!endgueltig && k.strangOffenHalten) return true
+  const ergebnis = await strangZusammenfuehren(
+    projektPfad,
+    k.strang,
+    blockendeBeschriftung(k.status, k.name)
+  )
+  // Erst NACH dem Gelingen vergessen: Bliebe der Strang hier auch im Fehlerfall
+  // los, öffnete der nächste Anlauf denselben Namen neu (mit force) und
+  // schnitte genau die Arbeit ab, die der Strang festhalten sollte — und das
+  // Sicherheitsnetz am Laufende versuchte es nie erneut.
+  if (!ergebnis.ok) {
+    tickern(texte.ticker.strangNichtZusammengefuehrt(bezeichnung))
+    return false
+  }
+  k.strang = null
+  if (k.status === 'fertig') tickern(texte.ticker.strangZusammengefuehrt(bezeichnung))
+  return true
+}
+
+// Ein Rückroll und seine ehrlichen Folgen an einer Stelle: Der Rückgabewert
+// wurde bis Bauschritt 45 an drei Stellen weggeworfen — der Ticker meldete
+// „zurückgerollt", auch wenn nichts zurückging.
+//
+// `nichtsMelden` schaltet den Gegenzweig zum Erfolgs-Satz frei: Ein Rückroll,
+// der NICHTS zurückgenommen hat, blieb für Georg still — der Ticker sprang
+// wortlos zur nächsten Zeile, während der Agent den Hinweis sehr wohl bekam.
+// Die Entscheidung kommt bewusst vom Aufrufer: Am harten Stopp ist „nichts
+// zurückzunehmen" der Normalfall (der Ordner steht schon auf dem Punkt), und die
+// Zeile wäre dort unerwünscht laut.
+//
+// WELCHER der beiden Sätze fällt, entscheidet sich dagegen hier — nur hier sind
+// die Zahlen bekannt. `zurueckgesetzt: false` meint zwei sehr verschiedene
+// Lagen: „es war wirklich nichts zu tun" und „es gab etwas, es blieb aber alles
+// stehen" (fremdes Revier, überholter Anker). Gemessen, bevor das getrennt
+// wurde: Der Ticker versprach einen Ordner, der „schon genau auf dem
+// Sicherungspunkt" stehe, und sagte in der Zeile darunter, was liegengeblieben
+// ist. Maßstab ist bewusst die Zahl der übersprungenen Dateien und nicht
+// `standUeberholt` allein: Ein überholter Anker, bei dem gar nichts zu tun war,
+// überspringt nichts — dort wäre „liegengeblieben" genauso falsch herum.
+//
+// `eigenerBereich` ist die ehrliche Grenze dieses Rückrolls (Nacharbeit zu
+// BAUPLAN 45): der Wirkbereich des Blocks, dessen Arbeit hier fällt. Er greift
+// NUR, wenn der Rückroll-Punkt inzwischen überholt ist — wenn also ein ANDERER
+// Block seit diesem Punkt seine fertige Runde zusammengeführt hat. Dann nähme
+// ein voller Rückroll dessen Arbeit mit aus dem Projektordner, obwohl sie
+// fertig und abgenommen ist; zurückgenommen wird deshalb nur noch, was
+// FlowForge dem betroffenen Block selbst zuordnen kann. Was dabei stehenbleibt,
+// sagt der Ticker — stumm wäre es genau der Verlust, den dieser Bauschritt
+// abschafft. Gemessen genau so, bevor die Grenze dazukam: Die Datei des
+// zweiten Bauers stand wieder auf ihrem Ausgangsstand, während ihr
+// Sicherungspunkt weiter in Georgs Liste stand und kein Wort davon fiel.
+export async function zurueckrollenAn(
+  projektPfad,
+  { strang, geschuetzt, eigenerBereich, erfolgsText, nichtsMelden = false, tickern }
+) {
+  const zurueck = await aufLetztenPunktZuruecksetzen(projektPfad, {
+    strang: strang ?? null,
+    geschuetzt: geschuetzt ?? [],
+    eigenerBereich: eigenerBereich ?? null
+  })
+  if (!zurueck.ok) {
+    tickern(texte.ticker.rollbackGescheitert)
+    return zurueck
+  }
+  if (zurueck.zurueckgesetzt === false) {
+    if (nichtsMelden)
+      tickern(
+        (zurueck.geschuetztUebersprungen ?? 0) + (zurueck.fremdUebersprungen ?? 0) > 0
+          ? texte.ticker.rollbackNichtsAngefasst
+          : texte.ticker.rollbackNichtsZurueckgenommen
+      )
+  } else if (erfolgsText) tickern(erfolgsText)
+  if (zurueck.geschuetztUebersprungen > 0)
+    tickern(texte.ticker.rollbackGeschuetzt(zurueck.geschuetztUebersprungen))
+  if (zurueck.standUeberholt && zurueck.fremdUebersprungen > 0)
+    tickern(texte.ticker.rollbackStandUeberholt(zurueck.fremdUebersprungen))
+  return zurueck
+}
+
+// Welcher Block ist beim harten Stopp wirklich mitten im Anlauf abgebrochen?
+// (Nacharbeit zu BAUPLAN 45) Der Status taugt dafür allein nicht mehr: Ein
+// abgebrochener Block steht danach auf 'offen' — und ein Prüfer, der auf seine
+// Nachprüfung wartet, ebenfalls. Wer in der Liste zuerst steht, entschied dann
+// über den Rückroll, und das konnte der Falsche sein. Deshalb merkt sich der
+// Ablaufplaner den Abbruch am Knoten und fragt hier danach.
+//
+// Kein Treffer (Abbruch, bevor überhaupt ein Block lief): die alte Rechnung —
+// der erste, der nicht fertig wurde.
+export function hartAbgebrochenerBlock(knotenListe) {
+  const liste = knotenListe ?? []
+  return (
+    liste.find((k) => k?.hartAbgebrochen && k.strang) ??
+    liste.find((k) => k?.hartAbgebrochen) ??
+    liste.find((k) => k?.status !== 'fertig') ??
+    null
+  )
+}
+
+// Der zentrale Rückroll des harten Stopps (SPEC §6) als eigene, ausführbare
+// Stelle — im Rumpf des Ablaufplaners ließe sich nur nachlesen, worauf er zielt.
+//
+// Der Maßstab ist der Strang des ABGEBROCHENEN Blocks — nie der eines fremden.
+// Ein fremder offener Strang gehört zu einem Anlauf, der hier gar nicht
+// abbricht; vorher lieh sich der harte Stopp den erstbesten und rollte damit auf
+// einen Punkt zurück, der die fertige Arbeit anderer Blöcke nicht kennt.
+// Zeigt der eigene Strang auf einen überholten Punkt, bremst die Grenze in
+// zurueckrollenAn: Zurückgenommen wird dann nur noch der eigene Wirkbereich,
+// und der Ticker sagt, was stehenblieb. Die Wirkbereiche der anderen Instanzen
+// bleiben ohnehin unangetastet.
+export async function hartZurueckrollenAn(projektPfad, { knotenListe, geschuetztFuer, tickern }) {
+  const abgebrochen = hartAbgebrochenerBlock(knotenListe)
+  return zurueckrollenAn(projektPfad, {
+    strang: abgebrochen?.strang ?? null,
+    geschuetzt: geschuetztFuer(abgebrochen),
+    eigenerBereich: abgebrochen?.wirkbereich ?? null,
+    erfolgsText: texte.ticker.zurueckgesetzt,
+    tickern
+  })
+}
+
+// Was der Laufstart mit den Strängen macht, die ein Absturz hinterlassen hat
+// (BAUPLAN 45) — genauer: was Georg davon erfährt. Auch das steht als eigene
+// Stelle hier, aus demselben Grund wie oben: Der Laufstart selbst lässt sich in
+// einer Prüfung nicht fahren, ohne echte Motoren anzuwerfen, und ausgerechnet
+// die Fehlerlage (das Aufräumen klemmt) wäre dann nie gemessen.
+//
+// Drei Ausgänge, drei Zeilen — und keiner davon darf verschwiegen werden:
+// weggeräumt wurde, was der gemeinsame Stand längst kennt; eingeholt wurde, was
+// er noch nicht kannte (erst damit steht es in Georgs Liste); stehen bleibt nur
+// das, wo auch das Einholen geklemmt hat.
+export async function straengeMeldenBeimStart(projektPfad, tickern) {
+  const aufgeraeumt = await straengeAufraeumen(projektPfad)
+  // Die einzige Fehlerlage dieses Bauschritts, die bis zur Nacharbeit stumm
+  // blieb: Klemmt das Aufräumen, bleiben die alten Stränge liegen. Für den Lauf
+  // folgenlos, aber verschwiegen wäre es ein Bruch mit SPEC §3.3.
+  if (!aufgeraeumt.ok) {
+    tickern(texte.ticker.straengeNichtAufgeraeumt)
+    return aufgeraeumt
+  }
+  if (aufgeraeumt.entfernt > 0) tickern(texte.ticker.straengeAufgeraeumt(aufgeraeumt.entfernt))
+  if (aufgeraeumt.eingeholt > 0) tickern(texte.ticker.straengeGerettet(aufgeraeumt.eingeholt))
+  if (aufgeraeumt.behalten > 0) tickern(texte.ticker.straengeBehalten(aufgeraeumt.behalten))
+  return aufgeraeumt
+}
 
 // Kontingent-Pause (SPEC §5): so lange wartet FlowForge zwischen zwei
 // Versuchen, wenn das Abo-Kontingent erschöpft ist.
@@ -1177,6 +1564,11 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     }
   }
   if (ausWarteschlange) tickern(texte.ticker.ausWarteschlangeGestartet)
+  // Die Wiederaufnahme hat schon zurückgerollt, bevor es diesen Ticker gab
+  // (laufFortsetzen) — was sie dabei absichtlich stehen ließ, erfährt Georg
+  // hier, mit demselben Wortlaut wie an den drei Rückroll-Stellen im Lauf.
+  if (fortsetzung?.rollbackGeschuetzt > 0)
+    tickern(texte.ticker.rollbackGeschuetzt(fortsetzung.rollbackGeschuetzt))
   // Sichtbarer Hinweis (SPEC §5, BAUPLAN 12): parallele Läufe vervielfachen den
   // Verbrauch — ehrlich im Ticker und damit auch im Laufbericht.
   if (aktiveLaeufe.size > 1) tickern(texte.lauf.parallelHinweis(aktiveLaeufe.size))
@@ -1184,6 +1576,14 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
   // Der eigentliche Ablaufplaner — läuft im Hintergrund weiter, laufStarten
   // kehrt sofort zurück.
   ;(async () => {
+    // Punkt-Stränge je Schreiber (BAUPLAN 45): Liegen aus einem Absturz noch
+    // Stränge herum, wird jetzt reiner Tisch gemacht — weggeräumt, was der
+    // gemeinsame Stand schon kennt, eingeholt, was er noch nicht kennt. Beides
+    // MUSS hier passieren, bevor dieser Lauf eigene Stränge anlegt: Ein Strang
+    // trägt den Namen seiner Instanz, und der nächste Anlauf desselben Blocks
+    // setzt ihn neu — der gerettete Punkt hinge danach an keinem Zeiger mehr.
+    await straengeMeldenBeimStart(projektPfad, tickern)
+
     // Ein Knoten pro Schaubild-Karte: Zustand, Lieferung und die Zusätze, die
     // beim nächsten Anlauf desselben Blocks in den Auftrag gehören.
     const knoten = new Map(
@@ -1282,7 +1682,19 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           // dateilisteGemeldet — die Ticker-Zeile zum Datenvertrag kommt einmal
           //   je Block, nicht in jeder Reparatur-Runde erneut.
           zuschnittNachforderung: '',
-          dateilisteGemeldet: false
+          dateilisteGemeldet: false,
+          // Sicherungspunkte je Schreiber (BAUPLAN 45):
+          // strang — der eigene Punkt-Strang dieses Block-Anlaufs (null = keiner,
+          //   dann zählt der gemeinsame Stand wie vor Bauschritt 45);
+          // wirkbereich — welche Dateien diesem Block gehören (null = unbekannt),
+          //   Grundlage für Strang, gefilterten Diff und die geschützten
+          //   Bereiche der anderen;
+          // strangGemeldet — welche Lage zuletzt getickert wurde ('mit'/'ohne'),
+          //   damit dieselbe Zeile nicht in jeder Runde erneut kommt, ein
+          //   Umschwung aber sehr wohl.
+          strang: null,
+          wirkbereich: null,
+          strangGemeldet: null
         }
       ])
     )
@@ -2107,6 +2519,22 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           // der bei diesem Block angekommenen Arbeitspakete — null heißt „keine
           // Sperre" (kein Paket, kein Vertrag, alter Laufstand).
           dateiListe,
+          // Sicherungspunkte je Schreiber (BAUPLAN 45): Strang und geschützte
+          // Bereiche DIESES Blocks. Die lokalen Helfer-Werkzeuge legen ihre
+          // Punkte darauf an und rollen nur darauf zurück — bis hierher hing
+          // dieser Zustand an der Motor-Session, die alle Blöcke nacheinander
+          // bedient (BAUPLAN 19), und der nächste Block rollte die Arbeit des
+          // vorigen zurück.
+          sicherung: {
+            kennung: instanzId,
+            bezeichnung: texte.ticker.blockBezeichnung(nummerVon.get(instanzId), k.name),
+            strang: k.strang ?? null,
+            geschuetzt: geschuetzteBereicheFuer(k),
+            // Sein EIGENER Wirkbereich (Nacharbeit zu BAUPLAN 45): die Notbremse
+            // für den Fall, dass der Rückroll-Punkt eines Teilstücks inzwischen
+            // von der Zusammenführung eines anderen Blocks überholt wurde.
+            eigenerBereich: k.wirkbereich ?? null
+          },
           // Modellklasse je Block (BAUPLAN 37): die Wahl an der Blockkarte,
           // sonst die Voreinstellung des Blocks. Der Motor trägt sie beim
           // Agent-Aufruf ein; das Modell der Unteraufgaben hängt zusätzlich
@@ -2177,6 +2605,10 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     // Überträge und Kontingent-/Server-Pausen durchstehen — bis ein endgültiges
     // Ergebnis da ist. Läuft für parallele Blöcke gleichzeitig.
     async function knotenAusfuehren(k) {
+      // Punkt-Strang je Schreiber (BAUPLAN 45): VOR allem anderen — ab hier
+      // laufen alle Sicherungspunkte dieses Blocks auf seinen Strang, und der
+      // Diff unten braucht seinen Wirkbereich.
+      await strangOeffnenFuer(k)
       // Lieferschein (BAUPLAN 42): Ein neuer Anlauf des Blocks (Reparatur-Runde,
       // Nachforderung) beginnt ohne Meldung — sonst gälte still das Urteil des
       // letzten Anlaufs weiter. Die alte bleibt als Vorlage erhalten. Ein
@@ -2198,7 +2630,10 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       // Projektordner steht — daraus rechnet FlowForge später „das hast du in
       // diesem Lauf bisher geändert" (kumulativ über alle Runden).
       if (!k.def.nurLesen && k.diffBasis === undefined) {
-        k.diffBasis = await letzterPunktId(projektPfad)
+        // Basis und Spitze müssen auf DEMSELBEN Strang gelesen werden
+        // (BAUPLAN 45) — sonst zeigen beide auf den gemeinsamen Stand, sind
+        // dieselbe id, und der Diff fällt lautlos auf leer zurück.
+        k.diffBasis = await letzterPunktId(projektPfad, k.strang ?? null)
         // Ehrliche Grenze: Hat vorher ein nur-lesender Block per Befehl Dateien
         // verändert, steckt das mit im Diff — dann sagt der Auftrag es dazu.
         // Nachsehen lohnt nur, wenn das überhaupt möglich war: Ohne die
@@ -2206,7 +2641,7 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         // nur-lesender Block etwas, und der Blick über den ganzen Ordner entfällt.
         k.diffBasisVerschmutzt =
           Boolean(k.diffBasis) && einstellungen.nurLesenBefehle
-            ? await standWeichtAb(projektPfad)
+            ? await standWeichtAb(projektPfad, k.strang ?? null)
             : false
       }
       // Tor ohne KI (BAUPLAN 35): Steht eine Nachprüfung an und liegt ein
@@ -2537,11 +2972,29 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     // arbeitsablage/ — die Prüfer-Tests liegen beim Rückführen uncommittet im
     // Ordner und wanderten sonst als „Bauer-Änderung" mit.
     async function diffTextFuer(k) {
-      const bis = await letzterPunktId(projektPfad)
+      // Beide Enden auf dem Strang des Blocks (BAUPLAN 45): Alle seine Punkte
+      // liegen dort; läse „bis" den gemeinsamen Stand, wäre es dieselbe id wie
+      // die Basis und der Diff fiele lautlos auf leer zurück.
+      const bis = await letzterPunktId(projektPfad, k.strang ?? null)
       if (!k.diffBasis || !bis || k.diffBasis === bis) return ''
-      const vergleich = await punkteVergleichen(projektPfad, k.diffBasis, bis)
-      if (!vergleich.ok || vergleich.dateien.length === 0) return ''
-      const text = diffTextBauen(vergleich.dateien, { verschmutzt: k.diffBasisVerschmutzt })
+      // Gefiltert auf den eigenen Wirkbereich (BAUPLAN 45): Jeder Umsetzer
+      // sieht nur seine Änderungen — ein Block ohne Wirkbereich (und der
+      // Prüfer, siehe diffFilterVon) sieht alles wie bisher.
+      const vergleich = await punkteVergleichen(projektPfad, k.diffBasis, bis, {
+        nurDateien: diffFilterVon(k.def, k.wirkbereich)
+      })
+      if (!vergleich.ok) return ''
+      // Was der Filter weggenommen hat, wird gesagt statt verschwiegen — sonst
+      // wäre es wieder ein stiller Verlust, und genau den verbietet SPEC
+      // durchgängig. Auch dann, wenn danach nichts mehr übrig ist.
+      const ausserhalb = vergleich.ausserhalb ?? 0
+      if (ausserhalb > 0) tickern(texte.ticker.diffAusserhalb(ausserhalb))
+      const text = diffAuftragsText(vergleich.dateien, ausserhalb, {
+        verschmutzt: k.diffBasisVerschmutzt
+      })
+      // Nichts übrig nach dem Filter: Der Hinweis ist dann der ganze Text —
+      // eine Bilanz-Zeile („n Dateien übergeben") wäre schlicht gelogen.
+      if (vergleich.dateien.length === 0) return text
       tickern(
         texte.ticker.diffUebergeben(
           k.name,
@@ -2727,6 +3180,82 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         }
       }
       return dateiListeVereinigen(angekommene)
+    }
+
+    // Die geschützten Bereiche (BAUPLAN 45) für einen Knoten dieses Laufs — die
+    // Regel selbst steht als reine Rechnung oben im Modul.
+    //
+    // k darf fehlen: Beim harten Stopp ist im Zweifel kein Block mehr als
+    // „der abgebrochene" auszumachen. Dann zählt jede Instanz als fremd, und
+    // geschützt sind die Prüfmappen aller — lieber eine zu viel stehen lassen
+    // als fremde Arbeit löschen.
+    function geschuetzteBereicheFuer(k) {
+      return geschuetzteBereicheVon(
+        k?.eintrag?.instanzId ?? null,
+        kette.map((eintrag) => {
+          const andere = knoten.get(eintrag.instanzId)
+          return {
+            instanzId: eintrag.instanzId,
+            def: andere.def,
+            pruefOrdner: andere.pruefOrdner,
+            // Die Dateiliste kostet einen Übergaben-Durchlauf — nur rechnen,
+            // wenn sie überhaupt zählen kann (siehe geschuetzteBereicheVon).
+            dateiListe: andere.status === 'laeuft' ? dateiListeFuer(andere) : null,
+            laeuft: andere.status === 'laeuft'
+          }
+        })
+      )
+    }
+
+    // Wie ein Block im Ticker heißt: Blocknummer plus Anzeigename.
+    function bezeichnungFuer(k) {
+      return texte.ticker.blockBezeichnung(nummerVon.get(k.eintrag.instanzId), k.name)
+    }
+
+    // Punkt-Strang je Schreiber (BAUPLAN 45) — die Regeln selbst stehen oben im
+    // Modul als eigene, ausführbare Stellen; hier hängen nur noch die Daten
+    // dieses Laufs dran.
+    async function strangOeffnenFuer(k) {
+      await strangOeffnenAn(projektPfad, k, {
+        instanzId: k.eintrag.instanzId,
+        bezeichnung: bezeichnungFuer(k),
+        dateiListe: dateiListeFuer(k),
+        tickern
+      })
+    }
+
+    async function strangSchliessenFuer(k) {
+      await strangSchliessenAn(projektPfad, k, { bezeichnung: bezeichnungFuer(k), tickern })
+    }
+
+    // Das Sicherheitsnetz am Laufende: Hier wird JEDER Strang geschlossen, auch
+    // der eines Blocks, der noch auf 'offen' steht. Zwischen den Blöcken bleibt
+    // ein solcher Strang bewusst liegen (siehe strangSchliessenAn) — nach dem
+    // Laufende läuft aber nichts mehr nach, das ihn noch bräuchte.
+    async function strangEndgueltigSchliessenFuer(k) {
+      await strangSchliessenAn(projektPfad, k, {
+        bezeichnung: bezeichnungFuer(k),
+        tickern,
+        endgueltig: true
+      })
+    }
+
+    // betroffen = der Block, dessen Arbeit fällt (bei der lokalen Vorreparatur
+    // ist das nicht der Prüfer, sondern sein Rückführungs-Ziel); strang = der
+    // Strang, auf dem der Rückroll-Punkt liegt. `nichtsMelden` nur dort, wo ein
+    // Rückroll wirklich versprochen wurde — am harten Stopp ist „nichts
+    // zurückzunehmen" der Normalfall und die Zeile wäre unerwünscht laut.
+    async function zurueckrollen(betroffen, strang, erfolgsText, { nichtsMelden = false } = {}) {
+      return zurueckrollenAn(projektPfad, {
+        strang,
+        geschuetzt: geschuetzteBereicheFuer(betroffen),
+        // Der Wirkbereich DESSEN, dessen Arbeit hier fällt — die Notbremse für
+        // den überholten Rückroll-Punkt (siehe zurueckrollenAn).
+        eigenerBereich: betroffen?.wirkbereich ?? null,
+        erfolgsText,
+        nichtsMelden,
+        tickern
+      })
     }
 
     // Ein gemeldeter Zuschnitt als Ticker-Zeile: je Paket sein Ziel mit
@@ -3028,7 +3557,11 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
 
       if (ergebnis.zustand === 'hart-abgebrochen') {
         // Der Abbruch samt Zurücksetzen wird nach dem Ende aller Motoren
-        // einmal zentral erledigt.
+        // einmal zentral erledigt. Wer dabei WIRKLICH mitten im Anlauf stand,
+        // wird hier vermerkt: Danach steht er auf 'offen' wie jeder wartende
+        // Block, und der zentrale Rückroll unten könnte sonst den Strang eines
+        // Blocks nehmen, der gar nicht abbricht.
+        k.hartAbgebrochen = true
         k.status = 'offen'
         return
       }
@@ -3308,6 +3841,9 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           const beanstandungen = beanstandungenAusMeldungen(k.meldungen)
           const belegKritik = prueferKritik(beanstandungen)
           const zielId = rueckfuehrungsZiel(workflow.bloecke, workflow.pfeile, id)
+          // Weiter oben geholt als früher (BAUPLAN 45): Der Rollback unten
+          // braucht den Ziel-Block schon — dessen Arbeit rollt er zurück.
+          const zielK = zielId ? knoten.get(zielId) : null
 
           // Lokale Vorreparatur (BAUPLAN 20): Mechanische Beanstandungen
           // repariert zuerst die lokale KI — erst wenn das Budget (2 je
@@ -3321,16 +3857,28 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           if (warLokaleNachpruefung) {
             // Gescheiterte Nachprüfung: Stand zurückrollen, BEVOR es weitergeht
             // — der Motor-Bauer soll reparieren, nicht erst das Gebastel der
-            // lokalen KI verstehen müssen. Der neueste Punkt ist garantiert
-            // „Stand vor lokaler Reparatur" (der Fehlschlag-Zweig legt keine an).
-            tickern(
-              texte.ticker.lokaleReparaturZurueckgerollt(k.lokaleVersuche, LOKALE_REPARATUR_VERSUCHE)
+            // lokalen KI verstehen müssen. Der neueste Punkt auf dem Strang des
+            // Prüfers ist garantiert „Stand vor lokaler Reparatur" (der
+            // Fehlschlag-Zweig legt keinen an).
+            //
+            // Gefiltert (BAUPLAN 45): Zurückgerollt wird die Arbeit des
+            // ZIEL-Blocks — die lokale KI hat in dessen Dateien repariert, nicht
+            // in denen des Prüfers. Geschützt bleiben damit die Prüfmappen aller
+            // Prüfer, auch die des gerade urteilenden: Er hat in der Nachprüfung
+            // frische Tests hineingeschrieben, und bis Bauschritt 45 löschte
+            // dieser Rollback sie wortlos mit.
+            await zurueckrollen(
+              zielK ?? k,
+              k.strang,
+              texte.ticker.lokaleReparaturZurueckgerollt(k.lokaleVersuche, LOKALE_REPARATUR_VERSUCHE),
+              // Hier ist ein Rückroll ausdrücklich versprochen — bleibt er ohne
+              // Wirkung, muss Georg genau das lesen statt gar nichts. Welcher
+              // der beiden Sätze passt, entscheidet die Naht an den Zahlen.
+              { nichtsMelden: true }
             )
-            await aufLetztenPunktZuruecksetzen(projektPfad)
             metrikUrteil(k.lokaleReparaturBlock, 'reparatur', 'nicht-gehalten', k.lokaleReparaturSchritte)
             eskalationsKritik = k.lokaleKritik
           }
-          const zielK = zielId ? knoten.get(zielId) : null
           // Nur aktiv, wenn die lokale KI beim Laufstart bereitstand und das
           // Häkchen am Ziel-Block (dessen Reparatur-Runde ersetzt würde) an ist.
           const lokalErlaubt =
@@ -3358,9 +3906,12 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
               k.lokaleVersuche++
               // Sicherungspunkt vor jedem Versuch — ohne Rückroll-Punkt läuft
               // kein lokaler Versuch.
+              // Auf den Strang des Prüfers (BAUPLAN 45) — dorthin greift der
+              // Rollback oben zurück, wenn die Nachprüfung scheitert.
               const punkt = await sicherungspunktAnlegen(
                 projektPfad,
-                texte.sicherungen.beschriftungVorLokalerReparatur
+                texte.sicherungen.beschriftungVorLokalerReparatur,
+                { strang: k.strang ?? null }
               )
               if (!punkt.ok) break
               tickern(
@@ -3404,6 +3955,12 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
                 k.lokaleReparaturSchritte = reparatur.schritte ?? 0
                 k.lokaleReparaturBlock = zielK.name
                 k.status = 'offen'
+                // Der EINZIGE Fall, in dem der Strang über das Blockende hinweg
+                // offen bleibt: Der Ankerpunkt von eben ist das Ziel des
+                // Rückrolls, den die gleich folgende Nachprüfung womöglich
+                // auslöst. Eine Zusammenführung fröre stattdessen das Gebastel
+                // der lokalen KI als neue gemeinsame Spitze ein.
+                k.strangOffenHalten = true
                 return
               }
               // Nichts ersetzt (oder Ollama gescheitert): nichts zurückzurollen
@@ -3458,8 +4015,10 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
             ziel.torProtokoll = warLokaleNachpruefung ? '' : k.letztesTorProtokoll
             k.letztesTorProtokoll = ''
             // Für den Prüfer zählt ab jetzt „was sich seit meinem Urteil
-            // geändert hat" — seine Nachprüfung bekommt denselben Dienst.
-            k.diffBasis = await letzterPunktId(projektPfad)
+            // geändert hat" — seine Nachprüfung bekommt denselben Dienst. Vom
+            // eigenen Strang gelesen (BAUPLAN 45): Dort liegen seine Punkte;
+            // der gemeinsame Stand kennt sie erst nach der Zusammenführung.
+            k.diffBasis = await letzterPunktId(projektPfad, k.strang ?? null)
             k.diffAnfordern = true
             // Der Prüfer selbst prüft in der nächsten Runde nur seine
             // Beanstandungen nach — keine erneute Vollprüfung. Die Felder
@@ -3493,7 +4052,13 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       // Sicherungspunkt nach jedem gelungenen schreibenden Block (SPEC §3.3).
       // Nur-lesende Blöcke ändern nichts — und ein Punkt, während parallel ein
       // Schreiber arbeitet, würde dessen halbfertige Änderungen einfrieren.
-      if (!k.def.nurLesen) {
+      //
+      // Hat der Block einen eigenen Strang (BAUPLAN 45), legt hier NICHTS an:
+      // Die Zusammenführung gleich danach hält denselben Ordnerstand fest und
+      // trägt dieselbe Beschriftung. Zwei Punkte wären zwei Einträge in Georgs
+      // Wiederherstellen-Liste, zwischen denen es sachlich nichts zu wählen
+      // gibt. Es bleibt bei genau einem Punkt je schreibendem Block.
+      if (!k.def.nurLesen && !k.strang) {
         const punkt = await sicherungspunktAnlegen(
           projektPfad,
           texte.sicherungen.beschriftungNachBlock(k.name)
@@ -3513,6 +4078,14 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       lauf.aktiveInstanzen.delete(id)
       senden({ art: 'block-fertig', instanzId: id })
       await verarbeite(id, ergebnis)
+      // Zusammenführung am Blockende (BAUPLAN 45): Der Strang lebt nur
+      // innerhalb EINES Block-Anlaufs — hier wird er auf den gemeinsamen Stand
+      // geholt, bevor der nächste Block startet. Beim harten Stopp NICHT: Dort
+      // setzt der zentrale Rollback unten erst zurück; erst danach ist der
+      // Arbeitsordner die Wahrheit, die zusammengehört. Steht der Block auf
+      // 'offen', läuft er gleich wieder — sein Anlauf ist nicht zu Ende, und
+      // strangSchliessenAn lässt seinen Strang deshalb stehen.
+      if (!lauf.hart) await strangSchliessenFuer(knoten.get(id))
       standSpeichern()
     }
 
@@ -3522,10 +4095,24 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     // Harter Stopp: alle Motoren sind tot — der Projektordner springt einmal
     // zentral auf den letzten Sicherungspunkt zurück (SPEC §6).
     if (lauf.hart && !wiederherstellenNachLauf) {
-      const zurueck = await aufLetztenPunktZuruecksetzen(projektPfad)
-      if (zurueck.ok && zurueck.zurueckgesetzt) tickern(texte.ticker.zurueckgesetzt)
+      // Maßgeblich ist der Strang des ABGEBROCHENEN Blocks — und nur, solange er
+      // noch taugt. Beide Regeln stehen oben im Modul als ausführbare Stellen;
+      // hier hängen nur die Daten dieses Laufs dran. Sein Rückroll lässt die
+      // Wirkbereiche der anderen Instanzen stehen (BAUPLAN 45); erst danach macht
+      // die Zusammenführung den wiederhergestellten Stand zum gemeinsamen.
+      await hartZurueckrollenAn(projektPfad, {
+        knotenListe: kettenIds.map((kid) => knoten.get(kid)),
+        geschuetztFuer: geschuetzteBereicheFuer,
+        tickern
+      })
       endZustand = 'hart-abgebrochen'
     }
+    // Sicherheitsnetz: Kein Strang dieses Laufs bleibt offen — ein
+    // liegengebliebener wäre beim nächsten Laufstart nur noch Aufräum-Arbeit,
+    // und sein Punkt fehlte in Georgs Sicherungspunkt-Liste. Hier ZÄHLT der
+    // Status nicht mehr: Auch ein Block, der noch auf 'offen' steht, bekommt
+    // seinen Strang geschlossen — nach dem Laufende läuft nichts mehr nach.
+    for (const kid of kettenIds) await strangEndgueltigSchliessenFuer(knoten.get(kid))
     if (!endZustand) {
       const alleFertig = kettenIds.every((id) => knoten.get(id).status === 'fertig')
       endZustand = alleFertig ? 'erfolgreich' : lauf.sanft ? 'sanft-gestoppt' : 'fehlgeschlagen'
@@ -3732,6 +4319,25 @@ export function laufstandInfo(projektPfad) {
   return { ok: true, vorhanden: true, gestartetAm: stand.gestartetAm, blockName }
 }
 
+// Geschützte Bereiche bei der Wiederaufnahme (BAUPLAN 45): die Prüfordner aller
+// Instanzen des Schaubilds außer dem abgebrochenen Block. Sie sind der
+// Wirkbereich fremder Prüfer — dort liegt aufbewahrte Arbeit, die der
+// abgebrochene Block nicht mitreißen darf. Die Dateilisten der Umsetzer stehen
+// hier nicht zur Verfügung (sie entstehen erst im Lauf aus den Lieferungen) —
+// und sie gehören auch nicht dazu: Ein Umsetzer, dessen Arbeit fällt,
+// hinterlässt kein zu schützendes Revier.
+function fremdePruefbereiche(projektPfad, abgebrochenId) {
+  const geladen = workflowLaden(projektPfad)
+  if (!geladen.ok) return []
+  const bereiche = []
+  for (const eintrag of geladen.workflow.bloecke) {
+    if (eintrag.instanzId === abgebrochenId) continue
+    const ordner = pruefOrdnerFuer(blockDefinition(eintrag.blockId), eintrag)
+    if (ordner) bereiche.push(PRUEFMAPPE + '/' + ordner + '/')
+  }
+  return [...new Set(bereiche)]
+}
+
 export function laufstandVerwerfen(projektPfad) {
   laufstandLoeschen(projektPfad)
   return { ok: true }
@@ -3750,14 +4356,35 @@ export async function laufFortsetzen(fenster, projektPfad, ausWarteschlange = fa
   // — seine Platz-Prüfung hat der Anstoßer vor dem Herausnehmen gemacht.
   if (!ausWarteschlange && plaetzeBelegt() >= MAX_PARALLEL_LAEUFE)
     return inWarteschlangeStellen(fenster, projektPfad, null, true)
-  const zurueck = await aufLetztenPunktZuruecksetzen(projektPfad)
+  // Der nächste offene Block ist der abgebrochene — seine Arbeit fällt, die
+  // Prüfmappen der anderen Instanzen nicht (BAUPLAN 45). Ein Strang aus dem
+  // Absturz wird bewusst NICHT benutzt: Er hielte genau die Arbeit fest, die
+  // hier fallen soll; der Laufstart räumt ihn gleich weg.
+  const abgebrochenId = Array.isArray(stand.fertigIds)
+    ? stand.kettenIds.find((id) => !stand.fertigIds.includes(id))
+    : stand.kettenIds[stand.index]
+  const zurueck = await aufLetztenPunktZuruecksetzen(projektPfad, {
+    geschuetzt: fremdePruefbereiche(projektPfad, abgebrochenId)
+  })
   if (!zurueck.ok) return zurueck
   // Sonderlauf (BAUPLAN 30): derselbe Ein-Block-Workflow wie beim Start.
   const sonderlauf =
     stand.sonderlauf && SONDERLAEUFE[stand.sonderlauf.art] && typeof stand.sonderlauf.instanzId === 'string'
       ? { art: stand.sonderlauf.art, instanzId: stand.sonderlauf.instanzId }
       : null
-  return laufStarten(fenster, projektPfad, stand.kartenIds, stand, ausWarteschlange, sonderlauf)
+  return laufStarten(
+    fenster,
+    projektPfad,
+    stand.kartenIds,
+    // Was der Rückroll stehengelassen hat, gehört in den Ticker (SPEC §3.3) —
+    // den gibt es hier noch nicht, laufFortsetzen läuft vor dem Laufstart. Die
+    // Zahl reist deshalb im Laufstand mit und wird drüben einmal getickert;
+    // ohne sie verschwiege ausgerechnet die Wiederaufnahme, dass fremde
+    // Prüfmappen bewusst stehengeblieben sind.
+    { ...stand, rollbackGeschuetzt: zurueck.geschuetztUebersprungen ?? 0 },
+    ausWarteschlange,
+    sonderlauf
+  )
 }
 
 // Sonderlauf starten (BAUPLAN 30): Aufräum-Knöpfe der Karten-Seitenleiste.

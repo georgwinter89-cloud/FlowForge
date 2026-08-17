@@ -5,6 +5,11 @@
 // „Bauer-Änderung" in den Auftrag der Reparatur-Runde wandert.
 // Rot-vor-Grün: Ohne den Prüfmappen-Ausschluss in punkteVergleichen taucht
 // pruefung/test.js in der Dateiliste auf — der dritte Fall schlägt dann fehl.
+//
+// Diese Datei prüft ausdrücklich den Weg OHNE Strang (BAUPLAN 45): alle Aufrufe
+// ohne die neuen Zusatzangaben, also gegen 'haupt' und ungefiltert. Sie ist
+// damit die Zusage, dass der Alltagsweg unverändert weiterläuft, während der
+// getrennte Weg je Schreiber in sicherungsstraenge.test.js gemessen wird.
 import { describe, it, expect, beforeAll } from 'vitest'
 import fs from 'node:fs'
 import os from 'node:os'
@@ -58,6 +63,9 @@ describe('BAUPLAN 34 · Diff aus zwei Sicherungspunkten', () => {
   it('findet geänderte, neue und gelöschte Dateien mit Zeilenbilanz', async () => {
     const vergleich = await punkteVergleichen(projektPfad, vorBauer, nachBauer)
     expect(vergleich.ok).toBe(true)
+    // Ohne Dateiliste fällt nichts weg — der ungefilterte Weg meldet ehrlich 0,
+    // statt die Zahl offenzulassen (BAUPLAN 45).
+    expect(vergleich.ausserhalb).toBe(0)
     const nach = Object.fromEntries(vergleich.dateien.map((datei) => [datei.pfad, datei]))
     expect(nach['app.js']).toMatchObject({ art: 'geaendert', plus: 1, minus: 1 })
     expect(nach['neu.js']).toMatchObject({ art: 'neu' })

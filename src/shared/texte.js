@@ -949,6 +949,15 @@ export const texte = {
       'gegeben: Erkunde diese Stellen nicht neu und triff keine anderen ' +
       'Entwurfsentscheidungen als beim letzten Mal — behebe nur die Beanstandungen.\n' +
       diff,
+    // Gefilterter Diff (BAUPLAN 45): Der Überblick zeigt nur noch die eigene
+    // Dateiliste. Was dabei wegfiel, wird gesagt statt verschwiegen — sonst
+    // hielte der Agent den Ausschnitt für den ganzen Stand. Ohne „weitere"
+    // formuliert: Der Satz steht auch dann allein da, wenn nach dem Filtern
+    // GAR keine Datei übrig blieb — und da wäre „weitere" schlicht falsch.
+    diffAusserhalb: (anzahl) =>
+      `\n\n(${anzahl} ${anzahl === 1 ? 'geänderte Datei liegt' : 'geänderte Dateien liegen'} ` +
+      `außerhalb deiner Dateiliste und ${anzahl === 1 ? 'ist' : 'sind'} hier nicht gezeigt — ` +
+      `${anzahl === 1 ? 'sie gehört' : 'sie gehören'} anderen Blöcken.)`,
     // Diff für den Prüfer in der Nachprüfung: was sich seit seinem Urteil getan hat.
     aenderungenSeitUrteil: (diff) =>
       '\n\nDas hat sich am Projekt geändert, seit du dein Urteil gefällt hast — von ' +
@@ -1468,6 +1477,44 @@ export const texte = {
     teilstueckOhneOffenes:
       'Kein offenes Teilstück — nichts abzunehmen und nichts zurückzurollen. (Ein ' +
       'gescheiterter lokal_bauen-Versuch ist schon aufgeräumt.)',
+    // Ehrlichkeit beim Zurückrollen (BAUPLAN 45): Bisher wurde der Rückgabewert
+    // weggeworfen — der Agent las „zurückgerollt" und baute auf einem Stand
+    // weiter, den FlowForge für verworfen hielt. Scheitert es, muss er es lesen.
+    rollbackGescheitertHinweis:
+      '\n\nACHTUNG: Das Zurückrollen hat NICHT geklappt — der Satz oben über den sauberen ' +
+      'Stand gilt NICHT. Die Änderungen der lokalen KI liegen noch im Projekt. Baue nicht ' +
+      'blind darauf weiter: Sieh dir die genannten Dateien zuerst selbst an und bring sie ' +
+      'in Ordnung.',
+    rollbackPunktVerschobenHinweis:
+      '\n\nACHTUNG: Dieses Teilstück stammt aus einem früheren Anlauf dieses Blocks — ' +
+      'FlowForge hat NICHTS zurückgerollt, weil dabei auch die Arbeit dieser Runde ' +
+      'verschwunden wäre. Sieh dir die betroffenen Stellen selbst an und bring sie in Ordnung.',
+    // Der Rückroll lässt die Arbeitsbereiche der anderen Blöcke absichtlich stehen
+    // (BAUPLAN 45). Ohne diesen Zusatz endete die Werkzeug-Antwort bei „der
+    // Projektstand ist sauber" — gemessen genau so, während das Gebastel der
+    // lokalen KI in einer fremden Prüfmappe liegenblieb.
+    rollbackGeschuetztHinweis: (anzahl) =>
+      '\n\nACHTUNG: Nicht alles wurde zurückgenommen. ' +
+      `${anzahl} ${anzahl === 1 ? 'Änderung liegt' : 'Änderungen liegen'} im Arbeitsbereich ` +
+      'anderer Blöcke (zum Beispiel in deren Prüfmappe) und blieb absichtlich stehen — der ' +
+      'Satz oben über den sauberen Stand gilt nur für deine eigenen Dateien. Fass fremde ' +
+      'Arbeitsbereiche nicht an; rechne aber damit, dass dort noch Reste dieses Versuchs liegen.',
+    // Überholter Rückroll-Punkt (Nacharbeit zu BAUPLAN 45): Ein anderer Block
+    // hat seit diesem Punkt seine fertige Runde beigesteuert. Voll
+    // zurückzurollen nähme sie mit — also blieb stehen, was nicht sicher diesem
+    // Block gehört. Ohne diesen Zusatz hielte der Agent den Ordner für sauber.
+    rollbackStandUeberholtHinweis: (anzahl) =>
+      '\n\nACHTUNG: Nicht alles wurde zurückgenommen. Seit dem Sicherungspunkt, auf den ' +
+      `zurückgerollt wurde, hat ein anderer Block fertige Arbeit beigesteuert; ${anzahl} ` +
+      `${anzahl === 1 ? 'Änderung blieb' : 'Änderungen blieben'} deshalb stehen, damit sie ` +
+      'nicht mitfällt. Der Satz oben über den sauberen Stand gilt nur für deine eigenen ' +
+      'Dateien — sieh dir die betroffenen Stellen selbst an, bevor du darauf weiterbaust.',
+    // Und der stille Gegenfall: Die lokale KI hat geschrieben, der Rückroll fand
+    // aber nichts zurückzunehmen. Dann ist „sauber" eine Behauptung ohne Deckung.
+    rollbackNichtsGefundenHinweis:
+      '\n\nACHTUNG: Beim Zurückrollen war nichts zurückzunehmen, obwohl die lokale KI ' +
+      'Dateien angefasst hat — der Satz oben über den sauberen Stand ist damit nicht ' +
+      'verbürgt. Sieh dir die genannten Dateien selbst an, bevor du darauf weiterbaust.',
     // Zusatz im Auftrag schreibender Blöcke (nur wenn die lokale KI bereitsteht
     // und das Häkchen am Block an ist — eingesetzt von der Lauf-Verwaltung).
     bauenAuftragZusatz:
@@ -2543,6 +2590,121 @@ export const texte = {
       'Rauchtest übersprungen: Die App läuft gerade im App-Tab — FlowForge nimmt ihr den Port nicht weg.',
     sicherungspunktAngelegt: 'Sicherungspunkt angelegt.',
     zurueckgesetzt: 'Projektordner auf den letzten Sicherungspunkt zurückgesetzt.',
+    // Sicherungspunkte je Schreiber (BAUPLAN 45). „Strang" ist ein Fachwort —
+    // für Georg heißt es „eigener Sicherungsstrang für diesen Block".
+    strangGeoeffnet: (bezeichnung) =>
+      `Eigener Sicherungsstrang für ${bezeichnung} — Zurückrollen und Änderungs-Überblick ` +
+      'gelten ab jetzt nur für seine Dateien.',
+    // Ehrlich, wo die Trennung NICHT gilt: Ohne Arbeitspaket mit Dateiliste hat
+    // FlowForge keinen Anhalt, welche Dateien diesem Block gehören.
+    strangOhneWirkbereich: (bezeichnung) =>
+      `${bezeichnung} bekommt KEINEN eigenen Sicherungsstrang — ohne Arbeitspaket mit ` +
+      'Dateiliste weiß FlowForge nicht, welche Dateien ihm gehören. Zurückrollen gilt für ' +
+      'ihn wie bisher für den ganzen Projektordner.',
+    // Und ehrlich, wo die Trennung an der Technik scheitert: Ohne diese Zeile
+    // liefe der Block klammheimlich ohne Trennung — genau die Annahme, die
+    // strangOhneWirkbereich verhindern soll.
+    strangNichtGeoeffnet: (bezeichnung) =>
+      `Der eigene Sicherungsstrang für ${bezeichnung} ließ sich NICHT anlegen — der Block ` +
+      'läuft ohne Trennung weiter. Zurückrollen fasst für ihn wie bisher den ganzen ' +
+      'Projektordner, und sein Änderungs-Überblick ist ungefiltert.',
+    strangZusammengefuehrt: (bezeichnung) =>
+      `Der eigene Sicherungsstrang von ${bezeichnung} ist wieder mit dem gemeinsamen ` +
+      'Stand zusammengeführt — sein Sicherungspunkt steht in der Liste.',
+    strangNichtZusammengefuehrt: (bezeichnung) =>
+      `Der eigene Sicherungsstrang von ${bezeichnung} ließ sich NICHT mit dem gemeinsamen ` +
+      'Stand zusammenführen — sein Sicherungspunkt fehlt deshalb noch in der Liste. ' +
+      'FlowForge versucht es am Ende des Laufs erneut.',
+    straengeAufgeraeumt: (anzahl) =>
+      anzahl === 1
+        ? 'Ein liegengebliebener Sicherungsstrang aus einem früheren Abbruch wurde entfernt.'
+        : `${anzahl} liegengebliebene Sicherungsstränge aus einem früheren Abbruch wurden entfernt.`,
+    // Aufgeräumt wird nur, was der gemeinsame Stand ohnehin schon kennt. Hält
+    // ein Strang Arbeit fest, die nie zusammengeführt wurde, holt der Laufstart
+    // sie ein — erst danach steht sie als Sicherungspunkt in der Liste.
+    straengeGerettet: (anzahl) =>
+      anzahl === 1
+        ? 'Ein Sicherungsstrang aus einem früheren Abbruch hielt noch Arbeit fest, die nie beim ' +
+          'gemeinsamen Stand angekommen war — sie ist jetzt eingeholt und steht als ' +
+          'Sicherungspunkt in der Liste.'
+        : `${anzahl} Sicherungsstränge aus einem früheren Abbruch hielten noch Arbeit fest, die ` +
+          'nie beim gemeinsamen Stand angekommen war — sie ist jetzt eingeholt und steht als ' +
+          'Sicherungspunkte in der Liste.',
+    // Stehen bleibt nur noch, wo auch das Einholen geklemmt hat. Kein
+    // Versprechen mehr, das der nächste Lauf bricht: Es bleibt liegen, in der
+    // Liste steht es nicht — genau so wird es gesagt.
+    straengeBehalten: (anzahl) =>
+      anzahl === 1
+        ? 'Ein Sicherungsstrang aus einem früheren Abbruch hält Arbeit fest, die nie beim ' +
+          'gemeinsamen Stand angekommen ist — sie ließ sich auch jetzt nicht einholen. Er ' +
+          'bleibt unangetastet liegen, steht aber nicht in der Liste der Sicherungspunkte; ' +
+          'FlowForge versucht es beim nächsten Start erneut.'
+        : `${anzahl} Sicherungsstränge aus einem früheren Abbruch halten Arbeit fest, die nie ` +
+          'beim gemeinsamen Stand angekommen ist — sie ließ sich auch jetzt nicht einholen. Sie ' +
+          'bleiben unangetastet liegen, stehen aber nicht in der Liste der Sicherungspunkte; ' +
+          'FlowForge versucht es beim nächsten Start erneut.',
+    straengeNichtAufgeraeumt:
+      'Die Sicherungsstränge aus früheren Abbrüchen ließen sich nicht aufräumen — der Lauf ' +
+      'läuft normal weiter, FlowForge versucht es beim nächsten Start erneut.',
+    // Auch der Rückbezug wird mitgebeugt: „1 Änderung blieb … sie liegen" war
+    // im Ticker einer echten Messung zu lesen — und genau eine fremde Änderung
+    // ist der Regelfall, sobald ein einziger fremder Prüfer im Lauf steht.
+    rollbackGeschuetzt: (anzahl) =>
+      `${anzahl} ${anzahl === 1 ? 'Änderung blieb' : 'Änderungen blieben'} beim Zurückrollen ` +
+      `unberührt — ${anzahl === 1 ? 'sie liegt' : 'sie liegen'} im Arbeitsbereich anderer ` +
+      'Blöcke (zum Beispiel in deren Prüfmappe).',
+    rollbackGescheitert:
+      'Das Zurückrollen hat NICHT geklappt — der Projektordner steht noch auf dem verworfenen ' +
+      'Stand. Der Agent hat den Hinweis bekommen und baut nicht blind darauf weiter.',
+    // Der stille Gegenfall zum Erfolgs-Satz: Es sollte zurückgerollt werden, es
+    // war aber nichts zurückzunehmen. Gemessen, bevor diese Zeile dazukam: Der
+    // Ticker sprang wortlos zur nächsten Zeile, während der Agent den Hinweis
+    // sehr wohl bekam — Georg las von der versuchten Reparatur gar nichts mehr.
+    // Steht nur dort, wo ein Rückroll wirklich versprochen war; am harten Stopp
+    // ist „nichts zurückzunehmen" der Normalfall.
+    //
+    // ZWEI Sätze, weil derselbe Rückgabewert zwei sehr verschiedene Lagen meint
+    // (gemessen): „nichts zurückgenommen" heißt einmal „es war wirklich nichts
+    // zu tun" und einmal „es gab etwas, es blieb aber alles stehen". Der erste
+    // Satz an der zweiten Lage war schlicht falsch — er behauptete einen
+    // sauberen Ordner, während direkt darunter stand, was liegengeblieben ist.
+    rollbackNichtsZurueckgenommen:
+      'Beim Zurückrollen war nichts zurückzunehmen — der Projektordner stand schon genau auf ' +
+      'dem Sicherungspunkt. Verworfen wurde damit nichts, obwohl etwas verworfen werden sollte.',
+    rollbackNichtsAngefasst:
+      'Beim Zurückrollen wurde nichts angefasst — der verworfene Stand liegt unverändert im ' +
+      'Projektordner. Zurückzunehmen gab es sehr wohl etwas; es steht aber vollständig in ' +
+      'Bereichen, die FlowForge stehenlassen muss. Die Zeile darunter sagt, welche das sind.',
+    // Der gemeinsame Stand ist weitergerückt, seit der Rückroll-Punkt festgelegt
+    // wurde: Ein ANDERER Block hat inzwischen seine fertige Runde beigesteuert.
+    // Voll zurückzurollen nähme sie mit. Gemessen genau so, bevor diese Grenze
+    // dazukam: Die Arbeit des zweiten Bauers verschwand aus dem Projektordner,
+    // ihr Sicherungspunkt stand weiter in der Liste, und der Ticker meldete
+    // nichts als „zurückgerollt".
+    rollbackStandUeberholt: (anzahl) =>
+      `${anzahl} ${anzahl === 1 ? 'Änderung blieb' : 'Änderungen blieben'} beim Zurückrollen ` +
+      'stehen, weil seit diesem Sicherungspunkt ein anderer Block seine fertige Runde ' +
+      `beigesteuert hat — ${anzahl === 1 ? 'sie würde' : 'sie würden'} sonst mit aus dem ` +
+      'Projektordner fallen. Zurückgenommen wurde nur, was FlowForge dem betroffenen Block ' +
+      'selbst zuordnen kann.',
+    // Ein offen gebliebenes Teilstück aus einem früheren Anlauf desselben
+    // Blocks: Sein Rückroll-Punkt gehört nicht mehr zum jetzigen Stand — ein
+    // Rückroll würfe die Arbeit der laufenden Runde weg.
+    rollbackPunktVerschoben:
+      'Das offene Teilstück gehört zu einem früheren Anlauf dieses Blocks — es wird NICHTS ' +
+      'zurückgerollt, sonst fiele die Arbeit der laufenden Runde mit. Der Agent bringt es selbst ' +
+      'in Ordnung.',
+    // Offenes Teilstück je Block (BAUPLAN 45): Bis hierher lebte es in der
+    // Lauf-Session, die alle Blöcke nacheinander bedient — der nächste Block
+    // konnte es abnehmen und damit SEINE Arbeit zurückrollen.
+    teilstueckBeimBlockwechsel: (bezeichnung, teilstueck) =>
+      `Offenes Teilstück „${teilstueck}" aus ${bezeichnung} wurde nie abgenommen — mit dem ` +
+      'Blockwechsel ist es geschlossen. Zurückgerollt wird nichts: Der Rückroll-Punkt gehört ' +
+      'zum vorherigen Block.',
+    diffAusserhalb: (anzahl) =>
+      `${anzahl} ${anzahl === 1 ? 'geänderte Datei liegt' : 'geänderte Dateien liegen'} außerhalb ` +
+      `der Dateiliste dieses Blocks — ${anzahl === 1 ? 'sie steht' : 'sie stehen'} nicht in ` +
+      'seinem Änderungs-Überblick.',
     fertigIn: (sekunden) => `Fertig nach ${sekunden} Sekunden.`,
     blockStartet: (nr, gesamt, name) => `Block ${nr} von ${gesamt}: „${name}" startet.`,
     // Karten-Vorschläge (BAUPLAN 26): Vorschlag und Ausgang sichtbar im Ticker.
@@ -2731,10 +2893,24 @@ export const texte = {
     // Lokaler Bauer (BAUPLAN 22): auf genau diesen Punkt wird zurückgerollt,
     // wenn die Abnahme des Teilstücks scheitert.
     beschriftungVorLokalemTeilstueck: 'Stand vor lokalem Teilstück',
+    // Sicherungspunkte je Schreiber (BAUPLAN 45): Der Punkt am Blockende IST
+    // die Zusammenführung des eigenen Strangs — es gibt weiterhin genau EINEN
+    // Eintrag je schreibendem Block, sonst stünde derselbe Ordnerstand zweimal
+    // in Georgs Liste. Der Zusatzname des Blocks (BAUPLAN 41) steht hier —
+    // nicht im Namen des Strangs. Für „fertig" gilt beschriftungNachBlock;
+    // endet der Block anders (ein Prüfer, der zurückweist, ein abgebrochener
+    // Anlauf), darf dort nicht „fertig" stehen.
+    beschriftungRundeBeendet: (block) => `Stand nach Runde „${block}"`,
     // Nachlauf-Chat (BAUPLAN 27): vor der ersten Änderung des Chats.
     beschriftungVorChatReparatur: 'Stand vor Chat-Reparatur',
     beschriftungWiederhergestellt: (zeit) => `Zurückgeholt: Stand von ${zeit}`,
     fehlerAnlegen: 'Der Sicherungspunkt konnte nicht angelegt werden. Der Lauf wurde sicherheitshalber nicht gestartet.',
+    // Stränge scheitern mitten im Lauf, nicht beim Start (BAUPLAN 45) — der
+    // Satz oben wäre dort schlicht falsch.
+    fehlerStrangOeffnen:
+      'Der eigene Sicherungsstrang für diesen Block konnte nicht angelegt werden. Der Block läuft ohne Trennung weiter.',
+    fehlerStrangZusammenfuehren:
+      'Der eigene Sicherungsstrang dieses Blocks konnte nicht mit dem gemeinsamen Stand zusammengeführt werden.',
     fehlerVorschau: 'Die Vorschau konnte nicht erstellt werden.',
     fehlerWiederherstellen: 'Das Wiederherstellen hat nicht geklappt. Der Projektordner wurde nicht verändert.',
     fehlerWaehrendLauf: 'Während ein Workflow läuft, kann nichts wiederhergestellt werden.',

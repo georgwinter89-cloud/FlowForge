@@ -29,10 +29,8 @@ import { vorschlagWerkzeugServer } from './vorschlagWerkzeuge.js'
 import { laufVorschlagWerkzeugServer } from './laufVorschlagWerkzeuge.js'
 import { kartenZuteilungWerkzeugServer } from './kartenZuteilungWerkzeuge.js'
 import { lieferscheinWerkzeugServer } from './lieferscheinWerkzeuge.js'
-import {
-  WERKZEUG_PRAEFIX as LIEFERSCHEIN_PRAEFIX,
-  dateiEintragNormalisieren
-} from '../../shared/lieferschein.js'
+import { WERKZEUG_PRAEFIX as LIEFERSCHEIN_PRAEFIX } from '../../shared/lieferschein.js'
+import { stehtInDateiliste } from '../dateilistenPfade.js'
 import { prozessWurzelMelden } from '../prozesse.js'
 
 const laden = createRequire(import.meta.url)
@@ -439,44 +437,13 @@ function liegtInArbeitsablage(datei, projektPfad) {
 }
 
 // Datenvertrag als Schreibsperre (BAUPLAN 44): Steht diese Datei in der
-// Dateiliste des Arbeitspakets? Genau dasselbe Normalisierungs-Muster wie alle
-// übrigen Pfad-Prüfungen hier (path.relative/resolve/toLowerCase, Ordner als
-// Präfix mit path.sep) — die Liste kommt als Modelltext („src/main/lauf.js",
-// teils mit „./" davor oder mit Schrägstrichen andersherum), die Prüfung rechnet
-// in Windows-Pfaden.
-//
-// Ein Eintrag gilt als ORDNER, wenn er auf einen Schrägstrich endet oder keine
-// Datei-Endung trägt — dann deckt er alles darunter ab. Geprüft wird
-// ausschließlich gegen den GEMELDETEN Pfad, nie gegen den Dateibestand: Der
-// Vertrag nennt ausdrücklich auch Dateien, die erst entstehen.
-//
-// Die Schreibweise eines Eintrags richtet dieselbe reine Funktion, die schon
-// das Melden prüft (dateiEintragNormalisieren, src/shared/lieferschein.js) —
-// beide Enden derselben Rechnung müssen gleich normalisieren, sonst sperrt die
-// Liste eine Datei, die sichtbar in ihr steht.
-// Exportiert, damit sich die Sperre ohne laufenden Motor prüfen lässt.
-export function stehtInDateiliste(datei, projektPfad, liste) {
-  if (!datei || !Array.isArray(liste) || liste.length === 0) return false
-  const relativ = path
-    .relative(path.resolve(projektPfad), path.resolve(projektPfad, String(datei)))
-    .toLowerCase()
-  for (const roh of liste) {
-    // Ein ausbrechender Eintrag trifft nie etwas im Projekt, und ein Eintrag auf
-    // den Projektordner selbst („.") träfe alles — das Melde-Werkzeug weist
-    // beide ab; hier werden sie übersprungen (alte Laufstände tragen noch
-    // ungeprüfte Listen zurück). Beide Enden geben damit dieselbe Antwort.
-    const eintrag = dateiEintragNormalisieren(roh).pfad ?? ''
-    if (!eintrag) continue
-    const ordner = /[/\\]$/.test(eintrag) || !/\.[^./\\]+$/.test(eintrag)
-    const ziel = path
-      .relative(path.resolve(projektPfad), path.resolve(projektPfad, eintrag))
-      .toLowerCase()
-    if (!ziel || ziel.startsWith('..')) continue
-    if (relativ === ziel) return true
-    if (ordner && relativ.startsWith(ziel + path.sep)) return true
-  }
-  return false
-}
+// Dateiliste des Arbeitspakets? Die Rechnung selbst wohnt seit Bauschritt 45 in
+// src/main/dateilistenPfade.js — von dort aus erreichbar für die
+// Sicherungspunkte (Wirkbereich und geschützte Bereiche, BAUPLAN 45), die
+// nichts vom Motor wissen dürfen, und ohne node:path in eine Schicht zu tragen,
+// die auch der Renderer lädt.
+// Hier unverändert weiter exportiert, damit jeder bestehende Aufruf gültig bleibt.
+export { stehtInDateiliste }
 
 // Die eine Stelle, an der die Dateilisten-Sperre entscheidet — für das
 // Schreib-Werkzeug wie für ein Umleitungsziel eines Befehls. Reihenfolge
@@ -1382,6 +1349,11 @@ export function starteLaufMotor(optionen) {
           holeProjektwissen: lokaleHelfer.projektwissen
             ? () => lokaleHelfer.projektwissen(block?.instanzId)
             : null,
+          // Sicherungspunkte je Schreiber (BAUPLAN 45): Strang und geschützte
+          // Bereiche gehören dem BLOCK — dieser Server wird einmal je Session
+          // gebaut, und eine Lauf-Session bedient alle Blöcke nacheinander.
+          // Deshalb je Aufruf frisch am gerade laufenden Block abgelesen.
+          holeSicherung: () => block?.sicherung ?? null,
           aufEreignis
         })
       : null
@@ -1855,7 +1827,9 @@ export function starteLaufMotor(optionen) {
     // Prüfmappe — Schreibversuche daneben werden hart abgelehnt.
     // dateiListe (BAUPLAN 44): der Datenvertrag der bei diesem Block
     // angekommenen Arbeitspakete — null heißt „keine Sperre".
-    blockAusfuehren({ auftrag, blockName, instanzId = null, nurLesen = false, darfPruefen = false, pruefOrdner = '', lokaleKi = true, darfKartenAnlegen = false, darfVorschlagen = false, darfLaufVorschlag = false, darfZuteilen = false, liefert = [], lieferscheinFrei = [], ziele = null, dateiListe = null, modell = null, unterModell = null, modellName = '', uebertrag }) {
+    // sicherung (BAUPLAN 45): Punkt-Strang und geschützte Bereiche dieses Blocks
+    // für die lokalen Helfer-Werkzeuge — null heißt „gemeinsamer Stand".
+    blockAusfuehren({ auftrag, blockName, instanzId = null, nurLesen = false, darfPruefen = false, pruefOrdner = '', lokaleKi = true, darfKartenAnlegen = false, darfVorschlagen = false, darfLaufVorschlag = false, darfZuteilen = false, liefert = [], lieferscheinFrei = [], ziele = null, dateiListe = null, sicherung = null, modell = null, unterModell = null, modellName = '', uebertrag }) {
       if (tot)
         return Promise.resolve({
           zustand: 'fehlgeschlagen',
@@ -1889,6 +1863,9 @@ export function starteLaufMotor(optionen) {
           // Datenvertrag als Schreibsperre (BAUPLAN 44): die erlaubten Dateien
           // der Arbeitspakete, die BEI DIESEM Block angekommen sind.
           dateiListe,
+          // Sicherungspunkte je Schreiber (BAUPLAN 45): Strang und geschützte
+          // Bereiche — die lokalen Helfer-Werkzeuge lesen sie hier ab.
+          sicherung,
           meldungen: [],
           modell: modell ?? sdkModell(MODELL_KLASSE_STANDARD),
           unterModell,

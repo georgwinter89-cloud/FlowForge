@@ -13,6 +13,12 @@
 //   - ob die Lieferung den Bedarf des Nachfolgers deckt (Ebene 3, Kanten-Prüfung),
 //   - wie eine Meldung als lesbarer Text aussieht (Übergabe und Laufbericht).
 // Die Schema-Ebene (Ebene 1) steht im Werkzeug selbst (lieferscheinWerkzeuge.js).
+//
+// Diese Datei bleibt browser-tauglich: Der Renderer importiert src/shared/ breit
+// (App.jsx, Leinwand.jsx, BlockEditor.jsx), ein node:-Baustein hier würde ihm
+// beim Bauen untergeschoben und erst zur Laufzeit sterben. Deshalb wohnt das
+// andere Ende der Dateilisten-Rechnung (stehtInDateiliste, braucht node:path)
+// in src/main/dateilistenPfade.js.
 import { texte } from './texte.js'
 import { TITEL_MAX, TEXT_MAX } from './kartenRegeln.js'
 import { zielFuerAdresse } from './kettenRegeln.js'
@@ -260,6 +266,12 @@ export function dateiEintragNormalisieren(wert) {
   if (!pfad || pfad === '.') return { wurzel: roh }
   return { pfad }
 }
+
+// Das andere Ende derselben Rechnung — „gehört DIESE Datei in DIESE Liste" —
+// steht in src/main/dateilistenPfade.js (stehtInDateiliste). Es wohnt nicht
+// hier, obwohl es sachlich hierher gehörte: Es braucht node:path, und diese
+// Datei muss browser-tauglich bleiben (siehe Kopf). Wer an der Normalisierung
+// oben etwas ändert, ändert dort mit — es ist EINE Rechnung mit zwei Enden.
 
 // Der Datenvertrag (BAUPLAN 44): welche Dateien dieses Paket anfassen darf.
 // Glob-Muster werden abgewiesen statt still ins Leere zu laufen — es gibt im

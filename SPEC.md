@@ -210,7 +210,91 @@ des erzeugenden Laufs.
   externes Git nötig). Das speist die Reparatur-Runde (§5). Ausgenommen sind zusätzlich
   `pruefung/` (die Prüfer-Tests liegen beim Rückführen uncommittet im Ordner und wären
   sonst „Bauer-Änderungen") und `arbeitsablage/`.
+- **Ein eigener Punkt-Strang je Schreiber** (seit Bauschritt 45): Ein schreibender Block,
+  von dem FlowForge weiß, welche Dateien ihm gehören (sein **Wirkbereich**: die Dateiliste
+  seines Arbeitspakets — beim Prüfer sein eigener Prüfordner), bekommt für die Dauer seines
+  Anlaufs einen eigenen Sicherungsstrang. Alle seine Punkte laufen darauf; **am Blockende
+  wird er auf den gemeinsamen Stand zusammengeführt**, bevor der nächste Block startet. Der
+  Projektordner selbst wird dabei nie umgeschrieben — er ist die Wahrheit, der Strang nur ein
+  Zeiger. **Diese Zusammenführung IST der Punkt am Blockende** — die Liste bekommt weiterhin
+  genau einen Eintrag je beendetem Anlauf, und seine Beschriftung folgt dem tatsächlichen
+  Ausgang: „fertig" nur, wenn der Block auch fertig wurde — endet der Anlauf anders (ein
+  Prüfer, der zurückweist), heißt der Punkt „Stand nach Runde …". Ein Schreiber ohne Wirkbereich
+  (kein Arbeitspaket mit Dateiliste, alter Laufstand) bekommt keinen Strang und verhält sich
+  wie zuvor; **das steht so im Ticker**, damit niemand eine Trennung annimmt, die nicht gilt.
+  Dasselbe gilt, wenn das Anlegen oder das Zusammenführen eines Strangs technisch scheitert:
+  beides wird gemeldet statt verschluckt, und ein nicht zusammengeführter Strang wird am
+  Laufende erneut eingeholt.
+- **Nur die unmittelbare Nachprüfung hält einen Strang offen:** Schickt eine lokale
+  Vorreparatur ihren Prüfer sofort in die Nachprüfung, bleibt dessen Strang über das
+  Blockende hinweg **offen** und wird beim nächsten Anlauf nicht neu angesetzt.
+  Zusammenführen hieße, den Arbeitsordner von genau jetzt als neue gemeinsame Spitze
+  einzufrieren — dann wäre der Stand, auf den der Rückroll zielt, der verbastelte. Offen
+  bleibt er **auch dann, wenn er gar keinen eigenen Punkt festhält** (der Prüfer hat in
+  dieser Runde nichts geschrieben) und deshalb, sobald ein anderer Block zusammenführt, wie
+  ein liegengebliebener Zeiger aussieht: Frisch angesetzt zeigte er auf den Stand **mit**
+  dem Gebastel, und der Rückroll fände nichts mehr zurückzunehmen. Neu angesetzt wird nur
+  ein Strang, auf den kein wartender Anlauf mehr zurückgreift (sein Zusammenführen ist
+  gescheitert) und den der gemeinsame Stand längst enthält. Jeder
+  andere Weg zurück auf „offen" (Reparatur-Runde, Nachforderung, Eskalation zum
+  Motor-Bauer) beginnt dagegen einen wirklich **neuen Anlauf**: Dort endet der Strang ganz
+  normal am Blockende, und der nächste Anlauf bekommt einen frisch angesetzten. Sonst zeigte
+  er in die nächste Runde hinein auf einen Punkt aus der Runde davor — der Änderungs-Überblick
+  des Prüfers läse beide Enden auf demselben Punkt und fiele lautlos auf leer, und ein
+  Rückroll zielte auf einen Stand, der die inzwischen fertige Arbeit anderer Blöcke nicht
+  kennt. **Am Laufende wird ausnahmslos jeder Strang geschlossen**, auch der eines Blocks,
+  der noch auf „offen" steht.
+- **Mehrere Stränge gleichzeitig offen — und die ehrliche Grenze dabei:** Weil ein wartender
+  Prüfer den Schreiber-Platz nicht belegt, kann ein anderer Block in der Zwischenzeit eine
+  ganze Runde fahren und zusammenführen. Der wartende Strang zeigt dann auf einen
+  Ordnerstand von **vor** dieser Zusammenführung. Ein voller Rückroll dorthin nähme die
+  fertige, abgenommene Arbeit des anderen Blocks mit aus dem Projektordner, während ihr
+  Sicherungspunkt weiter in der Liste stünde. Deshalb erkennt FlowForge den **überholten
+  Rückroll-Punkt** und nimmt dann nur noch zurück, was es dem betroffenen Block selbst
+  zuordnen kann (seinen Wirkbereich); ohne benannten Wirkbereich gar nichts. Was
+  stehenbleibt, steht im Ticker, und der Agent liest es im Werkzeug-Ergebnis — der Preis
+  ist, dass verbastelte Stellen sichtbar liegenbleiben, nicht dass fremde Arbeit still
+  verschwindet.
+- **Zurückgerollt wird ohne fremdes Revier:** Rollt FlowForge den Stand eines Blocks zurück
+  (verworfenes lokales Teilstück, gescheiterte Nachprüfung nach lokaler Vorreparatur, harter
+  Stopp, Wiederaufnahme), fasst der Rückroll **alles an außer den Wirkbereichen der anderen
+  Block-Instanzen** dieses Laufs — heute also außer deren Prüfmappen. Das gilt ohne Ausnahme,
+  auch wenn der betroffene Block gar keinen eigenen Strang hat. Bewusst die Umkehrung
+  einer Beschränkung auf die eigene Dateiliste: Ausgeführte Befehle und der Schreibpfad der
+  lokalen KI schreiben an der Dateilisten-Sperre vorbei (§7), ihr Gebastel bliebe sonst liegen.
+  Was dabei stehenbleibt, sagt der Ticker — bei der Wiederaufnahme am Laufstart, weil es dort
+  vorher noch keinen gibt. Und **ein gescheiterter Rückroll wird gemeldet**, statt als
+  „zurückgerollt" durchzugehen. Der Agent liest im Werkzeug-Ergebnis beides: dass ein Rückroll
+  nicht geklappt hat — und dass Reste im Arbeitsbereich anderer Blöcke stehengeblieben sind.
+  Auch der stille Gegenfall steht im Ticker: Wo ein Rückroll versprochen war und **nichts
+  zurückzunehmen** war, sagt FlowForge genau das, statt wortlos zur nächsten Zeile zu springen.
+  Dabei werden **zwei Lagen auseinandergehalten**: Stand der Projektordner wirklich schon auf
+  dem Sicherungspunkt, heißt es genau so; blieb dagegen etwas stehen, weil alles in fremdem
+  Revier oder hinter einem überholten Rückroll-Punkt lag, sagt der Ticker stattdessen, dass
+  **nichts angefasst wurde und der verworfene Stand sichtbar liegenbleibt** — sonst
+  widerspräche der Satz der Zeile direkt darunter, die aufzählt, was blieb.
+  Am harten Stopp bleibt die Zeile aus — dort ist „nichts zurückzunehmen" der Normalfall.
+  Maßgeblich ist am harten Stopp der Strang **des abgebrochenen Blocks** — nie der eines
+  fremden, der gerade auf seine Nachprüfung wartet: Dessen Anlauf bricht hier gar nicht ab,
+  und sein Punkt kennt die fertige Arbeit der anderen nicht.
+- **Der Diff ist auf die eigene Dateiliste gefiltert:** Ein **Umsetzer** sieht in der
+  Reparatur-Runde nur seine Änderungen. **Ausgenommen ist der Prüfer:** Sein Wirkbereich ist
+  seine Prüfmappe, und die ist im Diff ohnehin ausgeschlossen — filterte FlowForge darauf,
+  bliebe von „das hat sich seit deinem Urteil geändert" nichts übrig und er ginge blind in die
+  Nachprüfung. Er sieht den Überblick deshalb ungefiltert. Ehrliche Grenze: Fällt beim
+  Umsetzer etwas weg, steht die Zahl im Auftrag und im Ticker („n Änderungen außerhalb deiner
+  Dateiliste sind hier nicht gezeigt") — auch dann, wenn nach dem Filtern gar nichts übrig
+  bleibt.
 - Rechner-Neustart mitten im Lauf → App bietet an, am letzten Sicherungspunkt weiterzumachen.
+  Ein Strang, der aus dem Abbruch liegengeblieben ist, gehört zu dem Block, dessen Arbeit
+  ohnehin fällt. Der nächste Laufstart macht damit reinen Tisch, **bevor** dieser Lauf eigene
+  Stränge anlegt — sonst überschriebe der nächste Anlauf desselben Blocks den alten Strang
+  gleichen Namens: weggeräumt wird, was der gemeinsame Stand ohnehin schon kennt; **eingeholt
+  wird, was er noch nicht kennt** — erst dann steht diese Arbeit als Sicherungspunkt in der
+  Liste und ist wiederherstellbar. Stehen bleibt ein Strang nur, wenn auch das Einholen
+  klemmt; dann sagt der Ticker, dass er liegenbleibt und nicht in der Liste steht. Klemmt das
+  Aufräumen als Ganzes, wird auch das gemeldet — der Lauf läuft weiter, der nächste Start
+  versucht es erneut.
 
 ### 3.4 Metriken (seit Bauschritt 31)
 
