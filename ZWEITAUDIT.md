@@ -47,6 +47,7 @@ geblieben ist.
    - Alle §-Verweise in SPEC.md und BAUPLAN.md zeigen auf existierende
      Abschnitte.
    - Genau eine CLAUDE.md im Repo; keine Prosa-Chronik-Dateien entstanden
+     (BAUPLAN-ARCHIV.md ist keine: nur die Vorgaben fertiger Schritte, kein Verlauf)
      (CLAUDE.md-Doku-Regel).
    - Grep auf verdoppelte Pfadsegmente und halb ersetzte Varianten, falls
      zuletzt Massen-Ersetzungen liefen.

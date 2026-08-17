@@ -2,7 +2,7 @@
 
 FlowForge ist eine Electron-Desktop-App, mit der Nicht-Programmierer per Drag & Drop
 Coding-Workflows aus Blöcken bauen, die ein KI-Agent ausführt.
-Produktdefinition: [SPEC.md](SPEC.md) · Bauschritte: [BAUPLAN.md](BAUPLAN.md)
+Produktdefinition: [SPEC.md](SPEC.md) · Bauschritte: [BAUPLAN.md](BAUPLAN.md) · abgeschlossene Schritte 1–32: [BAUPLAN-ARCHIV.md](BAUPLAN-ARCHIV.md)
 
 ## Sessionstart
 1. SPEC.md und BAUPLAN.md lesen.
