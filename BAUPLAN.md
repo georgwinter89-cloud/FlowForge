@@ -1362,17 +1362,34 @@ Grund für die Ein-Schreiber-Regel ist nicht die Dateikollision, sondern der
   gegenseitig — A verwirft ein Teilstück, B verliert seine seitdem geschriebene
   Arbeit, ohne Meldung. Disjunkte Dateilisten helfen dagegen **nicht**: Das
   Sicherungspunkt-System kennt keine Teilbäume.
-- Neu: Ein Schreiber, der in einer Welle läuft, bekommt seinen **eigenen Punkt-Strang**
-  (eigener Zweig im versteckten Git-Verzeichnis); Rollback und Diff arbeiten nur auf
-  seinen Dateien. Am Ende der Welle wird zu einem gemeinsamen Punkt zusammengeführt —
-  konfliktfrei, weil die Dateilisten disjunkt sind (durchgesetzt in 44).
-- Der Diff aus Schritt 34 wird auf die eigene Dateiliste gefiltert: Jeder Bauer sieht
-  nur seine Änderungen — sauberer als heute, wo ein nur-lesender Block mit
-  Befehlsrecht mit im Diff steckt.
-- Nachzuziehen: SPEC §3.3 (Punkt-Strang je Schreiber, Zusammenführung am Wellen-Ende).
-**Alltagstest:** Georg lässt zwei Bauer nacheinander mit eingeschalteter lokaler KI
-laufen, bei denen die Vorreparatur zurückrollt: Die Arbeit des jeweils anderen bleibt
-unangetastet — heute verschwindet sie.
+- Neu: Ein Schreiber mit **Wirkbereich** (Dateiliste des Datenvertrags; beim Prüfer
+  sein Prüfordner) bekommt seinen **eigenen Punkt-Strang** (eigener Zweig im
+  versteckten Git-Verzeichnis). Der Strang ist ein reiner Zeiger — der Projektordner
+  wird nie ausgecheckt und bleibt die Wahrheit. Am Blockende wird zu einem gemeinsamen
+  Punkt zusammengeführt: ein Punkt mit mehreren Eltern und dem Baum des jetzigen
+  Ordners, ohne Merge-Algorithmus und damit strukturell konfliktfrei. (Angreifer-
+  Befund der Bausession: Ein echter Git-Merge wäre **nicht** konfliktfrei, weil alle
+  Stränge sich einen Index teilen — die Disjunktheit der Dateilisten sagt nichts über
+  den Inhalt der Strang-Bäume.) Ein Schreiber ohne Wirkbereich (altes Paket ohne
+  Dateiliste) bekommt keinen Strang, ehrlich im Ticker.
+- **Rollback als Umkehrung, nicht als Beschränkung:** Der Rückroll fasst alles an
+  **außer** den Wirkbereichen der anderen Block-Instanzen. Eine Beschränkung auf die
+  eigene Dateiliste ließe genau das stehen, was der Rückroll aufräumen soll — Befehle
+  und der Schreibpfad der lokalen KI schreiben laut Schritt 44 an der Sperre vorbei.
+- Der Diff aus Schritt 34 wird auf die eigene Dateiliste gefiltert, mit ehrlicher
+  Zeile über das Weggelassene; der Prüfer bekommt ihn ungefiltert (sein Wirkbereich
+  ist vom Diff ausgenommen).
+- Nachgezogen: SPEC §3.3 (Punkt-Strang je Schreiber, Wirkbereich, Rückroll ohne
+  fremdes Revier, Zusammenführung am Blockende).
+**Alltagstest** (geändert in der Bausession — der ursprüngliche „zwei Bauer
+nacheinander" wäre schon vorher grün gewesen, weil die Ein-Schreiber-Regel nie zwei
+Bauer gleichzeitig laufen lässt und der Punkt vor jedem Teilstück den ganzen Ordner
+sichert; der beschriebene Verlust setzt Gleichzeitigkeit voraus, die erst 46 bringt):
+Georg fährt Bauer → Prüfer mit eingeschalteter lokaler KI und einer mechanischen
+Beanstandung. Scheitert die Nachprüfung nach der lokalen Vorreparatur, bleiben die
+Testdateien, die der Prüfer in der Nachprüfung frisch geschrieben hat, erhalten, und
+der Ticker sagt, dass sie beim Zurückrollen unberührt blieben — vor 0.45.0 verschwanden
+sie wortlos. Der Zwei-Bauer-Fall bleibt als Regressionsprüfung erhalten.
 
 ### 46 — Parallel bauen: die Ein-Schreiber-Regel öffnen
 (Entscheidung Georg, 16.08.2026, gegen die Empfehlung des Entwurfs: voller Umbau
