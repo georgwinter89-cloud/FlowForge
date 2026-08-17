@@ -3,14 +3,17 @@
 // legt Laufberichte ab (SPEC §3.2, §4, §6).
 //
 // Parallele Zweige (SPEC §4.1, BAUPLAN 13): Ein Block startet, sobald alle
-// seine Vorgänger fertig sind. Mehrere nur-lesende Blöcke dürfen gleichzeitig
-// laufen, aber höchstens ein schreibender (SPEC §5) — ein Block mit mehreren
-// Vorgängern führt die Zweige zusammen, weil er auf alle wartet.
+// seine Vorgänger fertig sind. Mehrere nur-lesende Blöcke dürfen immer
+// gleichzeitig laufen; Schreiber seit BAUPLAN 46 als WELLE, wenn ihre
+// Dateilisten aus dem Datenvertrag getrennt sind (wellenStartRegel, SPEC §5) —
+// ein Block mit mehreren Vorgängern führt die Zweige zusammen, weil er auf
+// alle wartet.
 //
 // Fehlschlag-Rückführung (SPEC §4.1): Meldet ein Prüfer-Block „nicht bestanden",
 // laufen die Blöcke zwischen Ziel und Prüfer erneut — so oft, wie Reparatur-
-// Runden eingestellt sind. Danach hält der Lauf an und stellt die Folgen-Frage:
-// weitermachen, zurückstellen oder Stand wiederherstellen.
+// Runden eingestellt sind. Danach stellt der Lauf die Folgen-Frage für DIESEN
+// Zweig (weitermachen, zurückstellen oder Stand wiederherstellen); andere
+// Zweige laufen derweil weiter (BAUPLAN 46).
 import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'node:crypto'
@@ -65,6 +68,7 @@ import {
   zuschnittSchluessel,
   zuschnittDeckung,
   dateiListeVereinigen,
+  dateilistenUeberschneidung,
   RAHMEN_WERKZEUG,
   BEANSTANDUNG_MAX
 } from '../shared/lieferschein.js'
@@ -113,6 +117,7 @@ import {
   sicherungspunktAnlegen,
   aufLetztenPunktZuruecksetzen,
   wiederherstellen,
+  wiederherstellenBereich,
   letzterPunktId,
   standWeichtAb,
   punkteVergleichen,
@@ -197,8 +202,10 @@ export function blockendeBeschriftung(status, name) {
 // Prüfordner zählen IMMER: Dort liegt die aufbewahrte Arbeit eines fremden
 // Prüfers, auch wenn er gerade nicht läuft. Die Dateiliste eines Umsetzers zählt
 // nur, solange er WIRKLICH gleichzeitig schreibt — sonst schützte sie genau das
-// Gebastel, das ein Rollback wegräumen soll. Heute läuft nie ein zweiter
-// Schreiber (SPEC §5); ab Bauschritt 46 füllt sich diese Zeile von selbst.
+// Gebastel, das ein Rollback wegräumen soll. Seit der Welle (BAUPLAN 46) ist
+// das der Alltag: `laeuft` liefert der Aufrufer aus schreiberBelegt — es meint
+// „arbeitet oder ist fertig, aber noch nicht gemeinsamer Stand" (Nachlauf),
+// nicht nur den Motor-Anlauf.
 // andere: [{ instanzId, def, pruefOrdner, dateiListe, laeuft }]
 export function geschuetzteBereicheVon(eigeneInstanzId, andere) {
   const bereiche = []
@@ -208,6 +215,132 @@ export function geschuetzteBereicheVon(eigeneInstanzId, andere) {
     bereiche.push(...(wirkbereichVon(eintrag.def, eintrag.pruefOrdner, eintrag.dateiListe) ?? []))
   }
   return [...new Set(bereiche)]
+}
+
+// ——— Welle: mehrere Schreiber gleichzeitig (BAUPLAN 46) —————————————————————
+// Die Regeln der Welle stehen als reine Rechnungen hier oben, aus demselben
+// Grund wie die Nähte der Stränge: Der Ablaufplaner lässt sich in einer
+// Prüfung nicht fahren, und eine Zusicherung, die nur den Quelltext abklopft,
+// bliebe grün, während zwei Bauer sich still in dieselbe Datei schreiben.
+// Ein Knoten hier ist ein einfaches Objekt: { instanzId, name, def: { nurLesen,
+// prueft }, status, schreibtGerade, dateiListe }.
+
+// Wer belegt gerade Revier? Ein Schreiber, der läuft (Motor-Anlauf), der im
+// Nachlauf steht (fertig gebaut, Rauchtest wartet, Strang noch nicht
+// zusammengeführt) oder für den gerade die lokale Vorreparatur schreibt.
+// Alle drei sind für Rückroll und Blockende-Punkt der anderen „fremdes Revier".
+export function schreiberBelegt(k) {
+  if (!k || k.def?.nurLesen) return false
+  return k.status === 'laeuft' || k.status === 'nachlauf' || k.schreibtGerade === true
+}
+
+// „Bin ich gerade in einer Welle?" — die Frage, die der Motor je Werkzeugaufruf
+// stellt (Vertrag F3): Neben mir läuft ein ANDERER Schreiber, oder die lokale
+// Vorreparatur schreibt gerade für einen. Der Nachlauf zählt hier NICHT — dort
+// schreibt niemand mehr, und die Frage entscheidet nur, ob ein Befehl zur
+// Rückfrage wird (SPEC §7).
+export function inWelleVon(eigeneInstanzId, knotenListe) {
+  return (knotenListe ?? []).some(
+    (k) =>
+      k &&
+      k.instanzId !== eigeneInstanzId &&
+      !k.def?.nurLesen &&
+      (k.status === 'laeuft' || k.schreibtGerade === true)
+  )
+}
+
+// „Steht die Welle?" — dann darf der Rauchtest messen (Vertrag F3/F7): kein
+// UMSETZER läuft mehr, und keine lokale Vorreparatur schreibt. Prüfer zählen
+// nicht: Ein Prüfer läuft ohnehin nie neben einem Umsetzer (wellenStartRegel),
+// und ein Prüfer neben einem Prüfer schreibt nur in seine eigene Prüfmappe.
+export function welleStehtVon(eigeneInstanzId, knotenListe) {
+  return !(knotenListe ?? []).some(
+    (k) =>
+      k &&
+      k.instanzId !== eigeneInstanzId &&
+      !k.def?.nurLesen &&
+      !k.def?.prueft &&
+      (k.status === 'laeuft' || k.schreibtGerade === true)
+  )
+}
+
+// Die Startregel der Welle (Vertrag F2, SPEC §5): Darf `kandidat` neben den
+// gerade laufenden Blöcken starten?
+//   nur-lesend                → immer.
+//   Prüfer                    → wenn alle laufenden Schreiber Prüfer sind (jeder
+//                               hat seine eigene Prüfmappe).
+//   Umsetzer                  → wenn alle laufenden Schreiber Umsetzer sind, er
+//                               selbst eine Dateiliste (Datenvertrag) hat, jeder
+//                               laufende Umsetzer eine hat und sich keine zwei
+//                               Listen überschneiden (dateilistenUeberschneidung).
+// Umsetzer und Prüfer laufen NIE gleichzeitig: Ein Prüfer, dessen Tests über
+// den ganzen Ordner laufen, urteilte sonst über den Halbstand des Nachbarn —
+// dieselbe Begründung, mit der Tor und Rauchtest hinter die Welle gehören.
+// Ohne Datenvertrag gibt es keine Trennung, also auch keine Welle.
+//
+// `offeneZweige` (Nacharbeit BAUPLAN 46): [{ name, pfade }] — die Wirkbereiche
+// der Zweige, für die gerade eine Folgen-Frage offen ist. „Stand
+// wiederherstellen" setzt genau diese Pfade zurück; ein Umsetzer, dessen Liste
+// sich damit überschneidet (oder der gar keine hat), darf solange nicht
+// hineinschreiben — sonst nähme die Wahl seinen Halbstand still mit, während
+// der Ticker „andere Zweige unberührt" sagt (gemessen). grund 'frageOffen'.
+//
+// Rückgabe: { darf: true } oder { darf: false, grund, worauf: [Namen], … } —
+// grund ∈ 'ueberschneidung' (dazu paare: [{a,b}]) | 'ohneVertrag' (dazu
+// selbstOhne: fehlt die Liste dem Kandidaten selbst?) | 'prueferWartet' |
+// 'umsetzerWartet' | 'frageOffen'. Der Ablaufplaner macht daraus die Ticker-Zeile.
+export function wellenStartRegel(kandidat, laufende, offeneZweige = []) {
+  if (!kandidat || kandidat.def?.nurLesen) return { darf: true }
+  const namen = (liste) => liste.map((l) => l.name ?? l.instanzId ?? '?')
+  if (!kandidat.def?.prueft) {
+    const belegt = (offeneZweige ?? []).filter(
+      (zweig) =>
+        zweig?.pfade?.length &&
+        (!kandidat.dateiListe?.length ||
+          dateilistenUeberschneidung(kandidat.dateiListe, zweig.pfade).ueberschneidet)
+    )
+    if (belegt.length) return { darf: false, grund: 'frageOffen', worauf: namen(belegt) }
+  }
+  const schreiber = (laufende ?? []).filter(
+    (l) => l && !l.def?.nurLesen && l.instanzId !== kandidat.instanzId
+  )
+  if (schreiber.length === 0) return { darf: true }
+  if (kandidat.def?.prueft) {
+    const umsetzer = schreiber.filter((l) => !l.def?.prueft)
+    if (umsetzer.length) return { darf: false, grund: 'prueferWartet', worauf: namen(umsetzer) }
+    return { darf: true }
+  }
+  const pruefer = schreiber.filter((l) => l.def?.prueft)
+  if (pruefer.length) return { darf: false, grund: 'umsetzerWartet', worauf: namen(pruefer) }
+  if (!kandidat.dateiListe?.length)
+    return { darf: false, grund: 'ohneVertrag', worauf: namen(schreiber), selbstOhne: true }
+  const ohne = schreiber.filter((l) => !l.dateiListe?.length)
+  if (ohne.length)
+    return { darf: false, grund: 'ohneVertrag', worauf: namen(ohne), selbstOhne: false }
+  const worauf = []
+  const paare = []
+  for (const l of schreiber) {
+    const lage = dateilistenUeberschneidung(kandidat.dateiListe, l.dateiListe)
+    if (!lage.ueberschneidet) continue
+    worauf.push(l.name ?? l.instanzId ?? '?')
+    paare.push(...lage.paare)
+  }
+  if (worauf.length) return { darf: false, grund: 'ueberschneidung', worauf, paare }
+  return { darf: true }
+}
+
+// Der Ausgang eines Laufs, dessen Planer-Schleife zu Ende ist und dem noch kein
+// Ausgang zugewiesen wurde (Fehlschlag, Kontingent, harter Stopp setzen ihn
+// früher). Seit der Folgen-Frage je Zweig (BAUPLAN 46) kann ein Lauf zu Ende
+// laufen, obwohl ein Zweig zurückgestellt oder wiederhergestellt wurde — die
+// Rangfolge: wiederhergestellt > zurückgestellt > erfolgreich (alle fertig)
+// > sanft gestoppt > fehlgeschlagen.
+export function endzustandAus(knotenListe, { sanft = false } = {}) {
+  const liste = knotenListe ?? []
+  if (liste.some((k) => k?.status === 'wiederhergestellt')) return 'wiederhergestellt'
+  if (liste.some((k) => k?.status === 'zurueckgestellt')) return 'zurueckgestellt'
+  if (liste.every((k) => k?.status === 'fertig')) return 'erfolgreich'
+  return sanft ? 'sanft-gestoppt' : 'fehlgeschlagen'
 }
 
 // Die drei Nähte, an denen die Stränge am Lauf hängen (BAUPLAN 45). Sie stehen
@@ -360,20 +493,35 @@ export async function strangOeffnenAn(projektPfad, k, { instanzId, bezeichnung, 
 // zielte auf einen Stand, der die inzwischen fertige Arbeit anderer Blöcke gar
 // nicht kennt. Beides gemessen, bevor die Ausnahme eng gefasst wurde.
 //
+// Seit der Welle (BAUPLAN 46) bleibt der Strang außerdem offen, solange der
+// Block im NACHLAUF steht (fertig gebaut, der Rauchtest wartet, bis die Welle
+// steht) oder auf die Folgen-Frage seines Zweigs wartet: Sein Anlauf ist dann
+// noch nicht zu Ende — erst wenn er wirklich 'fertig' wird, entsteht der Punkt
+// „Nach Block X". So haben Fertig-Meldung, Punkt und der Laufstand (fertigIds)
+// dieselbe Körnung (Vertrag F6): Nach einem Absturz gilt kein Block als fertig,
+// dessen Arbeit noch nicht gemeinsamer Stand war.
+//
+// `ausgenommen` (Vertrag F6/S3) sind die Wirkbereiche der anderen, gerade noch
+// laufenden bzw. noch nicht zusammengeführten Schreiber: Für sie nimmt der
+// Punkt nicht den Arbeitsordner, sondern den Stand der Basis — „Nach Block A"
+// enthält genau A's Arbeit, nicht den Halbstand von B.
+//
 // `endgueltig` ist das Sicherheitsnetz am Laufende: Dort wird ALLES geschlossen,
 // auch was noch auf 'offen' steht — dann läuft nichts mehr nach, und ein
 // liegengebliebener Strang wäre beim nächsten Laufstart nur noch Aufräumarbeit.
 export async function strangSchliessenAn(
   projektPfad,
   k,
-  { bezeichnung, tickern, endgueltig = false }
+  { bezeichnung, tickern, endgueltig = false, ausgenommen = [] }
 ) {
   if (!k.strang) return true
   if (!endgueltig && k.strangOffenHalten) return true
+  if (!endgueltig && (k.status === 'nachlauf' || k.status === 'wartet-entscheidung')) return true
   const ergebnis = await strangZusammenfuehren(
     projektPfad,
     k.strang,
-    blockendeBeschriftung(k.status, k.name)
+    blockendeBeschriftung(k.status, k.name),
+    { ausgenommen: ausgenommen ?? [] }
   )
   // Erst NACH dem Gelingen vergessen: Bliebe der Strang hier auch im Fehlerfall
   // los, öffnete der nächste Anlauf denselben Namen neu (mit force) und
@@ -467,6 +615,17 @@ export function hartAbgebrochenerBlock(knotenListe) {
   )
 }
 
+// Seit der Welle (BAUPLAN 46) können MEHRERE Blöcke mitten im Anlauf abbrechen.
+// Alle Abgebrochenen, in Kettenreihenfolge; ohne Vermerk der eine aus der
+// alten Rechnung.
+export function hartAbgebrocheneBloecke(knotenListe) {
+  const liste = knotenListe ?? []
+  const abgebrochen = liste.filter((k) => k?.hartAbgebrochen)
+  if (abgebrochen.length) return abgebrochen
+  const einer = hartAbgebrochenerBlock(liste)
+  return einer ? [einer] : []
+}
+
 // Der zentrale Rückroll des harten Stopps (SPEC §6) als eigene, ausführbare
 // Stelle — im Rumpf des Ablaufplaners ließe sich nur nachlesen, worauf er zielt.
 //
@@ -478,15 +637,42 @@ export function hartAbgebrochenerBlock(knotenListe) {
 // zurueckrollenAn: Zurückgenommen wird dann nur noch der eigene Wirkbereich,
 // und der Ticker sagt, was stehenblieb. Die Wirkbereiche der anderen Instanzen
 // bleiben ohnehin unangetastet.
+//
+// Mehrere Abgebrochene (Welle, BAUPLAN 46, Vertrag F9): jeder wird der Reihe
+// nach auf SEINEM Strang zurückgerollt — sein eigener Wirkbereich als
+// Notbremse für den überholten Anker, die Wirkbereiche der übrigen
+// Abgebrochenen zusätzlich zu den fremden Revieren geschützt. Ehrliche Grenze:
+// Was außerhalb aller Wirkbereiche liegt (Befehle schreiben an der Dateiliste
+// vorbei), landet auf dem Stand des zuletzt zurückgerollten Strangs — der
+// Unterbau kann „nur den eigenen Bereich" nicht erzwingen, solange der Anker
+// nicht überholt ist (siehe aufLetztenPunktZuruecksetzen).
 export async function hartZurueckrollenAn(projektPfad, { knotenListe, geschuetztFuer, tickern }) {
-  const abgebrochen = hartAbgebrochenerBlock(knotenListe)
-  return zurueckrollenAn(projektPfad, {
-    strang: abgebrochen?.strang ?? null,
-    geschuetzt: geschuetztFuer(abgebrochen),
-    eigenerBereich: abgebrochen?.wirkbereich ?? null,
-    erfolgsText: texte.ticker.zurueckgesetzt,
-    tickern
-  })
+  const abgebrochene = hartAbgebrocheneBloecke(knotenListe)
+  if (abgebrochene.length <= 1) {
+    const abgebrochen = abgebrochene[0] ?? null
+    return zurueckrollenAn(projektPfad, {
+      strang: abgebrochen?.strang ?? null,
+      geschuetzt: geschuetztFuer(abgebrochen),
+      eigenerBereich: abgebrochen?.wirkbereich ?? null,
+      erfolgsText: texte.ticker.zurueckgesetzt,
+      tickern
+    })
+  }
+  let letztes = null
+  for (const k of abgebrochene) {
+    const uebrige = abgebrochene
+      .filter((anderer) => anderer !== k)
+      .flatMap((anderer) => anderer.wirkbereich ?? [])
+    letztes = await zurueckrollenAn(projektPfad, {
+      strang: k.strang ?? null,
+      geschuetzt: [...new Set([...(geschuetztFuer(k) ?? []), ...uebrige])],
+      eigenerBereich: k.wirkbereich ?? null,
+      erfolgsText: texte.ticker.zurueckgesetztBlock(k.name),
+      tickern
+    })
+    if (!letztes.ok) return letztes
+  }
+  return letztes
 }
 
 // Was der Laufstart mit den Strängen macht, die ein Absturz hinterlassen hat
@@ -519,8 +705,10 @@ export async function straengeMeldenBeimStart(projektPfad, tickern) {
 const KONTINGENT_PAUSE_MS = 10 * 60 * 1000
 
 // Parallelität (SPEC §5, BAUPLAN 12): bis zu 3 Läufe gleichzeitig, aber nur in
-// verschiedenen Projekten — pro Projekt schreibt immer nur ein Agent. Weitere
-// Starts landen in der Warteschlange und laufen automatisch an.
+// verschiedenen Projekten — pro Projekt höchstens EIN Lauf (innerhalb eines
+// Laufs schreiben seit BAUPLAN 46 mehrere Blöcke als Welle, siehe
+// wellenStartRegel). Weitere Starts landen in der Warteschlange und laufen
+// automatisch an.
 const MAX_PARALLEL_LAEUFE = 3
 const aktiveLaeufe = new Map() // projektPfad → Lauf
 const warteschlange = [] // { fenster, projektPfad, kartenIds, fortsetzen, sonderlauf }
@@ -976,7 +1164,8 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     return inWarteschlangeStellen(fenster, projektPfad, kartenIds, Boolean(fortsetzung), sonderlauf)
 
   // Co-Pilot (BAUPLAN 27/33): Arbeitet der Chat gerade in diesem Projekt,
-  // startet kein Lauf — ein Schreiber pro Projekt (SPEC §5). Ein untätiger
+  // startet kein Lauf — der Chat kennt weder Datenvertrag noch Strang und
+  // passt darum in keine Welle (SPEC §5). Ein untätiger
   // Chat bleibt, ist ab jetzt nur lesend und räumt ab, was er gestartet hat;
   // nach dem Lauf hängt er an der neuen Lauf-Session (sichtbare Marke).
   if (chatBeschaeftigt(projektPfad))
@@ -1005,6 +1194,10 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     offeneFragen: [],
     offeneMenschFragen: [],
     offeneVorschlaege: [],
+    // Folgen-Fragen je Zweig (BAUPLAN 46): mehrere können gleichzeitig offen
+    // sein — die Liste ist die Warteschlange, offeneEntscheidung die gerade
+    // sichtbare (immer die erste der Liste).
+    offeneEntscheidungen: [],
     offeneEntscheidung: null,
     // Gesprächsverlauf dieses Laufs (Fragen des Agenten + Antworten) — die
     // Ansicht stellt ihn nach einem Wechsel daraus wieder her.
@@ -1428,22 +1621,35 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     tickern(texte.ticker.laufVorschlagGespeichert(kartenTitel.length, empfehlung))
   }
 
-  // Folgen-Frage nach verbrauchten Reparatur-Runden (SPEC §4.1). Die Ergebnisse
-  // werden nacheinander verarbeitet — es ist also höchstens eine offen.
-  function entscheidungStellen(blockName, runden) {
+  // Folgen-Frage nach verbrauchten Reparatur-Runden (SPEC §4.1) — seit
+  // BAUPLAN 46 JE ZWEIG und ohne den Planer anzuhalten: Die Frage wird
+  // eingereiht (Warteschlange wie offeneFragen; die Ansicht zeigt eine nach der
+  // anderen), und das Promise löst mit einem Race-Ergebnis für die Planer-
+  // Schleife auf — der Prüfer steht solange auf 'wartet-entscheidung', andere
+  // Zweige laufen weiter. `trifft` sagt vorher, was „Stand wiederherstellen"
+  // treffen würde (Vertrag F8).
+  function entscheidungEinreihen({ instanzId, blockName, zielId, runden, trifft }) {
+    const antwort = (wahl) => ({ zustand: 'entscheidung', instanzId, zielId, wahl })
     return new Promise((aufloesen) => {
-      if (fenster.isDestroyed()) return aufloesen('zurueckstellen')
-      tickern(texte.ticker.entscheidungGestellt)
+      if (fenster.isDestroyed()) return aufloesen(antwort('zurueckstellen'))
+      tickern(texte.ticker.entscheidungGestellt(blockName))
       const frageId = crypto.randomUUID()
+      const eintrag = { frageId, blockName, runden, trifft }
       lauf.entscheidungen.set(frageId, (wahl) => {
         lauf.entscheidungen.delete(frageId)
-        lauf.offeneEntscheidung = null
+        lauf.offeneEntscheidungen = lauf.offeneEntscheidungen.filter((e) => e.frageId !== frageId)
+        lauf.offeneEntscheidung = lauf.offeneEntscheidungen[0] ?? null
         bericht.entscheidungen.push({ block: blockName, wahl })
         senden({ art: 'entscheidung-erledigt', frageId })
-        aufloesen(wahl)
+        // Wartet schon die Folgen-Frage eines anderen Zweigs, rückt sie nach.
+        if (lauf.offeneEntscheidung) senden({ art: 'entscheidung', ...lauf.offeneEntscheidung })
+        aufloesen(antwort(wahl))
       })
-      lauf.offeneEntscheidung = { frageId, blockName, runden }
-      senden({ art: 'entscheidung', frageId, blockName, runden })
+      lauf.offeneEntscheidungen.push(eintrag)
+      if (lauf.offeneEntscheidungen.length === 1) {
+        lauf.offeneEntscheidung = eintrag
+        senden({ art: 'entscheidung', ...eintrag })
+      }
     })
   }
 
@@ -1598,7 +1804,13 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           // Prüfordner dieser Instanz (BAUPLAN 41) — leer bei allen, die keine
           // Prüfungen schreiben.
           pruefOrdner: ordnerVon(eintrag),
-          status: 'offen', // 'offen' | 'laeuft' | 'fertig'
+          // 'offen' | 'laeuft' | 'fertig' — seit BAUPLAN 46 dazu 'nachlauf'
+          // (fertig gebaut, Rauchtest wartet, bis die Welle steht),
+          // 'wartet-entscheidung' (Prüfer wartet auf die Folgen-Frage seines
+          // Zweigs), 'zurueckgestellt' und 'wiederhergestellt' (die Wahl hat
+          // diesen Zweig beendet). Nur 'fertig' zählt für Nachfolger, Punkt und
+          // Laufstand.
+          status: 'offen',
           lieferung: null,
           // Lieferschein (BAUPLAN 42):
           // meldungen — die geprüften Meldungen des laufenden/letzten Anlaufs;
@@ -1694,7 +1906,23 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           //   Umschwung aber sehr wohl.
           strang: null,
           wirkbereich: null,
-          strangGemeldet: null
+          strangGemeldet: null,
+          // Welle (BAUPLAN 46):
+          // dateiListeAktiv — die beim Start gemerkte Dateiliste (Datenvertrag);
+          //   dateiListeFuer kostet einen Übergaben-Durchlauf und würde sonst
+          //   bei jedem Werkzeugaufruf der Nachbarn neu gerechnet;
+          // schreibtGerade — die lokale Vorreparatur schreibt gerade in die
+          //   Dateien dieses (Ziel-)Blocks: ein unsichtbarer Schreiber, der für
+          //   Welle und geschützte Bereiche wie ein laufender zählt;
+          // nachlaufErgebnis — der Berichts-Eintrag des Anlaufs, den der
+          //   Rauchtest im Nachlauf noch fortschreibt.
+          dateiListeAktiv: null,
+          schreibtGerade: false,
+          nachlaufErgebnis: null,
+          // entscheidungZielId — solange die Folgen-Frage dieses Prüfers offen
+          //   ist: sein Rückführungs-Ziel, aus dem der belegte Zweig gerechnet
+          //   wird (offeneFragenZweige).
+          entscheidungZielId: null
         }
       ])
     )
@@ -1905,7 +2133,8 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       typeof fortsetzung?.laufSitzung?.kennung === 'string' ? fortsetzung.laufSitzung.kennung : null
     let laufSessionTokens = Number(fortsetzung?.laufSitzung?.tokens) || 0
     // Die Lauf-Session verarbeitet einen Block nach dem anderen — parallele
-    // Zweige laufen als eigene Sessions (ehrlich im Ticker vermerkt).
+    // Zweige und die weiteren Schreiber einer Welle laufen als eigene Sessions
+    // (ehrlich im Ticker vermerkt).
     let laufMotorBelegt = false
     // Für die Ereignis-Zuordnung des Lauf-Motors: welcher Block gerade in der
     // Lauf-Session arbeitet (Ticker-Zeilen, Mensch-Fragen, Karten-Ereignisse).
@@ -1952,7 +2181,12 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     let pauseBenachrichtigt = false
     // Der Verbrauchs-Hinweis für parallele Blöcke kommt einmal pro Lauf.
     let parallelGemeldet = false
-    const laufende = new Map() // instanzId → Promise<{ id, ergebnis }>
+    // Die Wellen-Zeile (BAUPLAN 46) kommt einmal je Welle.
+    let welleGemeldet = false
+    // instanzId → Promise<{ id, ergebnis }> — seit BAUPLAN 46 hängen daneben die
+    // offenen Folgen-Fragen ('entscheidung:' + instanzId): Sie sind Teilnehmer
+    // desselben Race, damit die Frage den Planer nicht mehr anhält.
+    const laufende = new Map()
 
     // Laufstand festhalten (BAUPLAN 11): Bleibt die App mitten im Lauf stehen
     // (Absturz, Neustart), kann FlowForge an den fertigen Blöcken wieder aufsetzen.
@@ -2443,7 +2677,11 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       const instanzId = k.eintrag.instanzId
       // Datenvertrag als Schreibsperre (BAUPLAN 44): Dass sie gilt, sagt der
       // Ticker EINMAL je Block — nicht in jeder Reparatur-Runde erneut.
+      // Frisch gerechnet und am Knoten gemerkt (BAUPLAN 46): Die Nachbarn in der
+      // Welle fragen bei jedem Werkzeugaufruf nach den geschützten Bereichen —
+      // dort zählt diese Liste, ohne den Übergaben-Durchlauf zu wiederholen.
       const dateiListe = dateiListeFuer(k)
+      k.dateiListeAktiv = dateiListe
       if (dateiListe && !k.dateilisteGemeldet) {
         k.dateilisteGemeldet = true
         tickern(
@@ -2519,6 +2757,12 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           // der bei diesem Block angekommenen Arbeitspakete — null heißt „keine
           // Sperre" (kein Paket, kein Vertrag, alter Laufstand).
           dateiListe,
+          // Welle (BAUPLAN 46, Vertrag S5): Der Motor fragt bei jedem
+          // Werkzeugaufruf, ob neben diesem Block gerade ein anderer Schreiber
+          // arbeitet — dann werden sonst rückfragefreie Befehle zur Rückfrage
+          // (SPEC §7). Dynamisch, weil die Welle mitten im Anlauf beginnen und
+          // enden kann.
+          inWelle: () => andererSchreiberLaeuft(k),
           // Sicherungspunkte je Schreiber (BAUPLAN 45): Strang und geschützte
           // Bereiche DIESES Blocks. Die lokalen Helfer-Werkzeuge legen ihre
           // Punkte darauf an und rollen nur darauf zurück — bis hierher hing
@@ -2530,6 +2774,11 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
             bezeichnung: texte.ticker.blockBezeichnung(nummerVon.get(instanzId), k.name),
             strang: k.strang ?? null,
             geschuetzt: geschuetzteBereicheFuer(k),
+            // Seit der Welle (BAUPLAN 46) frisch je Aufruf: Ein Nachbar kann
+            // nach dem Start dieses Blocks anlaufen oder in den Nachlauf gehen —
+            // der Startwert oben bliebe dann falsch. `geschuetzt` bleibt als
+            // Rückfall für einen Motor ohne holeGeschuetzt.
+            holeGeschuetzt: () => geschuetzteBereicheFuer(k),
             // Sein EIGENER Wirkbereich (Nacharbeit zu BAUPLAN 45): die Notbremse
             // für den Fall, dass der Rückroll-Punkt eines Teilstücks inzwischen
             // von der Zusammenführung eines anderen Blocks überholt wurde.
@@ -2639,6 +2888,11 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         // Nachsehen lohnt nur, wenn das überhaupt möglich war: Ohne die
         // Einstellung „Nur-lesende Blöcke dürfen Befehle ausführen" ändert kein
         // nur-lesender Block etwas, und der Blick über den ganzen Ordner entfällt.
+        // Bewusst NICHT durch die Welle ausgelöst (BAUPLAN 46): Dass nebenan ein
+        // anderer Schreiber gerade seine eigenen Dateien ändert, ist keine
+        // Verschmutzung — sein Wirkbereich fällt beim Diff dieses Blocks ohnehin
+        // durch den Dateilisten-Filter (diffFilterVon), und der Hinweis „der
+        // Ordner war schon verändert" wäre in jeder Welle dauerhaft an.
         k.diffBasisVerschmutzt =
           Boolean(k.diffBasis) && einstellungen.nurLesenBefehle
             ? await standWeichtAb(projektPfad, k.strang ?? null)
@@ -3190,21 +3444,73 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     // geschützt sind die Prüfmappen aller — lieber eine zu viel stehen lassen
     // als fremde Arbeit löschen.
     function geschuetzteBereicheFuer(k) {
-      return geschuetzteBereicheVon(
-        k?.eintrag?.instanzId ?? null,
+      const eigene = k?.eintrag?.instanzId ?? null
+      // Ein offener Zweig (Folgen-Frage) ist belegtes Revier — Rückrolle und
+      // Punkte der Nachbarn schonen ihn, bis die Wahl gefallen ist. Der eigene
+      // Zweig zählt nicht: Für den fragenden Prüfer selbst wären das die
+      // Dateien, die er gleich zurücksetzen soll.
+      const offen = offeneFragenZweige(eigene).flatMap((zweig) => zweig.pfade)
+      const bereiche = geschuetzteBereicheVon(
+        eigene,
         kette.map((eintrag) => {
           const andere = knoten.get(eintrag.instanzId)
+          // Belegt = läuft, steht im Nachlauf oder die lokale Vorreparatur
+          // schreibt gerade für ihn (BAUPLAN 46, Vertrag F7) — die Regel steht
+          // oben im Modul. Die Dateiliste kommt aus dem beim Start gemerkten
+          // Wert: Diese Funktion läuft seit der Welle bei jedem Werkzeugaufruf
+          // der Nachbarn, ein Übergaben-Durchlauf je Aufruf wäre zu teuer.
+          const belegt = schreiberBelegt(andere)
           return {
             instanzId: eintrag.instanzId,
             def: andere.def,
             pruefOrdner: andere.pruefOrdner,
-            // Die Dateiliste kostet einen Übergaben-Durchlauf — nur rechnen,
-            // wenn sie überhaupt zählen kann (siehe geschuetzteBereicheVon).
-            dateiListe: andere.status === 'laeuft' ? dateiListeFuer(andere) : null,
-            laeuft: andere.status === 'laeuft'
+            dateiListe: belegt ? (andere.dateiListeAktiv ?? null) : null,
+            laeuft: belegt
           }
         })
       )
+      return offen.length ? [...new Set([...bereiche, ...offen])] : bereiche
+    }
+
+    // Die Zweige, für die gerade eine Folgen-Frage offen ist (Nacharbeit
+    // BAUPLAN 46): je wartendem Prüfer die Wirkbereiche seines Zweigs. Sie
+    // gelten als belegt — für die Startregel und die geschützten Bereiche —,
+    // weil „Stand wiederherstellen" genau diese Pfade zurücksetzt. `ausser`
+    // lässt den eigenen Zweig eines Prüfers weg.
+    function offeneFragenZweige(ausser = null) {
+      const zweige = []
+      for (const nk of knoten.values()) {
+        if (nk.status !== 'wartet-entscheidung' || nk.eintrag.instanzId === ausser) continue
+        zweige.push({
+          name: nk.name,
+          pfade: zweigWirkbereiche(nk.entscheidungZielId, nk.eintrag.instanzId).pfade
+        })
+      }
+      return zweige
+    }
+
+    // Läuft neben diesem Block gerade ein anderer Schreiber? (Welle, BAUPLAN 46;
+    // die Regel steht oben im Modul, hier hängen nur die Knoten dran.)
+    function andererSchreiberLaeuft(k) {
+      return inWelleVon(k?.eintrag?.instanzId ?? null, [...knoten.values()].map(wellenKnoten))
+    }
+
+    // Steht die Welle — kein Umsetzer läuft, keine Vorreparatur schreibt?
+    // (BAUPLAN 46, Vertrag F3/F7.) k darf fehlen: dann zählt jeder Umsetzer.
+    function welleSteht(k) {
+      return welleStehtVon(k?.eintrag?.instanzId ?? null, [...knoten.values()].map(wellenKnoten))
+    }
+
+    // Ein Knoten in der einfachen Form, die die Wellen-Regeln oben lesen.
+    function wellenKnoten(nk) {
+      return {
+        instanzId: nk.eintrag.instanzId,
+        name: nk.name,
+        def: nk.def,
+        status: nk.status,
+        schreibtGerade: nk.schreibtGerade === true,
+        dateiListe: nk.dateiListeAktiv ?? null
+      }
     }
 
     // Wie ein Block im Ticker heißt: Blocknummer plus Anzeigename.
@@ -3224,8 +3530,16 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       })
     }
 
+    // Ohne fremdes laufendes Revier (BAUPLAN 46, Vertrag F6): Der Punkt am
+    // Blockende nimmt für die Wirkbereiche der anderen, noch laufenden bzw.
+    // noch nicht zusammengeführten Schreiber den Stand der Basis — nicht den
+    // Halbstand aus dem Arbeitsordner.
     async function strangSchliessenFuer(k) {
-      await strangSchliessenAn(projektPfad, k, { bezeichnung: bezeichnungFuer(k), tickern })
+      await strangSchliessenAn(projektPfad, k, {
+        bezeichnung: bezeichnungFuer(k),
+        tickern,
+        ausgenommen: geschuetzteBereicheFuer(k)
+      })
     }
 
     // Das Sicherheitsnetz am Laufende: Hier wird JEDER Strang geschlossen, auch
@@ -3236,7 +3550,8 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       await strangSchliessenAn(projektPfad, k, {
         bezeichnung: bezeichnungFuer(k),
         tickern,
-        endgueltig: true
+        endgueltig: true,
+        ausgenommen: geschuetzteBereicheFuer(k)
       })
     }
 
@@ -3350,23 +3665,52 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     // gerade" statt einer stillen Pause. Je Block und Grund genau einmal —
     // bereiteStarten läuft nach jedem fertigen Block erneut und würde den
     // Ticker sonst mit derselben Zeile fluten.
-    function warteGrundMelden(k, grund, worauf) {
+    function warteGrundMelden(k, grund, worauf, zusatz = {}) {
       if (!worauf.length) return
       k.warteGemeldet ??= new Set()
       const schluessel = grund + ':' + worauf.join('|')
       if (k.warteGemeldet.has(schluessel)) return
       k.warteGemeldet.add(schluessel)
-      tickern(
-        grund === 'schreiber'
-          ? texte.ticker.warteAufSchreiber(k.name, worauf[0])
-          : texte.ticker.warteAufZweig(k.name, worauf)
-      )
+      // Die vier Gründe der Welle (BAUPLAN 46) kommen aus wellenStartRegel;
+      // 'zweig' ist die Zusammenführung aus BAUPLAN 36.
+      const anderer = worauf[0]
+      if (grund === 'ueberschneidung')
+        tickern(
+          texte.ticker.warteAufUeberschneidung(
+            k.name,
+            worauf.join('", „'),
+            (zusatz.paare ?? [])
+              .slice(0, 3)
+              .map((p) => `${p.a} ↔ ${p.b}`)
+              .join(', ')
+          )
+        )
+      else if (grund === 'ohneVertrag')
+        tickern(texte.ticker.warteOhneDatenvertrag(k.name, anderer, zusatz.selbstOhne === true))
+      else if (grund === 'prueferWartet')
+        tickern(texte.ticker.prueferWartetAufUmsetzer(k.name, anderer))
+      else if (grund === 'umsetzerWartet')
+        tickern(texte.ticker.umsetzerWartetAufPruefer(k.name, anderer))
+      else if (grund === 'frageOffen') tickern(texte.ticker.warteAufFolgenFrage(k.name, anderer))
+      else tickern(texte.ticker.warteAufZweig(k.name, worauf))
     }
 
-    // Startet alle Blöcke, deren Vorgänger fertig sind — unter der Regel:
-    // beliebig viele nur-lesende gleichzeitig, höchstens ein schreibender.
+    // Die Kennungen der Blöcke, deren Anlauf gerade läuft — ohne die
+    // Folgen-Fragen, die seit BAUPLAN 46 als eigene Teilnehmer im selben Race
+    // hängen ('entscheidung:…').
+    function laufendeBloecke() {
+      return [...laufende.keys()].filter((id) => knoten.has(id))
+    }
+
+    // Startet alle Blöcke, deren Vorgänger fertig sind — unter der Regel der
+    // Welle (BAUPLAN 46, wellenStartRegel): beliebig viele nur-lesende
+    // gleichzeitig; Schreiber nebeneinander nur mit getrennten Dateilisten,
+    // Prüfer nur neben Prüfern.
     function bereiteStarten() {
       if (endZustand || lauf.sanft || lauf.hart) return
+      // Einmal je Welle (nicht je Lauf): Georg soll jede Welle sehen. Zurück-
+      // gesetzt, sobald kein Schreiber mehr läuft.
+      if (!laufendeBloecke().some((id) => !knoten.get(id).def.nurLesen)) welleGemeldet = false
       for (const eintrag of kette) {
         const k = knoten.get(eintrag.instanzId)
         if (k.status !== 'offen') continue
@@ -3387,13 +3731,35 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           continue
         }
         if (!k.def.nurLesen) {
-          const schreiber = [...laufende.keys()].find((id) => !knoten.get(id).def.nurLesen)
-          if (schreiber) {
-            // pro Projekt schreibt nur ein Agent (SPEC §5) — und jetzt steht
-            // auch im Ticker, auf wen dieser Block deshalb wartet.
-            warteGrundMelden(k, 'schreiber', [knoten.get(schreiber).name])
+          // Der Kandidat mit seiner FRISCHEN Dateiliste (eine Lieferung kann
+          // seit dem letzten Versuch angekommen sein); die Laufenden mit der
+          // beim Start gemerkten.
+          // Als „laufend" zählt jeder, der Revier belegt (schreiberBelegt) —
+          // auch ein Block im Nachlauf: Sein Anlauf ist vorbei, aber seine
+          // Arbeit ist noch nicht gemeinsamer Stand, und seine Dateiliste
+          // ist noch sein Revier. Ließe man einen überschneidenden Nachbarn
+          // jetzt schon los, schriebe der in genau dieses geschützte Revier
+          // hinein — der Punkt „Nach Block D" nähme seine Arbeit dann nicht
+          // auf, und der Punkt „Nach Block A" trüge sie fälschlich (gemessen).
+          const kandidat = { ...wellenKnoten(k), dateiListe: dateiListeFuer(k) }
+          const urteil = wellenStartRegel(
+            kandidat,
+            [...knoten.values()]
+              .filter((nk) => nk.status === 'laeuft' || schreiberBelegt(nk))
+              .map(wellenKnoten),
+            // Und die Zweige mit offener Folgen-Frage: „Stand wiederherstellen"
+            // könnte sie zurücksetzen — bis dahin schreibt dort niemand hinein.
+            offeneFragenZweige()
+          )
+          if (!urteil.darf) {
+            // Und jetzt steht im Ticker, auf wen und warum dieser Block wartet.
+            warteGrundMelden(k, urteil.grund, urteil.worauf, urteil)
             continue
           }
+          // Schon HIER merken, nicht erst im Motor-Aufruf: Der nächste Kandidat
+          // derselben Runde liest die Liste dieses Blocks als „laufend" — und
+          // hielte ihn ohne sie für einen Schreiber ohne Datenvertrag.
+          k.dateiListeAktiv = kandidat.dateiListe
         }
         k.warteGemeldet?.clear()
         k.status = 'laeuft'
@@ -3424,9 +3790,17 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       }
       // Sichtbarer Hinweis (SPEC §4.1, BAUPLAN 13): parallele Blöcke
       // vervielfachen den Verbrauch — einmal pro Lauf.
-      if (laufende.size > 1 && !parallelGemeldet) {
+      const laufendeIds = laufendeBloecke()
+      if (laufendeIds.length > 1 && !parallelGemeldet) {
         parallelGemeldet = true
-        tickern(texte.lauf.parallelBloeckeHinweis(laufende.size))
+        tickern(texte.lauf.parallelBloeckeHinweis(laufendeIds.length))
+      }
+      // Welle (BAUPLAN 46): Sobald zwei Schreiber gleichzeitig laufen, steht das
+      // im Ticker — einmal je Welle.
+      const schreiber = laufendeIds.filter((id) => !knoten.get(id).def.nurLesen)
+      if (schreiber.length > 1 && !welleGemeldet) {
+        welleGemeldet = true
+        tickern(texte.ticker.welleGestartet(schreiber.length))
       }
     }
 
@@ -3747,42 +4121,104 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         tickern(texte.ticker.startanleitungWeiterOhne)
       }
 
-      // Rauchtest der Startanleitung (BAUPLAN 35): FlowForge startet die
-      // gebaute App einmal kurz und stoppt sie wieder — läuft sie gar nicht an,
-      // erfährt das der Bauer sofort und ohne einen Token, statt dass der
-      // Prüfer eine ganze Runde damit verbringt. Genau eine Nachbesserungs-
-      // Runde pro Lauf; danach macht der Lauf ehrlich vermerkt weiter.
-      if (
+      // Rauchtest der Startanleitung (BAUPLAN 35) — seit der Welle (BAUPLAN 46,
+      // Vertrag F7) NICHT mehr, solange nebenan ein anderer Umsetzer schreibt:
+      // Der Test misste sonst einen Zwischenstand, in dem halb geschrieben
+      // wurde. Steht die Welle, läuft er sofort; sonst geht der Block in den
+      // NACHLAUF, und die Planer-Schleife holt den Test nach, sobald kein
+      // Umsetzer mehr läuft (nachlaeufeAbarbeiten) — bevor sie Neues startet.
+      // In verarbeite wird ab hier auf nichts mehr gewartet, was andere Blöcke
+      // betrifft.
+      if (rauchtestSteht(k)) {
+        if (!welleSteht(k)) {
+          k.status = 'nachlauf'
+          k.nachlaufErgebnis = blockErgebnis
+          tickern(texte.ticker.nachlaufWartet(k.name))
+          return
+        }
+        await nachlaufFuer(k, id, blockErgebnis)
+        if (k.status !== 'fertig') return
+      }
+      await verarbeiteEnde(k, id, blockErgebnis)
+    }
+
+    // Steht für diesen Block ein Rauchtest an? Genau die Bedingung, die bis
+    // Bauschritt 45 direkt vor dem Test stand.
+    function rauchtestSteht(k) {
+      return (
         k.def.startanleitungPflicht &&
         k.status === 'fertig' &&
         !lauf.sanft &&
         !lauf.hart &&
         !endZustand
-      ) {
-        const probe = await rauchtest(projektPfad, {
-          // Eigene Prozessgruppe je Block-Instanz (BAUPLAN 41).
-          gruppe: 'rauchtest:' + projektPfad + ':' + id,
-          abbrechen: () => lauf.sanft || lauf.hart
-        })
-        if (probe.geprueft && probe.gruen) tickern(texte.ticker.rauchtestGruen)
-        else if (probe.grund === 'appLaeuft') tickern(texte.ticker.rauchtestUebersprungen)
-        else if (probe.geprueft && !probe.gruen) {
-          blockErgebnis.zustand = 'startanleitung-laeuft-nicht'
-          if (!rauchtestNachgefordert.has(id)) {
-            rauchtestNachgefordert.add(id)
-            k.rauchtestRueckmeldung = mitteGekuerzt(
-              String(probe.ausgabe ?? '').trim() || texte.tor.rauchtestOhneAusgabe,
-              TOR_PROTOKOLL_MAX
-            ).text
-            k.meldungWiederholen = true
-            k.status = 'offen'
-            tickern(texte.ticker.rauchtestRot(k.name))
-            return
-          }
-          tickern(texte.ticker.rauchtestWeiterOhne)
-        }
-      }
+      )
+    }
 
+    // Der Nachlauf eines Bau-Blocks (BAUPLAN 35, seit 46 als eigene Stelle für
+    // beide Wege — sofort und aus der Planer-Schleife): FlowForge startet die
+    // gebaute App einmal kurz und stoppt sie wieder — läuft sie gar nicht an,
+    // erfährt das der Bauer sofort und ohne einen Token, statt dass der Prüfer
+    // eine ganze Runde damit verbringt. Genau eine Nachbesserungs-Runde je
+    // Block; danach macht der Lauf ehrlich vermerkt weiter. Bei Rot steht der
+    // Block danach auf 'offen'.
+    async function nachlaufFuer(k, id, blockErgebnis) {
+      const probe = await rauchtest(projektPfad, {
+        // Eigene Prozessgruppe je Block-Instanz (BAUPLAN 41).
+        gruppe: 'rauchtest:' + projektPfad + ':' + id,
+        abbrechen: () => lauf.sanft || lauf.hart
+      })
+      if (probe.geprueft && probe.gruen) tickern(texte.ticker.rauchtestGruen)
+      else if (probe.grund === 'appLaeuft') tickern(texte.ticker.rauchtestUebersprungen)
+      else if (probe.geprueft && !probe.gruen) {
+        if (blockErgebnis) blockErgebnis.zustand = 'startanleitung-laeuft-nicht'
+        if (!rauchtestNachgefordert.has(id)) {
+          rauchtestNachgefordert.add(id)
+          k.rauchtestRueckmeldung = mitteGekuerzt(
+            String(probe.ausgabe ?? '').trim() || texte.tor.rauchtestOhneAusgabe,
+            TOR_PROTOKOLL_MAX
+          ).text
+          k.meldungWiederholen = true
+          k.status = 'offen'
+          tickern(texte.ticker.rauchtestRot(k.name))
+          return
+        }
+        tickern(texte.ticker.rauchtestWeiterOhne)
+      }
+    }
+
+    // Die ausstehenden Nachläufe abarbeiten (BAUPLAN 46, Vertrag F7): sobald
+    // die Welle steht — kein Umsetzer läuft mehr, keine Vorreparatur schreibt —
+    // und BEVOR die Planer-Schleife Neues startet. Je Block: Rauchtest samt
+    // seinen Folgen, dann das restliche Blockende (Prüfbefehl-Pflicht, Urteil,
+    // Punkt) und die Zusammenführung des Strangs. Erst danach ist der Block
+    // 'fertig' — für Nachfolger, Punkt und Laufstand gleichermaßen.
+    //
+    // Beim harten Stopp bleibt alles liegen: Ein Nachlauf-Block zählt dann
+    // weiter als belegtes Revier, damit der zentrale Rückroll seine fertige
+    // Arbeit nicht mitnimmt; sein Strang wird am Laufende geschlossen.
+    async function nachlaeufeAbarbeiten() {
+      if (lauf.hart) return
+      if (!welleSteht(null)) return
+      for (const eintrag of kette) {
+        const k = knoten.get(eintrag.instanzId)
+        if (k.status !== 'nachlauf') continue
+        const id = eintrag.instanzId
+        const blockErgebnis = k.nachlaufErgebnis
+        k.nachlaufErgebnis = null
+        k.status = 'fertig'
+        // Sanft gestoppt oder anderswo gescheitert: Der Test entfällt, wie er
+        // auch sofort entfallen wäre — der Block gilt als fertig.
+        if (!lauf.sanft && !endZustand) await nachlaufFuer(k, id, blockErgebnis)
+        if (k.status === 'fertig') await verarbeiteEnde(k, id, blockErgebnis)
+        await strangSchliessenFuer(k)
+        standSpeichern()
+      }
+    }
+
+    // Das Blockende hinter dem Rauchtest: Prüfbefehl-Pflicht, Prüfer-Urteil,
+    // Punkt am Blockende. Eigene Stelle, weil beide Wege — sofort in verarbeite
+    // und aus dem Nachlauf — hier ankommen müssen.
+    async function verarbeiteEnde(k, id, blockErgebnis) {
       // Prüfbefehl als Pflicht-Artefakt (BAUPLAN 35): Ohne ihn muss FlowForge
       // jede Reparatur-Runde wieder mit einem Prüfer-Agenten bezahlen. Fehlt
       // er, läuft der Prüfer genau einmal mit einer Nachforderung erneut — er
@@ -3908,10 +4344,13 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
               // kein lokaler Versuch.
               // Auf den Strang des Prüfers (BAUPLAN 45) — dorthin greift der
               // Rollback oben zurück, wenn die Nachprüfung scheitert.
+              // Ohne fremdes laufendes Revier (BAUPLAN 46, Vertrag F6): auch
+              // dieser Punkt nimmt für die Wirkbereiche laufender Nachbarn den
+              // Stand der Basis.
               const punkt = await sicherungspunktAnlegen(
                 projektPfad,
                 texte.sicherungen.beschriftungVorLokalerReparatur,
-                { strang: k.strang ?? null }
+                { strang: k.strang ?? null, ausgenommen: geschuetzteBereicheFuer(k) }
               )
               if (!punkt.ok) break
               tickern(
@@ -3921,26 +4360,39 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
                   lokaleHelfer.modell
                 )
               )
-              const reparatur = await lokalReparieren({
-                projektPfad,
-                // Projektwissen (BAUPLAN 25) auch für die Vorreparatur — sie
-                // läuft an den Helfer-Werkzeugen vorbei direkt über lauf.js.
-                auftrag:
-                  (lokaleHelfer.projektwissen?.(k.eintrag.instanzId) ?? '') +
-                  texte.agentenLokaleHelfer.reparaturAuftrag(k.lokaleKritik),
-                modell: lokaleHelfer.modell,
-                adresse: lokaleHelfer.adresse,
-                aufSchritt: (name, eingabe) =>
-                  tickern(
-                    name === 'ersetzen'
-                      ? texte.ticker.lokaleReparaturSchritt(eingabe?.pfad)
-                      : texte.ticker.lokaleHelferSchritt(name, eingabe)
-                  ),
-                // Denk-Ansicht (BAUPLAN 24): nur live, nie im Laufbericht —
-                // deshalb senden() statt tickern().
-                aufDenken: (text) =>
-                  senden({ art: 'denken', absender: texte.lauf.denkenLokaleKi, text })
-              })
+              // Die Vorreparatur ist ein unsichtbarer Schreiber (BAUPLAN 46): Sie
+              // schreibt in die Dateien des ZIEL-Blocks, ohne dass der auf
+              // 'laeuft' steht. Solange sie läuft, zählt das Ziel für Welle,
+              // Nachlauf und geschützte Bereiche wie ein laufender Schreiber —
+              // und seine Dateiliste ist ihre Tabu-Liste (Vertrag F5/S7).
+              zielK.dateiListeAktiv = dateiListeFuer(zielK)
+              zielK.schreibtGerade = true
+              let reparatur
+              try {
+                reparatur = await lokalReparieren({
+                  projektPfad,
+                  // Projektwissen (BAUPLAN 25) auch für die Vorreparatur — sie
+                  // läuft an den Helfer-Werkzeugen vorbei direkt über lauf.js.
+                  auftrag:
+                    (lokaleHelfer.projektwissen?.(k.eintrag.instanzId) ?? '') +
+                    texte.agentenLokaleHelfer.reparaturAuftrag(k.lokaleKritik),
+                  modell: lokaleHelfer.modell,
+                  adresse: lokaleHelfer.adresse,
+                  dateiListe: zielK.dateiListeAktiv,
+                  aufSchritt: (name, eingabe) =>
+                    tickern(
+                      name === 'ersetzen'
+                        ? texte.ticker.lokaleReparaturSchritt(eingabe?.pfad)
+                        : texte.ticker.lokaleHelferSchritt(name, eingabe)
+                    ),
+                  // Denk-Ansicht (BAUPLAN 24): nur live, nie im Laufbericht —
+                  // deshalb senden() statt tickern().
+                  aufDenken: (text) =>
+                    senden({ art: 'denken', absender: texte.lauf.denkenLokaleKi, text })
+                })
+              } finally {
+                zielK.schreibtGerade = false
+              }
               const l = helferZaehler()
               l.reparaturen = (l.reparaturen ?? 0) + 1
               l.schritte += reparatur.schritte ?? 0
@@ -3993,10 +4445,16 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           if (budget.erlaubt) {
             const genutzt = budget.genutzt
             // Erneut laufen alle Blöcke auf den Wegen vom Ziel zum Prüfer —
-            // parallele Zweige außerhalb behalten ihr Ergebnis.
+            // parallele Zweige außerhalb behalten ihr Ergebnis. Ein Block im
+            // Nachlauf (BAUPLAN 46) auf diesem Weg geht ebenfalls zurück auf
+            // 'offen': Sein Rauchtest wäre auf einen Stand gemessen worden,
+            // den die Reparatur-Runde gleich ersetzt.
             for (const nochmalId of zwischenBloecke(workflow.bloecke, workflow.pfeile, zielId, id)) {
               const nk = knoten.get(nochmalId)
-              if (nk.status === 'fertig') nk.status = 'offen'
+              if (nk.status === 'fertig' || nk.status === 'nachlauf') {
+                nk.status = 'offen'
+                nk.nachlaufErgebnis = null
+              }
             }
             const ziel = knoten.get(zielId)
             ziel.rueckmeldung = kritik
@@ -4033,59 +4491,175 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
               tickern(texte.ticker.beanstandungenTeilweise(belegKritik.weggelassen))
             return
           }
-          const wahl = await entscheidungStellen(k.name, rundenStandard)
-          if (wahl === 'zurueckstellen') {
-            tickern(texte.ticker.entscheidungZurueckgestellt)
-            if (!endZustand) endZustand = 'zurueckgestellt'
-            return
-          }
-          if (wahl === 'wiederherstellen') {
-            tickern(texte.ticker.entscheidungWiederhergestellt)
-            wiederherstellenNachLauf = true
-            if (!endZustand) endZustand = 'wiederhergestellt'
-            return
-          }
-          tickern(texte.ticker.entscheidungWeitermachen)
+          // Folgen-Frage je Zweig (BAUPLAN 46, Vertrag F8): Sie hält den
+          // Planer nicht mehr an. Der Prüfer wartet auf 'wartet-entscheidung'
+          // (seine Nachfolger starten nicht, andere Zweige laufen weiter), die
+          // Frage hängt als eigener Teilnehmer im Race der Planer-Schleife, und
+          // entscheidungVerarbeiten setzt die Wahl um. Der Dialog sagt vorher,
+          // was „Stand wiederherstellen" treffen würde.
+          k.status = 'wartet-entscheidung'
+          // Solange die Frage offen ist, gilt der Zweig als belegt
+          // (offeneFragenZweige) — dafür bleibt das Ziel am Knoten.
+          k.entscheidungZielId = zielId ?? null
+          const zweig = zweigWirkbereiche(zielId, id)
+          laufende.set(
+            'entscheidung:' + id,
+            entscheidungEinreihen({
+              instanzId: id,
+              blockName: k.name,
+              zielId,
+              runden: rundenStandard,
+              trifft: zweig.ohne.length
+                ? texte.entscheidung.trifftGanzerOrdner(zweig.ohne[0])
+                : texte.entscheidung.trifftBereiche(zweig.teile)
+            }).then((ergebnis) => ({ id: 'entscheidung:' + id, ergebnis }))
+          )
+          return
         }
       }
 
-      // Sicherungspunkt nach jedem gelungenen schreibenden Block (SPEC §3.3).
-      // Nur-lesende Blöcke ändern nichts — und ein Punkt, während parallel ein
-      // Schreiber arbeitet, würde dessen halbfertige Änderungen einfrieren.
-      //
-      // Hat der Block einen eigenen Strang (BAUPLAN 45), legt hier NICHTS an:
-      // Die Zusammenführung gleich danach hält denselben Ordnerstand fest und
-      // trägt dieselbe Beschriftung. Zwei Punkte wären zwei Einträge in Georgs
-      // Wiederherstellen-Liste, zwischen denen es sachlich nichts zu wählen
-      // gibt. Es bleibt bei genau einem Punkt je schreibendem Block.
+      await blockendePunktFuer(k)
+    }
+
+    // Sicherungspunkt nach jedem gelungenen schreibenden Block (SPEC §3.3).
+    // Nur-lesende Blöcke ändern nichts — und ein Punkt, während parallel ein
+    // Schreiber arbeitet, würde dessen halbfertige Änderungen einfrieren; seit
+    // der Welle (BAUPLAN 46) nimmt der Punkt für deren Wirkbereiche darum den
+    // Stand der Basis (`ausgenommen`, Vertrag F6).
+    //
+    // Hat der Block einen eigenen Strang (BAUPLAN 45), legt hier NICHTS an:
+    // Die Zusammenführung gleich danach hält denselben Ordnerstand fest und
+    // trägt dieselbe Beschriftung. Zwei Punkte wären zwei Einträge in Georgs
+    // Wiederherstellen-Liste, zwischen denen es sachlich nichts zu wählen
+    // gibt. Es bleibt bei genau einem Punkt je schreibendem Block.
+    async function blockendePunktFuer(k) {
       if (!k.def.nurLesen && !k.strang) {
         const punkt = await sicherungspunktAnlegen(
           projektPfad,
-          texte.sicherungen.beschriftungNachBlock(k.name)
+          texte.sicherungen.beschriftungNachBlock(k.name),
+          { ausgenommen: geschuetzteBereicheFuer(k) }
         )
         if (punkt.ok && punkt.neu) tickern(texte.ticker.sicherungspunktAngelegt)
       }
     }
 
+    // Was „Stand wiederherstellen" für den Zweig eines Prüfers träfe
+    // (BAUPLAN 46, Vertrag F8): die Wirkbereiche aller Blöcke auf den Wegen vom
+    // Rückführungs-Ziel zum Prüfer — Umsetzer ihre Dateiliste, Prüfer ihren
+    // Prüfordner; nur-lesende Blöcke schreiben nichts und zählen nicht. Fehlt
+    // einem Schreiber der Wirkbereich (kein Datenvertrag), geht es nicht
+    // zweigbezogen: `ohne` nennt ihn, und der Dialog sagt es vorher.
+    function zweigWirkbereiche(zielId, prueferId) {
+      // In Kettenreihenfolge, damit der Text so liest, wie der Zweig läuft:
+      // erst der Bauer, dann sein Prüfer.
+      const menge = zielId
+        ? zwischenBloecke(workflow.bloecke, workflow.pfeile, zielId, prueferId)
+        : new Set([prueferId])
+      const ids = kettenIds.filter((kid) => menge.has(kid))
+      const pfade = []
+      const teile = []
+      const ohne = []
+      for (const bid of ids) {
+        const nk = knoten.get(bid)
+        if (!nk || nk.def.nurLesen) continue
+        const bereich = nk.def.prueft
+          ? wirkbereichVon(nk.def, nk.pruefOrdner, null)
+          : wirkbereichVon(nk.def, '', nk.dateiListeAktiv ?? dateiListeFuer(nk))
+        if (!bereich) {
+          ohne.push(nk.name)
+          continue
+        }
+        pfade.push(...bereich)
+        teile.push(
+          nk.def.prueft
+            ? texte.entscheidung.trifftPruefordner(bereich[0])
+            : texte.entscheidung.trifftDateien(nk.name, bereich.length)
+        )
+      }
+      return { pfade: [...new Set(pfade)], teile, ohne }
+    }
+
+    // Die Wahl aus der Folgen-Frage umsetzen (BAUPLAN 46, Vertrag F8) — je
+    // Zweig, während andere Zweige weiterlaufen:
+    //   weitermachen     → der Prüfer gilt als erledigt (wie bisher: 'fertig',
+    //                      Punkt, Zusammenführung); seine Nachfolger starten.
+    //   zurueckstellen   → nur dieser Zweig endet ('zurueckgestellt'), der Lauf
+    //                      läuft weiter; am Ende heißt der Ausgang zurückgestellt,
+    //                      wenn nichts Schlimmeres vorliegt.
+    //   wiederherstellen → sind die Wirkbereiche ALLER Zweig-Blöcke bekannt,
+    //                      werden genau sie sofort auf den Punkt „vor Lauf"
+    //                      zurückgesetzt (wiederherstellenBereich) und der Zweig
+    //                      endet ('wiederhergestellt'). Fehlt einer, trifft es
+    //                      wie bisher den ganzen Ordner am Laufende — dann
+    //                      startet nichts Neues mehr.
+    async function entscheidungVerarbeiten({ instanzId, zielId, wahl }) {
+      const k = knoten.get(instanzId)
+      if (!k) return
+      // Ab hier ist der Zweig nicht mehr „offen" — der Status wechselt unten,
+      // und damit gibt offeneFragenZweige sein Revier frei.
+      k.entscheidungZielId = null
+      if (wahl === 'weitermachen') {
+        tickern(texte.ticker.entscheidungWeitermachen(k.name))
+        k.status = 'fertig'
+        await blockendePunktFuer(k)
+      } else if (wahl === 'zurueckstellen') {
+        tickern(texte.ticker.entscheidungZurueckgestellt(k.name))
+        k.status = 'zurueckgestellt'
+      } else {
+        const zweig = zweigWirkbereiche(zielId, instanzId)
+        if (zweig.ohne.length === 0) {
+          tickern(texte.ticker.entscheidungWiederhergestellt(k.name))
+          const zurueck = await wiederherstellenBereich(projektPfad, punktVorLauf, {
+            nurPfade: zweig.pfade,
+            // Das Sicherheitsnetz vor dem Rückroll ist ein Punkt in der Welle
+            // wie jeder andere: fremdes laufendes Revier auf dem Basis-Stand.
+            ausgenommen: geschuetzteBereicheFuer(k)
+          })
+          tickern(
+            zurueck.ok
+              ? texte.ticker.zweigWiederhergestellt(k.name, zurueck.dateien ?? 0)
+              : texte.ticker.zweigWiederherstellenGescheitert(k.name)
+          )
+        } else {
+          tickern(texte.ticker.entscheidungWiederhergestelltGanz(k.name))
+          wiederherstellenNachLauf = true
+          if (!endZustand) endZustand = 'wiederhergestellt'
+        }
+        k.status = 'wiederhergestellt'
+      }
+      // Der Strang des Prüfers blieb offen, solange die Frage offen war — jetzt
+      // ist der Anlauf zu Ende (beim harten Stopp räumt das Laufende auf).
+      if (!lauf.hart) await strangSchliessenFuer(k)
+    }
+
     standSpeichern()
     // Die Planer-Schleife: Bereites starten, auf den nächsten fertigen Block
-    // warten, Ergebnis verarbeiten — bis nichts mehr läuft.
+    // (oder die nächste beantwortete Folgen-Frage) warten, Ergebnis
+    // verarbeiten, ausstehende Nachläufe abarbeiten — bis nichts mehr läuft.
     while (true) {
       bereiteStarten()
       if (laufende.size === 0) break
       const { id, ergebnis } = await Promise.race(laufende.values())
       laufende.delete(id)
-      lauf.aktiveInstanzen.delete(id)
-      senden({ art: 'block-fertig', instanzId: id })
-      await verarbeite(id, ergebnis)
-      // Zusammenführung am Blockende (BAUPLAN 45): Der Strang lebt nur
-      // innerhalb EINES Block-Anlaufs — hier wird er auf den gemeinsamen Stand
-      // geholt, bevor der nächste Block startet. Beim harten Stopp NICHT: Dort
-      // setzt der zentrale Rollback unten erst zurück; erst danach ist der
-      // Arbeitsordner die Wahrheit, die zusammengehört. Steht der Block auf
-      // 'offen', läuft er gleich wieder — sein Anlauf ist nicht zu Ende, und
-      // strangSchliessenAn lässt seinen Strang deshalb stehen.
-      if (!lauf.hart) await strangSchliessenFuer(knoten.get(id))
+      if (ergebnis?.zustand === 'entscheidung') {
+        // Eine beantwortete Folgen-Frage (BAUPLAN 46) — kein Block-Ergebnis.
+        await entscheidungVerarbeiten(ergebnis)
+      } else {
+        lauf.aktiveInstanzen.delete(id)
+        senden({ art: 'block-fertig', instanzId: id })
+        await verarbeite(id, ergebnis)
+        // Zusammenführung am Blockende (BAUPLAN 45): Der Strang lebt nur
+        // innerhalb EINES Block-Anlaufs — hier wird er auf den gemeinsamen Stand
+        // geholt, bevor der nächste Block startet. Beim harten Stopp NICHT: Dort
+        // setzt der zentrale Rollback unten erst zurück; erst danach ist der
+        // Arbeitsordner die Wahrheit, die zusammengehört. Steht der Block im
+        // Nachlauf oder wartet er auf seine Folgen-Frage (BAUPLAN 46), ist sein
+        // Anlauf nicht zu Ende, und strangSchliessenAn lässt den Strang stehen.
+        if (!lauf.hart) await strangSchliessenFuer(knoten.get(id))
+      }
+      // Nachlauf-Phase (BAUPLAN 46): Steht die Welle, kommen die wartenden
+      // Rauchtests dran — VOR dem nächsten Start.
+      await nachlaeufeAbarbeiten()
       standSpeichern()
     }
 
@@ -4113,10 +4687,13 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     // Status nicht mehr: Auch ein Block, der noch auf 'offen' steht, bekommt
     // seinen Strang geschlossen — nach dem Laufende läuft nichts mehr nach.
     for (const kid of kettenIds) await strangEndgueltigSchliessenFuer(knoten.get(kid))
-    if (!endZustand) {
-      const alleFertig = kettenIds.every((id) => knoten.get(id).status === 'fertig')
-      endZustand = alleFertig ? 'erfolgreich' : lauf.sanft ? 'sanft-gestoppt' : 'fehlgeschlagen'
-    }
+    // Der Ausgang (seit BAUPLAN 46 mit den zweigbezogenen Wahlen der
+    // Folgen-Frage) — die Rangfolge steht oben im Modul als eigene Rechnung.
+    if (!endZustand)
+      endZustand = endzustandAus(
+        kettenIds.map((id) => knoten.get(id)),
+        { sanft: lauf.sanft }
+      )
     // „Stand wiederherstellen" aus der Folgen-Frage — jetzt schreibt keiner mehr.
     if (wiederherstellenNachLauf) {
       const zurueck = await wiederherstellen(projektPfad, punktVorLauf)
@@ -4221,6 +4798,11 @@ export function laufHartStoppen(projektPfad) {
   // Werkzeug-Aufruf im FlowForge-Prozess ewig hängen lassen — sofort auflösen.
   for (const antworten of [...lauf.menschFragen.values()]) antworten(null)
   for (const antworten of [...lauf.vorschlaege.values()]) antworten(null)
+  // Ebenso eine offene Folgen-Frage (BAUPLAN 46): Sie hängt im Race der
+  // Planer-Schleife — unbeantwortet käme der Lauf nie zum Rückroll des harten
+  // Stopps. „Zurückstellen" ist die Wahl ohne eigene Wirkung; zurückgesetzt
+  // wird ohnehin gleich zentral.
+  for (const aufloesen of [...lauf.entscheidungen.values()]) aufloesen('zurueckstellen')
   // Bei parallelen Zweigen laufen mehrere Motoren — alle sofort töten. Auch
   // eine gerade unbeschäftigte Lauf-Session stirbt mit (BAUPLAN 19); doppelte
   // Aufrufe auf denselben Motor sind unschädlich.
@@ -4360,6 +4942,12 @@ export async function laufFortsetzen(fenster, projektPfad, ausWarteschlange = fa
   // Prüfmappen der anderen Instanzen nicht (BAUPLAN 45). Ein Strang aus dem
   // Absturz wird bewusst NICHT benutzt: Er hielte genau die Arbeit fest, die
   // hier fallen soll; der Laufstart räumt ihn gleich weg.
+  // Seit der Welle (BAUPLAN 46) können MEHRERE Blöcke nicht fertig sein — der
+  // Rückroll auf den gemeinsamen Stand genügt für alle: In fertigIds steht nur,
+  // wessen Arbeit schon zusammengeführt war (Vertrag F6; Nachlauf und offene
+  // Folgen-Frage zählen nicht als fertig), und alles andere startet wieder auf
+  // 'offen'. Ehrliche Grenze: Die Prüfmappe eines zweiten abgebrochenen Prüfers
+  // bleibt stehen wie ein fremdes Revier — sein neuer Anlauf schreibt sie neu.
   const abgebrochenId = Array.isArray(stand.fertigIds)
     ? stand.kettenIds.find((id) => !stand.fertigIds.includes(id))
     : stand.kettenIds[stand.index]
@@ -4423,7 +5011,8 @@ export function laufZustand(projektPfad) {
     // Bei parallelen Zweigen laufen mehrere Karten gleichzeitig (BAUPLAN 13).
     blockInstanzIds: [...lauf.aktiveInstanzen],
     frage: lauf.offeneFragen[0] ?? null,
-    entscheidung: lauf.offeneEntscheidung,
+    // Die erste offene Folgen-Frage (BAUPLAN 46: mehrere können warten).
+    entscheidung: lauf.offeneEntscheidungen?.[0] ?? lauf.offeneEntscheidung ?? null,
     menschFrage: lauf.offeneMenschFragen[0] ?? null,
     vorschlag: lauf.offeneVorschlaege[0] ?? null,
     gespraech: lauf.gespraech,

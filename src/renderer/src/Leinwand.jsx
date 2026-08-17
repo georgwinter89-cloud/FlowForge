@@ -1192,13 +1192,18 @@ export default function Leinwand({
       if (ereignis.art === 'frage')
         setFrage({ frageId: ereignis.frageId, beschreibung: ereignis.beschreibung })
       if (ereignis.art === 'frage-erledigt') setFrage(null)
+      // Folgen-Frage je Zweig (BAUPLAN 46): mehrere können nacheinander kommen
+      // — lauf.js schickt nach jedem „erledigt" die nächste offene; `trifft`
+      // sagt, was „Stand wiederherstellen" für diesen Zweig träfe.
       if (ereignis.art === 'entscheidung')
         setEntscheidung({
           frageId: ereignis.frageId,
           blockName: ereignis.blockName,
-          runden: ereignis.runden
+          runden: ereignis.runden,
+          trifft: ereignis.trifft ?? null
         })
-      if (ereignis.art === 'entscheidung-erledigt') setEntscheidung(null)
+      if (ereignis.art === 'entscheidung-erledigt')
+        setEntscheidung((alt) => (alt && alt.frageId !== ereignis.frageId ? alt : null))
       if (ereignis.art === 'mensch-frage')
         setMenschFrage({
           frageId: ereignis.frageId,
@@ -2455,6 +2460,12 @@ export default function Leinwand({
                 >
                   <strong>{titel}</strong>
                   <span className="feld-hinweis">{hinweis}</span>
+                  {/* Was der Rückroll trifft (BAUPLAN 46): der Zweig — oder
+                      ehrlich der ganze Ordner, wenn ein Block keinen
+                      Datenvertrag hat. */}
+                  {wahl === 'wiederherstellen' && entscheidung.trifft && (
+                    <span className="feld-hinweis">{entscheidung.trifft}</span>
+                  )}
                 </button>
               ))}
             </div>

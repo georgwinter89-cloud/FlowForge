@@ -33,7 +33,9 @@ import {
   letzterPunktId,
   punkteVergleichen,
   aufLetztenPunktZuruecksetzen,
-  wiederherstellenVorschau
+  wiederherstellenVorschau,
+  wiederherstellenBereich,
+  wiederherstellen
 } from '../src/main/sicherungspunkte.js'
 
 // Das versteckte Git-Verzeichnis leitet sich allein aus dem Projektpfad ab
@@ -1453,5 +1455,301 @@ describe('BAUPLAN 45 · Klemmt ein Strang, sagt der Fehler die Wahrheit über de
     // ein zweiter Anlauf findet den Strang noch (siehe straengeAufraeumen).
     vi.restoreAllMocks()
     expect(await letzterPunktId(projektPfad, 'klemmt-2')).toBe(aufStrang.id)
+  })
+})
+
+// ── BAUPLAN 46: Punkte ohne fremdes laufendes Revier ────────────────────────
+// Seit zwei Schreiber gleichzeitig laufen, darf der Punkt am Blockende von A
+// nicht den Halbstand von B einfrieren: „Nach Block A" trägt genau A's Arbeit,
+// B's Wirkbereich bleibt auf dem Stand der Basis. Rot vor Grün: Vor dem
+// Bauschritt kannte strangZusammenfuehren kein `ausgenommen` — der Punkt trug
+// B's Halbstand, ausgenommenDateien war undefined, und wiederherstellenBereich
+// gab es nicht (Import undefined → TypeError).
+describe('BAUPLAN 46 · Zusammenführen ohne fremdes laufendes Revier', () => {
+  const projektPfad = projektAnlegen('ausgenommen')
+  let basis = null
+  let zusammen = null
+
+  beforeAll(async () => {
+    schreiben(projektPfad, 'src/ui/Leinwand.jsx', 'ui alt\n')
+    schreiben(projektPfad, 'src/motor/lauf.js', 'motor alt\n')
+    await sicherungspunktAnlegen(projektPfad, 'Stand vor dem Lauf')
+    basis = await letzterPunktId(projektPfad)
+    await strangOeffnen(projektPfad, 'bauer-ui')
+    // Bauer · UI schreibt in seinem Bereich, Bauer · Motor gleichzeitig in
+    // seinem — B ist noch nicht fertig, sein Bereich ist bei A ausgenommen.
+    schreiben(projektPfad, 'src/ui/Leinwand.jsx', 'ui NEU\n')
+    schreiben(projektPfad, 'src/motor/lauf.js', 'motor HALBFERTIG\n')
+    schreiben(projektPfad, 'src/motor/neu.js', 'neu, halbfertig\n')
+    zusammen = await strangZusammenfuehren(projektPfad, 'bauer-ui', 'Nach Block „Bauer · UI"', {
+      ausgenommen: ['src/motor/']
+    })
+  })
+
+  it('legt den gemeinsamen Punkt an und zählt, was ausgenommen blieb', () => {
+    expect(zusammen.ok).toBe(true)
+    expect(zusammen.ausgenommenDateien).toBe(2)
+  })
+
+  it("trägt A's Arbeit — und B's Bereich auf dem Basis-Stand", async () => {
+    const gitdir = gitOrdner(projektPfad)
+    const ui = await git.readBlob({ fs, gitdir, oid: zusammen.id, filepath: 'src/ui/Leinwand.jsx' })
+    expect(Buffer.from(ui.blob).toString()).toBe('ui NEU\n')
+    const motor = await git.readBlob({ fs, gitdir, oid: zusammen.id, filepath: 'src/motor/lauf.js' })
+    expect(Buffer.from(motor.blob).toString()).toBe('motor alt\n')
+    // Die halbfertige NEUE Datei von B ist im Punkt nicht drin.
+    await expect(
+      git.readBlob({ fs, gitdir, oid: zusammen.id, filepath: 'src/motor/neu.js' })
+    ).rejects.toThrow()
+  })
+
+  it('lässt den Arbeitsordner unangetastet — B arbeitet weiter', () => {
+    expect(lesen(projektPfad, 'src/motor/lauf.js')).toBe('motor HALBFERTIG\n')
+    expect(lesen(projektPfad, 'src/motor/neu.js')).toBe('neu, halbfertig\n')
+  })
+
+  it('ein Rückroll auf diesen Punkt stellte B nicht auf seinen Halbstand', async () => {
+    // Die Vorschau zeigt genau den Unterschied: B's Bereich weicht vom Punkt
+    // ab (weil der Punkt dort die Basis trägt), A's Bereich nicht.
+    const vorschau = await wiederherstellenVorschau(projektPfad, zusammen.id)
+    expect(vorschau.unterschiede.map((u) => u.pfad).sort()).toEqual([
+      'src/motor/lauf.js',
+      'src/motor/neu.js'
+    ])
+  })
+
+  it('der Basispunkt bleibt der Elternteil — die Kette ist eine', async () => {
+    const punkt = await git.readCommit({ fs, gitdir: gitOrdner(projektPfad), oid: zusammen.id })
+    expect(punkt.commit.parent[0]).toBe(basis)
+  })
+})
+
+describe('BAUPLAN 46 · Auch der Punkt auf dem Strang lässt fremdes Revier auf der Basis', () => {
+  const projektPfad = projektAnlegen('ausgenommen-strang')
+  let aufStrang = null
+  let zusammen = null
+
+  beforeAll(async () => {
+    schreiben(projektPfad, 'src/ui/a.js', 'a alt\n')
+    schreiben(projektPfad, 'src/motor/b.js', 'b alt\n')
+    await sicherungspunktAnlegen(projektPfad, 'Stand vor dem Lauf')
+    await strangOeffnen(projektPfad, 'bauer-ui')
+    schreiben(projektPfad, 'src/ui/a.js', 'a NEU\n')
+    schreiben(projektPfad, 'src/motor/b.js', 'b HALB\n')
+    // Der Zwischenpunkt „vor lokalem Teilstück" (helferWerkzeuge) mit ausgenommen.
+    aufStrang = await sicherungspunktAnlegen(projektPfad, 'Nach Block „Bauer · UI"', {
+      strang: 'bauer-ui',
+      ausgenommen: ['src/motor/']
+    })
+    zusammen = await strangZusammenfuehren(projektPfad, 'bauer-ui', 'Nach Block „Bauer · UI"', {
+      ausgenommen: ['src/motor/']
+    })
+  })
+
+  it("der Strangpunkt trägt B's Datei auf dem Stand der Strang-Basis", async () => {
+    expect(aufStrang.neu).toBe(true)
+    expect(aufStrang.ausgenommenDateien).toBe(1)
+    const b = await git.readBlob({
+      fs,
+      gitdir: gitOrdner(projektPfad),
+      oid: aufStrang.id,
+      filepath: 'src/motor/b.js'
+    })
+    expect(Buffer.from(b.blob).toString()).toBe('b alt\n')
+  })
+
+  it("zieht „haupt\" vor, weil der Strangpunkt auch in B's Bereich auf der Basis steht", async () => {
+    expect(zusammen.ok).toBe(true)
+    expect(zusammen.neu).toBe(false)
+    expect(zusammen.id).toBe(aufStrang.id)
+    expect(await letzterPunktId(projektPfad)).toBe(aufStrang.id)
+  })
+
+  it('zieht NICHT vor, wenn der Strangpunkt fremden Halbstand trägt', async () => {
+    // Ein Punkt OHNE Ausnahme (wie vor Bauschritt 46) friert B's Halbstand ein.
+    // Ihn vorzuziehen machte den Halbstand zur Spitze von 'haupt' — stattdessen
+    // entsteht der Punkt mit zwei Eltern, dessen Einsammeln die Basis nimmt.
+    await strangOeffnen(projektPfad, 'bauer-ui-2')
+    schreiben(projektPfad, 'src/ui/a.js', 'a NEUER\n')
+    schreiben(projektPfad, 'src/motor/b.js', 'b HALBER\n')
+    const ohne = await sicherungspunktAnlegen(projektPfad, 'Nach Block „Bauer · UI"', {
+      strang: 'bauer-ui-2'
+    })
+    const danach = await strangZusammenfuehren(projektPfad, 'bauer-ui-2', 'Nach Block „Bauer · UI"', {
+      ausgenommen: ['src/motor/']
+    })
+    expect(danach.ok).toBe(true)
+    expect(danach.neu).toBe(true)
+    expect(danach.id).not.toBe(ohne.id)
+    const b = await git.readBlob({
+      fs,
+      gitdir: gitOrdner(projektPfad),
+      oid: danach.id,
+      filepath: 'src/motor/b.js'
+    })
+    expect(Buffer.from(b.blob).toString()).toBe('b alt\n')
+  })
+})
+
+describe('BAUPLAN 46 · Wiederherstellen nur innerhalb eines Bereichs', () => {
+  const projektPfad = projektAnlegen('bereich')
+  let vorLauf = null
+  let ergebnis = null
+
+  beforeAll(async () => {
+    schreiben(projektPfad, 'src/ui/a.js', 'a alt\n')
+    schreiben(projektPfad, 'src/ui/weg.js', 'kommt weg\n')
+    schreiben(projektPfad, 'src/motor/b.js', 'b alt\n')
+    await sicherungspunktAnlegen(projektPfad, 'Stand vor dem Lauf')
+    vorLauf = await letzterPunktId(projektPfad)
+    // Zweig UI: geändert, gelöscht, neu angelegt. Zweig Motor: fertig, bleibt.
+    schreiben(projektPfad, 'src/ui/a.js', 'a verbastelt\n')
+    fs.rmSync(path.join(projektPfad, 'src/ui/weg.js'))
+    schreiben(projektPfad, 'src/ui/neu.js', 'neu, verbastelt\n')
+    schreiben(projektPfad, 'src/motor/b.js', 'b FERTIG\n')
+    schreiben(projektPfad, 'pruefung/pruefer-1/t.js', 'test\n')
+    ergebnis = await wiederherstellenBereich(projektPfad, vorLauf, {
+      nurPfade: ['src/ui/', 'pruefung/pruefer-1/']
+    })
+  })
+
+  it('setzt den Bereich zurück — ändern, zurückholen UND löschen', () => {
+    expect(ergebnis.ok).toBe(true)
+    expect(ergebnis.dateien).toBe(4)
+    expect(lesen(projektPfad, 'src/ui/a.js')).toBe('a alt\n')
+    expect(lesen(projektPfad, 'src/ui/weg.js')).toBe('kommt weg\n')
+    expect(lesen(projektPfad, 'src/ui/neu.js')).toBe(null)
+    expect(lesen(projektPfad, 'pruefung/pruefer-1/t.js')).toBe(null)
+  })
+
+  it('lässt alles außerhalb stehen und zählt es', () => {
+    expect(ergebnis.uebersprungen).toBe(1)
+    expect(lesen(projektPfad, 'src/motor/b.js')).toBe('b FERTIG\n')
+  })
+
+  it('hat vorher den jetzigen Stand gesichert', async () => {
+    const punkte = (await sicherungspunkteLaden(projektPfad)).punkte
+    expect(punkte[0].beschriftung).toBe(texte.sicherungen.beschriftungVorWiederherstellung)
+  })
+
+  it('fasst ohne Bereich gar nichts an', async () => {
+    schreiben(projektPfad, 'src/ui/a.js', 'a wieder anders\n')
+    const nichts = await wiederherstellenBereich(projektPfad, vorLauf, { nurPfade: [] })
+    expect(nichts).toEqual({ ok: true, dateien: 0, uebersprungen: 0 })
+    expect(lesen(projektPfad, 'src/ui/a.js')).toBe('a wieder anders\n')
+  })
+})
+
+describe('BAUPLAN 46 · Warteschlange je Projektordner', () => {
+  // Zwei Blöcke legen GLEICHZEITIG Punkte an — auf zwei Strängen, mit
+  // gegenseitig ausgenommenen Bereichen. Ohne Warteschlange arbeiteten beide
+  // verschränkt auf demselben Index; hier müssen beide Punkte konsistent sein.
+  // Rot vor Grün (gemessen mit ausgehängter Warteschlange, `return aufgabe()`):
+  // A's Punkt trug 'a alt' statt 'a NEU', und nach beiden Zusammenführungen
+  // fehlte B's Arbeit auf 'haupt' — der Nachbar hatte den Index dazwischen
+  // umgebaut.
+  const projektPfad = projektAnlegen('warteschlange')
+  let a = null
+  let b = null
+
+  beforeAll(async () => {
+    schreiben(projektPfad, 'src/ui/a.js', 'a alt\n')
+    schreiben(projektPfad, 'src/motor/b.js', 'b alt\n')
+    await sicherungspunktAnlegen(projektPfad, 'Stand vor dem Lauf')
+    await strangOeffnen(projektPfad, 'ui')
+    await strangOeffnen(projektPfad, 'motor')
+    schreiben(projektPfad, 'src/ui/a.js', 'a NEU\n')
+    schreiben(projektPfad, 'src/motor/b.js', 'b NEU\n')
+    ;[a, b] = await Promise.all([
+      sicherungspunktAnlegen(projektPfad, 'Teilstück UI', { strang: 'ui', ausgenommen: ['src/motor/'] }),
+      sicherungspunktAnlegen(projektPfad, 'Teilstück Motor', {
+        strang: 'motor',
+        ausgenommen: ['src/ui/']
+      })
+    ])
+  })
+
+  it('beide Punkte entstehen ohne Fehler', () => {
+    expect(a.ok).toBe(true)
+    expect(a.neu).toBe(true)
+    expect(b.ok).toBe(true)
+    expect(b.neu).toBe(true)
+    expect(a.id).not.toBe(b.id)
+  })
+
+  it('jeder Punkt trägt genau die eigene Arbeit und den Basis-Stand des anderen', async () => {
+    const gitdir = gitOrdner(projektPfad)
+    const lies = async (oid, pfad) =>
+      Buffer.from((await git.readBlob({ fs, gitdir, oid, filepath: pfad })).blob).toString()
+    expect(await lies(a.id, 'src/ui/a.js')).toBe('a NEU\n')
+    expect(await lies(a.id, 'src/motor/b.js')).toBe('b alt\n')
+    expect(await lies(b.id, 'src/motor/b.js')).toBe('b NEU\n')
+    expect(await lies(b.id, 'src/ui/a.js')).toBe('a alt\n')
+  })
+
+  it('beide Zusammenführungen gleichzeitig: „haupt" kennt am Ende beide Arbeiten', async () => {
+    const [za, zb] = await Promise.all([
+      strangZusammenfuehren(projektPfad, 'ui', 'Nach Block „UI"', { ausgenommen: ['src/motor/'] }),
+      strangZusammenfuehren(projektPfad, 'motor', 'Nach Block „Motor"', { ausgenommen: [] })
+    ])
+    expect(za.ok).toBe(true)
+    expect(zb.ok).toBe(true)
+    const spitze = await letzterPunktId(projektPfad)
+    const gitdir = gitOrdner(projektPfad)
+    const lies = async (pfad) =>
+      Buffer.from((await git.readBlob({ fs, gitdir, oid: spitze, filepath: pfad })).blob).toString()
+    expect(await lies('src/ui/a.js')).toBe('a NEU\n')
+    expect(await lies('src/motor/b.js')).toBe('b NEU\n')
+    // Beide Punkte stehen in Georgs Liste, jeder genau einmal.
+    const namen = (await sicherungspunkteLaden(projektPfad)).punkte.map((p) => p.beschriftung)
+    expect(namen.filter((n) => n === 'Nach Block „UI"')).toHaveLength(1)
+    expect(namen.filter((n) => n === 'Nach Block „Motor"')).toHaveLength(1)
+  })
+})
+
+// Prüferbefund zu Bauschritt 46: git.walk mit TREE({ ref }) meldet für eine
+// unbekannte oder leere Kennung keinen Fehler, sondern einen leeren Baum — jede
+// Datei sah dann aus wie „nur-ordner", also zu löschen. Rot vor Grün (gemessen
+// vor punktSicherstellen): wiederherstellenBereich('deadbeef') löschte src/ui/
+// leer und meldete ok:true; wiederherstellen('') löschte alles und meldete
+// danach ok:false.
+describe('BAUPLAN 46 · Eine Kennung, die kein Punkt ist, löscht nichts', () => {
+  const projektPfad = projektAnlegen('keinpunkt')
+
+  beforeAll(async () => {
+    schreiben(projektPfad, 'src/ui/a.js', 'a\n')
+    schreiben(projektPfad, 'src/motor/b.js', 'b\n')
+    await sicherungspunktAnlegen(projektPfad, 'Stand vor dem Lauf')
+  })
+
+  it.each(['', 'deadbeef', 'kein-punkt', null, undefined])(
+    'wiederherstellen(%j) meldet ok:false und fasst den Ordner nicht an',
+    async (punktId) => {
+      const ergebnis = await wiederherstellen(projektPfad, punktId)
+      expect(ergebnis.ok).toBe(false)
+      expect(ergebnis.fehler).toBe(texte.sicherungen.fehlerWiederherstellen)
+      expect(lesen(projektPfad, 'src/ui/a.js')).toBe('a\n')
+      expect(lesen(projektPfad, 'src/motor/b.js')).toBe('b\n')
+    }
+  )
+
+  it.each(['', 'deadbeef', null])(
+    'wiederherstellenBereich(%j) meldet ok:false und lässt den Bereich stehen',
+    async (punktId) => {
+      const ergebnis = await wiederherstellenBereich(projektPfad, punktId, { nurPfade: ['src/ui/'] })
+      expect(ergebnis.ok).toBe(false)
+      expect(lesen(projektPfad, 'src/ui/a.js')).toBe('a\n')
+    }
+  )
+
+  it('auch die Vorschau meldet ok:false statt „alles verschwindet"', async () => {
+    const vorschau = await wiederherstellenVorschau(projektPfad, 'deadbeef')
+    expect(vorschau.ok).toBe(false)
+    expect(vorschau.unterschiede).toBeUndefined()
+  })
+
+  it('legt dabei nicht einmal einen Sicherheitsnetz-Punkt an', async () => {
+    const punkte = (await sicherungspunkteLaden(projektPfad)).punkte
+    expect(punkte.map((p) => p.beschriftung)).toEqual(['Stand vor dem Lauf'])
   })
 })

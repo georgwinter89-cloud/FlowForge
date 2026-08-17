@@ -348,7 +348,16 @@ export function zielFuerAdresse(ziele, roh) {
 // Die benannten Ziele dieses Blocks: die Umsetzer unter den Empfängern seines
 // Arbeitspakets. Reine Funktion aus (bloecke, pfeile) wie vorspannText — sie
 // liest nichts aus dem Laufstatus, damit der Auftrag in jedem Anlauf Wort für
-// Wort derselbe bleibt. Liefert [{ instanzId, nummer, name, adresse, bezeichnung }].
+// Wort derselbe bleibt. Liefert
+// [{ instanzId, nummer, name, adresse, bezeichnung, nebenlaeufigZu }].
+//
+// `nebenlaeufigZu` (BAUPLAN 46): die Instanz-Kennungen der ANDEREN Ziele
+// derselben Quelle, die weder Vorfahr noch Nachfahr dieses Ziels sind — also
+// die, die im Lauf gleichzeitig mit ihm schreiben können. Nur für solche Paare
+// muss der Zuschnitt überschneidungsfrei sein: Eine Kette Bauer A → Bauer B
+// darf dieselbe Datei nacheinander anfassen, ein Fächer nicht gleichzeitig.
+// Die Rechnung steht hier und nicht im Melde-Werkzeug, weil nur das Schaubild
+// weiß, wer hinter wem liegt — das Melde-Werkzeug sieht nur Adressen.
 export function zielListe(bloecke, pfeile, instanzId) {
   const lage = empfaengerLage(bloecke, pfeile, instanzId)
   const ziele = []
@@ -365,9 +374,25 @@ export function zielListe(bloecke, pfeile, instanzId) {
       nummer: empfaenger.nummer,
       name: empfaenger.name,
       adresse: zielAdresse(empfaenger.nummer),
-      bezeichnung: texte.ticker.blockBezeichnung(empfaenger.nummer, empfaenger.name)
+      bezeichnung: texte.ticker.blockBezeichnung(empfaenger.nummer, empfaenger.name),
+      nebenlaeufigZu: []
     })
   }
+  // Vorfahren je Ziel einmal rechnen; „X ist Vorfahr von Y" heißt: X liegt in
+  // Ys Vorfahrenmenge. Weder das eine noch das andere → nebenläufig.
+  const vorfahrenVon = new Map(
+    ziele.map((z) => [
+      z.instanzId,
+      new Set(vorfahrenSortiert(bloecke, pfeile, z.instanzId).map((b) => b.instanzId))
+    ])
+  )
+  for (const ziel of ziele)
+    for (const anderes of ziele) {
+      if (anderes.instanzId === ziel.instanzId) continue
+      if (vorfahrenVon.get(ziel.instanzId).has(anderes.instanzId)) continue
+      if (vorfahrenVon.get(anderes.instanzId).has(ziel.instanzId)) continue
+      ziel.nebenlaeufigZu.push(anderes.instanzId)
+    }
   return ziele
 }
 

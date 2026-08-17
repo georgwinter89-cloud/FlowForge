@@ -82,6 +82,34 @@ function ausgeschlossen(dateipfad) {
   return AUSGESCHLOSSEN.has(dateipfad.split('/')[0])
 }
 
+// ── Warteschlange je Projektordner (BAUPLAN 46) ─────────────────────────────
+// Seit zwei Schreiber gleichzeitig laufen, legen zwei Blöcke gleichzeitig
+// Punkte an, führen zusammen und rollen zurück — und alle teilen sich EINEN
+// Git-Index im versteckten Verzeichnis. Zwei verschränkte statusMatrix/add/
+// commit-Folgen ergäben Punkte, die halb den einen und halb den anderen Stand
+// tragen, oder einen Commit auf einem Index, den der Nachbar gerade umbaut.
+// Deshalb läuft jede exportierte Operation, die den Index oder die Refs liest
+// oder schreibt, je Projektordner NACHEINANDER: eine kleine Promise-Kette.
+//
+// Verklemmungs-Regel: Innerhalb der Kette darf keine Funktion eine ANDERE
+// Ketten-Funktion awaiten — sie wartete auf sich selbst. Die inneren
+// Bausteine (…Intern, strangEinholen, standEinsammeln, unterschiede) laufen
+// deshalb ohne Warteschlange; nur die exportierten Hüllen stellen sich an.
+const warteschlangen = new Map()
+function nacheinander(projektPfad, aufgabe) {
+  const schluessel = path.resolve(String(projektPfad ?? '')).toLowerCase()
+  const vorher = warteschlangen.get(schluessel) ?? Promise.resolve()
+  // Die Aufgabe läuft auch dann, wenn die vorige geplatzt ist — ein Fehler des
+  // Nachbarn darf den eigenen Punkt nicht verhindern.
+  const jetzt = vorher.then(aufgabe, aufgabe)
+  const kette = jetzt.catch(() => {})
+  warteschlangen.set(schluessel, kette)
+  kette.then(() => {
+    if (warteschlangen.get(schluessel) === kette) warteschlangen.delete(schluessel)
+  })
+  return jetzt
+}
+
 function gitVerzeichnis(projektPfad) {
   const schluessel = crypto
     .createHash('sha1')
@@ -122,16 +150,42 @@ function alleDateien(wurzel, unter = '') {
 // Bringt den Index auf den jetzigen Arbeitsordner, gerechnet gegen `refPfad`,
 // und meldet, ob es dabei einen echten Unterschied gab. `kopf` ist die Spitze
 // dieses Refs (null = noch gar kein Punkt).
-async function standEinsammeln(projektPfad, gitdir, refPfad, kopf) {
+//
+// `ausgenommen` (BAUPLAN 46): Dateilisten-Einträge (Dateien und Ordner in der
+// Schreibweise der Wirkbereiche) der ANDEREN gerade laufenden Schreiber. Was
+// darin liegt, wird NICHT aus dem Arbeitsordner eingesammelt — dort steht
+// gerade halbfertige fremde Arbeit —, sondern im Index auf den Stand von
+// `basisRef` gesetzt (Voreinstellung: derselbe Ref, gegen den eingesammelt
+// wird). Damit trägt „Nach Block A" genau A's Arbeit, und nach einem Absturz
+// startet B sauber auf dem Stand „vor B". Ohne diese Ausnahme fror der Punkt
+// des einen den Halbstand des anderen ein — und ein Rückroll auf ihn stellte
+// den Halbstand wieder her.
+//
+// Rückgabe: { geaendert, ausgenommenDateien } — die Zahl der Dateien, die
+// wegen der Ausnahme NICHT vom Arbeitsordner genommen wurden, obwohl sie dort
+// vom Ref abweichen (die Zahl, die der Ticker nennen kann).
+async function standEinsammeln(projektPfad, gitdir, refPfad, kopf, { ausgenommen = [], basisRef = null } = {}) {
+  const bereiche = Array.isArray(ausgenommen) ? ausgenommen.filter(Boolean) : []
+  const istAusgenommen = (datei) =>
+    bereiche.length > 0 && stehtInDateiliste(datei, projektPfad, bereiche)
   let geaendert = false
+  let ausgenommenDateien = 0
+  const cache = {}
   if (!kopf) {
     for (const datei of alleDateien(projektPfad)) {
-      await git.add({ fs, dir: projektPfad, gitdir, filepath: datei })
+      if (istAusgenommen(datei)) {
+        // Ohne Basis gibt es keinen Basis-Stand: Die Datei bleibt aus dem
+        // ersten Punkt draußen (und aus dem Index, falls dort ein Rest liegt).
+        await git.remove({ fs, dir: projektPfad, gitdir, cache, filepath: datei })
+        ausgenommenDateien++
+        continue
+      }
+      await git.add({ fs, dir: projektPfad, gitdir, cache, filepath: datei })
       geaendert = true
     }
-    return geaendert
+    return { geaendert, ausgenommenDateien }
   }
-  const cache = {}
+  const basis = basisRef ?? refPfad
   const matrix = await git.statusMatrix({
     fs,
     dir: projektPfad,
@@ -141,13 +195,50 @@ async function standEinsammeln(projektPfad, gitdir, refPfad, kopf) {
     filter: (datei) => !ausgeschlossen(datei)
   })
   for (const [datei, imPunkt, imOrdner, imIndex] of matrix) {
+    if (istAusgenommen(datei)) {
+      // Immer auf die Basis setzen, auch wenn Ref, Ordner und Index gleich
+      // aussehen: Der Index ist zwischen allen Strängen geteilt, und die Basis
+      // kann ein anderer Ref sein als der, gegen den hier gerechnet wird.
+      await git.resetIndex({ fs, dir: projektPfad, gitdir, cache, filepath: datei, ref: basis })
+      if (imPunkt !== 1 || imOrdner !== 1) ausgenommenDateien++
+      continue
+    }
     if (imPunkt === 1 && imOrdner === 1 && imIndex === 1) continue
     if (imOrdner === 0) await git.remove({ fs, dir: projektPfad, gitdir, cache, filepath: datei })
     else await git.add({ fs, dir: projektPfad, gitdir, cache, filepath: datei })
     // Nur echte Unterschiede zum letzten Punkt zählen — nicht bloß Index-Reste.
     if (imPunkt !== 1 || imOrdner !== 1) geaendert = true
   }
-  return geaendert
+  return { geaendert, ausgenommenDateien }
+}
+
+// Weichen zwei Punkte innerhalb der Pfade `bereiche` voneinander ab? Ein
+// Baum-gegen-Baum-Gang ohne Blob-Inhalte (die oids stehen im Baum). Gebraucht
+// für „Vorziehen statt Zwilling" mit ausgenommenen Bereichen: Ein Vorziehen
+// machte den Strangpunkt zur Spitze von 'haupt' — dessen ausgenommene Bereiche
+// müssen dann wirklich auf dem Basis-Stand von 'haupt' stehen, sonst friert
+// das Vorziehen doch fremden Halbstand ein.
+async function punkteWeichenAbIn(projektPfad, gitdir, oidA, oidB, bereiche) {
+  if (!oidA || !oidB) return oidA !== oidB
+  if (oidA === oidB) return false
+  const treffer = await git.walk({
+    fs,
+    dir: projektPfad,
+    gitdir,
+    trees: [TREE({ ref: oidA }), TREE({ ref: oidB })],
+    map: async (dateipfad, [a, b]) => {
+      if (dateipfad === '.') return undefined
+      if (ausgeschlossen(dateipfad)) return null
+      const typA = a ? await a.type() : null
+      const typB = b ? await b.type() : null
+      if (typA !== 'blob' && typB !== 'blob') return undefined
+      if (!stehtInDateiliste(dateipfad, projektPfad, bereiche)) return undefined
+      const oidVonA = typA === 'blob' ? await a.oid() : null
+      const oidVonB = typB === 'blob' ? await b.oid() : null
+      return oidVonA === oidVonB ? undefined : dateipfad
+    }
+  })
+  return (treffer ?? []).length > 0
 }
 
 // Legt einen Sicherungspunkt an — aber nur, wenn sich seit dem letzten etwas
@@ -165,13 +256,27 @@ async function standEinsammeln(projektPfad, gitdir, refPfad, kopf) {
 // baut die Zusicherung in helferWerkzeuge.js („der neueste Punkt ist der Stand
 // VOR dem Teilstück"). Die lokale KI baute dann auf Gebastel weiter, das sie
 // gerade verworfen glaubt.
-export async function sicherungspunktAnlegen(projektPfad, beschriftung, { strang = null } = {}) {
+//
+// `ausgenommen` (BAUPLAN 46): die Wirkbereiche der anderen gerade laufenden
+// Schreiber — sie bleiben auf dem Stand der Spitze dieses Refs (standEinsammeln).
+// Rückgabe zusätzlich `ausgenommenDateien`.
+//
+// Die exportierte Hülle stellt sich in die Warteschlange des Projektordners;
+// die innere Fassung rufen die Stellen, die selbst schon in der Kette laufen
+// (Zusammenführen, Wiederherstellen) — siehe Verklemmungs-Regel oben.
+export function sicherungspunktAnlegen(projektPfad, beschriftung, optionen = {}) {
+  return nacheinander(projektPfad, () => sicherungspunktAnlegenIntern(projektPfad, beschriftung, optionen))
+}
+
+async function sicherungspunktAnlegenIntern(projektPfad, beschriftung, { strang = null, ausgenommen = [] } = {}) {
   try {
     const gitdir = await repoOeffnen(projektPfad)
     const refPfad = refFuer(strang)
     const kopf = await neuesterPunkt(gitdir, refPfad)
-    const geaendert = await standEinsammeln(projektPfad, gitdir, refPfad, kopf)
-    if (!geaendert) return { ok: true, neu: false, id: kopf?.oid ?? null }
+    const { geaendert, ausgenommenDateien } = await standEinsammeln(projektPfad, gitdir, refPfad, kopf, {
+      ausgenommen
+    })
+    if (!geaendert) return { ok: true, neu: false, id: kopf?.oid ?? null, ausgenommenDateien }
     const id = await git.commit({
       fs,
       dir: projektPfad,
@@ -180,7 +285,7 @@ export async function sicherungspunktAnlegen(projektPfad, beschriftung, { strang
       message: beschriftung,
       author: AUTOR
     })
-    return { ok: true, neu: true, id }
+    return { ok: true, neu: true, id, ausgenommenDateien }
   } catch {
     return { ok: false, fehler: texte.sicherungen.fehlerAnlegen }
   }
@@ -193,7 +298,11 @@ export async function sicherungspunktAnlegen(projektPfad, beschriftung, { strang
 //
 // Liegt unter demselben Namen noch ein Strang mit unzusammengeführter Arbeit,
 // wird die ZUERST eingeholt; klemmt das, öffnet die Funktion lieber gar nicht.
-export async function strangOeffnen(projektPfad, strang) {
+export function strangOeffnen(projektPfad, strang) {
+  return nacheinander(projektPfad, () => strangOeffnenIntern(projektPfad, strang))
+}
+
+async function strangOeffnenIntern(projektPfad, strang) {
   try {
     const gitdir = await repoOeffnen(projektPfad)
     const zweig = zweigFuer(strang)
@@ -284,7 +393,20 @@ async function hauptIstVorfahr(gitdir, hauptSpitze, strangSpitze) {
 // halten nur fest, woher es kam. Damit ist die Zusammenführung strukturell
 // konfliktfrei — und alles, was in gar keinem Strang stand (die Prüfmappe zum
 // Beispiel), ist selbstverständlich mit drin.
-export async function strangZusammenfuehren(projektPfad, strang, beschriftung) {
+//
+// `ausgenommen` (BAUPLAN 46): die Wirkbereiche der anderen Schreiber, die
+// gerade noch laufen oder auf ihren Nachlauf warten. Der gemeinsame Punkt
+// nimmt dort NICHT den Arbeitsordner (halbfertige fremde Arbeit), sondern den
+// Stand der Spitze von 'haupt' — den Stand von vor diesen Blöcken. So bleibt
+// „Nach Block A" genau A's Arbeit, und ein Absturz mitten in der Welle lässt B
+// nicht als halb festgehalten zurück. Rückgabe zusätzlich `ausgenommenDateien`.
+export function strangZusammenfuehren(projektPfad, strang, beschriftung, optionen = {}) {
+  return nacheinander(projektPfad, () =>
+    strangZusammenfuehrenIntern(projektPfad, strang, beschriftung, optionen)
+  )
+}
+
+async function strangZusammenfuehrenIntern(projektPfad, strang, beschriftung, { ausgenommen = [] } = {}) {
   try {
     const gitdir = await repoOeffnen(projektPfad)
     const zweig = zweigFuer(strang)
@@ -292,6 +414,7 @@ export async function strangZusammenfuehren(projektPfad, strang, beschriftung) {
     const strangRef = refFuer(strang)
     const strangSpitze = await neuesterPunkt(gitdir, strangRef)
     const hauptSpitze = await neuesterPunkt(gitdir, hauptRef)
+    const bereiche = Array.isArray(ausgenommen) ? ausgenommen.filter(Boolean) : []
     // Kein Strang, oder einer, dessen Spitze 'haupt' LÄNGST KENNT: Dann gibt es
     // nichts zusammenzuführen, und der gemeinsame Punkt ist ein ganz
     // gewöhnlicher — sicherungspunktAnlegen legt ihn nur an, wenn sich im Ordner
@@ -313,7 +436,9 @@ export async function strangZusammenfuehren(projektPfad, strang, beschriftung) {
     //   D gleicherBaum = true
     // Zwei Einträge, ein Ordnerstand — genau das Doppel, das SPEC §3.3 abschafft.
     if (!(await strangUnzusammengefuehrt(gitdir, hauptSpitze, strangSpitze))) {
-      const punkt = await sicherungspunktAnlegen(projektPfad, beschriftung)
+      const punkt = await sicherungspunktAnlegenIntern(projektPfad, beschriftung, {
+        ausgenommen: bereiche
+      })
       await strangEntfernen(gitdir, zweig)
       return punkt
     }
@@ -334,18 +459,35 @@ export async function strangZusammenfuehren(projektPfad, strang, beschriftung) {
     const gleicheBeschriftung =
       String(strangSpitze.commit.message ?? '').trim() === String(beschriftung ?? '').trim()
     if (gleicheBeschriftung) {
-      const geaendert = await standEinsammeln(projektPfad, gitdir, strangRef, strangSpitze)
-      if (!geaendert && (await hauptIstVorfahr(gitdir, hauptSpitze, strangSpitze))) {
+      // Mit ausgenommenen Bereichen (BAUPLAN 46) gilt die Bedingung in ZWEI
+      // Teilen: Außerhalb der Bereiche muss der Ordner auf der Strangspitze
+      // stehen (wie bisher) — und INNERHALB muss die Strangspitze auf dem
+      // Basis-Stand von 'haupt' stehen, denn genau der wird durch das Vorziehen
+      // zur Spitze von 'haupt'. Ein Strangpunkt, der dort fremden Halbstand
+      // trägt (ein Punkt, der ohne Ausnahme angelegt wurde), darf nicht
+      // vorgezogen werden; dann entsteht der Punkt mit zwei Eltern, und dessen
+      // Einsammeln setzt die Bereiche auf 'haupt'.
+      const { geaendert } = await standEinsammeln(projektPfad, gitdir, strangRef, strangSpitze, {
+        ausgenommen: bereiche
+      })
+      const bereicheAufBasis =
+        bereiche.length === 0 ||
+        !(await punkteWeichenAbIn(projektPfad, gitdir, hauptSpitze?.oid ?? null, strangSpitze.oid, bereiche))
+      if (!geaendert && bereicheAufBasis && (await hauptIstVorfahr(gitdir, hauptSpitze, strangSpitze))) {
         await git.writeRef({ fs, gitdir, ref: hauptRef, value: strangSpitze.oid, force: true })
         await strangEntfernen(gitdir, zweig)
         // neu: false — es ist wirklich kein neuer Punkt entstanden; der Punkt
         // des Blocks IST jetzt die Spitze von 'haupt'.
-        return { ok: true, neu: false, id: strangSpitze.oid }
+        return { ok: true, neu: false, id: strangSpitze.oid, ausgenommenDateien: 0 }
       }
     }
     // Sonst gegen 'haupt' einsammeln, nicht gegen den Strang: Der Baum soll den
-    // ganzen Arbeitsordner tragen, auch die Dateien außerhalb des Wirkbereichs.
-    await standEinsammeln(projektPfad, gitdir, hauptRef, hauptSpitze)
+    // ganzen Arbeitsordner tragen, auch die Dateien außerhalb des Wirkbereichs
+    // — außer den ausgenommenen Bereichen, die auf der Spitze von 'haupt'
+    // bleiben (BAUPLAN 46).
+    const { ausgenommenDateien } = await standEinsammeln(projektPfad, gitdir, hauptRef, hauptSpitze, {
+      ausgenommen: bereiche
+    })
     const id = await git.commit({
       fs,
       dir: projektPfad,
@@ -356,7 +498,7 @@ export async function strangZusammenfuehren(projektPfad, strang, beschriftung) {
       parent: hauptSpitze ? [hauptSpitze.oid, strangSpitze.oid] : [strangSpitze.oid]
     })
     await strangEntfernen(gitdir, zweig)
-    return { ok: true, neu: true, id }
+    return { ok: true, neu: true, id, ausgenommenDateien }
   } catch {
     // Auch hier der eigene Text: Es scheitert die Zusammenführung mitten im
     // Lauf, nicht der Laufstart — und der Strang bleibt bewusst stehen (siehe
@@ -419,7 +561,7 @@ async function strangEinholen(projektPfad, gitdir, zweig) {
   const spitze = await neuesterPunkt(gitdir, 'refs/heads/' + zweig)
   const hauptSpitze = await neuesterPunkt(gitdir, refFuer(null))
   if (!(await strangUnzusammengefuehrt(gitdir, hauptSpitze, spitze))) return 'nichts'
-  const eingeholt = await strangZusammenfuehren(
+  const eingeholt = await strangZusammenfuehrenIntern(
     projektPfad,
     zweig,
     String(spitze.commit.message ?? '').trim()
@@ -442,7 +584,11 @@ async function strangEinholen(projektPfad, gitdir, zweig) {
 //               stehen, und nur hier darf der Lauf von Erhaltung sprechen.
 //
 // `hauptSpitze` wird je Durchgang frisch gelesen: Jedes Einholen bewegt 'haupt'.
-export async function straengeAufraeumen(projektPfad) {
+export function straengeAufraeumen(projektPfad) {
+  return nacheinander(projektPfad, () => straengeAufraeumenIntern(projektPfad))
+}
+
+async function straengeAufraeumenIntern(projektPfad) {
   try {
     const gitdir = gitVerzeichnis(projektPfad)
     if (!fs.existsSync(path.join(gitdir, 'HEAD')))
@@ -535,20 +681,37 @@ function punkteOrdnen(eintraege) {
 }
 
 // Die Liste für die Oberfläche: jeder Punkt genau einmal, jüngster zuerst.
-export async function sicherungspunkteLaden(projektPfad) {
-  try {
-    const gitdir = gitVerzeichnis(projektPfad)
-    if (!fs.existsSync(path.join(gitdir, 'HEAD'))) return { ok: true, punkte: [] }
-    return { ok: true, punkte: punkteOrdnen(await git.log({ fs, gitdir, ref: refFuer(null) })) }
-  } catch {
-    return { ok: true, punkte: [] }
-  }
+// In der Warteschlange, damit die Liste nie zwischen writeRef und deleteBranch
+// einer laufenden Zusammenführung gelesen wird.
+export function sicherungspunkteLaden(projektPfad) {
+  return nacheinander(projektPfad, async () => {
+    try {
+      const gitdir = gitVerzeichnis(projektPfad)
+      if (!fs.existsSync(path.join(gitdir, 'HEAD'))) return { ok: true, punkte: [] }
+      return { ok: true, punkte: punkteOrdnen(await git.log({ fs, gitdir, ref: refFuer(null) })) }
+    } catch {
+      return { ok: true, punkte: [] }
+    }
+  })
+}
+
+// Ist das wirklich ein Punkt? git.walk mit TREE({ ref }) meldet für eine
+// unbekannte oder leere Kennung KEINEN Fehler, sondern einen leeren Baum — und
+// dann sähe jede Datei im Ordner aus wie „nur-ordner", also zu löschen. Ein
+// Wiederherstellen auf 'deadbeef' oder '' räumte so den Projektordner (bzw. den
+// Bereich) leer und meldete danach ok (Prüferbefund zu Bauschritt 46). Deshalb
+// wird die Kennung VOR jedem Vergleich gelesen; klemmt das, wirft die Funktion,
+// und die Aufrufer melden ok:false, bevor irgendetwas angewandt wurde.
+async function punktSicherstellen(gitdir, punktId) {
+  if (!punktId || typeof punktId !== 'string') throw new Error('kein Sicherungspunkt')
+  await git.readCommit({ fs, gitdir, oid: punktId })
 }
 
 // Unterschiede zwischen einem Sicherungspunkt und dem jetzigen Projektordner.
 // art: 'anders' (Datei wird zurückgesetzt), 'nur-sicherung' (kommt zurück),
 // 'nur-ordner' (verschwindet beim Wiederherstellen).
 async function unterschiede(projektPfad, gitdir, punktId) {
+  await punktSicherstellen(gitdir, punktId)
   const liste = await git.walk({
     fs,
     dir: projektPfad,
@@ -607,46 +770,92 @@ async function anwenden(projektPfad, gitdir, liste) {
   }
 }
 
-export async function wiederherstellenVorschau(projektPfad, punktId) {
-  try {
-    const gitdir = await repoOeffnen(projektPfad)
-    const liste = await unterschiede(projektPfad, gitdir, punktId)
-    return {
-      ok: true,
-      unterschiede: liste.map(({ pfad, art }) => ({ pfad, art }))
+export function wiederherstellenVorschau(projektPfad, punktId) {
+  return nacheinander(projektPfad, async () => {
+    try {
+      const gitdir = await repoOeffnen(projektPfad)
+      const liste = await unterschiede(projektPfad, gitdir, punktId)
+      return {
+        ok: true,
+        unterschiede: liste.map(({ pfad, art }) => ({ pfad, art }))
+      }
+    } catch {
+      return { ok: false, fehler: texte.sicherungen.fehlerVorschau }
     }
-  } catch {
-    return { ok: false, fehler: texte.sicherungen.fehlerVorschau }
-  }
+  })
 }
 
-export async function wiederherstellen(projektPfad, punktId) {
-  try {
-    const gitdir = await repoOeffnen(projektPfad)
-    // Sicherheitsnetz: den jetzigen Stand festhalten, falls er noch ungesichert ist —
-    // so ist auch eine Wiederherstellung selbst wieder rückgängig zu machen.
-    const netz = await sicherungspunktAnlegen(
-      projektPfad,
-      texte.sicherungen.beschriftungVorWiederherstellung
-    )
-    if (!netz.ok) return { ok: false, fehler: texte.sicherungen.fehlerWiederherstellen }
-    const liste = await unterschiede(projektPfad, gitdir, punktId)
-    if (liste.length) {
-      await anwenden(projektPfad, gitdir, liste)
-      const punkt = await git.readCommit({ fs, gitdir, oid: punktId })
-      const zeitText = new Date(punkt.commit.committer.timestamp * 1000).toLocaleString('de-DE', {
-        dateStyle: 'short',
-        timeStyle: 'short'
-      })
-      await sicherungspunktAnlegen(
+export function wiederherstellen(projektPfad, punktId) {
+  return nacheinander(projektPfad, async () => {
+    try {
+      const gitdir = await repoOeffnen(projektPfad)
+      // Erst die Kennung prüfen — vor dem Sicherheitsnetz, damit ein Tippfehler
+      // nicht einmal einen Punkt anlegt (siehe punktSicherstellen).
+      await punktSicherstellen(gitdir, punktId)
+      // Sicherheitsnetz: den jetzigen Stand festhalten, falls er noch ungesichert ist —
+      // so ist auch eine Wiederherstellung selbst wieder rückgängig zu machen.
+      const netz = await sicherungspunktAnlegenIntern(
         projektPfad,
-        texte.sicherungen.beschriftungWiederhergestellt(zeitText)
+        texte.sicherungen.beschriftungVorWiederherstellung
       )
+      if (!netz.ok) return { ok: false, fehler: texte.sicherungen.fehlerWiederherstellen }
+      const liste = await unterschiede(projektPfad, gitdir, punktId)
+      if (liste.length) {
+        await anwenden(projektPfad, gitdir, liste)
+        const punkt = await git.readCommit({ fs, gitdir, oid: punktId })
+        const zeitText = new Date(punkt.commit.committer.timestamp * 1000).toLocaleString('de-DE', {
+          dateStyle: 'short',
+          timeStyle: 'short'
+        })
+        await sicherungspunktAnlegenIntern(
+          projektPfad,
+          texte.sicherungen.beschriftungWiederhergestellt(zeitText)
+        )
+      }
+      return { ok: true }
+    } catch {
+      return { ok: false, fehler: texte.sicherungen.fehlerWiederherstellen }
     }
-    return { ok: true }
-  } catch {
-    return { ok: false, fehler: texte.sicherungen.fehlerWiederherstellen }
-  }
+  })
+}
+
+// Wiederherstellen NUR innerhalb eines Bereichs (BAUPLAN 46): Die Folgen-Frage
+// „Stand wiederherstellen" gilt jetzt je Zweig — zurückgesetzt werden allein
+// die Wirkbereiche der Blöcke dieses Zweigs (`nurPfade`: Dateilisten und
+// Prüfordner), während die erfolgreichen Zweige nebenan stehenbleiben. Bis
+// Bauschritt 45 traf „Stand wiederherstellen" den ganzen Ordner — auch die
+// Arbeit, die längst abgenommen war. Innerhalb des Bereichs geschieht alles,
+// was wiederherstellen auch tut: ändern, anlegen UND löschen; außerhalb wird
+// nichts angefasst.
+//
+// Vorher entsteht dasselbe Sicherheitsnetz wie bei wiederherstellen (der
+// jetzige Stand, falls ungesichert) — `ausgenommen` hält dabei die
+// Wirkbereiche der noch laufenden Schreiber auf dem Basis-Stand, wie jeder
+// andere Punkt in der Welle. Rückgabe: { ok, dateien, uebersprungen } — was
+// im Bereich zurückging und was außerhalb lag und deshalb blieb.
+export function wiederherstellenBereich(projektPfad, punktId, { nurPfade = [], ausgenommen = [] } = {}) {
+  return nacheinander(projektPfad, async () => {
+    try {
+      const bereiche = Array.isArray(nurPfade) ? nurPfade.filter(Boolean) : []
+      // Ohne Bereich ist es kein Bereichs-Rückroll: lieber gar nichts anfassen
+      // als still den ganzen Ordner — dafür gibt es wiederherstellen.
+      if (bereiche.length === 0) return { ok: true, dateien: 0, uebersprungen: 0 }
+      const gitdir = await repoOeffnen(projektPfad)
+      await punktSicherstellen(gitdir, punktId)
+      const netz = await sicherungspunktAnlegenIntern(
+        projektPfad,
+        texte.sicherungen.beschriftungVorWiederherstellung,
+        { ausgenommen }
+      )
+      if (!netz.ok) return { ok: false, fehler: texte.sicherungen.fehlerWiederherstellen }
+      const liste = await unterschiede(projektPfad, gitdir, punktId)
+      const imBereich = liste.filter((eintrag) => stehtInDateiliste(eintrag.pfad, projektPfad, bereiche))
+      if (imBereich.length) await anwenden(projektPfad, gitdir, imBereich)
+      return { ok: true, dateien: imBereich.length, uebersprungen: liste.length - imBereich.length }
+    } catch {
+      return { ok: false, fehler: texte.sicherungen.fehlerWiederherstellen }
+    }
+  })
 }
 
 // ——— Diff für Reparatur-Runden (BAUPLAN 34) ————————————————————————————————
@@ -664,30 +873,34 @@ function diffAusgeschlossen(dateipfad) {
 // Auf welchem Sicherungspunkt steht der Projektordner gerade? Grundlage für
 // „Das hast du in diesem Lauf bisher geändert" — null, wenn es noch keinen gibt.
 // Mit `strang` die Spitze DIESES Schreibers statt der von 'haupt'.
-export async function letzterPunktId(projektPfad, strang = null) {
-  try {
-    const gitdir = gitVerzeichnis(projektPfad)
-    if (!fs.existsSync(path.join(gitdir, 'HEAD'))) return null
-    return (await neuesterPunkt(gitdir, refFuer(strang)))?.oid ?? null
-  } catch {
-    return null
-  }
+export function letzterPunktId(projektPfad, strang = null) {
+  return nacheinander(projektPfad, async () => {
+    try {
+      const gitdir = gitVerzeichnis(projektPfad)
+      if (!fs.existsSync(path.join(gitdir, 'HEAD'))) return null
+      return (await neuesterPunkt(gitdir, refFuer(strang)))?.oid ?? null
+    } catch {
+      return null
+    }
+  })
 }
 
 // Weicht der Projektordner schon vom letzten Sicherungspunkt ab? Ehrliche
 // Grenze des Diffs: Hat vorher ein nur-lesender Block per Befehl Dateien
 // verändert, zählt das mit — dann steht das als Hinweis im Auftrag.
-export async function standWeichtAb(projektPfad, strang = null) {
-  try {
-    const gitdir = gitVerzeichnis(projektPfad)
-    if (!fs.existsSync(path.join(gitdir, 'HEAD'))) return false
-    const kopf = await neuesterPunkt(gitdir, refFuer(strang))
-    if (!kopf) return false
-    const liste = await unterschiede(projektPfad, gitdir, kopf.oid)
-    return liste.some((eintrag) => !diffAusgeschlossen(eintrag.pfad))
-  } catch {
-    return false
-  }
+export function standWeichtAb(projektPfad, strang = null) {
+  return nacheinander(projektPfad, async () => {
+    try {
+      const gitdir = gitVerzeichnis(projektPfad)
+      if (!fs.existsSync(path.join(gitdir, 'HEAD'))) return false
+      const kopf = await neuesterPunkt(gitdir, refFuer(strang))
+      if (!kopf) return false
+      const liste = await unterschiede(projektPfad, gitdir, kopf.oid)
+      return liste.some((eintrag) => !diffAusgeschlossen(eintrag.pfad))
+    } catch {
+      return false
+    }
+  })
 }
 
 // Bis hierhin gilt eine Datei als Text — darüber (oder bei einem NUL-Byte)
@@ -710,7 +923,11 @@ async function inhaltVonBlob(gitdir, oid) {
 // Ordner passiert ist. `ausserhalb` zählt, wie viele geänderte Dateien dabei
 // weggefallen sind — der Ticker sagt das ehrlich dazu, sonst hielte der Leser
 // einen gefilterten Diff für den ganzen.
-export async function punkteVergleichen(projektPfad, vonId, bisId, { nurDateien = null } = {}) {
+export function punkteVergleichen(projektPfad, vonId, bisId, optionen = {}) {
+  return nacheinander(projektPfad, () => punkteVergleichenIntern(projektPfad, vonId, bisId, optionen))
+}
+
+async function punkteVergleichenIntern(projektPfad, vonId, bisId, { nurDateien = null } = {}) {
   try {
     const gitdir = gitVerzeichnis(projektPfad)
     if (!fs.existsSync(path.join(gitdir, 'HEAD')))
@@ -796,7 +1013,11 @@ export async function punkteVergleichen(projektPfad, vonId, bisId, { nurDateien 
 // Dauer-Sperre wäre er genau der Fehler, vor dem der Absatz darüber warnt: Er
 // ließe das Gebastel liegen, das an der Dateilisten-Sperre vorbei geschrieben
 // wurde.
-export async function aufLetztenPunktZuruecksetzen(
+export function aufLetztenPunktZuruecksetzen(projektPfad, optionen = {}) {
+  return nacheinander(projektPfad, () => aufLetztenPunktZuruecksetzenIntern(projektPfad, optionen))
+}
+
+async function aufLetztenPunktZuruecksetzenIntern(
   projektPfad,
   { strang = null, geschuetzt = null, eigenerBereich = null } = {}
 ) {

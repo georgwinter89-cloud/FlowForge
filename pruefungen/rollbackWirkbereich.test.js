@@ -332,10 +332,12 @@ describe('BAUPLAN 45 · Was ein Rückroll nicht anfassen darf (geschützte Berei
     ])
   })
 
-  it('schützt die Dateiliste eines Umsetzers nur, solange er WIRKLICH gleichzeitig schreibt', () => {
-    // Heute läuft nie ein zweiter Schreiber (SPEC §5) — ein ruhender Umsetzer
-    // hinterlässt kein Revier, sonst bliebe genau das Gebastel liegen, das der
-    // Rückroll wegräumen soll (Befehle schreiben an der Dateiliste vorbei).
+  it('schützt die Dateiliste eines Umsetzers nur, solange er WIRKLICH Revier belegt', () => {
+    // Ein ruhender Umsetzer hinterlässt kein Revier, sonst bliebe genau das
+    // Gebastel liegen, das der Rückroll wegräumen soll (Befehle schreiben an
+    // der Dateiliste vorbei). Seit der Welle (BAUPLAN 46) heißt „belegt": läuft,
+    // steht im Nachlauf oder die Vorreparatur schreibt für ihn — die Zuordnung
+    // trifft schreiberBelegt (gemessen in welle.test.js).
     expect(geschuetzteBereicheVon('pruefer-a', [bauer, prueferA])).toEqual(['src/main/lauf.js'])
     expect(geschuetzteBereicheVon('pruefer-a', [{ ...bauer, laeuft: false }, prueferA])).toEqual([])
   })
@@ -1208,6 +1210,11 @@ describe('BAUPLAN 45 · Ein Rückroll, der nichts zurückgenommen hat, bleibt ni
     expect(lauf).toMatch(
       /export async function hartZurueckrollenAn[\s\S]{0,900}erfolgsText: texte\.ticker\.zurueckgesetzt,\s*\n\s*tickern\s*\n\s*\}\)/
     )
+    // Auch nicht auf dem Weg für mehrere Abgebrochene (Welle, BAUPLAN 46).
+    expect(lauf).toMatch(
+      /erfolgsText: texte\.ticker\.zurueckgesetztBlock\(k\.name\),\s*\n\s*tickern\s*\n\s*\}\)/
+    )
+    expect(lauf).not.toMatch(/export async function hartZurueckrollenAn[\s\S]{0,1800}nichtsMelden/)
   })
 
   it('sagt es auch in den lokalen Helfern — dort ist ein Rückroll immer versprochen', async () => {
@@ -1895,6 +1902,11 @@ describe('BAUPLAN 45 · Das Sicherheitsnetz am Laufende schließt jeden Strang',
     const lauf = fs.readFileSync('src/main/lauf.js', 'utf8')
     // Die Blockende-Naht in der Planer-Schleife kennt kein `endgueltig` …
     expect(lauf).toMatch(/if \(!lauf\.hart\) await strangSchliessenFuer\(knoten\.get\(id\)\)/)
+    // … und seit der Welle (BAUPLAN 46) folgen ihr in derselben Schleife die
+    // Nachläufe — VOR dem nächsten bereiteStarten.
+    expect(lauf).toMatch(
+      /if \(!lauf\.hart\) await strangSchliessenFuer\(knoten\.get\(id\)\)[\s\S]{0,400}await nachlaeufeAbarbeiten\(\)[\s\S]{0,60}standSpeichern\(\)\s*\n\s*\}/
+    )
     // … das Sicherheitsnetz am Laufende schon.
     expect(lauf).toMatch(
       /for \(const kid of kettenIds\) await strangEndgueltigSchliessenFuer\(knoten\.get\(kid\)\)/
@@ -1903,6 +1915,42 @@ describe('BAUPLAN 45 · Das Sicherheitsnetz am Laufende schließt jeden Strang',
     // Und das Kennzeichen wird an genau einer Stelle gesetzt: der Nachprüfung
     // einer lokalen Vorreparatur.
     expect([...lauf.matchAll(/k\.strangOffenHalten = true/g)]).toHaveLength(1)
+  })
+
+  // Seit der Welle (BAUPLAN 46) hält neben strangOffenHalten auch der Status den
+  // Strang offen: im Nachlauf und bei offener Folgen-Frage ist der Anlauf nicht
+  // zu Ende — der Punkt „Nach Block" entstünde sonst, bevor der Block fertig ist.
+  it('lässt den Strang im Nachlauf und bei offener Folgen-Frage stehen — am Laufende nicht', async () => {
+    const projekt = frischesProjekt('strang-nachlauf')
+    schreiben(projekt, 'src/app.js', 'alt\n')
+    await sicherungspunktAnlegen(projekt, 'Stand vor dem Lauf')
+    await strangOeffnen(projekt, 'strang/bauer-n')
+    schreiben(projekt, 'src/app.js', 'gebaut\n')
+    const zeilen = []
+    for (const status of ['nachlauf', 'wartet-entscheidung']) {
+      const k = { strang: 'strang/bauer-n', status, name: 'Bauer', strangOffenHalten: false }
+      expect(
+        await strangSchliessenAn(projekt, k, { bezeichnung: 'Block 2 „Bauer"', tickern: (t) => zeilen.push(t) })
+      ).toBe(true)
+      expect(k.strang).toBe('strang/bauer-n')
+    }
+    expect(zeilen).toEqual([])
+    const vorher = await sicherungspunkteLaden(projekt)
+    expect(vorher.punkte.map((p) => p.beschriftung)).toEqual(['Stand vor dem Lauf'])
+    // Am Laufende zählt der Status nicht mehr.
+    const k = { strang: 'strang/bauer-n', status: 'nachlauf', name: 'Bauer', strangOffenHalten: false }
+    expect(
+      await strangSchliessenAn(projekt, k, {
+        bezeichnung: 'Block 2 „Bauer"',
+        tickern: (t) => zeilen.push(t),
+        endgueltig: true
+      })
+    ).toBe(true)
+    expect(k.strang).toBe(null)
+    const nachher = await sicherungspunkteLaden(projekt)
+    expect(nachher.punkte.map((p) => p.beschriftung)).toContain(
+      texte.sicherungen.beschriftungRundeBeendet('Bauer')
+    )
   })
 })
 

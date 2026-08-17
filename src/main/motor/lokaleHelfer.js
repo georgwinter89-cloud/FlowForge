@@ -29,11 +29,20 @@
 // Abnahme übernimmt FlowForge (helferWerkzeuge.js) — Opus liest jedes
 // Teilstück sofort gegen.
 //
+// Tabu-Liste (BAUPLAN 46): Vorreparatur und lokaler Bauer bekommen die
+// Dateiliste des Blocks, für den sie schreiben, und lehnen Schreiben außerhalb
+// ab (arbeitsablage/ frei, ohne Liste keine Sperre) — die Lücke, die SPEC §7
+// bis Bauschritt 45 als ehrliche Grenze nannte, ist damit zu.
+//
 // Bewusst ohne Electron-Abhängigkeiten: das Modul ist einzeln (mit node)
 // erprobbar, wie es die Bauplan-Regel für neue Bausteine verlangt.
 import fs from 'node:fs'
 import path from 'node:path'
 import { texte } from '../../shared/texte.js'
+// Tabu-Liste (BAUPLAN 46): dieselbe Rechnung „gehört diese Datei in diese
+// Liste" wie die Schreibsperre des Motors — kein eigener Abgleicher hier,
+// sonst sperrte die lokale KI eine Datei, die der Bauer schreiben darf.
+import { stehtInDateiliste } from '../dateilistenPfade.js'
 
 // Standard-Adresse: Ollama auf diesem Rechner. Über die Einstellungen ist auch
 // ein anderer Rechner im Heimnetz möglich (z.B. ein Gaming-PC mit richtiger
@@ -270,23 +279,42 @@ const SCHREIB_TABU_DATEIEN = new Set([
 const SCHREIB_TABU_ORDNER = new Set(['pruefung', 'laufberichte', 'node_modules', '.git'])
 
 // Gemeinsame Tabu-Prüfung: null = erlaubt, sonst die Ablehnung als Text.
-function schreibTabu(projektPfad, ziel) {
+//
+// `dateiListe` (BAUPLAN 46): die Dateiliste des Blocks, für den die lokale KI
+// gerade schreibt (Vorreparatur: die des Rückführungs-Ziels; lokal_bauen: die
+// des Bauers). Bis Bauschritt 45 schrieb dieser Pfad mit echtem Schreibrecht
+// im ganzen Projektordner an der Dateiliste vorbei — SPEC §7 nannte das
+// ehrlich als Grenze. Jetzt ist die Liste hier eine Tabu-Liste: Ein Ziel
+// außerhalb wird abgelehnt, mit dem Weg heraus (im Fazit melden, nicht erneut
+// versuchen). null/leer = keine Sperre (SPEC §7 (2), alte Laufstände);
+// arbeitsablage/ bleibt frei (SPEC §7 (4)). Die spezifischeren Sperren oben
+// (Prüfmappe, Verwaltungsdateien) gehen vor und nennen ihren eigenen Grund.
+const FREIER_ORDNER = 'arbeitsablage'
+function schreibTabu(projektPfad, ziel, dateiListe = null) {
   const relativ = path.relative(path.resolve(projektPfad), ziel).toLowerCase()
   const oberster = relativ.split(path.sep)[0]
   if (SCHREIB_TABU_ORDNER.has(oberster))
     return `Abgelehnt: Der Ordner „${oberster}" ist für die lokale KI gesperrt.`
   if (SCHREIB_TABU_DATEIEN.has(relativ))
     return 'Abgelehnt: FlowForge-Verwaltungsdateien sind gesperrt.'
+  if (Array.isArray(dateiListe) && dateiListe.length > 0) {
+    if (oberster === FREIER_ORDNER) return null
+    if (!stehtInDateiliste(ziel, projektPfad, dateiListe))
+      return texte.agentenLokaleHelfer.ausserhalbDateiliste(
+        relativ.split(path.sep).join('/'),
+        dateiListe
+      )
+  }
   return null
 }
 
 // Das einzige Schreib-Werkzeug der lokalen KI: gezieltes Ersetzen. Der alte
 // Text muss genau und eindeutig in der Datei stehen — kein freies Schreiben,
 // kein Anlegen, kein Löschen. zaehler.ersetzungen zählt die echten Änderungen.
-function ersetzen(projektPfad, eingabe, zaehler) {
+function ersetzen(projektPfad, eingabe, zaehler, dateiListe = null) {
   const ziel = imProjekt(projektPfad, eingabe.pfad)
   if (!ziel) return 'Abgelehnt: Pfade außerhalb des Projektordners sind gesperrt.'
-  const tabu = schreibTabu(projektPfad, ziel)
+  const tabu = schreibTabu(projektPfad, ziel, dateiListe)
   if (tabu) return tabu
   const alt = String(eingabe.alt ?? '')
   const neu = String(eingabe.neu ?? '')
@@ -391,10 +419,10 @@ const ENTWURF_WERKZEUG = {
 // Das zweite Schreibwerkzeug des Bau-Kreislaufs: ganze Dateien schreiben —
 // für neue Dateien oder komplette Neuschriebe im Teilauftrag. Dieselben
 // Tabu-Zonen wie beim Ersetzen; zaehler.geschrieben sammelt die Pfade.
-function dateiSchreiben(projektPfad, eingabe, zaehler) {
+function dateiSchreiben(projektPfad, eingabe, zaehler, dateiListe = null) {
   const ziel = imProjekt(projektPfad, eingabe.pfad)
   if (!ziel) return 'Abgelehnt: Pfade außerhalb des Projektordners sind gesperrt.'
-  const tabu = schreibTabu(projektPfad, ziel)
+  const tabu = schreibTabu(projektPfad, ziel, dateiListe)
   if (tabu) return tabu
   const inhalt = String(eingabe.inhalt ?? '')
   if (!inhalt.trim())
@@ -430,18 +458,20 @@ const DATEI_SCHREIBEN_WERKZEUG = {
   }
 }
 
-function werkzeugAusfuehren(projektPfad, name, eingabe, zaehler) {
+// `dateiListe` (BAUPLAN 46) erreicht nur die beiden Schreib-Werkzeuge im
+// Projekt; Entwürfe sind ohnehin auf arbeitsablage/ begrenzt, Lesen ist frei.
+function werkzeugAusfuehren(projektPfad, name, eingabe, zaehler, dateiListe = null) {
   if (name === 'ordner_auflisten') return ordnerAuflisten(projektPfad, eingabe)
   if (name === 'datei_lesen') return dateiLesen(projektPfad, eingabe)
   if (name === 'suchen') return suchen(projektPfad, eingabe)
   // Schreib-Werkzeuge nur im jeweils passenden Kreislauf — auch wenn das
   // Modell einen nicht angebotenen Werkzeugnamen halluziniert.
   if (name === 'ersetzen' && typeof zaehler?.ersetzungen === 'number')
-    return ersetzen(projektPfad, eingabe, zaehler)
+    return ersetzen(projektPfad, eingabe, zaehler, dateiListe)
   if (name === 'entwurf_schreiben' && Array.isArray(zaehler?.dateien))
     return entwurfSchreiben(projektPfad, eingabe, zaehler)
   if (name === 'datei_schreiben' && Array.isArray(zaehler?.geschrieben))
-    return dateiSchreiben(projektPfad, eingabe, zaehler)
+    return dateiSchreiben(projektPfad, eingabe, zaehler, dateiListe)
   return `Unbekanntes Werkzeug: ${name}`
 }
 
@@ -478,7 +508,10 @@ export function lokalRecherchieren({ projektPfad, auftrag, modell, adresse = STA
 // Lese-Werkzeugen gibt es genau das Ersetzen-Werkzeug — an kurzer Leine.
 // ergebnis.ersetzungen zählt die echten Änderungen: 0 heißt „nichts passiert"
 // — dann spart sich FlowForge die Nachprüfung.
-export async function lokalReparieren({ projektPfad, auftrag, modell, adresse = STANDARD_ADRESSE, aufSchritt, aufDenken }) {
+// `dateiListe` (BAUPLAN 46): die Tabu-Liste — beim Vorreparieren die Dateiliste
+// des RÜCKFÜHRUNGS-ZIELS (des Bauers, dessen Arbeit repariert wird), nicht die
+// des Prüfers; null = keine Sperre.
+export async function lokalReparieren({ projektPfad, auftrag, modell, adresse = STANDARD_ADRESSE, aufSchritt, aufDenken, dateiListe = null }) {
   const nachrichten = [
     // Empfänger im Auftrag (BAUPLAN 43): Der System-Text liegt jetzt zentral in
     // texte.js — inline nannte er einen Blocknamen, während der Auftrag darunter
@@ -496,7 +529,8 @@ export async function lokalReparieren({ projektPfad, auftrag, modell, adresse = 
     adresse,
     aufSchritt,
     aufDenken,
-    zaehler
+    zaehler,
+    dateiListe
   })
   return { ...ergebnis, ersetzungen: zaehler.ersetzungen }
 }
@@ -549,7 +583,9 @@ export async function lokalEntwerfen({ projektPfad, auftrag, modell, adresse = S
 // unter den unveränderten Tabu-Zonen. ergebnis.ersetzungen und
 // ergebnis.dateien zählen die echten Änderungen: beides leer heißt „nichts
 // gebaut" — dann gibt es auch nichts abzunehmen oder zurückzurollen.
-export async function lokalBauen({ projektPfad, auftrag, modell, adresse = STANDARD_ADRESSE, aufSchritt, aufDenken }) {
+// `dateiListe` (BAUPLAN 46): die Dateiliste des Blocks als Tabu-Liste; null =
+// keine Sperre. Gilt IMMER, wenn eine Liste vorliegt — nicht nur in der Welle.
+export async function lokalBauen({ projektPfad, auftrag, modell, adresse = STANDARD_ADRESSE, aufSchritt, aufDenken, dateiListe = null }) {
   const nachrichten = [
     {
       role: 'system',
@@ -580,7 +616,8 @@ export async function lokalBauen({ projektPfad, auftrag, modell, adresse = STAND
     adresse,
     aufSchritt,
     aufDenken,
-    zaehler
+    zaehler,
+    dateiListe
   })
   return { ...ergebnis, ersetzungen: zaehler.ersetzungen, dateien: zaehler.geschrieben }
 }
@@ -651,7 +688,7 @@ function getarnteAufrufe(text, werkzeuge) {
 
 // Gemeinsamer Kern der Kreisläufe: Ollama-Runden mit Werkzeugaufrufen,
 // bis ein Fazit kommt oder die Runden ausgehen.
-async function kreislauf({ projektPfad, nachrichten, werkzeuge, modell, adresse, aufSchritt, aufDenken, zaehler = null }) {
+async function kreislauf({ projektPfad, nachrichten, werkzeuge, modell, adresse, aufSchritt, aufDenken, zaehler = null, dateiListe = null }) {
   let schritte = 0
   // Denk-Modelle (z.B. gpt-oss) schreiben manchmal alles ins Denkfeld und
   // lassen die eigentliche Antwort leer (real beobachtet am 13.08.2026:
@@ -707,7 +744,7 @@ async function kreislauf({ projektPfad, nachrichten, werkzeuge, modell, adresse,
         for (const { name, eingabe } of getarnt) {
           schritte++
           aufSchritt?.(name, eingabe)
-          const ergebnis = werkzeugAusfuehren(projektPfad, name, eingabe, zaehler)
+          const ergebnis = werkzeugAusfuehren(projektPfad, name, eingabe, zaehler, dateiListe)
           nachrichten.push({ role: 'tool', tool_name: name, content: String(ergebnis) })
         }
         continue
@@ -741,7 +778,7 @@ async function kreislauf({ projektPfad, nachrichten, werkzeuge, modell, adresse,
       }
       schritte++
       aufSchritt?.(name, eingabe)
-      const ergebnis = werkzeugAusfuehren(projektPfad, name, eingabe, zaehler)
+      const ergebnis = werkzeugAusfuehren(projektPfad, name, eingabe, zaehler, dateiListe)
       nachrichten.push({ role: 'tool', tool_name: name, content: String(ergebnis) })
     }
   }

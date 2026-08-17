@@ -40,7 +40,8 @@ function bauer(name, eingabe, { dateiListe = liste, pruefOrdner = '' } = {}) {
     false, // darfZuteilen
     pruefOrdner,
     [], // lieferscheinFrei
-    dateiListe
+    dateiListe,
+    false // inWelle (BAUPLAN 46) — die Welle prüft wellenSperren.test.js
   )
 }
 
@@ -229,7 +230,8 @@ describe('BAUPLAN 44 · Der Bauer erfährt vor der Arbeit, dass die Dateiliste s
 })
 
 describe('BAUPLAN 44 · Alle Motor-Aufrufstellen reichen die Dateiliste durch', () => {
-  // Fund 12 der Angriffsliste: pruefeWerkzeug hat 14 Positionsparameter und drei
+  // Fund 12 der Angriffsliste: pruefeWerkzeug hat 15 Positionsparameter (seit
+  // BAUPLAN 46: inWelle als letzter) und drei
   // Aufrufstellen im Motor. Ein Neuzugang, der an einer davon vergessen wird,
   // rutscht still an die falsche Stelle — dann landet die Dateiliste z.B. auf
   // `lieferscheinFrei` und der Block kann sein Melde-Werkzeug nicht mehr rufen,
@@ -237,7 +239,7 @@ describe('BAUPLAN 44 · Alle Motor-Aufrufstellen reichen die Dateiliste durch', 
   // gelesen.
   const quelle = fs.readFileSync('src/main/motor/claudeCodeMotor.js', 'utf8')
 
-  it('hat genau drei Aufrufstellen, und jede endet auf der Dateiliste', () => {
+  it('hat genau drei Aufrufstellen, und jede endet auf Dateiliste und Welle', () => {
     const stellen = [...quelle.matchAll(/pruefeWerkzeug\(\s*\n([\s\S]*?)\n\s*\)/g)]
     expect(stellen).toHaveLength(3)
     for (const stelle of stellen) {
@@ -247,8 +249,11 @@ describe('BAUPLAN 44 · Alle Motor-Aufrufstellen reichen die Dateiliste durch', 
         .split('\n')
         .map((z) => z.trim())
         .filter((z) => z && !z.startsWith('//'))
-      expect(zeilen).toHaveLength(14)
+      expect(zeilen).toHaveLength(15)
       expect(zeilen[13]).toMatch(/dateiListe|null/)
+      // BAUPLAN 46: der 15. Parameter ist die Welle — im Lauf frisch abgefragt
+      // (inWelleJetzt), im Chat ausdrücklich false.
+      expect(zeilen[14]).toMatch(/^inWelleJetzt\(\)$|^false/)
     }
   })
 

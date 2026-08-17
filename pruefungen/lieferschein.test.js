@@ -25,7 +25,8 @@ import {
   urteilAusMeldungen,
   beanstandungenAusMeldungen,
   beanstandungenEinstufen,
-  pruefkarteAusMeldungen
+  pruefkarteAusMeldungen,
+  dateilistenUeberschneidung
 } from '../src/shared/lieferschein.js'
 import { blockDefinition, BLOCK_KATALOG } from '../src/shared/blockKatalog.js'
 import { pruefeWerkzeug } from '../src/main/motor/claudeCodeMotor.js'
@@ -360,5 +361,85 @@ describe('BAUPLAN 42 · harter Schnitt in den Blockaufträgen', () => {
       expect([...werkzeugeFuerBlock(def)]).toEqual(['melde_pruefbeleg'])
       expect(def.auftrag).toMatch(/urteil/)
     }
+  })
+})
+
+// BAUPLAN 46: „Überschneiden sich zwei Dateilisten?" — das dritte Ende der
+// Dateilisten-Rechnung. Dieselbe Antwort braucht der Planer (Welle bilden) und
+// das Melde-Werkzeug (Zuschnitt abweisen). Rot vor Grün: Die Funktion gab es
+// vor dem Bauschritt nicht (Import undefined → TypeError).
+describe('BAUPLAN 46 · Überschneidung zweier Dateilisten', () => {
+  it('ein Ordner-Eintrag deckt die Dateien darunter — in beide Richtungen', () => {
+    expect(dateilistenUeberschneidung(['src/ui/'], ['src/ui/Leinwand.jsx']).ueberschneidet).toBe(true)
+    expect(dateilistenUeberschneidung(['src/ui/tief/x.js'], ['src/ui/']).ueberschneidet).toBe(true)
+    // Ohne Datei-Endung gilt ein Eintrag als Ordner, auch ohne Schrägstrich.
+    expect(dateilistenUeberschneidung(['src/ui'], ['src/ui/x.js']).ueberschneidet).toBe(true)
+  })
+
+  it('nennt die Paare in der gemeldeten Schreibweise', () => {
+    const lage = dateilistenUeberschneidung(['src/shared/texte.js', 'src/a.js'], ['src/shared/'])
+    expect(lage.paare).toEqual([{ a: 'src/shared/texte.js', b: 'src/shared/' }])
+  })
+
+  it('zählt Groß/Klein und Schrägstrich-Richtung nicht als Unterschied', () => {
+    expect(dateilistenUeberschneidung(['SRC/Main/Lauf.js'], ['src\\main\\lauf.js']).ueberschneidet).toBe(true)
+    expect(dateilistenUeberschneidung(['./src/a.js'], ['/src/a.js']).ueberschneidet).toBe(true)
+  })
+
+  it('unterscheidet Geschwister und Namensverwandte', () => {
+    expect(dateilistenUeberschneidung(['src/ui/'], ['src/main/']).ueberschneidet).toBe(false)
+    // „src/ui2/" liegt NICHT unter „src/ui/" — eine Vorsilbe ist kein Ordner.
+    expect(dateilistenUeberschneidung(['src/ui/'], ['src/ui2/x.js']).ueberschneidet).toBe(false)
+  })
+
+  it('leere Listen überschneiden nichts', () => {
+    expect(dateilistenUeberschneidung([], ['src/a.js']).ueberschneidet).toBe(false)
+    expect(dateilistenUeberschneidung(null, undefined).ueberschneidet).toBe(false)
+  })
+
+  // Prüferbefund zu Bauschritt 46: Innere „./", doppelte Schrägstriche und ein
+  // abschließendes „/." überlebten das Melden unverändert — das Melden sagte
+  // „disjunkt", die Schreibsperre (über path.resolve) ließ beide Bauer auf
+  // dieselbe Datei. Rot vor Grün: Vor der Kanonisierung waren alle vier
+  // Paare hier `ueberschneidet: false`.
+  it('sieht innere „./", doppelte Schrägstriche und ein „/." am Ende als dieselbe Stelle', () => {
+    expect(dateilistenUeberschneidung(['src/./api'], ['src/api/x.js']).ueberschneidet).toBe(true)
+    expect(dateilistenUeberschneidung(['src//api'], ['src/api/x.js']).ueberschneidet).toBe(true)
+    expect(dateilistenUeberschneidung(['src/api/.'], ['src/api/x.js']).ueberschneidet).toBe(true)
+    expect(dateilistenUeberschneidung(['src/api/x.js'], ['src/api/./x.js']).ueberschneidet).toBe(true)
+    // Und der Gegenfall bleibt: „src/.hidden" ist ein Name, kein Punkt-Segment.
+    expect(dateilistenUeberschneidung(['src/.hidden'], ['src/hidden']).ueberschneidet).toBe(false)
+  })
+
+  it('speichert beim Melden schon die kanonische Schreibweise', () => {
+    const ergebnis = meldungPruefen(
+      'arbeitspaket',
+      {
+        ...rahmen,
+        pakete: [
+          {
+            ziel: 'Etwas bauen',
+            fertigKriterien: ['Läuft.'],
+            erlaubteDateien: ['src/./api', 'src//main/lauf.js', 'src/ui/./', 'src/api/.', './x.js']
+          }
+        ]
+      },
+      'Arbeitspaket'
+    )
+    expect(ergebnis.fehler).toBeUndefined()
+    expect(ergebnis.meldung.pakete[0].erlaubteDateien).toEqual([
+      'src/api',
+      'src/main/lauf.js',
+      'src/ui/',
+      'x.js'
+    ])
+  })
+
+  it('„Makefile" ohne Endung gilt als Ordner-Regel — alles darunter überschneidet', () => {
+    // Bekannte, bewusst hingenommene Grenze der Ordner-Regel (dieselbe wie in
+    // stehtInDateiliste): Ein Eintrag ohne Datei-Endung deckt alles darunter.
+    expect(dateilistenUeberschneidung(['Makefile'], ['Makefile/x.txt']).ueberschneidet).toBe(true)
+    expect(dateilistenUeberschneidung(['Makefile'], ['Makefile']).ueberschneidet).toBe(true)
+    expect(dateilistenUeberschneidung(['Makefile'], ['Makefile.bak']).ueberschneidet).toBe(false)
   })
 })

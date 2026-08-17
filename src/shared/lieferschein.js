@@ -250,11 +250,29 @@ export function dateiEintragNormalisieren(wert) {
   // aber keine einzige Datei, und der Bauer wurde an JEDEM Schreibversuch
   // gestoppt. Jede Schreibweise, die am Ende auf den Projektordner selbst
   // zeigt, muss in den wurzel-Ausgang laufen.
+  //
+  // Kanonisieren, rein textlich (Prüferbefund zu Bauschritt 46): Innere „./"-
+  // Segmente, doppelte Schrägstriche und ein abschließendes „/." blieben hier
+  // stehen („src/./api", „src//api", „src/api/."). Das MELDEN und die
+  // Wellen-Startregel (dateilistenUeberschneidung) rechnen reine Zeichen und
+  // sahen darin etwas anderes als „src/api" — „disjunkt", „darf gleichzeitig"
+  // —, während die Schreibsperre (stehtInDateiliste, über path.resolve) beide
+  // Bauer auf dieselbe Datei ließ. Gemessen: [["src/./api"],["src/api/x.js"]]
+  // wurde angenommen, ueberschneidet:false, und stehtInDateiliste sagte für
+  // BEIDE Listen true. Deshalb wird HIER — dem einen Ende, das alle nutzen —
+  // auf die kanonische Form gebracht; gespeichert wird schon sie, und alle
+  // drei Enden sehen dieselben Zeichen. Ohne node:path (Browser-Tauglichkeit).
+  // Ein Punkt-Segment ist nur „/." vor Schrägstrich oder Ende — „src/.hidden"
+  // und „src/.." bleiben unangetastet (Letzteres fängt die Hinaus-Prüfung).
   let pfad = text
   let vorher = ''
   while (pfad !== vorher) {
     vorher = pfad
-    pfad = pfad.replace(/^\/+/, '').replace(/^(\.\/)+/, '')
+    pfad = pfad
+      .replace(/\/{2,}/g, '/')
+      .replace(/\/\.(?=\/|$)/g, '')
+      .replace(/^\/+/, '')
+      .replace(/^(\.\/)+/, '')
   }
   if (pfad.split('/').includes('..')) return { hinaus: roh }
   // Zeigt auf den Projektordner selbst („.", „./", „.\", „/" allein): Er
@@ -272,6 +290,39 @@ export function dateiEintragNormalisieren(wert) {
 // hier, obwohl es sachlich hierher gehörte: Es braucht node:path, und diese
 // Datei muss browser-tauglich bleiben (siehe Kopf). Wer an der Normalisierung
 // oben etwas ändert, ändert dort mit — es ist EINE Rechnung mit zwei Enden.
+
+// Das dritte Ende derselben Rechnung (BAUPLAN 46): „überschneiden sich ZWEI
+// Listen?" — Liste gegen Liste, nicht Datei gegen Liste. Reine String-Rechnung
+// ohne node:path, damit Planer (Hauptprozess), Melde-Werkzeug und Renderer
+// dieselbe Antwort bekommen. Ordner-Regel wörtlich wie in
+// src/main/dateilistenPfade.js: Ein Eintrag ist ein ORDNER, wenn er auf einen
+// Schrägstrich endet oder keine Datei-Endung trägt — dann deckt er alles
+// darunter ab; „src/" überschneidet also „src/a.js" und „src/tief/b.js".
+// Groß-/Kleinschreibung zählt nicht (Windows). Ausbrechende oder wurzelnde
+// Einträge werden übersprungen — beide Enden weisen sie schon beim Melden ab.
+//
+// Rückgabe: { ueberschneidet, paare: [{ a, b }] } — die Paare in der
+// Schreibweise, in der sie gemeldet wurden, für Ablehnungs- und Ticker-Texte.
+export function dateilistenUeberschneidung(listeA, listeB) {
+  const paare = []
+  const eintraege = (liste) =>
+    (Array.isArray(liste) ? liste : [])
+      .map((roh) => {
+        const pfad = dateiEintragNormalisieren(roh).pfad ?? ''
+        if (!pfad) return null
+        const ordner = pfad.endsWith('/') || !/\.[^./]+$/.test(pfad)
+        return { roh, pfad: pfad.replace(/\/+$/, '').toLowerCase(), ordner }
+      })
+      .filter(Boolean)
+  const a = eintraege(listeA)
+  const b = eintraege(listeB)
+  const trifft = (x, y) =>
+    x.pfad === y.pfad ||
+    (x.ordner && y.pfad.startsWith(x.pfad + '/')) ||
+    (y.ordner && x.pfad.startsWith(y.pfad + '/'))
+  for (const x of a) for (const y of b) if (trifft(x, y)) paare.push({ a: x.roh, b: y.roh })
+  return { ueberschneidet: paare.length > 0, paare }
+}
 
 // Der Datenvertrag (BAUPLAN 44): welche Dateien dieses Paket anfassen darf.
 // Glob-Muster werden abgewiesen statt still ins Leere zu laufen — es gibt im
@@ -431,7 +482,74 @@ function arbeitspaketPruefen(roh, umfeld) {
     belegt.add(schluessel)
     pakete.push(geprueft.paket)
   }
+  const nebenlaeufig = nebenlaeufigeZuschnittePruefen(pakete, umfeld)
+  if (nebenlaeufig.fehler) return nebenlaeufig
   return { teil: { pakete } }
+}
+
+// Zuschnitte nebenläufiger Ziele müssen sich in den Dateilisten AUSSCHLIESSEN
+// (BAUPLAN 46). Seit die Ein-Schreiber-Regel offen ist, laufen zwei Umsetzer,
+// die weder Vorfahr noch Nachfahr voneinander sind (kettenRegeln.zielListe →
+// nebenlaeufigZu), gleichzeitig — genau dann, wenn ihre Dateilisten
+// überschneidungsfrei sind. Überschneiden sie sich, ließe der Planer sie
+// nacheinander laufen; das ist kein Fehler im Lauf, aber ein Zuschnitt, der
+// sein Versprechen („unabhängige Baustellen") nicht hält. Deshalb wird er
+// schon HIER abgewiesen, bevor ein Token in die Bauer fließt (BAUPLAN 46:
+// „schon beim Zuschnitt zurück").
+//
+// Gerechnet wird mit den EFFEKTIVEN Listen: Die Liste des adressierten
+// Zuschnitts plus die des adresslosen — der gilt für alle (zuschnittRouting).
+// Daraus folgt die zweite Regel: Ein adressloser Zuschnitt MIT Dateiliste
+// neben ≥ 2 nebenläufigen Zielen überschneidet sich per Bauart mit jedem —
+// dieselbe Liste stünde bei beiden. Er wird abgewiesen, mit dem Weg heraus
+// (adressieren oder erlaubteDateien dort weglassen).
+//
+// Rückfall ohne Bruch: Mit einem Ziel, ohne Zielliste (Prüfskripte) oder ohne
+// Dateilisten ändert sich nichts — Meldungen von vor Bauschritt 46 laufen
+// unverändert durch. Die Rechnung selbst (dateilistenUeberschneidung) ist
+// dieselbe, mit der der Planer die Welle bildet — zwei verschiedene Antworten
+// auf „überschneiden sich A und B?" wären die nächste stille Fehlerquelle.
+function nebenlaeufigeZuschnittePruefen(pakete, umfeld) {
+  const tl = texte.lieferschein
+  const ziele = Array.isArray(umfeld?.ziele) ? umfeld.ziele : null
+  if (!ziele || ziele.length < 2) return {}
+  const nebenlaeufigVorhanden = ziele.some((z) => (z.nebenlaeufigZu ?? []).length > 0)
+  if (!nebenlaeufigVorhanden) return {}
+  const adresslos = pakete.find((p) => !p.zielInstanzId) ?? null
+  const adressloseListe = adresslos?.erlaubteDateien ?? []
+  if (adressloseListe.length > 0) {
+    // Die Ziele nennen, damit der Agent sieht, WEM er den Zuschnitt zuordnen
+    // soll — die Adressen sind dieselben, die zielBlockUnbekannt nennt.
+    return {
+      fehler: tl.adressloserZuschnittMitListe(
+        ziele.filter((z) => (z.nebenlaeufigZu ?? []).length > 0).map((z) => z.bezeichnung).join(' · ')
+      )
+    }
+  }
+  const listeVon = (instanzId) => [
+    ...(pakete.find((p) => p.zielInstanzId === instanzId)?.erlaubteDateien ?? []),
+    ...adressloseListe
+  ]
+  const geprueft = new Set()
+  for (const ziel of ziele)
+    for (const anderesId of ziel.nebenlaeufigZu ?? []) {
+      const anderes = ziele.find((z) => z.instanzId === anderesId)
+      if (!anderes) continue
+      // Jedes Paar nur einmal — die Beziehung ist symmetrisch.
+      const paarSchluessel = [ziel.instanzId, anderesId].sort().join('|')
+      if (geprueft.has(paarSchluessel)) continue
+      geprueft.add(paarSchluessel)
+      const lage = dateilistenUeberschneidung(listeVon(ziel.instanzId), listeVon(anderesId))
+      if (lage.ueberschneidet)
+        return {
+          fehler: tl.zuschnittUeberschneidung(
+            ziel.bezeichnung,
+            anderes.bezeichnung,
+            lage.paare.map(({ a, b }) => (a === b ? `„${a}"` : `„${a}" ↔ „${b}"`))
+          )
+        }
+    }
+  return {}
 }
 
 // Der Schlüssel, unter dem ein Zuschnitt zugestellt wird: die Instanz des

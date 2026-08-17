@@ -526,11 +526,17 @@ function liegtImProjekt(datei, projektPfad) {
 // pruefOrdner (BAUPLAN 41): der eigene Unterordner dieser Prüf-Instanz in der
 // Prüfmappe — in fremde Prüfordner schreibt auch ein Prüfer nicht.
 // dateiListe (BAUPLAN 44): der Datenvertrag der Arbeitspakete, die bei DIESEM
-// Block angekommen sind (bei mehreren die Vereinigung ihrer Listen). Steht als
-// LETZTER Parameter mit sicherem Standard: null = keine Sperre. Gesetzt wird sie
-// nur für Blöcke, die ein Paket umsetzen — ein Prüfer stünde sonst bei
-// legitimer Arbeit.
-export function pruefeWerkzeug(name, eingabe, projektPfad, nurLesen, darfPruefen, lokaleKi = true, nurLesenBefehle = false, darfKartenAnlegen = false, darfVorschlagen = false, darfLaufVorschlag = false, darfZuteilen = false, pruefOrdner = '', lieferscheinFrei = [], dateiListe = null) {
+// Block angekommen sind (bei mehreren die Vereinigung ihrer Listen). Sicherer
+// Standard: null = keine Sperre. Gesetzt wird sie nur für Blöcke, die ein Paket
+// umsetzen — ein Prüfer stünde sonst bei legitimer Arbeit.
+// inWelle (BAUPLAN 46): true, solange neben diesem Block ein ANDERER Schreiber
+// läuft — je Werkzeugaufruf frisch abgefragt (lauf.js). Dann werden Befehle,
+// die sonst rückfragefrei durchliefen (Entwickler-Werkzeuge), zur Rückfrage:
+// Ein Befehl schreibt an der Dateiliste vorbei, und ein Build oder Test liest
+// den Halbstand des Nachbarn. Rein lesende Befehle bleiben frei; die harten
+// Sperren (Git, Prüfmappe, Dateiliste bei Umleitungen, „darf nur lesen") gehen
+// wie bisher vor. Steht als LETZTER Parameter mit sicherem Standard false.
+export function pruefeWerkzeug(name, eingabe, projektPfad, nurLesen, darfPruefen, lokaleKi = true, nurLesenBefehle = false, darfKartenAnlegen = false, darfVorschlagen = false, darfLaufVorschlag = false, darfZuteilen = false, pruefOrdner = '', lieferscheinFrei = [], dateiListe = null, inWelle = false) {
   if (name.startsWith(MENSCH_PRAEFIX)) return { erlaubt: true }
   // Lieferschein (BAUPLAN 42): frei ist je Block genau das Werkzeug zu seinem
   // liefert-Etikett — die anderen fragen nach.
@@ -695,7 +701,17 @@ export function pruefeWerkzeug(name, eingabe, projektPfad, nurLesen, darfPruefen
     const umleitungsZiel = umleitungsZielAusserhalb(befehl, projektPfad)
     if (umleitungsZiel)
       return { frage: texte.rechteFrage.schreibenAusserhalb(umleitungsZiel) }
-    if (befehlOhneRueckfrage(befehl)) return { erlaubt: true }
+    if (befehlOhneRueckfrage(befehl)) {
+      // Befehle in einer Welle (BAUPLAN 46): Was hier sonst rückfragefrei
+      // durchliefe (npm, npx, node, vitest, pip …), fragt nach, solange
+      // parallel ein anderer Block schreibt — außer es liest nur. Bewusst eine
+      // RÜCKFRAGE und keine Sperre: Ein Bauer, der seine Tests nicht mehr
+      // laufen lassen darf, ist kein Bauer; im Automodus wird sie erlaubt und
+      // steht so im Ticker (SPEC §7 sagt ehrlich: Meldung, keine Bremse).
+      if (inWelle === true && !befehlNurLesend(befehl))
+        return { frage: texte.rechteFrage.befehlInWelle(befehl) }
+      return { erlaubt: true }
+    }
     return { frage: texte.rechteFrage.befehl(befehl) }
   }
   if (name === 'WebFetch' || name === 'WebSearch')
@@ -1067,6 +1083,20 @@ export function starteLaufMotor(optionen) {
   // Parallele Zweige bekommen eigene Motoren (lauf.js).
   let block = null
 
+  // Steht dieser Block gerade in einer Welle (BAUPLAN 46), läuft also neben ihm
+  // ein anderer Schreiber? Der Lauf gibt eine FUNKTION herein, kein Kennzeichen:
+  // Nachbarn starten und enden, während dieser Block arbeitet — ein beim Start
+  // eingefrorener Wert wäre nach dem ersten Blockende falsch. Ein klemmender
+  // Blick darf den Werkzeugaufruf nicht kippen: dann gilt „nicht in der Welle",
+  // also das Verhalten von vor Bauschritt 46.
+  function inWelleJetzt() {
+    try {
+      return block?.inWelle?.() === true
+    } catch {
+      return false
+    }
+  }
+
   function unterSumme() {
     return block ? [...block.unterVerbrauch.values()].reduce((a, b) => a + b, 0) : 0
   }
@@ -1223,7 +1253,9 @@ export function starteLaufMotor(optionen) {
       block?.pruefOrdner ?? '',
       block?.lieferscheinFrei ?? [],
       // Datenvertrag als Schreibsperre (BAUPLAN 44) — null heißt keine Sperre.
-      block?.dateiListe ?? null
+      block?.dateiListe ?? null,
+      // Welle (BAUPLAN 46): je Aufruf frisch, denn Nachbarn kommen und gehen.
+      inWelleJetzt()
     )
     if (urteil.gesperrt) return nein(urteil.gesperrt, urteil.tickerText)
     if (urteil.erlaubt) {
@@ -1353,7 +1385,24 @@ export function starteLaufMotor(optionen) {
           // Bereiche gehören dem BLOCK — dieser Server wird einmal je Session
           // gebaut, und eine Lauf-Session bedient alle Blöcke nacheinander.
           // Deshalb je Aufruf frisch am gerade laufenden Block abgelesen.
-          holeSicherung: () => block?.sicherung ?? null,
+          //
+          // Die geschützten Bereiche selbst sind seit BAUPLAN 46 ebenfalls
+          // FRISCH je Aufruf: `holeGeschuetzt` fragt den Lauf, wer JETZT neben
+          // diesem Block schreibt — ein beim Blockstart eingefrorenes Feld
+          // schützte einen Nachbarn, der längst fertig ist, und ließ einen
+          // ungeschützt, der danach gestartet ist. Fehlt der Getter (Lauf von
+          // vor 46), gilt das eingefrorene `geschuetzt` wie bisher.
+          holeSicherung: () => {
+            const sicherung = block?.sicherung ?? null
+            if (!sicherung) return null
+            return {
+              ...sicherung,
+              geschuetzt: sicherung.holeGeschuetzt?.() ?? sicherung.geschuetzt ?? []
+            }
+          },
+          // Tabu-Liste der lokalen Helfer-KI (BAUPLAN 46): die Dateiliste des
+          // gerade laufenden Blocks — lokal_bauen schreibt nur noch darin.
+          holeDateiListe: () => block?.dateiListe ?? null,
           aufEreignis
         })
       : null
@@ -1474,7 +1523,9 @@ export function starteLaufMotor(optionen) {
             block?.pruefOrdner ?? '',
             block?.lieferscheinFrei ?? [],
             // Datenvertrag als Schreibsperre (BAUPLAN 44) — null heißt keine Sperre.
-            block?.dateiListe ?? null
+            block?.dateiListe ?? null,
+            // Welle (BAUPLAN 46): je Aufruf frisch, denn Nachbarn kommen und gehen.
+            inWelleJetzt()
           )
           if (urteil.erlaubt) return { behavior: 'allow', updatedInput: eingabeDaten }
           if (urteil.gesperrt) {
@@ -1829,7 +1880,10 @@ export function starteLaufMotor(optionen) {
     // angekommenen Arbeitspakete — null heißt „keine Sperre".
     // sicherung (BAUPLAN 45): Punkt-Strang und geschützte Bereiche dieses Blocks
     // für die lokalen Helfer-Werkzeuge — null heißt „gemeinsamer Stand".
-    blockAusfuehren({ auftrag, blockName, instanzId = null, nurLesen = false, darfPruefen = false, pruefOrdner = '', lokaleKi = true, darfKartenAnlegen = false, darfVorschlagen = false, darfLaufVorschlag = false, darfZuteilen = false, liefert = [], lieferscheinFrei = [], ziele = null, dateiListe = null, sicherung = null, modell = null, unterModell = null, modellName = '', uebertrag }) {
+    // Seit BAUPLAN 46 mit `holeGeschuetzt: () => string[]` (frisch je Aufruf).
+    // inWelle (BAUPLAN 46): Funktion → true, solange neben diesem Block ein
+    // anderer Schreiber läuft; null heißt „nie in einer Welle" (wie vor 46).
+    blockAusfuehren({ auftrag, blockName, instanzId = null, nurLesen = false, darfPruefen = false, pruefOrdner = '', lokaleKi = true, darfKartenAnlegen = false, darfVorschlagen = false, darfLaufVorschlag = false, darfZuteilen = false, liefert = [], lieferscheinFrei = [], ziele = null, dateiListe = null, sicherung = null, inWelle = null, modell = null, unterModell = null, modellName = '', uebertrag }) {
       if (tot)
         return Promise.resolve({
           zustand: 'fehlgeschlagen',
@@ -1866,6 +1920,9 @@ export function starteLaufMotor(optionen) {
           // Sicherungspunkte je Schreiber (BAUPLAN 45): Strang und geschützte
           // Bereiche — die lokalen Helfer-Werkzeuge lesen sie hier ab.
           sicherung,
+          // Welle (BAUPLAN 46): die Frage „schreibt gerade jemand neben mir?"
+          // — je Werkzeugaufruf gestellt (inWelleJetzt), nie eingefroren.
+          inWelle: typeof inWelle === 'function' ? inWelle : null,
           meldungen: [],
           modell: modell ?? sdkModell(MODELL_KLASSE_STANDARD),
           unterModell,
@@ -2064,18 +2121,23 @@ export function starteChatMotor(optionen) {
       true,
       Boolean(holeNurLesenBefehle?.()),
       // Karten anlegen ist der Normalweg des nur-lesenden Chats — außer während
-      // eines Laufs: dann ist der Chat wirklich lesend (ein Schreiber pro Projekt).
+      // eines Laufs: dann ist der Chat wirklich lesend (er schreibt nicht, solange
+      // ein Lauf läuft — BAUPLAN 46).
       !laufAktiv,
       false,
       // Ab hier ausgeschrieben statt den Standardwerten überlassen (Fund 12 der
-      // Angriffsliste zu BAUPLAN 44): Die Signatur trägt 14 Positionsparameter —
+      // Angriffsliste zu BAUPLAN 44): Die Signatur trägt 15 Positionsparameter —
       // ein Neuzugang rutschte an einer verkürzten Aufrufstelle sonst still an
-      // die falsche Stelle. Der Chat hat kein Arbeitspaket, also keine Sperre.
+      // die falsche Stelle. Der Chat hat kein Arbeitspaket, also keine Sperre —
+      // und er ist nie Teil einer Welle: Während ein Lauf läuft, schreibt er gar
+      // nicht (BAUPLAN 46), also gibt es für ihn keinen Befehl „neben" einem
+      // anderen Schreiber.
       false, // darfLaufVorschlag
       false, // darfZuteilen
       '', // pruefOrdner
       [], // lieferscheinFrei
-      null // dateiListe
+      null, // dateiListe
+      false // inWelle
     )
     // Während ein Lauf läuft, sagt die Abweisung ehrlich, warum: nicht „dieser
     // Block darf nur lesen", sondern „im Projekt läuft gerade ein Lauf".

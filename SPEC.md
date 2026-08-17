@@ -285,6 +285,34 @@ des erzeugenden Laufs.
   Umsetzer etwas weg, steht die Zahl im Auftrag und im Ticker („n Änderungen außerhalb deiner
   Dateiliste sind hier nicht gezeigt") — auch dann, wenn nach dem Filtern gar nichts übrig
   bleibt.
+- **Ein Punkt sammelt fremdes laufendes Revier nicht ein** (seit Bauschritt 46): Seit mehrere
+  Schreiber gleichzeitig laufen (§5), enthält der Punkt am Blockende von A — die
+  Zusammenführung seines Strangs — **nicht** den Arbeitsordner-Stand in den Wirkbereichen der
+  anderen Schreiber, die gerade noch laufen oder auf ihren Nachlauf warten. Dort nimmt er den
+  **Stand der Basis** (die Spitze des gemeinsamen Stands — also den Stand von *vor* diesen
+  Blöcken). „Nach Block A" trägt damit genau A's Arbeit; und stürzt die App mitten in der
+  Welle ab, startet B beim Wiederaufnehmen sauber auf „vor B", statt auf einem eingefrorenen
+  Halbstand seiner selbst. Dasselbe gilt für die **Zwischenpunkte der lokalen Helfer-KI**
+  („vor lokalem Teilstück") auf dem eigenen Strang. Der Arbeitsordner bleibt dabei unberührt —
+  B arbeitet einfach weiter. Folge, sichtbar in der Wiederherstellen-Vorschau: Wer den Punkt
+  „Nach Block A" zurückholt, während B noch schreibt, holt B's Bereich auf den Stand vor B —
+  nicht auf B's Halbstand. Auch die Regel „ein Punkt statt Zwilling" prüft das mit: Der
+  Strangpunkt wird nur dann zur gemeinsamen Spitze vorgezogen, wenn er auch in den fremden
+  Bereichen auf der Basis steht; sonst entsteht der Punkt mit zwei Eltern.
+- **Wiederherstellen nur innerhalb eines Bereichs** (seit Bauschritt 46): Für die
+  zweigbezogene Folgen-Frage (§4.1) kann FlowForge einen Sicherungspunkt **auf einen Bereich
+  begrenzt** zurückholen — Dateilisten und Prüfordner der Blöcke eines Zweigs. Innerhalb des
+  Bereichs geschieht alles, was Wiederherstellen sonst auch tut (ändern, zurückholen, löschen);
+  außerhalb wird nichts angefasst, und die Zahl des Übersprungenen ist bekannt. Vorher entsteht
+  dasselbe Sicherheitsnetz wie beim vollen Wiederherstellen (der jetzige Stand, falls
+  ungesichert). Ohne benannten Bereich fasst diese Form gar nichts an — dafür gibt es das
+  volle Wiederherstellen.
+- **Sicherungspunkt-Operationen laufen je Projektordner nacheinander** (seit Bauschritt 46):
+  Alle Stränge eines Projekts teilen sich technisch einen Index; zwei Blöcke, die gleichzeitig
+  Punkte anlegen, zusammenführen oder zurückrollen, arbeiteten sonst verschränkt darauf und
+  bekämen Punkte, die halb den einen und halb den anderen Stand tragen (gemessen). Deshalb
+  stellt sich jede dieser Operationen je Projektordner in eine Warteschlange — für den Lauf
+  unsichtbar, außer dass zwei gleichzeitige Punkte beide vollständig sind.
 - Rechner-Neustart mitten im Lauf → App bietet an, am letzten Sicherungspunkt weiterzumachen.
   Ein Strang, der aus dem Abbruch liegengeblieben ist, gehört zu dem Block, dessen Arbeit
   ohnehin fällt. Der nächste Laufstart macht damit reinen Tisch, **bevor** dieser Lauf eigene
@@ -377,15 +405,18 @@ Seite aufs Projekt vorgefiltert zeigt (eigener Baustein, nicht Teil der Leinwand
   ausgehen und mehrere an einer ankommen; Kreise sind verboten. Ein Block startet,
   sobald alle seine Vorgänger fertig sind — ein Block mit mehreren eingehenden Pfeilen
   führt die Zweige zusammen (er wartet auf alle). Gleichzeitig laufen dürfen mehrere
-  lesende Blöcke, aber höchstens ein schreibender (§5) — Achtung: Ist die Einstellung
+  lesende Blöcke immer; schreibende seit Bauschritt 46 als **Welle**, wenn ihre
+  Dateilisten getrennt sind — Prüfer nur neben Prüfern, nie neben einem Bauer (Regel und
+  Grenzen in §5) — Achtung: Ist die Einstellung
   „Nur-lesende Blöcke dürfen Befehle ausführen" (§7) an, kann auch ein „lesender"
   Block über ausgeführte Skripte Dateien verändern; die Parallel-Regel bleibt dann
   bewusst auf eigene Gefahr. Ein sichtbarer Hinweis im
   Ticker warnt, dass parallele Blöcke den Verbrauch vervielfachen. Seit Bauschritt 36
-  sagt der Ticker auch, **worauf ein Block gerade wartet** („Angreifer wartet — Bauer
-  schreibt gerade", „Prüfer wartet auf Audit") — je Block und Grund genau einmal, und
+  sagt der Ticker auch, **worauf ein Block gerade wartet** („Prüfer wartet auf Audit",
+  seit 46 die Gründe der Welle: Überschneidung samt Paaren, fehlender Datenvertrag,
+  „ein Prüfer urteilt nie über einen halben Stand") — je Block und Grund genau einmal, und
   nur dort, wo es etwas erklärt: an Zusammenführungen, deren einer Zweig schon fertig
-  ist, und wenn die Ein-Schreiber-Regel bremst. braucht/liefert
+  ist, und wenn die Wellen-Regel bremst. braucht/liefert
   gilt entlang der Pfeile: Was ein Block braucht, muss einer seiner Vorfahren liefern.
   Seit Bauschritt 36 steht das **an den braucht-Chips der Blockkarte**: „← Paket
   schneiden" (bei mehreren gleich nahen Lieferanten alle), „← fehlt" bzw. bei
@@ -465,13 +496,31 @@ Seite aufs Projekt vorgefiltert zeigt (eigener Baustein, nicht Teil der Leinwand
   Standard **2 Reparatur-Runden** (pro Workflow verstellbar) — seit Bauschritt 41
   **je Rückführungs-Ziel** statt je Lauf: Zwei Prüfer hinter zwei Bauern aßen sich
   sonst die Runden gegenseitig weg, und der zweite Zweig bekam die Folgen-Frage,
-  ohne je repariert zu haben. Danach hält der Lauf an und stellt
+  ohne je repariert zu haben. Danach stellt der Lauf
   eine Folgen-Frage („Weitermachen, zurückstellen oder Stand wiederherstellen?"). Im
   Verzweigten laufen genau die Blöcke auf den Wegen von X zum Prüfer erneut — parallele
   Zweige daneben behalten ihr Ergebnis; als Ziel wählbar sind alle Vorfahren des Prüfers.
   Seit Bauschritt 36 ist der Weg zurück **im Schaubild sichtbar**: ein gestrichelter,
   roter Bogen vom Prüfer zu seinem Ziel, beschriftet mit „bei Fehlschlag, 2 Runden"
   (bei 0 Runden: „es folgt sofort die Folgen-Frage").
+  **Folgen-Frage je Zweig** (seit Bauschritt 46): Die Frage hält nicht mehr den ganzen
+  Lauf an. Nur der fragende Prüfer wartet (seine Nachfolger starten nicht); alle anderen
+  Zweige laufen derweil weiter, und mehrere Fragen können nacheinander offen sein — das
+  Fenster zeigt eine nach der anderen. Jede der drei Wahlen gilt für **diesen Zweig**:
+  **Weitermachen** — der Prüfer gilt als erledigt, sein Zweig macht mit dem nächsten Block
+  weiter. **Zurückstellen** — dieser Zweig endet hier, alle anderen laufen zu Ende; der
+  Lauf heißt am Ende „zurückgestellt", wenn nichts Schlimmeres vorliegt. **Stand
+  wiederherstellen** — FlowForge setzt **sofort** und **nur** die Wirkbereiche der
+  Zweig-Blöcke (die Dateilisten der Bauer auf den Wegen vom Ziel zum Prüfer und die
+  Prüfmappe des Prüfers, §3.3) auf den Punkt „Stand vor Lauf" zurück; die erfolgreichen
+  Zweige daneben bleiben unberührt, und der Ticker nennt Zweig und Dateizahl. Der Dialog
+  sagt **vorher**, was die Wahl trifft („trifft: Bauer · UI (4 Dateien), Prüfordner
+  pruefung/pruefer-3/"). Hat ein Bauer des Zweigs keinen Datenvertrag, geht es nicht
+  zweigbezogen: Dann sagt der Dialog „trifft den ganzen Projektordner", und es bleibt bei
+  der alten Wirkung — der ganze Ordner am Laufende, nichts Neues startet mehr. Ein harter
+  Stopp löst eine offene Folgen-Frage mit „zurückstellen" auf; zurückgesetzt wird ohnehin
+  zentral. Prüfer und Bauer laufen nie gleichzeitig (§5): Ein Prüfer startet erst, wenn
+  kein Bauer mehr schreibt — er urteilt nicht über einen halben Stand.
 
 ### 4.2 Anatomie eines Blocks
 
@@ -537,9 +586,25 @@ hängengeblieben und für den Gehorsam abgewiesen. **Alle** Pakete gehen in
 **einem** Aufruf von
 `melde_arbeitspaket` (Feld `pakete`); ein zweiter Aufruf ersetzt den ersten, wie
 bei jeder Meldung. Zwei Pakete für dasselbe Ziel weist FlowForge ab.
+**Überschneidende Zuschnitte nebenläufiger Ziele weist FlowForge ab** (seit
+Bauschritt 46): Zwei benannte Ziele, von denen keines Vorfahr des anderen ist
+(zwei Bauer im Fächer hinter Paket schneiden), laufen im Lauf gleichzeitig
+(§5) — genau dann, wenn ihre Dateilisten sich ausschließen. Überschneiden sich
+die **effektiven** Listen zweier solcher Ziele (der adressierte Zuschnitt plus
+ein adressloser, der für alle gilt), wird die ganze Meldung abgewiesen, **bevor
+ein Token in die Bauer fließt**; die Abweisung nennt beide Ziele und die
+überlappenden Einträge. Aus derselben Rechnung folgt: Ein adressloser Zuschnitt
+**mit** Dateiliste neben zwei oder mehr nebenläufigen Zielen wird abgewiesen —
+dieselbe Liste stünde bei beiden —, mit dem Hinweis, ihn zu adressieren oder
+`erlaubteDateien` dort wegzulassen. Zwei Ziele **hintereinander** (Bauer A →
+Bauer B) dürfen dieselbe Datei nennen: Sie schreiben nacheinander. Die Frage
+„überschneiden sich zwei Listen?" rechnet dieselbe Stelle, die im Lauf die
+Welle bildet (§5) — zwei verschiedene Antworten wären die nächste stille
+Fehlerquelle.
 **Rückfall ohne Bruch:** Gibt es kein benanntes Ziel oder lässt der Agent die
 Adresse leer, ist es genau ein Paket, das für alle gilt — Läufe und Laufstände
-von vor Bauschritt 44 laufen unverändert weiter.
+von vor Bauschritt 44 laufen unverändert weiter; mit einem Ziel oder ohne
+Dateilisten ändert die Überschneidungs-Prüfung nichts.
 
 **Datenvertrag im Paket** (seit Bauschritt 44): Je Zuschnitt nennt das
 Arbeitspaket **welche Dateien angefasst werden dürfen** (`erlaubteDateien`,
@@ -1127,8 +1192,9 @@ Angreifer durch die Diagnose.
   die Schwelle auch nur **sein** Kontextfenster — das Fenster des Block-Agenten steht
   getrennt daneben. Reparatur-Runden laufen als neuer Agent mit der
   Prüferkritik im Auftrag; ihr **Budget zählt je Rückführungs-Ziel** (seit
-  Bauschritt 41, §4.1). **Parallele Zweige** laufen als eigene Sessions, weil die
-  Lauf-Session einen Block nach dem anderen verarbeitet — ehrlich im Ticker vermerkt.
+  Bauschritt 41, §4.1). **Parallele Zweige** — und seit Bauschritt 46 die weiteren
+  Schreiber einer Welle (unten) — laufen als eigene Sessions, weil die Lauf-Session einen
+  Block nach dem anderen verarbeitet — ehrlich im Ticker vermerkt.
 - **Reparatur-Runde mit Diff und Vor-Fazit** (seit Bauschritt 34): Der frische Agent einer
   Reparatur-Runde bekommt neben der Prüferkritik zwei von FlowForge gerechnete Tatsachen —
   den **exakten Unterschied** „Das hast du in diesem Lauf bisher geändert" aus den
@@ -1232,12 +1298,60 @@ Angreifer durch die Diagnose.
   Normalfall. Ehrlichkeit: Vorschlag samt Empfehlung steht im Ticker und im
   Laufbericht des erzeugenden Laufs.
 - **Parallelität** (seit Bauschritt 12): Bis zu **3 Workflows gleichzeitig, aber nur in
-  verschiedenen Projekten.** Pro Projekt schreibt immer nur **ein** Agent (mehrere lesende
-  erlaubt). Weitere Starts landen in einer Warteschlange und laufen automatisch an: sichtbar
-  im Lauf-Tab (samt Herausnehmen-Knopf), festgehalten im Ticker des anlaufenden Laufs.
-  Solange ein Projekt läuft oder wartet, sind Schaubild-Umbau und Wiederherstellen gesperrt.
-  **Sichtbarer Verbrauchs-Hinweis:** Läuft anderswo schon etwas, warnt FlowForge beim Start
-  und im Lauf-Tab, dass parallele Läufe den Verbrauch vervielfachen.
+  verschiedenen Projekten.** Pro Projekt läuft immer nur **ein** Workflow; innerhalb dieses
+  Laufs schreiben seit Bauschritt 46 mehrere Blöcke als **Welle** (unten), lesende dürfen
+  ohnehin nebeneinander. Weitere Starts landen in einer Warteschlange und laufen automatisch
+  an: sichtbar im Lauf-Tab (samt Herausnehmen-Knopf), festgehalten im Ticker des anlaufenden
+  Laufs. Solange ein Projekt läuft oder wartet, sind Schaubild-Umbau und Wiederherstellen
+  gesperrt. **Sichtbarer Verbrauchs-Hinweis:** Läuft anderswo schon etwas, warnt FlowForge
+  beim Start und im Lauf-Tab, dass parallele Läufe den Verbrauch vervielfachen.
+- **Welle: mehrere Schreiber gleichzeitig** (seit Bauschritt 46 — die Ein-Schreiber-Regel ist
+  **bedingt** geöffnet): Ein schreibender Block darf neben anderen schreibenden starten, wenn
+  FlowForge weiß, dass sie sich nicht in die Quere kommen. Die Regel in Alltagssprache:
+  Ein **Bauer** startet neben laufenden Bauern nur, wenn er selbst einen Datenvertrag
+  (Dateiliste seines Arbeitspakets, §4.3) hat, jeder laufende Bauer einen hat und sich keine
+  zwei dieser Listen überschneiden (Ordner-Einträge decken alles darunter ab: „src/" trifft
+  „src/a.js"). Ein **Prüfer** startet neben laufenden Prüfern immer — jeder hat seine eigene
+  Prüfmappe (§3.3). **Bauer und Prüfer laufen nie gleichzeitig**: Ein Prüfer, dessen Tests
+  über den ganzen Ordner laufen, urteilte sonst über den Halbstand des Nachbarn — derselbe
+  Grund, aus dem Tor und Rauchtest hinter die Welle gehören (§4.1, §8). Ohne Datenvertrag
+  gibt es keine Trennung und darum keine Welle: Ein Bauer ohne Dateiliste wartet, bis er
+  allein schreibt, und ein laufender Bauer ohne Dateiliste lässt keinen zweiten neben sich.
+  Der Ticker sagt jeden Warte-Grund **einmal je Block und Grund** („wartet, bis „Bauer · UI"
+  fertig ist — beide Dateilisten überschneiden sich (src/ui/ ↔ src/ui/knopf.js)", „hat
+  keinen Datenvertrag", „ein Prüfer urteilt nie über einen halben Stand", „solange ein
+  Prüfer misst, baut keiner daneben") und meldet den Beginn jeder Welle („Welle: 3 Blöcke
+  schreiben gleichzeitig (Dateilisten getrennt)"). Die weiteren Schreiber einer Welle laufen
+  wie parallele Zweige als eigene Motor-Sessions (oben), ehrlich im Ticker vermerkt.
+  **Ein Block bleibt in der Welle, solange sein Revier belegt ist:** Auch nach dem Ende
+  seines Motor-Anlaufs gilt seine Dateiliste als sein Revier, bis seine Arbeit gemeinsamer
+  Stand ist (Nachlauf, unten) — ein überschneidender Nachbar wartet so lange. Für die Blöcke
+  in einer Welle werden sonst rückfragefreie Befehle zur Rückfrage, und die lokale Helfer-KI
+  bekommt die Dateiliste als Tabu-Liste (§7).
+  **Nachlauf-Phase — der Rauchtest wartet, bis die Welle steht:** Der Rauchtest (§8) läuft
+  nicht mehr im Moment, in dem ein Bauer fertig wird, wenn nebenan ein anderer Bauer noch
+  schreibt (oder die lokale Vorreparatur gerade schreibt) — er misste einen Zwischenstand.
+  Der Block geht dann in den **Nachlauf** („Rauchtest von „Bauer · UI" wartet, bis die Welle
+  steht"), und FlowForge holt den Test nach, sobald kein Bauer mehr läuft — **bevor** es
+  Neues startet. Bei Rot bekommt der Block wie bisher genau eine Nachbesserungs-Runde.
+  **Körnung:** Ein Block gilt erst als **fertig** — für seine Nachfolger, für den Punkt „Nach
+  Block …" (§3.3) und für den Laufstand der Wiederaufnahme —, wenn sein Nachlauf durch ist
+  und sein Strang zusammengeführt wurde. Fertig-Meldung, Sicherungspunkt und Laufstand haben
+  damit dieselbe Körnung: Stürzt die App mitten in der Welle ab, gilt kein Block als fertig,
+  dessen Arbeit noch nicht gemeinsamer Stand war; nach der Wiederaufnahme laufen alle
+  Nicht-Fertigen erneut. Der Punkt am Blockende sammelt dabei **nicht** das halbfertige
+  Revier der anderen ein — dort nimmt er den Stand der Basis („Nach Block A" enthält genau
+  A's Arbeit, §3.3). Bricht ein harter Stopp mehrere Schreiber gleichzeitig ab, wird jeder
+  auf seinem eigenen Strang zurückgerollt — als Umkehrung wie jeder Rückroll (§3.3): sein
+  Wirkbereich ist die Notbremse für einen überholten Rückroll-Punkt, die Wirkbereiche der
+  übrigen sind geschützt (§6). **Eine offene Folgen-Frage belegt ihren Zweig:** Solange ein
+  Prüfer auf die Antwort wartet (§4.1), gelten die Wirkbereiche seines Zweigs als belegt —
+  ein Bauer, dessen Dateiliste sich damit überschneidet (oder der keine hat), wartet mit
+  eigenem Grund im Ticker („wartet, bis die Folgen-Frage zu „Prüfer · A" beantwortet ist"),
+  und Rückrolle wie Punkte der Nachbarn schonen diese Dateien; sonst könnte „Stand
+  wiederherstellen" die halbfertige Arbeit eines Nachbarn mitnehmen. Der Co-Pilot-Chat
+  passt in keine Welle: Er kennt weder Datenvertrag noch Strang und startet keinen Lauf,
+  solange er arbeitet.
 
 ## 6. Live-Ansicht & Eingriff
 
@@ -1265,7 +1379,10 @@ Angreifer durch die Diagnose.
   dem des Koordinators. Der Hinweis steuert nichts.
 - **Stopp in zwei Stufen:** „Sanft anhalten" (laufender Block macht fertig, Halt am
   Sicherungspunkt) und „Sofort abbrechen" (Block gilt als nicht gelaufen; der Projektordner
-  springt automatisch auf den letzten Sicherungspunkt zurück).
+  springt automatisch auf den letzten Sicherungspunkt zurück — seit Bauschritt 46 bei
+  mehreren gleichzeitig abgebrochenen Schreibern jeder auf seinem eigenen Strang, mit einer
+  Ticker-Zeile je Block; die Arbeit eines Blocks im Nachlauf, §5, bleibt dabei stehen und
+  wird am Laufende als Punkt „Stand nach Runde …" festgehalten).
 - **Gespräch** (seit Bauschritt 9): Stellt der Agent eine Frage (Frage-Block,
   Spec-Interview — über das eingebaute mensch-Werkzeug), pausiert der Lauf und
   die Lauf-Ansicht zeigt eine Chat-Ansicht: Verlauf aus Fragen und Antworten,
@@ -1327,8 +1444,8 @@ Angreifer durch die Diagnose.
   der Bauer gerade") — wirklich lesend: die Einstellung „nur-lesende Blöcke dürfen
   Befehle ausführen" gilt für den Chat dann NICHT, Karten anlegen und Reparieren
   sind gesperrt (Schalter ausgegraut), es entsteht kein Sicherungspunkt mitten im
-  Lauf; die KI bekommt die Notiz „gerade läuft ein Lauf" mit. Ein Schreiber pro
-  Projekt (§5): arbeitet der Chat gerade an einer Antwort, startet kein Lauf; ein
+  Lauf; die KI bekommt die Notiz „gerade läuft ein Lauf" mit. Der Chat ist nie Teil
+  einer Welle (§5): arbeitet der Chat gerade an einer Antwort, startet kein Lauf; ein
   Laufstart beendet den Chat-Motor (die nächste Nachricht setzt die Chat-Session
   fort) und räumt ab, was der Chat gestartet hatte.
   **Verlauf je Projekt gespeichert** (Verwaltungsdatei `chat.json` im Projektordner
@@ -1465,15 +1582,37 @@ im selben Modul wären die nächste stille Fehlerquelle. Bei einer Umleitung wir
 die Dateiliste geprüft und **erst danach** die Projektgrenze: Ein Ziel außerhalb
 des Projekts steht per Definition in keiner Dateiliste und ist damit ebenfalls
 hart gesperrt — sonst wäre ausgerechnet der gefährlichere Schreibvorgang nur
-eine Rückfrage, die der Automodus durchwinkt. Sie greift **nicht** an sonst
-ausgeführten Befehlen (`npm run build` schreibt, wohin es will), nicht an
+eine Rückfrage, die der Automodus durchwinkt. Sie greift **nicht** an
 Umbenennen, Verschieben und Löschen — die tragen keinen Pfad in einem
-Schreib-Werkzeug — und nicht am eigenen Schreibpfad der lokalen Helfer-KI: Was
-der Agent über `lokal_bauen` delegiert, schreibt mit echtem Schreibrecht im
-ganzen Projektordner an der Dateiliste vorbei (§4.3, nur die harten Sperren
-gelten dort); allein die Entwürfe aus `lokal_entwerfen` bleiben auf
-`arbeitsablage/` begrenzt. **Bauschritt 46 schließt diese Lücke**; bis dahin ist
-die Dateiliste eine wirksame Leitplanke, keine Mauer.
+Schreib-Werkzeug — und nicht an sonst ausgeführten Befehlen (`npm run build`
+schreibt, wohin es will). Zwei Stellen, die bis Bauschritt 45 ebenfalls an der
+Liste vorbeischrieben, halten sie seit Bauschritt 46:
+**Die lokale Helfer-KI hält die Dateiliste** (Tabu-Liste): Was der Agent über
+`lokal_bauen` delegiert und was die lokale Vorreparatur (§5) ersetzt, bekommt
+die Dateiliste des Blocks mit, für den geschrieben wird — bei der Vorreparatur
+die des Rückführungs-Ziels (des Bauers), nicht die des Prüfers. Schreiben und
+Ersetzen außerhalb wird abgelehnt; die Ablehnung nennt die Liste und den Weg
+heraus (ins Fazit schreiben, damit der Block-Agent es im Feld `anmerkung`
+meldet, statt es erneut zu versuchen). `arbeitsablage/` bleibt frei, die
+Entwürfe aus `lokal_entwerfen` ohnehin darauf begrenzt; ohne Liste sperrt
+nichts (Festlegung (2) oben), und die spezifischeren Sperren (Prüfmappe,
+Verwaltungsdateien) nennen weiter ihren eigenen Grund. Die Tabu-Liste gilt
+**immer**, wenn eine Dateiliste vorliegt — nicht nur, solange parallel gebaut
+wird.
+**Befehle in einer Welle sind Rückfragen** (§5): Solange neben einem Block ein
+anderer Schreiber läuft, fragt FlowForge auch bei den sonst rückfragefreien
+Entwickler-Werkzeugen nach (`npm run build`, `npx vitest run`, `node …`) und
+sagt in der Frage, dass parallel ein anderer Block schreibt: Ein Befehl
+schreibt an der Dateiliste vorbei, und ein Build oder Testlauf misst den
+halbfertigen Stand des Nachbarn. Rein lesende Befehle bleiben frei; die harten
+Sperren (Git, Prüfmappe, Dateiliste bei Umleitungen, „darf nur lesen") gehen
+wie bisher vor und werden nicht zur Rückfrage aufgeweicht. Ob ein Block gerade
+in einer Welle steht, wird **je Werkzeugaufruf frisch** entschieden — Nachbarn
+kommen und gehen, während er arbeitet. **Ehrlich dazu:** Im Automodus wird
+diese Rückfrage wie jede andere automatisch erlaubt und steht so im Ticker —
+sie ist dort eine sichtbare Meldung, keine Bremse. Die einzige harte Grenze an
+Befehlen bleibt die Umleitungs-Sperre der Dateiliste. Der Chat ist nie Teil
+einer Welle: Er schreibt nicht, solange ein Lauf läuft.
 
 **Melde-Werkzeuge** (Lieferschein, §4.3, seit Bauschritt 42): Sein Ergebnis zu
 melden ändert nichts am Projekt — FlowForge nimmt nur entgegen. Das Werkzeug zum
@@ -1509,7 +1648,12 @@ existieren. Ist es rot, geht die Ausgabe als Rückmeldung an den Bauer und derse
 genau **eine** Nachbesserungs-Runde erneut — bevor der Prüfer eine ganze Runde damit
 verbringt; danach macht der Lauf ehrlich vermerkt weiter. Läuft die App gerade im App-Tab,
 entfällt der Rauchtest (FlowForge nimmt ihr den Port nicht weg), ebenso bei einer
-Startanleitung ohne Befehl und Datei-Adresse.
+Startanleitung ohne Befehl und Datei-Adresse. **Nach der Welle, nicht mittendrin** (seit
+Bauschritt 46): Schreibt nebenan noch ein anderer Bauer (oder die lokale Vorreparatur,
+§4.3), misst der Rauchtest nicht sofort — er träfe einen Zwischenstand, in dem halb
+geschrieben wurde. Der Block wartet dann im **Nachlauf** („Rauchtest von „Bauer · UI"
+wartet, bis die Welle steht"), und FlowForge holt den Test nach, sobald kein Bauer mehr
+läuft — bevor es Neues startet; erst danach ist der Block fertig (§5, Körnung).
 
 Ausgeführt wird die Anleitung **im Tab „App"** der Projektansicht (seit Bauschritt 32; das
 frühere externe Konsolenfenster gibt es nicht mehr — Entscheidung Georg, 15.08.2026). Der

@@ -522,29 +522,62 @@ sie wortlos. Der Zwei-Bauer-Fall bleibt als Regressionsprüfung erhalten.
 (Entscheidung Georg, 16.08.2026, gegen die Empfehlung des Entwurfs: voller Umbau
 statt sequenziellem Zuschnitt. Der Entwurf riet zu 44 ohne Parallelität, weil dort
 schon der ganze fachliche Nutzen liegt und die Parallelität nur Zeit spart.)
-- SPEC §5 wird **bedingt** geöffnet: mehrere schreibende Blöcke gleichzeitig, wenn
-  ihre Dateilisten aus dem Datenvertrag überschneidungsfrei sind. Überschneiden sie
-  sich, weist FlowForge das schon beim Zuschnitt zurück — bevor ein Token fließt.
-- **Die Lücke aus 44 schließen:** Für Blöcke in einer Welle werden Befehle
-  rückfragepflichtig (auch die sonst rückfragefreien Entwickler-Werkzeuge), und der
-  Schreibpfad der lokalen Helfer-KI bekommt die Dateiliste als Tabu-Liste. Ohne das
-  ist „parallel, weil disjunkt" eine Zusicherung, die der Code nicht hält.
-- **Laufstand-Granularität:** Fertig-Meldung und Sicherungspunkt müssen dieselbe
-  Körnung haben. Stürzt die App mitten in der Welle ab, dürfen nicht zwei Blöcke als
-  „fertig" gelten, deren Arbeit der Rollback entfernt hat — die Welle ist als Ganzes
-  fertig oder gar nicht.
-- **Folgen-Frage je Zweig:** Heute hält ein einziger offener Entscheidungs-Slot den
-  ganzen Planer an, und „Stand wiederherstellen" setzt den **ganzen** Ordner zurück —
-  auch die erfolgreichen Zweige. Beides wird zweigbezogen; der Dialog sagt, was er
-  trifft.
-- **Tor und Rauchtest** (Schritt 35) laufen erst, wenn die Welle steht — sonst messen
-  sie einen Zwischenstand, in dem nebenan halb geschrieben wurde.
-- Nachzuziehen: SPEC §5 (bedingte Öffnung, Welle), §4.1 (Folgen-Frage je Zweig),
-  §7 (Befehls-Rückfrage in Wellen), §8 (Rauchtest nach der Welle).
-**Alltagstest:** Georg fährt einen Lauf mit drei Bauern: Im Liveticker arbeiten alle
-drei gleichzeitig, der Lauf ist deutlich kürzer als mit einem Bauer nach dem anderen.
-Ein Bauer, dessen Zuschnitt sich mit einem anderen überschneidet, wird schon vor dem
-Start freundlich abgelehnt.
+- SPEC §5 ist **bedingt** geöffnet: mehrere schreibende Blöcke gleichzeitig (Welle),
+  wenn ihre Dateilisten aus dem Datenvertrag überschneidungsfrei sind. Überschneiden
+  sie sich, weist `paket_melden` das schon beim Zuschnitt zurück — bevor ein Token
+  fließt (nur für Ziele, die nebenläufig sind; Bauer A → Bauer B dürfen dieselbe Datei
+  nennen). Die Überschneidungsrechnung ist das dritte Ende der Dateilisten-Rechnung
+  (`dateilistenUeberschneidung`, browsertauglich in lieferschein.js).
+- **Zwei Auslegungen der Bausession (Angriffsliste, 24 Funde):** (a) **Bauer und Prüfer
+  laufen nie gleichzeitig** — nur Bauer∥Bauer (getrennte Listen) und Prüfer∥Prüfer
+  (getrennte Prüfordner). Ein Prüfer, dessen Tests über den ganzen Ordner laufen,
+  urteilte sonst über den Halbstand des Nachbarn und schickte den falschen Bauer
+  zurück — derselbe Grund, aus dem der Bauplan Tor und Rauchtest hinter die Welle
+  stellt. (b) **Ohne Datenvertrag keine Welle:** Ein Bauer ohne Dateiliste wartet, bis
+  er allein schreibt (kein Vertrag, keine Trennung); der Ticker sagt jeden Warte-Grund
+  samt überlappender Einträge.
+- **Die Lücke aus 44 ist geschlossen — mit ehrlicher Grenze:** Für Blöcke in einer
+  Welle werden sonst rückfragefreie Befehle (Entwickler-Werkzeuge) zur Rechte-Rückfrage
+  (rein lesende bleiben frei); im Automodus wird sie automatisch erlaubt und steht so
+  im Ticker — dort ist das eine sichtbare Meldung, keine Bremse (SPEC §7 sagt es).
+  Der Schreibpfad der lokalen Helfer-KI (`lokal_bauen`, lokale Vorreparatur) hält die
+  Dateiliste jetzt immer als Tabu-Liste, nicht nur in der Welle. Geschützte Bereiche
+  werden je Werkzeugaufruf frisch gerechnet (vorher ein Schnappschuss vom Blockstart —
+  der zweite Schreiber existierte für den ersten nicht).
+- **Körnung Laufstand/Sicherungspunkt:** gebaut als Block-Körnung, nicht als
+  „Welle als Ganzes": Der Punkt am Blockende sammelt das Revier der anderen noch
+  laufenden oder nachlaufenden Schreiber **nicht** aus dem Arbeitsordner ein, sondern
+  nimmt dort den Basis-Stand — „Nach Block A" trägt genau A's Arbeit, und B startet
+  nach einem Absturz sauber auf „vor B". Fertig gilt ein Block erst, wenn Nachlauf und
+  Zusammenführung durch sind (`fertigIds` folgen dem). Alle Sicherungspunkt-Operationen
+  laufen je Projekt in einer Warteschlange (zwei Blöcke teilten sich sonst verschränkt
+  einen Git-Index — gemessen: halber Punkt).
+- **Folgen-Frage je Zweig:** Die Frage blockiert den Planer nicht mehr (sie ist ein
+  Race-Teilnehmer wie ein Blockergebnis; mehrere können nacheinander offen sein).
+  „Zurückstellen" endet nur diesen Zweig; „Stand wiederherstellen" setzt sofort und nur
+  die Wirkbereiche der Zweig-Blöcke zurück (`wiederherstellenBereich`); ohne
+  Datenvertrag im Zweig bleibt es beim ganzen Ordner am Laufende — der Dialog sagt
+  vorher, was er trifft. Eine offene Frage belegt ihren Zweig: Ein überschneidender
+  Bauer aus einer anderen Auftragsquelle wartet, bis sie beantwortet ist (Prüfer-Fund
+  der Bausession — sonst setzte „wiederherstellen" seinen Halbstand still zurück). Ein
+  harter Stopp mit mehreren Schreibern rollt jeden auf seinem Strang zurück.
+- **Rauchtest nach der Welle:** Nachlauf-Phase — der Block wartet mit Status
+  „nachlauf", FlowForge holt den Rauchtest nach, sobald kein Bauer mehr schreibt, vor
+  dem nächsten Start; ein Nachlauf-Block belegt sein Revier weiter. Das Tor läuft
+  ohnehin erst beim Start des Prüfers, und der startet nur ohne laufende Bauer.
+- Nachgezogen: SPEC §5 (Welle, Nachlauf, Körnung), §4.1 (Folgen-Frage je Zweig,
+  Warte-Gründe), §7 (Befehle in der Welle, Tabu-Liste), §8 (Rauchtest nach der Welle),
+  §3.3 (Punkt ohne fremdes Revier, Bereichs-Wiederherstellung, Warteschlange), §4.3
+  (Zuschnitt-Ablehnung).
+**Alltagstest:** Georg legt hinter „Paket schneiden" drei Bauer mit Zusatznamen (etwa
+„Bauer · UI", „Bauer · Daten", „Bauer · Doku") und lässt „Feature hinzufügen" laufen:
+Im Liveticker steht „Welle: 3 Blöcke schreiben gleichzeitig", alle drei sind auf der
+Leinwand gleichzeitig hervorgehoben, der Lauf ist deutlich kürzer als nacheinander.
+Meldet Paket schneiden zwei Zuschnitte mit derselben Datei, weist FlowForge die
+Meldung sichtbar ab, bevor ein Bauer startet; ein Bauer ohne Dateiliste wartet mit
+Begründung. Ein Prüfer, der durchfällt, stellt seine Folgen-Frage, während der andere
+Zweig weiterläuft; „Stand wiederherstellen" nennt vorher, was es trifft, und lässt den
+anderen Zweig stehen.
 
 ### 47 — Integrator: die Nähte zwischen parallel gebauten Teilen
 (Entscheidung Georg: eigene **Blockart**, nicht ein fester Block — eine geteilte

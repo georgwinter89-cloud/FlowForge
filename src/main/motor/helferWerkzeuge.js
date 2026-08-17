@@ -45,8 +45,24 @@ import {
 // (Block ohne Wirkbereich) verhält sich alles wie vor Bauschritt 45. Der
 // eigene Wirkbereich ist die Notbremse, wenn ein anderer Block seit dem
 // Rückroll-Punkt zusammengeführt hat: Dann wird nur noch darin zurückgenommen.
-export async function helferWerkzeugServer({ projektPfad, modell, adresse, bewerten = false, holeProjektwissen = null, holeSicherung = null, aufEreignis }) {
+// Seit BAUPLAN 46 sind die geschützten Bereiche darin FRISCH je Aufruf (der
+// Motor fragt den Lauf) — hier wird deshalb nichts davon eingefroren außer
+// Strang, Rückroll-Punkt und eigenem Wirkbereich; beim Rückroll wird erneut
+// gefragt, wer JETZT neben dem Block schreibt.
+// holeDateiListe (BAUPLAN 46): die Dateiliste des gerade laufenden Blocks als
+// Tabu-Liste für lokal_bauen — Schreiben außerhalb wird in lokaleHelfer.js
+// abgelehnt (arbeitsablage/ bleibt frei); null heißt keine Sperre.
+export async function helferWerkzeugServer({ projektPfad, modell, adresse, bewerten = false, holeProjektwissen = null, holeSicherung = null, holeDateiListe = null, aufEreignis }) {
   const { createSdkMcpServer, tool } = await import('@anthropic-ai/claude-agent-sdk')
+
+  function dateiListeVonJetzt() {
+    try {
+      const liste = holeDateiListe?.() ?? null
+      return Array.isArray(liste) && liste.length ? liste : null
+    } catch {
+      return null
+    }
+  }
 
   function mitProjektwissen(auftrag) {
     try {
@@ -73,7 +89,15 @@ export async function helferWerkzeugServer({ projektPfad, modell, adresse, bewer
   // auch wenn der Rollback an einer gesperrten Datei gescheitert war — und der
   // Agent baute auf einem Stand weiter, den FlowForge für verworfen hielt.
   // Rückgabe: '' = sauber, sonst der Hinweis, den der Agent lesen muss.
-  async function zurueckrollen({ strang, geschuetzt, eigenerBereich, punktId }, erfolgsText) {
+  async function zurueckrollen({ kennung, strang, geschuetzt, eigenerBereich, punktId }, erfolgsText) {
+    // Geschützt wird, wer JETZT neben diesem Block schreibt (BAUPLAN 46) — nicht,
+    // wer beim Bauen des Teilstücks daneben lief. Zwischen lokal_bauen und
+    // teilstueck_abnehmen können Nachbarn fertig geworden oder gestartet sein;
+    // der eingefrorene Wert diente nur als Rückfall, falls der Blick klemmt
+    // oder der Block inzwischen ein anderer ist.
+    const jetzt = sicherungVonJetzt()
+    if (jetzt && (jetzt.kennung ?? null) === (kennung ?? null) && Array.isArray(jetzt.geschuetzt))
+      geschuetzt = jetzt.geschuetzt
     // Zeigt die Spitze des Strangs noch auf den gemerkten Punkt? Ein zweiter
     // Anlauf desselben Blocks (Reparatur-Runde) bekommt einen frischen Strang
     // unter demselben Namen — ein Teilstück, das aus dem Anlauf davor offen
@@ -407,11 +431,14 @@ export async function helferWerkzeugServer({ projektPfad, modell, adresse, bewer
         }
       // Sicherungspunkt vor jedem Teilauftrag — ohne Rückroll-Punkt baut die
       // lokale KI nicht (dieselbe Regel wie bei der Vorreparatur). Auf den
-      // Strang dieses Blocks (BAUPLAN 45).
+      // Strang dieses Blocks (BAUPLAN 45) — und ohne die Wirkbereiche der
+      // Nachbarn, die gerade schreiben (BAUPLAN 46): Sonst fröre der
+      // Zwischenpunkt „vor lokalem Teilstück" fremden Halbstand ein, und ein
+      // Rückroll auf ihn stellte den Halbstand wieder her.
       const punkt = await sicherungspunktAnlegen(
         projektPfad,
         texte.sicherungen.beschriftungVorLokalemTeilstueck,
-        { strang: sicherung?.strang ?? null }
+        { strang: sicherung?.strang ?? null, ausgenommen: sicherung?.geschuetzt ?? [] }
       )
       if (!punkt.ok)
         return {
@@ -424,6 +451,9 @@ export async function helferWerkzeugServer({ projektPfad, modell, adresse, bewer
         auftrag: mitProjektwissen(auftrag),
         modell,
         adresse,
+        // Tabu-Liste (BAUPLAN 46): die Dateiliste des Blocks — die lokale KI
+        // schreibt nur noch darin (arbeitsablage/ bleibt frei).
+        dateiListe: dateiListeVonJetzt(),
         aufSchritt: (name, eingabe) =>
           aufEreignis({
             art: 'ticker',
@@ -480,6 +510,8 @@ export async function helferWerkzeugServer({ projektPfad, modell, adresse, bewer
         bezeichnung: sicherung?.bezeichnung ?? '',
         teilstueck,
         strang: sicherung?.strang ?? null,
+        // Nur Rückfall (BAUPLAN 46): Beim Rückroll wird frisch gefragt, wer
+        // dann neben dem Block schreibt — siehe zurueckrollen.
         geschuetzt: sicherung?.geschuetzt ?? [],
         eigenerBereich: sicherung?.eigenerBereich ?? null,
         // Der Punkt, auf den die Abnahme zurückrollen darf — und nur der.

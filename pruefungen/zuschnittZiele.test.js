@@ -179,11 +179,15 @@ describe('BAUPLAN 44 · Jeder Empfänger bekommt genau das für ihn geschnittene
 
 describe('BAUPLAN 44 · Zuschnitt und Datenvertrag als geprüfte Felder', () => {
   const ziele = zielListe(bloecke, pfeile, 'p')
+  // Je Ziel eine EIGENE Dateiliste (seit BAUPLAN 46 Pflicht bei nebenläufigen
+  // Zielen — die beiden Bauer hier laufen gleichzeitig): Bauer · UI die
+  // Oberfläche, Bauer · Motor den Motor. Vor 46 trugen beide dieselbe Datei,
+  // und die Meldung ging durch — heute weist sie das ab (eigene Prüfung unten).
   const paket = (zielBlock, ziel) => ({
     zielBlock,
     ziel,
     fertigKriterien: ['Der Test läuft grün.'],
-    erlaubteDateien: ['src/renderer/src/Leinwand.jsx']
+    erlaubteDateien: zielBlock === '4' ? ['src/main/motor/'] : ['src/renderer/src/Leinwand.jsx']
   })
 
   it('nimmt beide Pakete in EINEM Aufruf an und merkt sich das Ziel je Zuschnitt', () => {
@@ -304,6 +308,151 @@ describe('BAUPLAN 44 · Zuschnitt und Datenvertrag als geprüfte Felder', () => 
     }
     expect(zuschnitteAusMeldung(alt)).toHaveLength(1)
     expect(lieferscheinText(alt)).toContain(`${tl.labels.ziel}: Etwas bauen`)
+  })
+})
+
+// BAUPLAN 46: Welche Ziele laufen GLEICHZEITIG? Nur für die muss der Zuschnitt
+// überschneidungsfrei sein. Rot vor Grün: Vor dem Bauschritt trug zielListe
+// kein Feld nebenlaeufigZu (undefined statt Liste), und die Meldung unten mit
+// derselben Datei in beiden Zuschnitten ging ohne Fehler durch.
+describe('BAUPLAN 46 · Nebenläufige Ziele: wer neben wem schreiben kann', () => {
+  it('nennt im Fächer den jeweils anderen Bauer als nebenläufig', () => {
+    const ziele = zielListe(bloecke, pfeile, 'p')
+    expect(ziele.find((z) => z.instanzId === 'bu').nebenlaeufigZu).toEqual(['bm'])
+    expect(ziele.find((z) => z.instanzId === 'bm').nebenlaeufigZu).toEqual(['bu'])
+  })
+
+  it('in einer Kette Bauer A → Bauer B ist niemand nebenläufig', () => {
+    const kette = [
+      { instanzId: 'k-p', blockId: 'paket-schneiden', zusatz: '' },
+      { instanzId: 'k-a', blockId: 'bauer', zusatz: 'A' },
+      { instanzId: 'k-b', blockId: 'bauer', zusatz: 'B' }
+    ]
+    const kettenPfeile = [
+      { von: 'k-p', nach: 'k-a' },
+      { von: 'k-a', nach: 'k-b' }
+    ]
+    const ziele = zielListe(kette, kettenPfeile, 'k-p')
+    expect(ziele.map((z) => z.instanzId)).toEqual(['k-a', 'k-b'])
+    for (const ziel of ziele) expect(ziel.nebenlaeufigZu).toEqual([])
+  })
+
+  it('mit genau einem Ziel ist die Liste leer', () => {
+    const [einziges] = zielListe(vorlageBloecke, vorlagePfeile, 'v-p')
+    expect(einziges.nebenlaeufigZu).toEqual([])
+  })
+})
+
+describe('BAUPLAN 46 · Überschneidende Zuschnitte werden beim Melden abgewiesen', () => {
+  const ziele = zielListe(bloecke, pfeile, 'p')
+  const paket = (zielBlock, erlaubteDateien) => ({
+    zielBlock,
+    ziel: 'Etwas bauen',
+    fertigKriterien: ['Läuft.'],
+    erlaubteDateien
+  })
+
+  it('nennt beide Ziele und die überlappenden Einträge', () => {
+    const ergebnis = meldungPruefen(
+      'arbeitspaket',
+      {
+        ...rahmen,
+        pakete: [
+          paket('2', ['src/renderer/src/Leinwand.jsx', 'src/shared/texte.js']),
+          paket('4', ['src/main/motor/', 'src/shared/'])
+        ]
+      },
+      'Arbeitspaket',
+      { ziele }
+    )
+    expect(ergebnis.fehler).toBe(
+      tl.zuschnittUeberschneidung(ziele[0].bezeichnung, ziele[1].bezeichnung, [
+        '„src/shared/texte.js" ↔ „src/shared/"'
+      ])
+    )
+  })
+
+  it('weist einen adresslosen Zuschnitt MIT Dateiliste neben zwei nebenläufigen Zielen ab — mit dem Weg heraus', () => {
+    const ergebnis = meldungPruefen(
+      'arbeitspaket',
+      {
+        ...rahmen,
+        pakete: [
+          paket('2', ['src/renderer/src/Leinwand.jsx']),
+          paket('4', ['src/main/motor/']),
+          paket('', ['src/shared/texte.js'])
+        ]
+      },
+      'Arbeitspaket',
+      { ziele }
+    )
+    expect(ergebnis.fehler).toBe(
+      tl.adressloserZuschnittMitListe(ziele.map((z) => z.bezeichnung).join(' · '))
+    )
+    expect(ergebnis.fehler).toMatch(/adressiere|Adressiere/)
+    expect(ergebnis.fehler).toMatch(/erlaubteDateien/)
+  })
+
+  it('lässt disjunkte Zuschnitte durch — auch mit einem adresslosen OHNE Dateiliste', () => {
+    const ergebnis = meldungPruefen(
+      'arbeitspaket',
+      {
+        ...rahmen,
+        pakete: [
+          paket('2', ['src/renderer/src/Leinwand.jsx']),
+          paket('4', ['src/main/motor/']),
+          paket('', [])
+        ]
+      },
+      'Arbeitspaket',
+      { ziele }
+    )
+    expect(ergebnis.fehler).toBeUndefined()
+    expect(zuschnitteAusMeldung(ergebnis.meldung)).toHaveLength(3)
+  })
+
+  it('kein Bruch: mit einem Ziel oder ohne Dateilisten ändert sich nichts', () => {
+    const [einziges] = zielListe(vorlageBloecke, vorlagePfeile, 'v-p')
+    const einZiel = meldungPruefen(
+      'arbeitspaket',
+      { ...rahmen, pakete: [paket(einziges.adresse, ['src/a.js']), paket('', ['src/a.js'])] },
+      'Arbeitspaket',
+      { ziele: [einziges] }
+    )
+    expect(einZiel.fehler).toBeUndefined()
+    const ohneListen = meldungPruefen(
+      'arbeitspaket',
+      { ...rahmen, pakete: [paket('2', []), paket('4', [])] },
+      'Arbeitspaket',
+      { ziele }
+    )
+    expect(ohneListen.fehler).toBeUndefined()
+  })
+
+  it('in einer Kette Bauer A → Bauer B darf dieselbe Datei nacheinander angefasst werden', () => {
+    const kette = [
+      { instanzId: 'k-p', blockId: 'paket-schneiden', zusatz: '' },
+      { instanzId: 'k-a', blockId: 'bauer', zusatz: 'A' },
+      { instanzId: 'k-b', blockId: 'bauer', zusatz: 'B' }
+    ]
+    const kettenPfeile = [
+      { von: 'k-p', nach: 'k-a' },
+      { von: 'k-a', nach: 'k-b' }
+    ]
+    const kettenZiele = zielListe(kette, kettenPfeile, 'k-p')
+    const ergebnis = meldungPruefen(
+      'arbeitspaket',
+      {
+        ...rahmen,
+        pakete: [
+          paket(kettenZiele[0].adresse, ['src/a.js']),
+          paket(kettenZiele[1].adresse, ['src/a.js'])
+        ]
+      },
+      'Arbeitspaket',
+      { ziele: kettenZiele }
+    )
+    expect(ergebnis.fehler).toBeUndefined()
   })
 })
 

@@ -356,15 +356,25 @@ export const texte = {
       runden > 0
         ? `„${block}" hat die Prüfung auch nach ${runden === 1 ? 'einer Reparatur-Runde' : runden + ' Reparatur-Runden'} nicht bestanden. Wie soll es weitergehen?`
         : `„${block}" hat die Prüfung nicht bestanden, und Reparatur-Runden sind keine eingestellt. Wie soll es weitergehen?`,
+    // Seit BAUPLAN 46 gilt jede Wahl nur für den Zweig dieses Prüfers — andere
+    // Zweige laufen weiter; der Dialog sagt vorher, was „wiederherstellen" trifft.
     weitermachen: 'Weitermachen',
     weitermachenHinweis:
-      'Der Lauf macht trotz der nicht bestandenen Prüfung mit dem nächsten Block weiter.',
+      'Dieser Zweig macht trotz der nicht bestandenen Prüfung mit dem nächsten Block weiter.',
     zurueckstellen: 'Zurückstellen',
     zurueckstellenHinweis:
-      'Der Lauf hält hier an. Alles bisher Gebaute bleibt bestehen — du kannst später neu starten.',
+      'Dieser Zweig endet hier; andere Zweige laufen zu Ende. Alles bisher Gebaute bleibt bestehen — du kannst später neu starten.',
     wiederherstellen: 'Stand wiederherstellen',
     wiederherstellenHinweis:
-      'Der Projektordner wird auf den Stand von vor diesem Lauf zurückgesetzt.'
+      'Die Dateien dieses Zweigs werden auf den Stand von vor diesem Lauf zurückgesetzt — andere Zweige bleiben unberührt.',
+    // Was der Rückroll trifft (BAUPLAN 46): je Zweig-Block sein Wirkbereich —
+    // oder ehrlich der ganze Ordner, wenn ein Block keinen Datenvertrag hat.
+    trifftDateien: (name, anzahl) =>
+      `${name} (${anzahl} ${anzahl === 1 ? 'Datei' : 'Dateien'})`,
+    trifftPruefordner: (ordner) => `Prüfordner ${ordner}`,
+    trifftBereiche: (teile) => `trifft: ${teile.join(', ')}`,
+    trifftGanzerOrdner: (name) =>
+      `trifft den ganzen Projektordner am Laufende — Block „${name}" hat keinen Datenvertrag (Dateiliste); zweigbezogen geht es dann nicht.`
   },
   karten: {
     ueberschrift: 'Karten',
@@ -586,7 +596,7 @@ export const texte = {
     reparierenAn: 'Chat darf jetzt reparieren — vor der ersten Änderung entsteht ein Sicherungspunkt.',
     reparierenAus: 'Chat ist wieder nur-lesend (Karten anlegen bleibt erlaubt).',
     reparierenWaehrendLauf:
-      'Solange in diesem Projekt ein Lauf läuft oder wartet, darf der Chat nicht reparieren — pro Projekt schreibt nur ein Agent.',
+      'Solange in diesem Projekt ein Lauf läuft oder wartet, darf der Chat nicht reparieren — der Chat schreibt nicht, solange ein Lauf läuft.',
     reparierenUebersicht: 'In der Projektübersicht gibt es nichts zu reparieren — öffne dafür ein Projekt.',
     // Marke im Verlauf (Entscheidung Georg): Nach jedem Lauf hängt der Chat an
     // der neuen Lauf-Session — der ältere Teil bleibt zum Nachlesen, die KI
@@ -1530,7 +1540,17 @@ export const texte = {
       'Auftrag präzise zu beschreiben kostet fast so viel, wie ihn selbst zu erledigen — ' +
       'Kleinst-Änderungen erledigst du direkt selbst. Ein verworfenes Teilstück ist KEIN ' +
       'Urteil über die übrigen: Versuche jedes Teilstück zuerst lokal — erst wenn mehrere ' +
-      'hintereinander nicht halten, bau den Rest selbst.'
+      'hintereinander nicht halten, bau den Rest selbst.',
+    // Tabu-Liste der lokalen Helfer-KI (BAUPLAN 46): Der Schreibpfad der lokalen
+    // KI lief bis Bauschritt 45 an der Dateiliste des Blocks vorbei (SPEC §7,
+    // „ehrliche Grenze"). Jetzt gilt sie auch hier — Ablehnung mit demselben Weg
+    // heraus wie beim Bauer: im Feld anmerkung melden, nicht erneut versuchen.
+    // Der Text geht an die lokale KI, die ihn ins Fazit trägt; von dort liest
+    // ihn der Block-Agent.
+    ausserhalbDateiliste: (datei, liste) =>
+      `Abgelehnt: „${datei}" steht nicht in der Dateiliste dieses Blocks. Schreiben darfst du ` +
+      `nur in: ${liste.join(', ')} (und in arbeitsablage/). Versuche es NICHT erneut — schreibe ` +
+      'in dein Fazit, dass diese Datei fehlt; der Block-Agent meldet das im Feld anmerkung.'
   },
   // KI-Assistent des Block-Editors (SPEC §4.5, BAUPLAN 14) — Texte an den Motor.
   agentenBlockAssistent: {
@@ -1811,6 +1831,20 @@ export const texte = {
     zielBlockOhneZiele: (gewaehlt) =>
       `Du hast das Paket an „${gewaehlt}" adressiert, aber hinter dir liegt kein Block, der ein ` +
       'Arbeitspaket umsetzt. Lass zielBlock leer — dann gilt dein Paket für alle.',
+    // Zuschnitte nebenläufiger Ziele (BAUPLAN 46): Zwei Umsetzer, die weder
+    // hintereinander noch voreinander liegen, laufen parallel — nur wenn ihre
+    // Dateilisten sich ausschließen. Überschneidung wird beim MELDEN abgewiesen,
+    // bevor ein Token in die Bauer fließt; der Text nennt Paar und Einträge.
+    zuschnittUeberschneidung: (zielA, zielB, eintraege) =>
+      `Die Zuschnitte für ${zielA} und ${zielB} überschneiden sich in erlaubteDateien: ` +
+      `${eintraege.join(', ')}. Diese beiden Blöcke laufen gleichzeitig — dieselbe Datei in ` +
+      'beiden Listen hieße zwei Schreiber an einer Stelle. Teile die Dateien eindeutig einem ' +
+      'der beiden zu (oder fasse die Arbeit daran in EINEM Zuschnitt zusammen).',
+    adressloserZuschnittMitListe: (ziele) =>
+      'Ein Zuschnitt ohne zielBlock gilt für ALLE Ziele — mit erlaubteDateien stünde dieselbe ' +
+      `Dateiliste bei ${ziele}, die gleichzeitig laufen, und sie überschnitten sich mit sich ` +
+      'selbst. Adressiere den Zuschnitt an genau ein Ziel (zielBlock) oder lass erlaubteDateien ' +
+      'dort weg.',
     // Die Verbindung Zuschnitt → Aufgaben-Karte wird hart geprüft (BAUPLAN 44):
     // Eine erfundene id deckte sonst nichts ab, und die Vollständigkeit wäre
     // wieder eine Schätzung.
@@ -2237,10 +2271,11 @@ export const texte = {
     fertigSanft: 'Der Lauf wurde sanft angehalten. Der Stand ist am letzten Sicherungspunkt.',
     fertigHart:
       'Der Lauf wurde sofort abgebrochen. Der laufende Block gilt als nicht gelaufen; angefangene Änderungen wurden auf den letzten Sicherungspunkt zurückgesetzt.',
+    // Seit BAUPLAN 46 zweigbezogen: Die Folgen-Frage beendet nur ihren Zweig.
     fertigZurueckgestellt:
-      'Der Lauf wurde zurückgestellt. Alles bisher Gebaute bleibt bestehen — du kannst später neu starten.',
+      'Mindestens ein Zweig wurde zurückgestellt, die übrigen liefen zu Ende. Alles bisher Gebaute bleibt bestehen — du kannst später neu starten.',
     fertigWiederhergestellt:
-      'Der Projektordner wurde auf den Stand von vor dem Lauf zurückgesetzt.',
+      'Ein Zweig wurde auf den Stand von vor dem Lauf zurückgesetzt — oder, wenn ein Block keinen Datenvertrag hatte, der ganze Projektordner. Der Liveticker sagt, welches von beiden.',
     fertigKontingent:
       'Dein Abo-Kontingent ist im Moment erschöpft. Der Lauf hat angehalten — alles bisher Gebaute bleibt bestehen. Starte den Workflow neu, sobald dein Kontingent wieder da ist.',
     okKnopf: 'Alles klar',
@@ -2287,6 +2322,14 @@ export const texte = {
     schreibenAusserhalb: (pfad) =>
       `Der Agent möchte außerhalb des Projektordners schreiben:\n${pfad}`,
     befehl: (befehl) => `Der Agent möchte einen Kommandozeilen-Befehl ausführen:\n${befehl}`,
+    // Befehle in einer Welle (BAUPLAN 46): Während parallel ein anderer Block
+    // schreibt, fragt auch ein sonst rückfragefreies Entwickler-Werkzeug nach
+    // — Befehle schreiben an der Dateiliste vorbei, und ein Build oder Test
+    // liest zudem den Halbstand des Nachbarn. Rein lesende Befehle bleiben frei.
+    befehlInWelle: (befehl) =>
+      `Der Agent will ausführen: ${befehl}\n— während parallel ein anderer Block schreibt. ` +
+      'Befehle schreiben an der Dateiliste vorbei und sehen den halbfertigen Stand des Nachbarn; ' +
+      'deshalb fragt FlowForge in einer Welle auch bei sonst freien Entwickler-Werkzeugen nach.',
     internet: (ziel) => `Der Agent möchte aufs Internet zugreifen:\n${ziel}`,
     unbekanntesWerkzeug: (name) =>
       `Der Agent möchte ein Werkzeug nutzen, das FlowForge nicht kennt: ${name}`,
@@ -2360,8 +2403,12 @@ export const texte = {
       'FlowForges Datenordner ist für dich gesperrt (dort liegen Einstellungen und Schlüssel). Ohne offenes Projekt liest du nur die Produktbeschreibung über ihren absoluten Pfad.',
     uebersichtGesperrtFuerAgent:
       'Ohne offenes Projekt beantwortest du nur Bedienfragen zu FlowForge — Befehle, Schreiben und Projektzugriffe sind hier gesperrt. Bitte den Nutzer, das Projekt zu öffnen, wenn es um sein Projekt geht.',
+    // Seit Bauschritt 46 schreiben mehrere Blöcke gleichzeitig — die Regel für
+    // den Chat lautet deshalb nicht mehr „ein Schreiber pro Projekt", sondern:
+    // Der Chat schreibt nicht, solange ein Lauf läuft (er hat keine Dateiliste
+    // und keinen Strang, wäre also ein Schreiber ohne Wirkbereich).
     chatWaehrendLaufFuerAgent:
-      'Im Projekt läuft gerade ein Workflow-Lauf — der Chat ist so lange hart nur-lesend (ein Schreiber pro Projekt). Beantworte die Frage aus dem, was du lesen kannst; Änderungen gehen erst nach dem Lauf.'
+      'Im Projekt läuft gerade ein Workflow-Lauf — der Chat schreibt nicht, solange ein Lauf läuft, und ist so lange hart nur-lesend. Beantworte die Frage aus dem, was du lesen kannst; Änderungen gehen erst nach dem Lauf.'
   },
   ticker: {
     // Eine Motor-Session pro Lauf (BAUPLAN 19): Der Motor startet einmal,
@@ -2652,7 +2699,7 @@ export const texte = {
     rollbackGeschuetzt: (anzahl) =>
       `${anzahl} ${anzahl === 1 ? 'Änderung blieb' : 'Änderungen blieben'} beim Zurückrollen ` +
       `unberührt — ${anzahl === 1 ? 'sie liegt' : 'sie liegen'} im Arbeitsbereich anderer ` +
-      'Blöcke (zum Beispiel in deren Prüfmappe).',
+      'Blöcke (deren Prüfmappe oder Dateiliste).',
     rollbackGescheitert:
       'Das Zurückrollen hat NICHT geklappt — der Projektordner steht noch auf dem verworfenen ' +
       'Stand. Der Agent hat den Hinweis bekommen und baut nicht blind darauf weiter.',
@@ -2777,11 +2824,43 @@ export const texte = {
     zweigeZusammengefuehrt: (name, anzahl) =>
       `„${name}" führt ${anzahl} Zweige zusammen — alle Vorgänger sind fertig.`,
     // Warte-Grund (BAUPLAN 36): Eine stille Pause im Verzweigten sieht aus wie
-    // ein Hänger — hier steht, worauf gewartet wird.
-    warteAufSchreiber: (name, schreiber) =>
-      `„${name}" wartet — „${schreiber}" schreibt gerade (im Projekt schreibt immer nur einer).`,
+    // ein Hänger — hier steht, worauf gewartet wird. Seit BAUPLAN 46 mit den
+    // vier Gründen der Welle: Zwei Schreiber dürfen gleichzeitig, wenn ihre
+    // Dateilisten getrennt sind — sonst sagt die Zeile, woran es hängt.
+    warteAufUeberschneidung: (name, anderer, paare) =>
+      `„${name}" wartet, bis „${anderer}" fertig ist — beide Dateilisten überschneiden sich` +
+      (paare ? ` (${paare})` : '') +
+      '.',
+    warteOhneDatenvertrag: (name, anderer, selbstOhne) =>
+      selbstOhne
+        ? `„${name}" wartet, bis „${anderer}" fertig ist — „${name}" hat keinen Datenvertrag (Dateiliste) und schreibt darum nicht parallel.`
+        : `„${name}" wartet, bis „${anderer}" fertig ist — „${anderer}" hat keinen Datenvertrag (Dateiliste); ohne ihn schreibt kein zweiter Block daneben.`,
+    prueferWartetAufUmsetzer: (name, anderer) =>
+      `„${name}" wartet, bis „${anderer}" fertig gebaut hat — ein Prüfer urteilt nie über einen halben Stand.`,
+    umsetzerWartetAufPruefer: (name, anderer) =>
+      `„${name}" wartet, bis „${anderer}" fertig geprüft hat — solange ein Prüfer misst, baut keiner daneben.`,
+    // Eine offene Folgen-Frage belegt ihren Zweig (BAUPLAN 46): „Stand
+    // wiederherstellen" könnte die Dateien des Zweigs zurücksetzen — ein Bauer,
+    // dessen Liste sich damit überschneidet, wartet, statt hineinzuschreiben.
+    warteAufFolgenFrage: (name, pruefer) =>
+      `„${name}" wartet, bis die Folgen-Frage zu „${pruefer}" beantwortet ist — die Dateien dieses Zweigs könnten noch zurückgesetzt werden.`,
     warteAufZweig: (name, offene) =>
       `„${name}" wartet auf ${offene.map((n) => `„${n}"`).join(' und ')} — der andere Zweig ist schon fertig.`,
+    // Welle (BAUPLAN 46): mehrere Schreiber gleichzeitig — die Zeile kommt,
+    // sobald es zum ersten Mal in dieser Welle zwei sind.
+    welleGestartet: (anzahl) =>
+      `Welle: ${anzahl} Blöcke schreiben gleichzeitig (Dateilisten getrennt).`,
+    // Nachlauf (BAUPLAN 46): Der Rauchtest misst erst, wenn nebenan keiner
+    // mehr halb geschrieben hat.
+    nachlaufWartet: (name) => `Rauchtest von „${name}" wartet, bis die Welle steht.`,
+    // Folgen-Frage je Zweig (BAUPLAN 46): Der Rückroll trifft nur den Zweig.
+    zweigWiederhergestellt: (name, dateien) =>
+      `Zweig „${name}" auf den Stand vor dem Lauf zurückgesetzt (${dateien} ${dateien === 1 ? 'Datei' : 'Dateien'}), andere Zweige unberührt.`,
+    zweigWiederherstellenGescheitert: (name) =>
+      `Zweig „${name}" ließ sich NICHT auf den Stand vor dem Lauf zurücksetzen — der Projektordner bleibt, wie er ist.`,
+    // Harter Stopp mit mehreren Schreibern (BAUPLAN 46): je Block eine Zeile.
+    zurueckgesetztBlock: (name) =>
+      `Arbeit von „${name}" auf ihren letzten Sicherungspunkt zurückgesetzt.`,
     // Compaction sichtbar (BAUPLAN 36): Der Motor dampft sein Arbeitsgedächtnis
     // selbst ein — das erklärt später, warum ein Agent Details vergessen hat.
     zusammengefasst: ({ wer, istKoordinator, vorher, nachher, automatisch }) =>
@@ -2830,12 +2909,21 @@ export const texte = {
     uebergabeGekuerzt: (name, von, auf) =>
       `Übergabe von „${name}" gekürzt: ${von.toLocaleString('de-DE')} → ` +
       `${auf.toLocaleString('de-DE')} Zeichen (in der Mitte, das Ende bleibt vollständig).`,
-    entscheidungGestellt: 'Folgen-Frage an dich — bitte im Fenster beantworten.',
+    // Folgen-Frage je Zweig (BAUPLAN 46): Mehrere können offen sein, und jede
+    // Wahl trifft nur ihren Zweig — deshalb nennt jede Zeile den Prüfer.
+    entscheidungGestellt: (name) =>
+      `Folgen-Frage zu „${name}" an dich — bitte im Fenster beantworten` +
+      ' (andere Zweige laufen derweil weiter).',
     menschFrageGestellt: 'Frage an dich — bitte im Gespräch antworten.',
     menschGeantwortet: 'Deine Antwort ist beim Agenten.',
-    entscheidungWeitermachen: 'Du hast entschieden: weitermachen.',
-    entscheidungZurueckgestellt: 'Du hast entschieden: zurückstellen.',
-    entscheidungWiederhergestellt: 'Du hast entschieden: Stand von vor dem Lauf wiederherstellen.',
+    entscheidungWeitermachen: (name) =>
+      `Du hast entschieden: „${name}" — weitermachen; der Zweig gilt als erledigt.`,
+    entscheidungZurueckgestellt: (name) =>
+      `Du hast entschieden: „${name}" — zurückstellen; dieser Zweig endet hier, andere laufen zu Ende.`,
+    entscheidungWiederhergestellt: (name) =>
+      `Du hast entschieden: „${name}" — Stand von vor dem Lauf wiederherstellen (nur für diesen Zweig).`,
+    entscheidungWiederhergestelltGanz: (name) =>
+      `Du hast entschieden: „${name}" — Stand von vor dem Lauf wiederherstellen; ohne Datenvertrag trifft das am Laufende den ganzen Projektordner.`,
     uebertragAngefordert: (von, bis) =>
       `Der Kontext ist zu etwa ${von}–${bis} % gefüllt — Übertrag: Der Agent notiert den Zwischenstand und übergibt.`,
     uebertragWeiter: (nummer, grenze) =>

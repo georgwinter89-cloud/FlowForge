@@ -9,7 +9,9 @@
 // Zwei Betriebsarten wie bisher: Standard nur-lesend (Karten anlegen erlaubt),
 // auf Zuruf „Chat darf reparieren" — dann Sicherungspunkt vor der ersten
 // Änderung. Während ein Lauf läuft oder wartet: nur lesend, kein Sicherungspunkt,
-// Reparieren gesperrt (ein Schreiber pro Projekt).
+// Reparieren gesperrt — der Chat schreibt nicht, solange ein Lauf läuft (seit
+// Bauschritt 46 schreiben im Lauf mehrere Blöcke; der Chat hätte weder
+// Dateiliste noch Strang und wäre ein Schreiber ohne Wirkbereich).
 // Der Verlauf ist je Projekt gespeichert (Verwaltungsdatei chat.json) und
 // überlebt Neustarts; nach jedem Lauf hängt der Chat an der neuen Lauf-Session,
 // sichtbar durch eine Marke im Verlauf. Gespräche nach einem Lauf wandern
@@ -418,7 +420,8 @@ function motorBesorgen(chat) {
     spec: specWissen(),
     // Während ein Lauf läuft oder wartet: nur lesend — die Einstellung „nur-
     // lesende Blöcke dürfen Befehle ausführen" gilt dann NICHT, Reparieren ist
-    // gesperrt (ein Schreiber pro Projekt). Je Werkzeugaufruf frisch gelesen.
+    // gesperrt (der Chat schreibt nicht, solange ein Lauf läuft). Je
+    // Werkzeugaufruf frisch gelesen.
     holeNurLesenBefehle: () =>
       Boolean(einstellungenLaden().einstellungen.nurLesenBefehle) && !laufAktiv(projektPfad),
     holeReparieren: () => chat.reparieren && !laufAktiv(projektPfad),
