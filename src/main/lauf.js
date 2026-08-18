@@ -95,6 +95,7 @@ import {
 import { starteLaufMotor } from './motor/claudeCodeMotor.js'
 import {
   lokaleHelferPruefen,
+  lokaleHelferKontextSetzen,
   lokalReparieren,
   LOKALE_REPARATUR_VERSUCHE
 } from './motor/lokaleHelfer.js'
@@ -1669,21 +1670,29 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       einstellungen.lokaleHelferAdresse
     )
     if (status.erreichbar && status.modellDa) {
+      // Kontext-Fenster aus den Einstellungen (32k/64k/128k, seit 0.46.3) —
+      // gilt für alle lokalen Kreisläufe dieses Laufs; die Werkzeug-Deckel
+      // der lokalen KI wachsen damit mit.
+      const grenzen = lokaleHelferKontextSetzen(einstellungen.lokaleHelferKontext)
       lokaleHelfer = {
         modell: einstellungen.lokaleHelferModell,
         adresse: einstellungen.lokaleHelferAdresse,
+        kontext: grenzen.kontext,
         // Trefferquote (BAUPLAN 23): Standard an — ohne Quote ist die
         // Kosten-Wette der lokalen KI blind.
         bewerten: einstellungen.lokaleHelferQuote !== false,
         // Projektwissen (BAUPLAN 25): je lokalem Auftrag frisch gelesen —
         // die Kartenauswahl (ausgewaehlt) wächst mitten im Lauf. Seit der
         // Karten-Zuteilung (BAUPLAN 29) block-bezogen: Der Motor reicht die
-        // Instanz-Kennung des laufenden Blocks herein — das 32k-Fenster
+        // Instanz-Kennung des laufenden Blocks herein — das Fenster
         // kleiner Modelle verträgt keine Kartenflut.
         projektwissen: (instanzId) =>
           projektwissenFuerHelfer(projektPfad, kartenFuerBlock(instanzId))
       }
-      lokaleHelferHinweis = texte.ticker.lokaleHelferBereit(einstellungen.lokaleHelferModell)
+      lokaleHelferHinweis = texte.ticker.lokaleHelferBereit(
+        einstellungen.lokaleHelferModell,
+        grenzen.kontext
+      )
     } else {
       lokaleHelferHinweis = texte.ticker.lokaleHelferNichtErreichbar
     }

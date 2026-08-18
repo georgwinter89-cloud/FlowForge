@@ -16,6 +16,7 @@ export default function Einstellungen({ onSchliessen }) {
   const [lokaleHelferQuote, setLokaleHelferQuote] = useState(true)
   const [lokaleHelferModell, setLokaleHelferModell] = useState('')
   const [lokaleHelferAdresse, setLokaleHelferAdresse] = useState('')
+  const [lokaleHelferKontext, setLokaleHelferKontext] = useState(65536)
   const [helferStatus, setHelferStatus] = useState(null)
   const [aboErlaubt, setAboErlaubt] = useState(true)
   const [fehler, setFehler] = useState('')
@@ -37,6 +38,7 @@ export default function Einstellungen({ onSchliessen }) {
       setLokaleHelferQuote(e.einstellungen.lokaleHelferQuote !== false)
       setLokaleHelferModell(e.einstellungen.lokaleHelferModell ?? '')
       setLokaleHelferAdresse(e.einstellungen.lokaleHelferAdresse ?? '')
+      setLokaleHelferKontext(Number(e.einstellungen.lokaleHelferKontext) || 65536)
       setAboErlaubt(e.aboErlaubt)
       setGeladen(true)
     })
@@ -69,7 +71,8 @@ export default function Einstellungen({ onSchliessen }) {
       lokaleHelferAktiv,
       lokaleHelferQuote,
       lokaleHelferModell,
-      lokaleHelferAdresse
+      lokaleHelferAdresse,
+      lokaleHelferKontext
     })
     if (!ergebnis.ok) return setFehler(ergebnis.fehler)
     onSchliessen()
@@ -257,6 +260,22 @@ export default function Einstellungen({ onSchliessen }) {
                         : t.lokaleHelferStatusAus}
                   </span>
                 )}
+              </label>
+              {/* Kontext-Fenster (seit 0.46.3): 32k / 64k / 128k — die
+                  Werkzeug-Deckel der lokalen KI wachsen mit. */}
+              <label className="feld">
+                <span>{t.lokaleHelferKontext}</span>
+                <select
+                  value={lokaleHelferKontext}
+                  onChange={(e) => setLokaleHelferKontext(Number(e.target.value))}
+                >
+                  {[32768, 65536, 131072].map((k) => (
+                    <option key={k} value={k}>
+                      {t.lokaleHelferKontextWahl(k)}
+                    </option>
+                  ))}
+                </select>
+                <span className="feld-hinweis">{t.lokaleHelferKontextHinweis}</span>
               </label>
             </>
           )}

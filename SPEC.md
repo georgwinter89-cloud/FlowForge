@@ -980,8 +980,14 @@ Modell-Nachrichten strikt abwechseln), auch das Nachhaken ist eine Nutzer-Nachri
 nur die Antworten des Modells selbst bleiben unverändert im Verlauf (fehlt ihnen die
 Rolle, ergänzt FlowForge `assistant`). Grund: Manche lokalen Modelle bzw. Chat-Vorlagen kommen mit
 system- und tool-Rollen nicht zurecht — eine einheitliche Nutzer-Rolle läuft mit
-jeder Vorlage. Ein Kreislauf hat höchstens 48 Werkzeug-Runden, das Kontext-Fenster
-bleibt bei 32k. Denk-Modelle (z.B. gpt-oss), die ihre Antwort leer lassen und alles ins
+jeder Vorlage. **Kontext-Fenster einstellbar** (seit 0.46.3, Einstellungen: 32k / 64k /
+128k Token, Standard 64k — für ein 27B-Modell auf einer 32-GB-Karte; FlowForge schickt
+`num_ctx` je Anfrage mit): Mit dem Fenster wachsen die Portionen der lokalen KI —
+Zeilen je Lesen (400 / 800 / 1.600), Zeichen je Werkzeug-Antwort (24.000 / 48.000 /
+96.000), Suchtreffer (60 / 120 / 240), Ordnereinträge (300 / 600 / 1.200) und der
+Runden-Deckel eines Kreislaufs (48 / 64 / 96 Werkzeug-Runden). Die Einstellung sagt
+ehrlich, was das Fenster an Grafikspeicher kostet (grob 250 KB je Token bei 27B); der
+Ticker nennt beim Laufstart Modell und Fenster. Denk-Modelle (z.B. gpt-oss), die ihre Antwort leer lassen und alles ins
 Denkfeld schreiben, werden einmal nachgehakt, bevor ein Fehlschlag gemeldet wird.
 Modelle, die Werkzeugaufrufe als bloßen JSON-Text in die Antwort schreiben statt
 ins Werkzeug-Format (Befund 14.08.2026: qwen2.5-coder), fängt FlowForge selbst
@@ -1328,7 +1334,7 @@ Angreifer durch die Diagnose.
   (die Abweisung listet die gültigen Adressen),
   die Status-Karte fällt still heraus (sie ist immer dabei). Ab der Zuteilung bekommt
   jeder genannte Block nur noch seine Teilmenge in den Auftrag; dasselbe gilt fürs
-  Projektwissen der lokalen Helfer-KI (das 32k-Fenster kleiner Modelle verträgt keine
+  Projektwissen der lokalen Helfer-KI (das Fenster kleiner Modelle verträgt keine
   Kartenflut). **Rückfall ohne Bruch:** Wird das Werkzeug nicht benutzt oder ein Block
   nicht genannt, bekommt er wie bisher die volle Auswahl. Die Zuteilung wandert in den
   Laufstand (Wiederaufnahme nach Neustart) und steht mit Kartenzahl je Block im Ticker

@@ -44,8 +44,15 @@ const STANDARD = {
   lokaleHelferModell: 'qwen2.5:7b',
   // Adresse des Ollama-Servers — localhost oder ein anderer Rechner im
   // Heimnetz (z.B. der Gaming-PC mit richtiger Grafikkarte).
-  lokaleHelferAdresse: 'http://127.0.0.1:11434'
+  lokaleHelferAdresse: 'http://127.0.0.1:11434',
+  // Kontext-Fenster der lokalen KI in Token (32k / 64k / 128k; Wunsch Georg
+  // 18.08.2026 für ein 27B-Modell auf einer 32-GB-Karte). Die Werkzeug-Deckel
+  // der lokalen KI wachsen mit (lokaleHelfer.js). Standard 64k: passt bei 27B
+  // samt Gewichten in 32 GB; 128k nur, wenn die Karte es wirklich hergibt.
+  lokaleHelferKontext: 65536
 }
+
+const KONTEXT_WAHL = [32768, 65536, 131072]
 
 function dateiPfad() {
   return path.join(app.getPath('userData'), 'einstellungen.json')
@@ -92,7 +99,12 @@ export function einstellungenSpeichern(neu) {
     lokaleHelferAdresse: (() => {
       const roh = String(neu.lokaleHelferAdresse ?? '').trim().replace(/\/+$/, '')
       return /^https?:\/\/.+/.test(roh) ? roh : STANDARD.lokaleHelferAdresse
-    })()
+    })(),
+    // Nur die drei bekannten Fenster; alles andere (auch ein fehlendes Feld
+    // älterer Aufrufer) fällt auf den Standard zurück.
+    lokaleHelferKontext: KONTEXT_WAHL.includes(Number(neu.lokaleHelferKontext))
+      ? Number(neu.lokaleHelferKontext)
+      : STANDARD.lokaleHelferKontext
   }
   const tmp = dateiPfad() + '.tmp'
   fs.writeFileSync(tmp, JSON.stringify(daten, null, 2), 'utf8')

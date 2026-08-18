@@ -70,27 +70,56 @@ import { stehtInDateiliste } from '../dateilistenPfade.js'
 // Grafikkarte — dort laufen größere Modelle schneller und genauer).
 const STANDARD_ADRESSE = 'http://127.0.0.1:11434'
 
-// Deckel gegen Kontext-Überlauf des kleinen Modells. num_ctx wird je Anfrage
-// mitgeschickt und überstimmt die Ollama-Einstellung — bewusst 32k, nicht
-// mehr: Das Arbeitsgedächtnis (KV-Cache) kostet bei 14B grob 190 KB je
-// Kontext-Token; 128k wären ~25 GB nur dafür und passen in keine 16-GB-Karte
-// — Ollama lagert dann still auf die CPU aus und alles kriecht. Außerdem
-// verlieren kleine Modelle in Riesen-Kontexten den Faden; die kompakten
-// Werkzeug-Antworten sind auch Konzentrationshilfe (Wunsch Georg, 13.08.2026:
-// großzügiger als die alten 16k, aber ehrlich begrenzt).
+// Kontext-Fenster der lokalen KI (Einstellung `lokaleHelferKontext`, seit
+// 0.46.3 — Wunsch Georg 18.08.2026 für ein 27B-Modell auf einer 32-GB-Karte):
+// 32k, 64k oder 128k Token; num_ctx wird je Anfrage mitgeschickt und
+// überstimmt die Ollama-Einstellung. Ehrliche Grenze, die in der Einstellung
+// steht: Das Arbeitsgedächtnis (KV-Cache) wächst mit dem Fenster — bei einem
+// 27B-Modell grob 250 KB je Token, also ~16 GB bei 64k und ~32 GB bei 128k
+// zusätzlich zu den Gewichten. Passt es nicht in die Karte, lagert Ollama still
+// auf die CPU aus und alles kriecht; kleine Modelle verlieren in Riesen-
+// Kontexten außerdem den Faden. Deshalb Standard 64k, nicht 128k.
 //
-// Runden-Deckel: 48 statt 32 (Wunsch Georg 18.08.2026 — die lokale KI bekommt
-// jetzt auch mittelgroße Aufträge: ein ganzes Modul, mehrere zusammengehörige
-// Dateien; die brauchen mehr Lese-, Such- und Schreib-Runden, bevor ein Fazit
-// ehrlich möglich ist). Das Kontext-Fenster bleibt bei 32k — die Werkzeug-
-// Antworten sind gestutzt, und die Begründung oben gilt weiter.
-const MAX_RUNDEN = 48
-const MAX_ZEILEN_JE_LESEN = 400
-const MAX_ZEICHEN_JE_ANTWORT = 24000
-const MAX_TREFFER_JE_SUCHE = 60
-const MAX_EINTRAEGE_JE_ORDNER = 300
+// Die Werkzeug-Deckel (Zeilen je Lesen, Zeichen je Antwort, Suchtreffer,
+// Ordnereinträge) und der Runden-Deckel wachsen mit dem Fenster mit — sonst
+// bekäme ein 128k-Modell dieselben Häppchen wie ein 32k-Modell und bräuchte
+// nur mehr Runden. Bezugsgröße sind die 32k-Werte (400 / 24.000 / 60 / 300 /
+// 48 Runden — die 48 statt 32 seit 18.08.2026, weil die lokale KI auch
+// mittelgroße Aufträge bekommt); bei 64k das Doppelte, bei 128k das Vierfache
+// (Runden: 48 / 64 / 96 — Runden hängen an der Aufgabentiefe, nicht linear
+// am Fenster). Alle Deckel liegen in `grenzen`, gesetzt über
+// lokaleHelferKontextSetzen — einmal je Laufstart aus den Einstellungen.
+export const KONTEXT_FENSTER_STANDARD = 65536
+export const KONTEXT_FENSTER_WAHL = [32768, 65536, 131072]
 const ANTWORT_ZEITLIMIT_MS = 5 * 60 * 1000
-const KONTEXT_FENSTER = 32768
+
+export function grenzenFuer(kontext) {
+  const fenster = KONTEXT_FENSTER_WAHL.includes(Number(kontext))
+    ? Number(kontext)
+    : KONTEXT_FENSTER_STANDARD
+  const faktor = fenster / 32768
+  return {
+    kontext: fenster,
+    runden: fenster >= 131072 ? 96 : fenster >= 65536 ? 64 : 48,
+    zeilenJeLesen: 400 * faktor,
+    zeichenJeAntwort: 24000 * faktor,
+    trefferJeSuche: 60 * faktor,
+    eintraegeJeOrdner: 300 * faktor
+  }
+}
+
+let grenzen = grenzenFuer(KONTEXT_FENSTER_STANDARD)
+
+// Vom Lauf beim Start aufgerufen (Einstellung ist global — alle Läufe teilen
+// sich denselben Wert). Liefert die geltenden Grenzen zurück (für Ticker/Test).
+export function lokaleHelferKontextSetzen(kontext) {
+  grenzen = grenzenFuer(kontext)
+  return { ...grenzen }
+}
+
+export function lokaleHelferGrenzen() {
+  return { ...grenzen }
+}
 
 // Ordner, in denen nie gesucht oder gelistet wird — Ballast ohne Erkenntnis.
 const UEBERSPRUNGEN = new Set(['node_modules', '.git', 'laufberichte'])
@@ -121,8 +150,8 @@ function imProjekt(projektPfad, angefragt) {
 
 function gestutzt(text) {
   const t = String(text)
-  return t.length > MAX_ZEICHEN_JE_ANTWORT
-    ? t.slice(0, MAX_ZEICHEN_JE_ANTWORT) + '\n… (gekürzt — lies gezielter weiter, z.B. mit vonZeile)'
+  return t.length > grenzen.zeichenJeAntwort
+    ? t.slice(0, grenzen.zeichenJeAntwort) + '\n… (gekürzt — lies gezielter weiter, z.B. mit vonZeile)'
     : t
 }
 
@@ -139,7 +168,7 @@ function ordnerAuflisten(projektPfad, eingabe) {
   const zeilen = []
   for (const e of eintraege) {
     if (UEBERSPRUNGEN.has(e.name)) continue
-    if (zeilen.length >= MAX_EINTRAEGE_JE_ORDNER) {
+    if (zeilen.length >= grenzen.eintraegeJeOrdner) {
       zeilen.push('… (weitere Einträge weggelassen)')
       break
     }
@@ -169,7 +198,7 @@ function dateiLesen(projektPfad, eingabe) {
   }
   const zeilen = inhalt.split('\n')
   const von = Math.max(1, Number(eingabe.vonZeile) || 1)
-  const bis = Math.min(zeilen.length, von + MAX_ZEILEN_JE_LESEN - 1)
+  const bis = Math.min(zeilen.length, von + grenzen.zeilenJeLesen - 1)
   const teil = zeilen
     .slice(von - 1, bis)
     .map((z, i) => `${von + i}: ${z}`)
@@ -192,7 +221,7 @@ function suchen(projektPfad, eingabe) {
   }
   const treffer = []
   const stapel = [path.resolve(projektPfad)]
-  while (stapel.length && treffer.length < MAX_TREFFER_JE_SUCHE) {
+  while (stapel.length && treffer.length < grenzen.trefferJeSuche) {
     const ordner = stapel.pop()
     let eintraege
     try {
@@ -201,7 +230,7 @@ function suchen(projektPfad, eingabe) {
       continue
     }
     for (const e of eintraege) {
-      if (treffer.length >= MAX_TREFFER_JE_SUCHE) break
+      if (treffer.length >= grenzen.trefferJeSuche) break
       const voll = path.join(ordner, e.name)
       if (e.isDirectory()) {
         if (!UEBERSPRUNGEN.has(e.name)) stapel.push(voll)
@@ -217,7 +246,7 @@ function suchen(projektPfad, eingabe) {
       }
       const relativ = path.relative(projektPfad, voll)
       const zeilen = inhalt.split('\n')
-      for (let i = 0; i < zeilen.length && treffer.length < MAX_TREFFER_JE_SUCHE; i++) {
+      for (let i = 0; i < zeilen.length && treffer.length < grenzen.trefferJeSuche; i++) {
         const passt = regex ? regex.test(zeilen[i]) : zeilen[i].includes(muster)
         if (passt) treffer.push(`${relativ}:${i + 1}: ${zeilen[i].trim().slice(0, 200)}`)
       }
@@ -225,11 +254,14 @@ function suchen(projektPfad, eingabe) {
   }
   if (!treffer.length) return `Keine Treffer für: ${muster}`
   const hinweis =
-    treffer.length >= MAX_TREFFER_JE_SUCHE ? '\n… (weitere Treffer weggelassen — suche enger)' : ''
+    treffer.length >= grenzen.trefferJeSuche ? '\n… (weitere Treffer weggelassen — suche enger)' : ''
   return gestutzt(treffer.join('\n') + hinweis)
 }
 
-const WERKZEUGE = [
+// Als Funktion, nicht als Konstante: Die Beschreibung von datei_lesen nennt den
+// Zeilen-Deckel, und der hängt am eingestellten Kontext-Fenster (grenzen).
+function lesendeWerkzeuge() {
+  return [
   {
     type: 'function',
     function: {
@@ -250,7 +282,7 @@ const WERKZEUGE = [
       name: 'datei_lesen',
       description:
         'Liest eine Textdatei im Projekt (höchstens ' +
-        MAX_ZEILEN_JE_LESEN +
+        grenzen.zeilenJeLesen +
         ' Zeilen je Aufruf; mit vonZeile weiterblättern).',
       parameters: {
         type: 'object',
@@ -276,7 +308,8 @@ const WERKZEUGE = [
       }
     }
   }
-]
+  ]
+}
 
 // --- Lokale Vorreparatur (BAUPLAN 20) --------------------------------------
 
@@ -600,7 +633,7 @@ export const KREISLAUF_SYSTEMTEXTE = {
 // Werkzeugaufrufen (das „laute Denken" kleiner Modelle).
 export function lokalRecherchieren({ projektPfad, auftrag, modell, adresse = STANDARD_ADRESSE, aufSchritt, aufDenken }) {
   const nachrichten = [auftaktNachricht(KREISLAUF_SYSTEMTEXTE.recherche, auftrag)]
-  return kreislauf({ projektPfad, nachrichten, werkzeuge: WERKZEUGE, modell, adresse, aufSchritt, aufDenken })
+  return kreislauf({ projektPfad, nachrichten, werkzeuge: lesendeWerkzeuge(), modell, adresse, aufSchritt, aufDenken })
 }
 
 // Der Reparatur-Kreislauf (BAUPLAN 20): Beanstandungen des Prüfers rein,
@@ -617,7 +650,7 @@ export async function lokalReparieren({ projektPfad, auftrag, modell, adresse = 
   const ergebnis = await kreislauf({
     projektPfad,
     nachrichten,
-    werkzeuge: [...WERKZEUGE, ERSETZEN_WERKZEUG],
+    werkzeuge: [...lesendeWerkzeuge(), ERSETZEN_WERKZEUG],
     modell,
     adresse,
     aufSchritt,
@@ -639,7 +672,7 @@ export async function lokalEntwerfen({ projektPfad, auftrag, modell, adresse = S
   const ergebnis = await kreislauf({
     projektPfad,
     nachrichten,
-    werkzeuge: [...WERKZEUGE, ENTWURF_WERKZEUG],
+    werkzeuge: [...lesendeWerkzeuge(), ENTWURF_WERKZEUG],
     modell,
     adresse,
     aufSchritt,
@@ -664,7 +697,7 @@ export async function lokalBauen({ projektPfad, auftrag, modell, adresse = STAND
   const ergebnis = await kreislauf({
     projektPfad,
     nachrichten,
-    werkzeuge: [...WERKZEUGE, ERSETZEN_WERKZEUG, DATEI_SCHREIBEN_WERKZEUG],
+    werkzeuge: [...lesendeWerkzeuge(), ERSETZEN_WERKZEUG, DATEI_SCHREIBEN_WERKZEUG],
     modell,
     adresse,
     aufSchritt,
@@ -748,7 +781,7 @@ async function kreislauf({ projektPfad, nachrichten, werkzeuge, modell, adresse,
   // „kein Fazit geliefert" gleich beim ersten Einsatz). Einmal nachhaken
   // statt aufgeben — erst danach ist es ehrlich ein Fehlschlag.
   let nachgehakt = false
-  for (let runde = 0; runde < MAX_RUNDEN; runde++) {
+  for (let runde = 0; runde < grenzen.runden; runde++) {
     let antwort
     try {
       const httpAntwort = await fetch((adresse || STANDARD_ADRESSE) + '/api/chat', {
@@ -760,7 +793,7 @@ async function kreislauf({ projektPfad, nachrichten, werkzeuge, modell, adresse,
           messages: nachrichten,
           tools: werkzeuge,
           stream: false,
-          options: { temperature: 0.2, num_ctx: KONTEXT_FENSTER }
+          options: { temperature: 0.2, num_ctx: grenzen.kontext }
         })
       })
       if (!httpAntwort.ok)
@@ -847,7 +880,7 @@ async function kreislauf({ projektPfad, nachrichten, werkzeuge, modell, adresse,
   }
   return {
     ok: false,
-    fehler: `Die lokale KI kam nach ${MAX_RUNDEN} Runden zu keinem Fazit.`,
+    fehler: `Die lokale KI kam nach ${grenzen.runden} Runden zu keinem Fazit.`,
     schritte
   }
 }

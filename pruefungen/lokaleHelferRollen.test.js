@@ -30,7 +30,9 @@ import {
   lokalReparieren,
   lokalEntwerfen,
   lokalBauen,
-  KREISLAUF_SYSTEMTEXTE
+  KREISLAUF_SYSTEMTEXTE,
+  lokaleHelferKontextSetzen,
+  KONTEXT_FENSTER_STANDARD
 } from '../src/main/motor/lokaleHelfer.js'
 import { texte } from '../src/shared/texte.js'
 
@@ -291,6 +293,9 @@ describe('Lokale Helfer-KI · jede Nachricht von FlowForge ist eine Nutzer-Nachr
   })
 
   it('Runden-Deckel: nach 48 Runden ohne Fazit endet der Kreislauf ehrlich mit „48"', async () => {
+    // Der Runden-Deckel hängt seit 0.46.3 am Kontext-Fenster (48 bei 32k,
+    // 64 bei 64k, 96 bei 128k) — hier ausdrücklich das 32k-Fenster.
+    lokaleHelferKontextSetzen(32768)
     const anfragen = ollamaStub(() => antwortMit(aufruf('ordner_auflisten', { pfad: '.' })))
     const ergebnis = await lokalRecherchieren({
       projektPfad,
@@ -302,6 +307,7 @@ describe('Lokale Helfer-KI · jede Nachricht von FlowForge ist eine Nutzer-Nachr
     expect(ergebnis.fehler).toMatch(/48 Runden/)
     expect(anfragen.length).toBe(48)
     expect(ergebnis.schritte).toBe(48)
+    lokaleHelferKontextSetzen(KONTEXT_FENSTER_STANDARD)
     // Auch im langen Verlauf: keine fremde Rolle eingeschlichen.
     const rollen = new Set(anfragen[47].messages.map((m) => m.role))
     expect([...rollen].sort()).toEqual(['assistant', 'user'])

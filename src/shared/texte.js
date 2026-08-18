@@ -2193,6 +2193,16 @@ export const texte = {
       `Ollama läuft, aber das Modell „${modell}" ist nicht heruntergeladen.`,
     lokaleHelferStatusVorhandene: (modelle) => `Vorhanden: ${modelle.join(', ')}.`,
     lokaleHelferStatusAus: 'Ollama ist unter dieser Adresse gerade nicht erreichbar.',
+    // Kontext-Fenster (seit 0.46.3): 32k / 64k / 128k, Werkzeug-Deckel wachsen mit.
+    lokaleHelferKontext: 'Kontextfenster der lokalen KI',
+    lokaleHelferKontextWahl: (kontext) => `${Math.round(kontext / 1024)}k Token`,
+    lokaleHelferKontextHinweis:
+      'Wie viel die lokale KI auf einmal im Kopf behält. Mit dem Fenster wachsen auch ihre ' +
+      'Portionen (Zeilen je Lesen, Suchtreffer, Runden). Faustregel fürs Grafikspeicher-Budget: ' +
+      'Das Arbeitsgedächtnis kostet zusätzlich zu den Modell-Gewichten grob 250 KB je Token bei ' +
+      'einem 27B-Modell — 64k ≈ 16 GB, 128k ≈ 32 GB. Passt es nicht mehr in die Karte, ' +
+      'lagert Ollama still in den Arbeitsspeicher aus und alles wird sehr langsam. Empfehlung: ' +
+      '64k; 128k nur, wenn Ollama beim Laufen (ollama ps) noch „100 % GPU" zeigt.',
     // Unteraufgaben-Modell (BAUPLAN 37): der Motor-Zwilling der lokalen
     // Helfer-KI — Zuarbeit muss nicht auf dem großen Modell laufen.
     unteraufgabenUeberschrift: 'Modell der Unteraufgaben',
@@ -2426,8 +2436,8 @@ export const texte = {
     parallelEigeneSession: (name) =>
       `„${name}" läuft parallel in einer eigenen Session — die Lauf-Session ist gerade beschäftigt.`,
     // Lokale Helfer-KI (Experiment): sichtbar, wenn die lokale KI recherchiert.
-    lokaleHelferBereit: (modell) =>
-      `Lokale Helfer-KI bereit (${modell}) — Recherche-Aufträge kosten kein Kontingent.`,
+    lokaleHelferBereit: (modell, kontext = null) =>
+      `Lokale Helfer-KI bereit (${modell}${kontext ? ', Kontext ' + Math.round(kontext / 1024) + 'k' : ''}) — Recherche-Aufträge kosten kein Kontingent.`,
     lokaleHelferNichtErreichbar:
       'Lokale Helfer-KI ist eingeschaltet, aber Ollama ist nicht erreichbar (oder das Modell fehlt) — Unteraufgaben laufen normal über den Motor.',
     lokaleHelferStart: (modell) => `Lokale KI recherchiert (${modell}) …`,
