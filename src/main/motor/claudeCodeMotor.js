@@ -1294,7 +1294,14 @@ export function starteLaufMotor(optionen) {
     const menschServer = await menschWerkzeugServer({ aufMenschFrage })
     // Startanleitung (BAUPLAN 10): das Pflicht-Artefakt der Bau-Blöcke wird
     // ausschließlich über dieses validierende Werkzeug geschrieben.
-    const startServer = await startWerkzeugServer({ projektPfad, aufEreignis })
+    // gesetztVon (0.46.2): der Block, der die Anleitung setzt — in der Welle
+    // muss FlowForge wissen, wer wessen Anleitung ersetzt und wem der Rauchtest
+    // die Nachbesserungs-Runde gibt.
+    const startServer = await startWerkzeugServer({
+      projektPfad,
+      aufEreignis,
+      holeInstanz: () => block?.instanzId ?? null
+    })
     // Prüfbefehl (BAUPLAN 35): das Pflicht-Artefakt des Prüfers — hart
     // validiert, weil FlowForge ihn später selbst ohne Rückfrage abspielt.
     // Je Prüf-Instanz einer (BAUPLAN 41): Der Motor reicht die Kennung des

@@ -112,52 +112,121 @@ export function vorfahrenDistanzen(bloecke, pfeile, instanzId) {
 // beide hier, sonst zeigen die Chips etwas anderes, als der Lauf tut.
 //
 // `lieferungen` sind die Vorfahren mit Abschlusstext, topologisch sortiert:
-//   { name, nummer, naehe, liefert: [etikett], text }
-// Regel: Der nähere Vorfahre gewinnt; mehrere GLEICH nahe kommen alle an
-// (BAUPLAN 34 — früher gewann still einer). Neu in BAUPLAN 40: Was dabei
-// verdrängt wird, verschwindet nicht mehr wortlos, sondern steht als
-// `verdraengt` in der Gruppe — der Lauf tickert es. Blöcke mit dem Kennzeichen
-// `fuehrtZusammen` (BAUPLAN 47) nehmen alles: Für sie gilt die Distanz-Regel
-// gar nicht, denn Zusammenführen ist ihre Aufgabe.
+//   { name, nummer, naehe, liefert: [etikett], text,
+//     instanzId?, braucht?: [etikett], vorfahrenIds?: [instanzId] }
+// Die drei letzten Felder sind seit 0.46.2 dabei und optional: `braucht` sind
+// die Etiketten, die der LIEFERANT selbst nimmt (braucht + brauchtOptional),
+// `vorfahrenIds` seine Vorfahren im Schaubild. Fehlen sie, gilt exakt die
+// Regel von vorher.
+//
+// Regel, in dieser Reihenfolge:
+// (1) Blöcke mit dem Kennzeichen `fuehrtZusammen` (BAUPLAN 47) nehmen alles:
+//     Für sie gilt keine Verdrängung, denn Zusammenführen ist ihre Aufgabe.
+// (2) Verdrängung durch WEITERVERARBEITUNG (0.46.2, Entscheidung Georg
+//     18.08.2026): Liegen zwei Lieferungen A und B desselben Etiketts vor, und
+//     hat B die Lieferung von A als Eingang genommen (A ist Vorfahr von B, und B
+//     braucht dieses Etikett), zählt am gemeinsamen Empfänger nur B — die
+//     Prüfung der Prüfung ersetzt die Prüfung (Prüfer → Zweitaudit →
+//     Sessionende: das Sessionende bekommt nur den Beleg des Zweitaudits). Die
+//     Regel gilt allgemein für jeden Block, der ein Etikett braucht UND
+//     liefert; sie ist unabhängig von der Distanz.
+// (3) Unter den Übrigen die DISTANZ-Regel: Der nähere Vorfahre gewinnt;
+//     mehrere GLEICH nahe kommen alle an (BAUPLAN 34 — früher gewann still
+//     einer).
+// Was verdrängt wird, verschwindet nicht wortlos (BAUPLAN 40), sondern steht
+// als `verdraengt` in der Gruppe — der Lauf tickert es. Jeder Eintrag dort ist
+// die Lieferung selbst (flache Kopie) plus `grund: 'distanz' |
+// 'weiterverarbeitung'` und `verdraengtVon: [instanzId]` — bei Distanz die
+// Kennungen der angekommenen Lieferungen, bei Weiterverarbeitung die der
+// Lieferung(en) B, in die A eingegangen ist (ohne instanzId der Gewinner leer).
+// Kopie statt Original, weil derselbe Lieferungs-Gegenstand bei einem anderen
+// Empfänger ankommen kann und dort keinen Grund tragen darf.
 //
 // Gruppen entstehen nur für Etiketten, die dieser Block wirklich braucht
 // (braucht + brauchtOptional) — Lieferungen, die ihn nichts angehen, sind
 // keine Verdrängung, sondern Lärm im Ticker.
 export function uebergabenAuswahl(def, lieferungen) {
   const fuehrtZusammen = Boolean(def?.fuehrtZusammen)
-  const gesammelt = new Map()
-  for (const lieferung of lieferungen) {
-    for (const etikett of lieferung.liefert ?? []) {
-      const bisher = gesammelt.get(etikett)
-      if (!bisher) {
-        gesammelt.set(etikett, {
-          naehe: lieferung.naehe,
-          angekommen: [lieferung],
-          verdraengt: []
-        })
-        continue
-      }
-      if (fuehrtZusammen || lieferung.naehe === bisher.naehe) {
-        bisher.angekommen.push(lieferung)
-        continue
-      }
-      // Beide Richtungen zählen: Der spätere nähere verdrängt die bisherigen
-      // (unten), der frühere nähere schluckt den späteren entfernteren
-      // (else-Zweig) — genau dieser zweite Fall lief bisher ohne jede Spur.
-      if (lieferung.naehe < bisher.naehe) {
-        bisher.verdraengt.push(...bisher.angekommen)
-        bisher.angekommen = [lieferung]
-        bisher.naehe = lieferung.naehe
-      } else bisher.verdraengt.push(lieferung)
-    }
-  }
   const gruppen = []
   for (const etikett of [...(def?.braucht ?? []), ...(def?.brauchtOptional ?? [])]) {
-    const treffer = gesammelt.get(etikett)
-    if (!treffer) continue
-    gruppen.push({ etikett, angekommen: treffer.angekommen, verdraengt: treffer.verdraengt })
+    const kandidaten = (lieferungen ?? []).filter((l) => (l.liefert ?? []).includes(etikett))
+    if (kandidaten.length === 0) continue
+    if (fuehrtZusammen) {
+      gruppen.push({ etikett, angekommen: kandidaten, verdraengt: [] })
+      continue
+    }
+    const verdraengt = []
+    // (2) Weiterverarbeitung — nur zwischen Lieferungen, die beide Felder
+    // tragen; alles andere bleibt Kandidat der Distanz-Regel.
+    const uebrig = []
+    for (const a of kandidaten) {
+      const weiterverarbeiter =
+        a.instanzId == null
+          ? []
+          : kandidaten.filter(
+              (b) =>
+                b !== a &&
+                Array.isArray(b.vorfahrenIds) &&
+                b.vorfahrenIds.includes(a.instanzId) &&
+                (b.braucht ?? []).includes(etikett)
+            )
+      if (weiterverarbeiter.length)
+        verdraengt.push({
+          ...a,
+          grund: 'weiterverarbeitung',
+          verdraengtVon: weiterverarbeiter.map((b) => b.instanzId)
+        })
+      else uebrig.push(a)
+    }
+    // (3) Distanz unter den Übrigen. Beide Richtungen zählen: Der spätere
+    // nähere verdrängt die bisherigen, der frühere nähere schluckt den
+    // späteren entfernteren — genau dieser zweite Fall lief vor BAUPLAN 40
+    // ohne jede Spur.
+    let angekommen = []
+    let naehe = null
+    const durchDistanz = []
+    for (const lieferung of uebrig) {
+      if (naehe === null || lieferung.naehe === naehe) {
+        angekommen.push(lieferung)
+        naehe = lieferung.naehe
+        continue
+      }
+      if (lieferung.naehe < naehe) {
+        durchDistanz.push(...angekommen)
+        angekommen = [lieferung]
+        naehe = lieferung.naehe
+      } else durchDistanz.push(lieferung)
+    }
+    const gewinnerIds = angekommen.map((l) => l.instanzId).filter((id) => id != null)
+    for (const lieferung of durchDistanz)
+      verdraengt.push({ ...lieferung, grund: 'distanz', verdraengtVon: gewinnerIds })
+    gruppen.push({ etikett, angekommen, verdraengt })
   }
   return { gruppen }
+}
+
+// Die Herkunfts-Felder einer Lieferung für uebergabenAuswahl (0.46.2): wer der
+// Lieferant ist, was er selbst nimmt und wer vor ihm liegt — die Grundlage der
+// Verdrängung durch Weiterverarbeitung. Liefert eine Funktion (instanzId, def)
+// → { instanzId, braucht, vorfahrenIds }; die Vorfahren werden je Kennung nur
+// einmal gerechnet, denn empfaengerLage fragt für jeden Nachfahren nach allen
+// seinen Vorfahren. Der Lauf (lauf.js, herkunftVon) baut dieselbe Form aus
+// seiner Vorfahren-Map — beide müssen dieselben Felder liefern, sonst sagt der
+// Vorspann etwas anderes, als der Lauf tut.
+function lieferungsHerkunft(bloecke, pfeile) {
+  const vorfahrenIdsVon = new Map()
+  return (instanzId, def) => {
+    if (!vorfahrenIdsVon.has(instanzId))
+      vorfahrenIdsVon.set(
+        instanzId,
+        vorfahrenSortiert(bloecke, pfeile, instanzId).map((b) => b.instanzId)
+      )
+    return {
+      instanzId,
+      braucht: [...(def?.braucht ?? []), ...(def?.brauchtOptional ?? [])],
+      vorfahrenIds: vorfahrenIdsVon.get(instanzId)
+    }
+  }
 }
 
 // Sicht-Hilfe am Schaubild (BAUPLAN 36): Woher bekommt dieser Block, was er
@@ -170,6 +239,7 @@ export function brauchtHerkunft(bloecke, pfeile, instanzId) {
   const herkunft = new Map()
   if (!def) return herkunft
   const distanz = vorfahrenDistanzen(bloecke, pfeile, instanzId)
+  const herkunftVon = lieferungsHerkunft(bloecke, pfeile)
   const lieferungen = []
   for (const vorfahre of vorfahrenSortiert(bloecke, pfeile, instanzId)) {
     const vDef = blockDefinition(vorfahre.blockId)
@@ -181,7 +251,8 @@ export function brauchtHerkunft(bloecke, pfeile, instanzId) {
       // besseren Namen.
       name: blockAnzeigeName(vDef, vorfahre),
       naehe: distanz.get(vorfahre.instanzId) ?? Number.MAX_SAFE_INTEGER,
-      liefert: vDef.liefert
+      liefert: vDef.liefert,
+      ...herkunftVon(vorfahre.instanzId, vDef)
     })
   }
   for (const etikett of [...def.braucht, ...(def.brauchtOptional ?? [])]) herkunft.set(etikett, [])
@@ -236,7 +307,9 @@ function kennungen(bloecke, pfeile) {
 //
 // Nicht „alle Nachfahren mit passendem braucht": Die Distanz-Regel wirft
 // Lieferungen weg (uebergabenAuswahl) — liegt ein zweiter Lieferant desselben
-// Etiketts näher am Nachfahren, kommt diese Lieferung dort NICHT an. Deshalb
+// Etiketts näher am Nachfahren, kommt diese Lieferung dort NICHT an; seit
+// 0.46.2 ebenso die Weiterverarbeitung (ist der Beleg ins Zweitaudit
+// eingegangen, kommt beim Sessionende nur der des Zweitaudits an). Deshalb
 // wird für JEDEN Nachfahren einmal dieselbe Auswahl über den statischen Graphen
 // gefahren und geprüft, ob dieser Block in `angekommen` oder in `verdraengt`
 // steht. Nur so sagt der Vorspann dasselbe, was der Lauf später tut.
@@ -266,6 +339,7 @@ export function empfaengerLage(bloecke, pfeile, instanzId) {
   // gemeldet nur, was nirgends angekommen ist (siehe unten).
   const verdraengtVon = new Map()
   const angekommen = new Set()
+  const herkunftVon = lieferungsHerkunft(bloecke, pfeile)
   for (const nachfahre of nachfahren) {
     const nDef = blockDefinition(nachfahre.blockId)
     if (!nDef) continue
@@ -277,7 +351,11 @@ export function empfaengerLage(bloecke, pfeile, instanzId) {
       lieferungen.push({
         ...kennung(vorfahre.instanzId),
         naehe: distanz.get(vorfahre.instanzId) ?? Number.MAX_SAFE_INTEGER,
-        liefert: vDef.liefert
+        liefert: vDef.liefert,
+        // Herkunft (0.46.2): Damit die Weiterverarbeitungs-Regel greift —
+        // sonst nennte der Vorspann des Prüfers das Sessionende als Empfänger,
+        // obwohl im Lauf nur der Beleg des Zweitaudits dort ankommt.
+        ...herkunftVon(vorfahre.instanzId, vDef)
       })
     }
     for (const gruppe of uebergabenAuswahl(nDef, lieferungen).gruppen) {

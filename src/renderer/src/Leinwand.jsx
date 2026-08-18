@@ -550,6 +550,8 @@ function LieferscheinAnsicht({ meldungen }) {
 // der Lieferschein klappt auf Klick auf.
 function BlockErgebnisZeile({ eintrag }) {
   const [offen, setOffen] = useState(false)
+  const [rauchtestAusgabeOffen, setRauchtestAusgabeOffen] = useState(false)
+  const rauchtest = eintrag.rauchtest ?? null
   return (
     <div className="block-ergebnis">
       <button className="block-ergebnis-knopf" onClick={() => setOffen(!offen)}>
@@ -579,6 +581,29 @@ function BlockErgebnisZeile({ eintrag }) {
           )}
           {eintrag.kostenUsd != null && (
             <p className="feld-hinweis">{tb.apiKosten(eintrag.kostenUsd)}</p>
+          )}
+          {/* Rauchtest ehrlich (0.46.2): grün, rot mit Grund oder übersprungen
+              mit Grund — die Ausgabe des Startversuchs klappt auf Wunsch auf. */}
+          {rauchtest && (
+            <div className="block-ergebnis-rauchtest">
+              <p className="feld-hinweis">
+                {tb.rauchtestZeile(rauchtest)}
+                {rauchtest.gemessenAn && ` · ${tb.rauchtestGemessenAn(rauchtest.gemessenAn)}`}
+              </p>
+              {rauchtest.ausgabe && (
+                <>
+                  <button
+                    className="link-knopf"
+                    onClick={() => setRauchtestAusgabeOffen(!rauchtestAusgabeOffen)}
+                  >
+                    {rauchtestAusgabeOffen ? tb.rauchtestAusgabeVerbergen : tb.rauchtestAusgabeZeigen}
+                  </button>
+                  {rauchtestAusgabeOffen && (
+                    <pre className="block-ergebnis-rauchtest-ausgabe">{rauchtest.ausgabe}</pre>
+                  )}
+                </>
+              )}
+            </div>
           )}
           {(eintrag.meldungen ?? []).length > 0 ? (
             <LieferscheinAnsicht meldungen={eintrag.meldungen} />

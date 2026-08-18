@@ -179,7 +179,9 @@ async function portPruefen(anleitung) {
   return { port, ...besitzer }
 }
 
-async function aufPortFreiWarten(port) {
+// Exportiert (0.46.2): Der Rauchtest wartet nach dem Abräumen eines
+// Waisenprozesses mit derselben Mechanik, bis der Port wirklich frei ist.
+export async function aufPortFreiWarten(port) {
   const schluss = Date.now() + PORT_FREI_WARTEN_MS
   while (Date.now() < schluss) {
     if (!(await portBesitzer(port))) return true

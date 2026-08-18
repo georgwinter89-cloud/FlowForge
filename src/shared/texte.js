@@ -2597,6 +2597,11 @@ export const texte = {
     karteAbgelehnt: (grund) => `Karten-Änderung abgelehnt: ${grund}`,
     startanleitungGesetzt: 'Startanleitung festgelegt — „App starten" ist bereit.',
     startanleitungAbgelehnt: (grund) => `Startanleitung abgelehnt: ${grund}`,
+    // Startanleitung in der Welle (0.46.2): Sie ist eine Projektdatei, kein
+    // Teil des Datenvertrags — überschreibt ein Block die Anleitung eines
+    // anderen, der gerade Revier belegt, sagt der Ticker es mit beiden Befehlen.
+    startanleitungErsetzt: (wer, wen, alt, neu) =>
+      `„${wer}" hat die Startanleitung von „${wen}" ersetzt: „${alt}" → „${neu}"`,
     startanleitungNachgefordert: (block) =>
       `Die Startanleitung fehlt — „${block}" bekommt eine Nachbesserungs-Runde.`,
     startanleitungWeiterOhne:
@@ -2629,12 +2634,28 @@ export const texte = {
       `Stand vor dem Lauf: schon rot (${anzahl} ${anzahl === 1 ? 'Fehlerzeile' : 'Fehlerzeilen'}) — das sind Altlasten, keine Fehlschläge dieses Laufs.`,
     baselineAltlastKarte: (titel) => `Altlast als Aufgaben-Karte abgelegt: „${titel}"`,
     rauchtestGruen: 'Rauchtest der Startanleitung: die App läuft an.',
-    rauchtestRot: (block) =>
-      `Rauchtest der Startanleitung: die App läuft NICHT an — „${block}" bekommt eine Nachbesserungs-Runde, bevor der Prüfer etwas kostet.`,
-    rauchtestWeiterOhne:
-      'Die Startanleitung läuft weiterhin nicht an — der Lauf macht ehrlich vermerkt weiter.',
     rauchtestUebersprungen:
       'Rauchtest übersprungen: Die App läuft gerade im App-Tab — FlowForge nimmt ihr den Port nicht weg.',
+    // Rauchtest ehrlich (0.46.2): Der Grund steht im Ticker — Fehlercode plus
+    // letzte Ausgabezeile bei Rot, sonst warum nichts geprüft wurde.
+    rauchtestRotGrund: (code, zeile, block) =>
+      `Rauchtest: rot (${code == null ? 'ohne Fehlercode' : 'Code ' + code})${zeile ? ' — ' + zeile : ''} — „${block}" bekommt eine Nachbesserungs-Runde, bevor der Prüfer etwas kostet.`,
+    rauchtestWeiterOhneGrund: (code, zeile) =>
+      `Rauchtest: weiterhin rot (${code == null ? 'ohne Fehlercode' : 'Code ' + code})${zeile ? ' — ' + zeile : ''} — der Lauf macht ehrlich vermerkt weiter.`,
+    rauchtestKeineAnleitung: 'Rauchtest übersprungen: keine Startanleitung vorhanden — kein Urteil.',
+    rauchtestNichtsZuStarten:
+      'Rauchtest übersprungen: Die Startanleitung hat weder Befehl noch Datei-Adresse — nichts zu starten, kein Urteil.',
+    rauchtestAbgebrochen: 'Rauchtest abgebrochen: Der Lauf wurde gestoppt — kein Urteil über die App.',
+    rauchtestPortFremd: (port, besitzer, vermutlich) =>
+      `Rauchtest übersprungen: Port ${port} ist von ${besitzer.name || 'einem Prozess'} (PID ${besitzer.pid}${besitzer.befehl ? ', „' + besitzer.befehl.slice(0, 120) + '"' : ''}) belegt, der ${vermutlich ? 'nur vermutlich' : 'nicht'} zu diesem Lauf gehört — kein Urteil.`,
+    rauchtestPortFlowForge: (port) =>
+      `Rauchtest übersprungen: Port ${port} ist von FlowForge selbst belegt — kein Urteil.`,
+    rauchtestWaiseBeendet: (p, port) =>
+      `Waisenprozess ${p.name || 'PID ' + p.pid} (PID ${p.pid}${p.befehl ? ', „' + p.befehl.slice(0, 120) + '"' : ''}) aus diesem Lauf beendet — Port ${port} war belegt.`,
+    // Rauchtest einmal je Welle (0.46.2): Wer die Runde bekommt, wenn niemand
+    // in der Welle die Startanleitung gesetzt hat.
+    rauchtestRueckfall: (block) =>
+      `Niemand in dieser Welle hat die Startanleitung gesetzt — die Nachbesserung geht an „${block}" (zuletzt fertig geworden).`,
     sicherungspunktAngelegt: 'Sicherungspunkt angelegt.',
     zurueckgesetzt: 'Projektordner auf den letzten Sicherungspunkt zurückgesetzt.',
     // Sicherungspunkte je Schreiber (BAUPLAN 45). „Strang" ist ein Fachwort —
@@ -2903,6 +2924,12 @@ export const texte = {
     uebergabeVerdraengt: (etikett, empfaenger, gewinner, verdraengt) =>
       `„${etikett}" für ${empfaenger} kommt von ${gewinner} — näher im Schaubild. ` +
       `Verdrängt: ${verdraengt}; diese Arbeit geht nicht in den Auftrag.`,
+    // Verdrängung durch Weiterverarbeitung (0.46.2): Der Beleg des ersten
+    // Prüfers ging ins Zweitaudit ein — beim gemeinsamen Empfänger zählt der
+    // des Zweitaudits. Nichts ist verloren, es steht nur woanders drin.
+    uebergabeWeiterverarbeitet: (etikett, verdraengt, weiterverarbeiter, empfaenger, gewinner) =>
+      `„${etikett}" von ${verdraengt} ging in ${weiterverarbeiter} ein — ` +
+      `bei ${empfaenger} zählt der von ${gewinner}.`,
     // Folgen-Frage je Zweig (BAUPLAN 46): Mehrere können offen sein, und jede
     // Wahl trifft nur ihren Zweig — deshalb nennt jede Zeile den Prüfer.
     entscheidungGestellt: (name) =>
@@ -3128,6 +3155,29 @@ export const texte = {
       // benannte Ziel bedient — er trägt in einem kurzen zweiten Anlauf nach.
       'zuschnitt-unvollstaendig': 'Zuschnitt unvollständig'
     },
+    // Rauchtest am Block-Ergebnis (0.46.2): grün, rot mit Fehlercode und
+    // Grund, oder übersprungen mit Grund — nicht nur „lief nicht an".
+    rauchtestZeile: (r) => {
+      const code = r.code == null ? 'ohne Fehlercode' : 'Code ' + r.code
+      if (r.gruen === true) return 'Rauchtest: grün — die App läuft an.'
+      if (r.gruen === false) return `Rauchtest: rot (${code})${r.zeile ? ' — ' + r.zeile : ''}`
+      const gruende = {
+        keine: 'keine Startanleitung vorhanden',
+        appLaeuft: 'die App lief gerade im App-Tab',
+        nichtsZuStarten: 'die Startanleitung hat weder Befehl noch Datei-Adresse',
+        abgebrochen: 'der Lauf wurde gestoppt',
+        portFremd: r.port
+          ? `Port ${r.port} war belegt` +
+            (r.besitzer ? ` von ${r.besitzer.name || 'PID ' + r.besitzer.pid} (PID ${r.besitzer.pid})` : '') +
+            ', der nicht zu diesem Lauf gehört'
+          : 'der Port war fremd belegt'
+      }
+      return `Rauchtest: übersprungen — ${gruende[r.grund] ?? r.grund ?? 'kein Urteil'}`
+    },
+    rauchtestGemessenAn: (bezeichnung) =>
+      `Ein Rauchtest für die ganze Welle — bei Rot geht die Nachbesserung an ${bezeichnung}.`,
+    rauchtestAusgabeZeigen: 'Ausgabe des Startversuchs zeigen',
+    rauchtestAusgabeVerbergen: 'Ausgabe des Startversuchs verbergen',
     details: 'Einzelheiten',
     schliessen: 'Zuklappen',
     fehlertextLabel: 'Fehler',

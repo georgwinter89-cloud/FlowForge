@@ -395,6 +395,37 @@ export async function prozessBeenden(pid, start) {
   return { ok: gelungen }
 }
 
+// Gehört ein Prozess zu diesem Lauf/Projekt? (Port-Prüfung vor dem Rauchtest,
+// 0.46.2.) Startzeit wird wie in lebtNoch verglichen — eine Wurzel, die der
+// Späher noch nie gesehen hat (start === null), zählt als zugehörig.
+//   'gruppe'     — Mitglied einer aktiven Gruppe dieses Projekts (lauf:, tor:,
+//                  rauchtest:, chat:, …): stammt sicher aus diesem Lauf.
+//   'rest'       — Rest einer abgeräumten Gruppe dieses Projekts, der sich
+//                  nicht beenden ließ.
+//   'vermutlich' — nur die Verwaisten-Heuristik der Rückfall-Liste; kein
+//                  Beleg, deshalb räumt FlowForge so einen nie automatisch ab.
+//   null         — fremd (Georgs eigener Server, ein Editor, FlowForge selbst).
+// Gerechnet auf dem letzten Schnappschuss — der Aufrufer hat ihn eben über
+// portBesitzer frisch geholt.
+export function prozessZugehoerigkeit(pid, start, projektPfad) {
+  if (!Number.isInteger(pid) || pid <= 0 || pid === process.pid) return null
+  const passt = (eintrag) => eintrag.start === null || !start || eintrag.start === start
+  for (const gruppe of gruppen.values()) {
+    if (gruppe.projektPfad !== projektPfad) continue
+    const eintrag = gruppe.bekannt.get(pid)
+    if (eintrag && passt(eintrag)) return 'gruppe'
+  }
+  const rest = reste.get(pid)
+  if (rest && rest.projektPfad === projektPfad && passt(rest)) return 'rest'
+  const kandidaten = verwaisteKandidaten(letzterSchnappschuss, {
+    fenster: laufFenster,
+    eigenePid: process.pid,
+    ausgeschlossen: new Set()
+  })
+  if (kandidaten.some((p) => p.pid === pid && (!start || p.start === start))) return 'vermutlich'
+  return null
+}
+
 // Besitzer eines belegten lokalen Ports (Port-Prüfung vor dem App-Start):
 // { pid, name, befehl } oder null, wenn frei.
 export async function portBesitzer(port) {

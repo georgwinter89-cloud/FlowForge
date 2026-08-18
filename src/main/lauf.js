@@ -102,7 +102,7 @@ import {
   KONTEXT_FENSTER_STANDARD,
   FORTSETZUNG_WAECHTER_PROZENT
 } from './motor/schnittstelle.js'
-import { startanleitungVorhanden } from './startanleitung.js'
+import { startanleitungVorhanden, startanleitungLaden } from './startanleitung.js'
 import {
   pruefbefehlLaden,
   pruefbefehlVorhanden,
@@ -1914,10 +1914,15 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           //   Dateien dieses (Ziel-)Blocks: ein unsichtbarer Schreiber, der für
           //   Welle und geschützte Bereiche wie ein laufender zählt;
           // nachlaufErgebnis — der Berichts-Eintrag des Anlaufs, den der
-          //   Rauchtest im Nachlauf noch fortschreibt.
+          //   Rauchtest im Nachlauf noch fortschreibt;
+          // nachlaufReihe (0.46.2) — Reihenfolge, in der die Blöcke einer Welle
+          //   in den Nachlauf gingen: der zuletzt fertig gewordene ist der
+          //   Rückfall der Rauchtest-Attribution, wenn niemand die
+          //   Startanleitung gesetzt hat.
           dateiListeAktiv: null,
           schreibtGerade: false,
           nachlaufErgebnis: null,
+          nachlaufReihe: 0,
           // entscheidungZielId — solange die Folgen-Frage dieses Prüfers offen
           //   ist: sein Rückführungs-Ziel, aus dem der belegte Zweig gerechnet
           //   wird (offeneFragenZweige).
@@ -2626,6 +2631,28 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
             bericht.zusammenfassungen.push({ zeit: jetztIso(), wer: daten.wer, text: zeile })
             tickern(zeile)
             return
+          }
+          // Startanleitung in der Welle (0.46.2): Das Werkzeug meldet, wer
+          // gesetzt hat und was vorher galt. Ersetzt ein Block die Anleitung
+          // eines ANDEREN Blocks dieses Laufs, der gerade Revier belegt, sagt
+          // der Ticker es mit beiden Befehlen — sonst gewann der letzte
+          // Schreiber still. Derselbe Block (Nachbesserungs-Runde) tickert
+          // nicht. Das Ereignis geht danach unverändert an die Oberfläche.
+          if (daten.art === 'startanleitung') {
+            const wer = daten.gesetztVon ?? holeInstanz()
+            const vorherVon = daten.vorher?.gesetztVon ?? null
+            const anderer = vorherVon && vorherVon !== wer ? knoten.get(vorherVon) : null
+            if (anderer && schreiberBelegt(wellenKnoten(anderer))) {
+              const kurz = (a) => a?.befehl || a?.adresse || ''
+              tickern(
+                texte.ticker.startanleitungErsetzt(
+                  knoten.get(wer)?.name ?? holeName() ?? wer,
+                  anderer.name,
+                  kurz(daten.vorher),
+                  kurz(daten.anleitung)
+                )
+              )
+            }
           }
           // Letzter Kontext-Stand am Lauf gespiegelt — der Kontext-Balken der
           // Projektübersicht braucht ihn außerhalb der Lauf-Ansicht.
@@ -3380,6 +3407,24 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       return stuecke.length ? stuecke.join('\n\n') : null
     }
 
+    // Herkunfts-Felder einer Lieferung für uebergabenAuswahl (0.46.2): wer
+    // liefert, was er selbst nimmt, wer vor ihm liegt. Damit greift die
+    // Verdrängung durch Weiterverarbeitung — Prüfer → Zweitaudit → Sessionende:
+    // beim Sessionende zählt nur der Beleg des Zweitaudits. Nur Vorfahren MIT
+    // Lieferung stehen in der Kandidatenmenge (Aufrufer filtern vorher), also
+    // gilt im Lauf: Nur wer geliefert hat, verdrängt — meldet das Zweitaudit
+    // nichts, kommt der erste Beleg doch an. Gegenstück zu lieferungsHerkunft
+    // in kettenRegeln.js (gleiche Form { instanzId, braucht, vorfahrenIds },
+    // dort aus dem statischen Schaubild gerechnet — hier aus vorfahrenVon, der
+    // einmal je Lauf gerechneten Map, damit Vorspann und Lauf dasselbe sagen).
+    function herkunftVon(instanzId, vk) {
+      return {
+        instanzId,
+        braucht: [...(vk.def.braucht ?? []), ...(vk.def.brauchtOptional ?? [])],
+        vorfahrenIds: (vorfahrenVon.get(instanzId) ?? []).map((b) => b.instanzId)
+      }
+    }
+
     // Der Datenvertrag, der für DIESEN Block gilt (BAUPLAN 44): die erlaubten
     // Dateien der Arbeitspakete, die bei ihm ankommen. Ausgewählt wird mit
     // genau derselben Regel wie der Übergabe-Text (uebergabenAuswahl plus
@@ -3413,7 +3458,8 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         lieferungen.push({
           naehe: distanz.get(vorfahre.instanzId) ?? Number.MAX_SAFE_INTEGER,
           liefert: vk.def.liefert,
-          zuschnitte: zuschnitteAusMeldungen(vk.meldungen)
+          zuschnitte: zuschnitteAusMeldungen(vk.meldungen),
+          ...herkunftVon(vorfahre.instanzId, vk)
         })
       }
       const angekommene = []
@@ -3608,13 +3654,21 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           // mit zwei Etiketten reichte bisher beiden Nachfolgern denselben
           // Abschlusstext — jetzt bekommt jeder genau seine Lieferung.
           // Seit BAUPLAN 44 je Etikett ein Text JE ZIEL (Schlüssel '' = ohne Ziel).
-          texte: vk.lieferungen ?? {}
+          texte: vk.lieferungen ?? {},
+          // Herkunft (0.46.2): Grundlage der Verdrängung durch Weiterverarbeitung.
+          ...herkunftVon(vorfahre.instanzId, vk)
         })
       }
       // Optionale Bedarfe (z.B. Angriffsliste beim Bauer) sind in den Gruppen
       // enthalten, wenn ein Vorfahre sie geliefert hat — verlangt werden sie nicht.
       const { gruppen } = uebergabenAuswahl(k.def, lieferungen)
       const bezeichnung = (l) => texte.ticker.blockBezeichnung(l.nummer, l.name)
+      const bezeichnungVonId = (id) =>
+        texte.ticker.blockBezeichnung(nummerVon.get(id), knoten.get(id)?.name ?? '?')
+      // Weiterverarbeitung einmal je Block und Etikett — eigenes Set neben
+      // verdraengungGemeldet, denn beide Gründe können am selben Etikett
+      // zusammentreffen und jede Zeile sagt etwas anderes.
+      k.weiterverarbeitungGemeldet ??= new Set()
       const eintraege = []
       for (const gruppe of gruppen) {
         gruppe.angekommen.forEach((lieferung, index) => {
@@ -3642,14 +3696,36 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
             texte.ticker.uebergabenZusammengefuehrt(gruppe.angekommen.length, gruppe.etikett)
           )
         }
-        if (gruppe.verdraengt.length && !k.verdraengungGemeldet.has(gruppe.etikett)) {
+        // Zwei Gründe, zwei Zeilen (0.46.2): „näher im Schaubild" gilt nur noch
+        // für die Distanz; was ins Zweitaudit eingegangen ist, ist nicht
+        // verloren, sondern steckt in dessen Beleg — die Zeile sagt genau das.
+        const durchDistanz = gruppe.verdraengt.filter((l) => l.grund !== 'weiterverarbeitung')
+        const durchWeiterverarbeitung = gruppe.verdraengt.filter(
+          (l) => l.grund === 'weiterverarbeitung'
+        )
+        if (durchDistanz.length && !k.verdraengungGemeldet.has(gruppe.etikett)) {
           k.verdraengungGemeldet.add(gruppe.etikett)
           tickern(
             texte.ticker.uebergabeVerdraengt(
               gruppe.etikett,
               texte.ticker.blockBezeichnung(nummerVon.get(k.eintrag.instanzId), k.name),
               gruppe.angekommen.map(bezeichnung).join(' und '),
-              gruppe.verdraengt.map(bezeichnung).join(', ')
+              durchDistanz.map(bezeichnung).join(', ')
+            )
+          )
+        }
+        if (durchWeiterverarbeitung.length && !k.weiterverarbeitungGemeldet.has(gruppe.etikett)) {
+          k.weiterverarbeitungGemeldet.add(gruppe.etikett)
+          const weiterverarbeiter = [
+            ...new Set(durchWeiterverarbeitung.flatMap((l) => l.verdraengtVon ?? []))
+          ]
+          tickern(
+            texte.ticker.uebergabeWeiterverarbeitet(
+              gruppe.etikett,
+              durchWeiterverarbeitung.map(bezeichnung).join(' und '),
+              weiterverarbeiter.map(bezeichnungVonId).join(' und '),
+              texte.ticker.blockBezeichnung(nummerVon.get(k.eintrag.instanzId), k.name),
+              gruppe.angekommen.map(bezeichnung).join(' und ')
             )
           )
         }
@@ -4119,23 +4195,24 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       // Rauchtest der Startanleitung (BAUPLAN 35) — seit der Welle (BAUPLAN 46,
       // Vertrag F7) NICHT mehr, solange nebenan ein anderer Umsetzer schreibt:
       // Der Test misste sonst einen Zwischenstand, in dem halb geschrieben
-      // wurde. Steht die Welle, läuft er sofort; sonst geht der Block in den
-      // NACHLAUF, und die Planer-Schleife holt den Test nach, sobald kein
-      // Umsetzer mehr läuft (nachlaeufeAbarbeiten) — bevor sie Neues startet.
-      // In verarbeite wird ab hier auf nichts mehr gewartet, was andere Blöcke
-      // betrifft.
+      // wurde. Der Block geht IMMER in den NACHLAUF (0.46.2); die Planer-
+      // Schleife misst dort — sobald die Welle steht — GENAU EINEN Rauchtest
+      // für alle wartenden Blöcke (nachlaeufeAbarbeiten), bevor sie Neues
+      // startet. Ein Bauer allein sieht davon nichts: Die Welle steht sofort,
+      // der Test läuft in derselben Planer-Runde. Die Wartezeile kommt nur,
+      // wenn nebenan wirklich noch jemand schreibt.
       if (rauchtestSteht(k)) {
-        if (!welleSteht(k)) {
-          k.status = 'nachlauf'
-          k.nachlaufErgebnis = blockErgebnis
-          tickern(texte.ticker.nachlaufWartet(k.name))
-          return
-        }
-        await nachlaufFuer(k, id, blockErgebnis)
-        if (k.status !== 'fertig') return
+        k.status = 'nachlauf'
+        k.nachlaufErgebnis = blockErgebnis
+        k.nachlaufReihe = ++nachlaufZaehler
+        if (!welleSteht(k)) tickern(texte.ticker.nachlaufWartet(k.name))
+        return
       }
       await verarbeiteEnde(k, id, blockErgebnis)
     }
+    // Zählt, in welcher Reihenfolge Blöcke in den Nachlauf gehen (0.46.2) —
+    // wird VOR der Planer-Schleife angelegt, verarbeite läuft erst dort.
+    let nachlaufZaehler = 0
 
     // Steht für diesen Block ein Rauchtest an? Genau die Bedingung, die bis
     // Bauschritt 45 direkt vor dem Test stand.
@@ -4149,44 +4226,109 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       )
     }
 
-    // Der Nachlauf eines Bau-Blocks (BAUPLAN 35, seit 46 als eigene Stelle für
-    // beide Wege — sofort und aus der Planer-Schleife): FlowForge startet die
-    // gebaute App einmal kurz und stoppt sie wieder — läuft sie gar nicht an,
-    // erfährt das der Bauer sofort und ohne einen Token, statt dass der Prüfer
-    // eine ganze Runde damit verbringt. Genau eine Nachbesserungs-Runde je
-    // Block; danach macht der Lauf ehrlich vermerkt weiter. Bei Rot steht der
-    // Block danach auf 'offen'.
-    async function nachlaufFuer(k, id, blockErgebnis) {
+    // Letzte nichtleere Zeile einer Prozess-Ausgabe, gedeckelt wie eine
+    // Beanstandungs-Zeile — die Grund-Zeile des Rauchtests im Ticker (0.46.2).
+    function letzteZeile(ausgabe) {
+      const zeilen = String(ausgabe ?? '')
+        .split('\n')
+        .map((z) => z.trim())
+        .filter(Boolean)
+      const zeile = zeilen.length ? zeilen[zeilen.length - 1] : ''
+      return zeile.length > TOR_BEANSTANDUNG_ZEILE_MAX ? zeile.slice(0, TOR_BEANSTANDUNG_ZEILE_MAX - 1) + '…' : zeile
+    }
+
+    // Der Rauchtest-Eintrag am Block-Ergebnis (0.46.2): für Grün, Rot UND
+    // Übersprungen — Georg liest im Laufbericht, warum, nicht nur „lief nicht an".
+    function rauchtestFuerBericht(probe, gemessenAn) {
+      return {
+        gruen: probe.geprueft ? probe.gruen === true : null,
+        code: probe.code ?? null,
+        ausgabe: mitteGekuerzt(String(probe.ausgabe ?? '').trim(), TOR_PROTOKOLL_MAX).text,
+        zeile: letzteZeile(probe.ausgabe),
+        grund: probe.grund ?? null,
+        ...(probe.port ? { port: probe.port } : {}),
+        ...(probe.besitzer ? { besitzer: probe.besitzer } : {}),
+        ...(probe.abgeraeumt?.length ? { abgeraeumt: probe.abgeraeumt } : {}),
+        ...(gemessenAn ? { gemessenAn } : {})
+      }
+    }
+
+    // Der Rauchtest EINMAL je Welle (BAUPLAN 35, 46; seit 0.46.2 für alle
+    // wartenden Blöcke zusammen): FlowForge startet die gebaute App einmal
+    // kurz und stoppt sie wieder — läuft sie gar nicht an, erfährt das der
+    // Bauer ohne einen Token, statt dass der Prüfer eine Runde damit verbringt.
+    // Es gibt nur EINE Startanleitung je Projekt, also auch nur ein Urteil:
+    // Die Nachbesserungs-Runde bekommt der Nachlauf-Block, der die Anleitung
+    // ZULETZT gesetzt hat (gesetztVon in startanleitung.json); Rückfall, wenn
+    // niemand aus der Welle sie gesetzt hat: der zuletzt fertig gewordene —
+    // ehrlich getickert. Die übrigen Blöcke der Welle bleiben 'erfolgreich',
+    // ohne Etikett und ohne Runde (im Lauf vom 18.08.2026 kosteten zwei
+    // doppelte Runden ~190k Tokens für dieselbe Anleitung). Genau eine
+    // Nachbesserungs-Runde je Block; danach macht der Lauf ehrlich vermerkt
+    // weiter. Bei Rot steht der attribuierte Block danach auf 'offen'.
+    // eintraege: [{ k, id, blockErgebnis }] — alle mit startanleitungPflicht.
+    async function nachlaufFuerWelle(eintraege) {
+      if (eintraege.length === 0) return
+      const gesetztVon = startanleitungLaden(projektPfad).anleitung?.gesetztVon ?? null
+      let ziel = eintraege.find((e) => e.id === gesetztVon) ?? null
+      const rueckfall = !ziel && eintraege.length > 1
+      if (!ziel) ziel = eintraege.reduce((a, b) => (b.k.nachlaufReihe > a.k.nachlaufReihe ? b : a))
       const probe = await rauchtest(projektPfad, {
-        // Eigene Prozessgruppe je Block-Instanz (BAUPLAN 41).
-        gruppe: 'rauchtest:' + projektPfad + ':' + id,
+        // Eigene Prozessgruppe je Rauchtest (BAUPLAN 41), benannt nach dem
+        // attribuierten Block.
+        gruppe: 'rauchtest:' + projektPfad + ':' + ziel.id,
         abbrechen: () => lauf.sanft || lauf.hart
       })
-      if (probe.geprueft && probe.gruen) tickern(texte.ticker.rauchtestGruen)
-      else if (probe.grund === 'appLaeuft') tickern(texte.ticker.rauchtestUebersprungen)
-      else if (probe.geprueft && !probe.gruen) {
-        if (blockErgebnis) blockErgebnis.zustand = 'startanleitung-laeuft-nicht'
-        if (!rauchtestNachgefordert.has(id)) {
-          rauchtestNachgefordert.add(id)
-          k.rauchtestRueckmeldung = mitteGekuerzt(
-            String(probe.ausgabe ?? '').trim() || texte.tor.rauchtestOhneAusgabe,
-            TOR_PROTOKOLL_MAX
-          ).text
-          k.meldungWiederholen = true
-          k.status = 'offen'
-          tickern(texte.ticker.rauchtestRot(k.name))
-          return
-        }
-        tickern(texte.ticker.rauchtestWeiterOhne)
+      for (const e of eintraege)
+        if (e.blockErgebnis)
+          e.blockErgebnis.rauchtest = rauchtestFuerBericht(probe, e === ziel ? null : bezeichnungFuer(ziel.k))
+      for (const p of probe.abgeraeumt ?? []) tickern(texte.ticker.rauchtestWaiseBeendet(p, probe.port))
+
+      if (probe.geprueft && probe.gruen) {
+        tickern(texte.ticker.rauchtestGruen)
+        return
       }
+      if (!probe.geprueft) {
+        if (probe.grund === 'appLaeuft') tickern(texte.ticker.rauchtestUebersprungen)
+        else if (probe.grund === 'keine') tickern(texte.ticker.rauchtestKeineAnleitung)
+        else if (probe.grund === 'nichtsZuStarten') tickern(texte.ticker.rauchtestNichtsZuStarten)
+        else if (probe.grund === 'abgebrochen') tickern(texte.ticker.rauchtestAbgebrochen)
+        else if (probe.grund === 'portFremd')
+          tickern(
+            probe.besitzer?.pid === process.pid
+              ? texte.ticker.rauchtestPortFlowForge(probe.port)
+              : texte.ticker.rauchtestPortFremd(
+                  probe.port,
+                  probe.besitzer ?? { pid: 0, name: '', befehl: '' },
+                  probe.zugehoerigkeit === 'vermutlich'
+                )
+          )
+        return
+      }
+      // Rot: nur der attribuierte Block trägt das Etikett und bekommt die Runde.
+      const zeile = letzteZeile(probe.ausgabe)
+      if (ziel.blockErgebnis) ziel.blockErgebnis.zustand = 'startanleitung-laeuft-nicht'
+      if (rueckfall) tickern(texte.ticker.rauchtestRueckfall(ziel.k.name))
+      if (!rauchtestNachgefordert.has(ziel.id)) {
+        rauchtestNachgefordert.add(ziel.id)
+        ziel.k.rauchtestRueckmeldung = mitteGekuerzt(
+          String(probe.ausgabe ?? '').trim() || texte.tor.rauchtestOhneAusgabe,
+          TOR_PROTOKOLL_MAX
+        ).text
+        ziel.k.meldungWiederholen = true
+        ziel.k.status = 'offen'
+        tickern(texte.ticker.rauchtestRotGrund(probe.code, zeile, ziel.k.name))
+        return
+      }
+      tickern(texte.ticker.rauchtestWeiterOhneGrund(probe.code, zeile))
     }
 
     // Die ausstehenden Nachläufe abarbeiten (BAUPLAN 46, Vertrag F7): sobald
     // die Welle steht — kein Umsetzer läuft mehr, keine Vorreparatur schreibt —
-    // und BEVOR die Planer-Schleife Neues startet. Je Block: Rauchtest samt
-    // seinen Folgen, dann das restliche Blockende (Prüfbefehl-Pflicht, Urteil,
-    // Punkt) und die Zusammenführung des Strangs. Erst danach ist der Block
-    // 'fertig' — für Nachfolger, Punkt und Laufstand gleichermaßen.
+    // und BEVOR die Planer-Schleife Neues startet. Erst EIN Rauchtest für alle
+    // Wartenden (0.46.2), dann je Block das restliche Blockende (Prüfbefehl-
+    // Pflicht, Urteil, Punkt) und die Zusammenführung des Strangs. Erst danach
+    // ist der Block 'fertig' — für Nachfolger, Punkt und Laufstand gleichermaßen.
     //
     // Beim harten Stopp bleibt alles liegen: Ein Nachlauf-Block zählt dann
     // weiter als belegtes Revier, damit der zentrale Rückroll seine fertige
@@ -4194,16 +4336,23 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     async function nachlaeufeAbarbeiten() {
       if (lauf.hart) return
       if (!welleSteht(null)) return
+      const eintraege = []
       for (const eintrag of kette) {
         const k = knoten.get(eintrag.instanzId)
         if (k.status !== 'nachlauf') continue
-        const id = eintrag.instanzId
-        const blockErgebnis = k.nachlaufErgebnis
+        eintraege.push({ k, id: eintrag.instanzId, blockErgebnis: k.nachlaufErgebnis })
         k.nachlaufErgebnis = null
-        k.status = 'fertig'
-        // Sanft gestoppt oder anderswo gescheitert: Der Test entfällt, wie er
-        // auch sofort entfallen wäre — der Block gilt als fertig.
-        if (!lauf.sanft && !endZustand) await nachlaufFuer(k, id, blockErgebnis)
+      }
+      if (eintraege.length === 0) return
+      // Sanft gestoppt oder anderswo gescheitert: Der Test entfällt, wie er
+      // auch sofort entfallen wäre — die Blöcke gelten als fertig.
+      if (!lauf.sanft && !endZustand) await nachlaufFuerWelle(eintraege)
+      // Erst jetzt, Block für Block, aus dem Nachlauf heraus: Wer noch wartet,
+      // belegt sein Revier weiter — der Punkt „Nach Block A" nimmt B's und C's
+      // Arbeit sonst schon mit, und B und C bekämen keinen eigenen Punkt mehr
+      // (gemessen, als alle vorab auf 'fertig' standen).
+      for (const { k, id, blockErgebnis } of eintraege) {
+        if (k.status === 'nachlauf') k.status = 'fertig'
         if (k.status === 'fertig') await verarbeiteEnde(k, id, blockErgebnis)
         await strangSchliessenFuer(k)
         standSpeichern()
@@ -4650,8 +4799,8 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         // Anlauf nicht zu Ende, und strangSchliessenAn lässt den Strang stehen.
         if (!lauf.hart) await strangSchliessenFuer(knoten.get(id))
       }
-      // Nachlauf-Phase (BAUPLAN 46): Steht die Welle, kommen die wartenden
-      // Rauchtests dran — VOR dem nächsten Start.
+      // Nachlauf-Phase (BAUPLAN 46): Steht die Welle, kommt der EINE Rauchtest
+      // für alle wartenden Blöcke dran (0.46.2) — VOR dem nächsten Start.
       await nachlaeufeAbarbeiten()
       standSpeichern()
     }

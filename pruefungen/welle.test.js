@@ -36,7 +36,10 @@ vi.mock('../src/main/torProzess.js', async (importOriginal) => ({
   ...(await importOriginal()),
   rauchtest: async (projektPfad, { gruppe }) => {
     steuerung.rauchtests.push({ zeit: Date.now(), gruppe })
-    return steuerung.rauchtestErgebnis
+    // Ein Fall darf je Aufruf antworten (erst rot, dann grün).
+    return typeof steuerung.rauchtestErgebnis === 'function'
+      ? steuerung.rauchtestErgebnis(steuerung.rauchtests.length)
+      : steuerung.rauchtestErgebnis
   }
 }))
 vi.mock('../src/main/prozesse.js', async (importOriginal) => ({
@@ -73,6 +76,7 @@ import {
 } from '../src/main/sicherungspunkte.js'
 import { meldungPruefen } from '../src/shared/lieferschein.js'
 import { pruefbefehlSetzen } from '../src/main/pruefbefehl.js'
+import { startanleitungSetzen, startanleitungLaden } from '../src/main/startanleitung.js'
 import { texte } from '../src/shared/texte.js'
 
 const umsetzer = { nurLesen: false, prueft: false }
@@ -569,8 +573,14 @@ describe('BAUPLAN 46 · Ein Lauf mit drei getrennten Bauern schreibt als Welle',
     await motor.freigeben('bb')
     await motor.freigeben('bc')
     await sicht.warteAuf(() => motor.gestartet.some((g) => g.instanzId === 'bd'), 'D gestartet')
-    // Drei Rauchtests (A, B, C) — jeder zu einer Zeit, zu der KEIN Bauer lief.
-    expect(steuerung.rauchtests).toHaveLength(3)
+    // GENAU EIN Rauchtest für die ganze Welle A, B, C (0.46.2) — zu einer
+    // Zeit, zu der KEIN Bauer lief. Rot vor Grün: Bis 0.46.1 maß FlowForge je
+    // Bauer einen (hier standen drei) — dieselbe Startanleitung dreimal, und
+    // bei Rot bekam jeder eine eigene Nachbesserungs-Runde. Niemand hat die
+    // Anleitung gesetzt (die Attrappe schreibt keine), also trägt die Gruppe
+    // die Kennung des zuletzt fertig gewordenen Bauers: C.
+    expect(steuerung.rauchtests).toHaveLength(1)
+    expect(steuerung.rauchtests[0].gruppe).toBe('rauchtest:' + projekt + ':bc')
     const laeuftUm = (zeit) =>
       motor.gestartet.some((g) => {
         if (!g.instanzId.startsWith('b')) return false
@@ -596,9 +606,20 @@ describe('BAUPLAN 46 · Ein Lauf mit drei getrennten Bauern schreibt als Welle',
     await sicht.warteAuf(() => sicht.ereignisse.some((e) => e.art === 'fertig'), 'Laufende')
     const ende = sicht.ereignisse.find((e) => e.art === 'fertig')
     expect(ende.zustand).toBe('erfolgreich')
-    expect(steuerung.rauchtests).toHaveLength(4)
+    // Zwei Rauchtests insgesamt: einer für die Welle A/B/C, einer für D allein.
+    expect(steuerung.rauchtests).toHaveLength(2)
+    expect(steuerung.rauchtests[1].gruppe).toBe('rauchtest:' + projekt + ':bd')
     const zeilen = sicht.ticker()
-    expect(zeilen.filter((z) => z === texte.ticker.rauchtestGruen)).toHaveLength(4)
+    expect(zeilen.filter((z) => z === texte.ticker.rauchtestGruen)).toHaveLength(2)
+    // Jeder Bauer trägt das Rauchtest-Ergebnis am Block-Ergebnis; die drei der
+    // Welle nennen, an wem gemessen wurde (C), D nicht (allein gemessen).
+    const bauerErgebnisse = Object.fromEntries(
+      ende.bericht.blockErgebnisse.filter((b) => b.block === 'Bauer').map((b) => [b.instanzId, b])
+    )
+    for (const id of ['ba', 'bb', 'bc', 'bd']) expect(bauerErgebnisse[id].rauchtest?.gruen).toBe(true)
+    expect(bauerErgebnisse.ba.rauchtest.gemessenAn).toBe(texte.ticker.blockBezeichnung(4, 'Bauer · C'))
+    expect(bauerErgebnisse.bc.rauchtest.gemessenAn).toBeUndefined()
+    expect(bauerErgebnisse.bd.rauchtest.gemessenAn).toBeUndefined()
     const punkte = (await sicherungspunkteLaden(projekt)).punkte.map((p) => p.beschriftung)
     for (const name of ['Bauer · A', 'Bauer · B', 'Bauer · C', 'Bauer · D'])
       expect(punkte.filter((b) => b === texte.sicherungen.beschriftungNachBlock(name))).toHaveLength(1)
@@ -797,4 +818,213 @@ describe('BAUPLAN 46 · Eine offene Folgen-Frage belegt ihren Zweig (Nacharbeit,
     expect(fs.readFileSync(path.join(projekt, 'src/a/x.js'), 'utf8')).toBe('a von b\n')
     expect(sicht.ereignisse.find((e) => e.art === 'fertig').zustand).toBe('wiederhergestellt')
   }, 20000)
+})
+
+// ——— Rauchtest einmal je Welle, Startanleitung in der Welle (0.46.2) ————————————
+
+// Der Motor-Ersatz tut, was startanleitung_setzen tut: Datei schreiben (mit
+// gesetztVon) und das Ereignis mit gesetztVon + vorher melden.
+function startanleitungSetzenWie(projekt, block, optionen, befehl) {
+  const ergebnis = startanleitungSetzen(
+    projekt,
+    { beschreibung: 'Startet ' + block.instanzId, befehl },
+    { gesetztVon: block.instanzId }
+  )
+  if (!ergebnis.ok) throw new Error(ergebnis.fehler)
+  optionen.aufEreignis({
+    art: 'startanleitung',
+    anleitung: ergebnis.anleitung,
+    gesetztVon: block.instanzId,
+    vorher: ergebnis.vorher
+  })
+}
+
+const rotDannGruen = (n) =>
+  n === 1
+    ? {
+        geprueft: true,
+        gruen: false,
+        code: 1,
+        ausgabe:
+          'node:events:495\n      throw er; // Unhandled\nError: listen EADDRINUSE: address already in use :::3888\n'
+      }
+    : { geprueft: true, gruen: true, code: null, ausgabe: 'Server lauscht auf 3888\n' }
+
+describe('0.46.2 · Rauchtest einmal je Welle — die Runde bekommt, wer die Startanleitung zuletzt gesetzt hat', () => {
+  // Paket schneiden → Bauer · A und Bauer · B (getrennte Listen). Beide setzen
+  // die Startanleitung; A zuerst, B danach — B überschreibt A's. Der eine
+  // Rauchtest der Welle ist rot: B bekommt die Runde, A bleibt „erledigt".
+  // Rot vor Grün: Bis 0.46.1 maß FlowForge je Bauer einen Rauchtest, und
+  // beide bekamen das Etikett „lief nicht an" plus je eine Nachbesserungs-Runde
+  // (Life-OS-Lauf 18.08.2026: ~190k Tokens für dieselbe Anleitung); das
+  // Überschreiben blieb wortlos.
+  const projekt = frischesProjekt('welle-rauchtest-setzer')
+  const bloecke = [
+    { instanzId: 'p', blockId: 'paket-schneiden', zusatz: '', feldWerte: { wunsch: 'Zwei Teile' } },
+    { instanzId: 'ba', blockId: 'bauer', zusatz: 'A' },
+    { instanzId: 'bb', blockId: 'bauer', zusatz: 'B' }
+  ]
+  const pfeile = [
+    { von: 'p', nach: 'ba' },
+    { von: 'p', nach: 'bb' }
+  ]
+  const listen = { ba: ['src/a/'], bb: ['src/b/'] }
+  let sicht
+  let motor
+  const auftraege = {}
+
+  beforeAll(async () => {
+    workflowSchreiben(projekt, bloecke, pfeile)
+    steuerung.rauchtests.length = 0
+    steuerung.rauchtestErgebnis = rotDannGruen
+    motor = motorErsatz(async (block, optionen) => {
+      if (block.instanzId === 'p') {
+        optionen.aufPaketMeldung({ instanzId: 'p', aufgabenIds: [] })
+        return paketMeldung(block, listen)
+      }
+      auftraege[block.instanzId] = [...(auftraege[block.instanzId] ?? []), block.auftrag]
+      schreiben(projekt, listen[block.instanzId][0] + 'neu.js', 'gebaut\n')
+      startanleitungSetzenWie(projekt, block, optionen, 'node ' + block.instanzId + '.js')
+      return umsetzungsMeldung()
+    })
+    sicht = fensterErsatz()
+    expect(await laufStarten(sicht.fenster, projekt, [], null, false, null)).toEqual({ ok: true })
+    await motor.freigeben('p')
+    await sicht.warteAuf(
+      () => ['ba', 'bb'].every((id) => motor.gestartet.some((g) => g.instanzId === id)),
+      'A und B gestartet'
+    )
+    await motor.freigeben('ba')
+    await sicht.warteAuf(
+      () => sicht.ticker().includes(texte.ticker.nachlaufWartet('Bauer · A')),
+      'A im Nachlauf'
+    )
+    await motor.freigeben('bb')
+    // Rot → B läuft ein zweites Mal an (Nachbesserungs-Runde) und wird erneut
+    // freigegeben; dann endet der Lauf.
+    await sicht.warteAuf(
+      () => motor.gestartet.filter((g) => g.instanzId === 'bb').length === 2,
+      'B ein zweites Mal gestartet'
+    )
+    await motor.freigeben('bb')
+    await sicht.warteAuf(() => sicht.ereignisse.some((e) => e.art === 'fertig'), 'Laufende')
+  }, 30000)
+
+  it('tickert das Überschreiben mit beiden Befehlen — einmal, nicht in der Nachbesserungs-Runde von B', () => {
+    const zeilen = sicht.ticker()
+    const ersetzt = texte.ticker.startanleitungErsetzt('Bauer · B', 'Bauer · A', 'node ba.js', 'node bb.js')
+    expect(zeilen.filter((z) => z === ersetzt)).toHaveLength(1)
+    // Umgekehrt nie: A hat nichts von B ersetzt.
+    expect(zeilen.some((z) => z.startsWith('„Bauer · A" hat die Startanleitung'))).toBe(false)
+    expect(startanleitungLaden(projekt).anleitung.gesetztVon).toBe('bb')
+  })
+
+  it('misst EINEN Rauchtest für die Welle und gibt die Runde dem Setzer B — mit Grund im Ticker', () => {
+    // Zwei Rauchtests insgesamt: die Welle (rot) und die Nachbesserung von B (grün).
+    expect(steuerung.rauchtests).toHaveLength(2)
+    expect(steuerung.rauchtests[0].gruppe).toBe('rauchtest:' + projekt + ':bb')
+    expect(motor.gestartet.filter((g) => g.instanzId === 'bb')).toHaveLength(2)
+    expect(motor.gestartet.filter((g) => g.instanzId === 'ba')).toHaveLength(1)
+    const zeilen = sicht.ticker()
+    expect(zeilen).toContain(
+      texte.ticker.rauchtestRotGrund(1, 'Error: listen EADDRINUSE: address already in use :::3888', 'Bauer · B')
+    )
+    expect(zeilen).not.toContain(texte.ticker.rauchtestRueckfall('Bauer · B'))
+    // A bekommt keine Runde — keine Rot-Zeile nennt ihn.
+    expect(zeilen.some((z) => z.startsWith('Rauchtest: rot') && z.includes('„Bauer · A"'))).toBe(false)
+    // Der zweite Auftrag von B trägt die Ausgabe des Startversuchs.
+    expect(auftraege.bb).toHaveLength(2)
+    expect(auftraege.bb[1]).toContain('EADDRINUSE')
+    expect(auftraege.ba).toHaveLength(1)
+  })
+
+  it('lässt A ohne Etikett und ohne Runde — beide tragen das Rauchtest-Ergebnis im Bericht', () => {
+    const ende = sicht.ereignisse.find((e) => e.art === 'fertig')
+    expect(ende.zustand).toBe('erfolgreich')
+    const von = (id) => ende.bericht.blockErgebnisse.filter((b) => b.instanzId === id)
+    expect(von('ba')).toHaveLength(1)
+    expect(von('ba')[0].zustand).toBe('erfolgreich')
+    expect(von('ba')[0].rauchtest).toMatchObject({
+      gruen: false,
+      code: 1,
+      zeile: 'Error: listen EADDRINUSE: address already in use :::3888',
+      gemessenAn: texte.ticker.blockBezeichnung(3, 'Bauer · B')
+    })
+    expect(von('bb')).toHaveLength(2)
+    expect(von('bb')[0].zustand).toBe('startanleitung-laeuft-nicht')
+    expect(von('bb')[0].rauchtest).toMatchObject({ gruen: false, code: 1 })
+    expect(von('bb')[0].rauchtest.gemessenAn).toBeUndefined()
+    expect(von('bb')[1].zustand).toBe('erfolgreich')
+    expect(von('bb')[1].rauchtest).toMatchObject({ gruen: true, code: null, zeile: 'Server lauscht auf 3888' })
+  })
+})
+
+describe('0.46.2 · Rückfall der Attribution: niemand in der Welle hat die Startanleitung gesetzt', () => {
+  // Die Anleitung liegt schon vor dem Lauf (ohne gesetztVon); A und B setzen
+  // nichts. Rot → der zuletzt fertig gewordene Bauer (B) bekommt die Runde,
+  // und der Ticker sagt, warum gerade er.
+  const projekt = frischesProjekt('welle-rauchtest-rueckfall')
+  const bloecke = [
+    { instanzId: 'p', blockId: 'paket-schneiden', zusatz: '', feldWerte: { wunsch: 'Zwei Teile' } },
+    { instanzId: 'ba', blockId: 'bauer', zusatz: 'A' },
+    { instanzId: 'bb', blockId: 'bauer', zusatz: 'B' }
+  ]
+  const pfeile = [
+    { von: 'p', nach: 'ba' },
+    { von: 'p', nach: 'bb' }
+  ]
+  const listen = { ba: ['src/a/'], bb: ['src/b/'] }
+  let sicht
+  let motor
+
+  beforeAll(async () => {
+    workflowSchreiben(projekt, bloecke, pfeile)
+    expect(startanleitungSetzen(projekt, { beschreibung: 'Alt', befehl: 'node alt.js' }).ok).toBe(true)
+    steuerung.rauchtests.length = 0
+    steuerung.rauchtestErgebnis = rotDannGruen
+    motor = motorErsatz(async (block, optionen) => {
+      if (block.instanzId === 'p') {
+        optionen.aufPaketMeldung({ instanzId: 'p', aufgabenIds: [] })
+        return paketMeldung(block, listen)
+      }
+      schreiben(projekt, listen[block.instanzId][0] + 'neu.js', 'gebaut\n')
+      return umsetzungsMeldung()
+    })
+    sicht = fensterErsatz()
+    expect(await laufStarten(sicht.fenster, projekt, [], null, false, null)).toEqual({ ok: true })
+    await motor.freigeben('p')
+    await sicht.warteAuf(
+      () => ['ba', 'bb'].every((id) => motor.gestartet.some((g) => g.instanzId === id)),
+      'A und B gestartet'
+    )
+    await motor.freigeben('ba')
+    await sicht.warteAuf(
+      () => sicht.ticker().includes(texte.ticker.nachlaufWartet('Bauer · A')),
+      'A im Nachlauf'
+    )
+    await motor.freigeben('bb')
+    // Rot → B läuft ein zweites Mal an (Nachbesserungs-Runde) und wird erneut
+    // freigegeben; dann endet der Lauf.
+    await sicht.warteAuf(
+      () => motor.gestartet.filter((g) => g.instanzId === 'bb').length === 2,
+      'B ein zweites Mal gestartet'
+    )
+    await motor.freigeben('bb')
+    await sicht.warteAuf(() => sicht.ereignisse.some((e) => e.art === 'fertig'), 'Laufende')
+  }, 30000)
+
+  it('gibt die Runde dem zuletzt fertig gewordenen Bauer und sagt es', () => {
+    const zeilen = sicht.ticker()
+    expect(zeilen).toContain(texte.ticker.rauchtestRueckfall('Bauer · B'))
+    expect(steuerung.rauchtests[0].gruppe).toBe('rauchtest:' + projekt + ':bb')
+    expect(motor.gestartet.filter((g) => g.instanzId === 'bb')).toHaveLength(2)
+    expect(motor.gestartet.filter((g) => g.instanzId === 'ba')).toHaveLength(1)
+    expect(zeilen.some((z) => /^„Bauer · [AB]" hat die Startanleitung/.test(z))).toBe(false)
+    const ende = sicht.ereignisse.find((e) => e.art === 'fertig')
+    expect(ende.zustand).toBe('erfolgreich')
+    expect(ende.bericht.blockErgebnisse.filter((b) => b.instanzId === 'ba')[0].zustand).toBe('erfolgreich')
+    expect(ende.bericht.blockErgebnisse.filter((b) => b.instanzId === 'bb')[0].zustand).toBe(
+      'startanleitung-laeuft-nicht'
+    )
+  })
 })

@@ -1786,6 +1786,36 @@ body {
   margin-bottom: 2px;
 }
 
+/* Rauchtest am Block-Ergebnis (0.46.2): Zeile mit Grund, Ausgabe aufklappbar. */
+.block-ergebnis-rauchtest {
+  margin: 4px 0 6px;
+}
+
+.block-ergebnis-rauchtest .link-knopf {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--akzent-text);
+  font-family: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.block-ergebnis-rauchtest-ausgabe {
+  margin: 4px 0 0;
+  max-height: 160px;
+  overflow: auto;
+  padding: 6px 8px;
+  border: 1px solid var(--rand-kontrolle);
+  border-radius: 8px;
+  background: var(--flaeche-tief);
+  font-size: 11px;
+  color: var(--text-zweit);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .block-ergebnis-text {
   max-height: 180px;
   overflow-y: auto;

@@ -6,7 +6,11 @@ import { z } from 'zod'
 import { texte } from '../../shared/texte.js'
 import { startanleitungSetzen } from '../startanleitung.js'
 
-export async function startWerkzeugServer({ projektPfad, aufEreignis }) {
+// holeInstanz (0.46.2): Die Kennung des Blocks, der gerade setzt — wie beim
+// Prüfbefehl. Sie steht als gesetztVon in der Datei und im Ereignis, damit der
+// Lauf in der Welle sagen kann, wer wessen Anleitung ersetzt hat, und wem der
+// Rauchtest die Nachbesserungs-Runde gibt. Ohne sie (Chat) bleibt es null.
+export async function startWerkzeugServer({ projektPfad, aufEreignis, holeInstanz = null }) {
   const { createSdkMcpServer, tool } = await import('@anthropic-ai/claude-agent-sdk')
 
   const setzen = tool(
@@ -37,13 +41,16 @@ export async function startWerkzeugServer({ projektPfad, aufEreignis }) {
         )
     },
     async ({ beschreibung, befehl, adresse }) => {
-      const ergebnis = startanleitungSetzen(projektPfad, { beschreibung, befehl, adresse })
+      const gesetztVon = holeInstanz?.() ?? null
+      const ergebnis = startanleitungSetzen(projektPfad, { beschreibung, befehl, adresse }, { gesetztVon })
       if (!ergebnis.ok) {
         aufEreignis({ art: 'ticker', text: texte.ticker.startanleitungAbgelehnt(ergebnis.fehler) })
         return { content: [{ type: 'text', text: ergebnis.fehler }], isError: true }
       }
       // Oberfläche sofort nachziehen: der „App starten"-Knopf wird aktiv.
-      aufEreignis({ art: 'startanleitung', anleitung: ergebnis.anleitung })
+      // gesetztVon + vorher (0.46.2): der Lauf baut daraus den Überschreiben-
+      // Ticker der Welle.
+      aufEreignis({ art: 'startanleitung', anleitung: ergebnis.anleitung, gesetztVon, vorher: ergebnis.vorher })
       aufEreignis({ art: 'ticker', text: texte.ticker.startanleitungGesetzt })
       return { content: [{ type: 'text', text: texte.agentenStart.gesetzt(ergebnis.anleitung) }] }
     },

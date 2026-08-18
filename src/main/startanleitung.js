@@ -40,19 +40,30 @@ function pruefeAnleitung(projektPfad, eingabe) {
     return { fehler: texte.agentenStart.fehlerZuLang }
   if (adresse && !istWebAdresse(adresse) && !dateiImProjekt(projektPfad, adresse))
     return { fehler: texte.agentenStart.fehlerAdresse }
-  return { anleitung: { beschreibung, befehl, adresse } }
+  // gesetztVon (0.46.2): die Block-Instanz, die die Anleitung zuletzt gesetzt
+  // hat — wird durchgereicht, nicht geprüft (Kennung, kein Nutzertext). null,
+  // wenn sie fehlt (alte Dateien, Chat).
+  const gesetztVon =
+    typeof eingabe?.gesetztVon === 'string' && eingabe.gesetztVon.trim() ? eingabe.gesetztVon.trim() : null
+  return { anleitung: { beschreibung, befehl, adresse, gesetztVon } }
 }
 
-export function startanleitungSetzen(projektPfad, eingabe) {
+// gesetztVon (0.46.2): Der Block, der die Anleitung setzt, wird in der Datei
+// vermerkt — in der Welle überschreiben sich Bauer sonst wortlos, und der
+// Rauchtest wüsste nicht, wem er eine Nachbesserungs-Runde geben soll.
+// Liefert zusätzlich `vorher`: die vorher gültige Anleitung (samt gesetztVon)
+// oder null — daraus baut der Lauf den Überschreiben-Ticker.
+export function startanleitungSetzen(projektPfad, eingabe, { gesetztVon = null } = {}) {
   if (!fs.existsSync(projektPfad)) return { ok: false, fehler: texte.fehler.projektNichtGefunden }
-  const geprueft = pruefeAnleitung(projektPfad, eingabe)
+  const geprueft = pruefeAnleitung(projektPfad, { ...eingabe, gesetztVon })
   if (geprueft.fehler) return { ok: false, fehler: geprueft.fehler }
+  const vorher = startanleitungLaden(projektPfad).anleitung
   const anleitung = { ...geprueft.anleitung, geaendertAm: new Date().toISOString() }
   const datei = path.join(projektPfad, STARTANLEITUNG_DATEI)
   const tmp = datei + '.tmp'
   fs.writeFileSync(tmp, JSON.stringify(anleitung, null, 2), 'utf8')
   fs.renameSync(tmp, datei)
-  return { ok: true, anleitung }
+  return { ok: true, anleitung, vorher }
 }
 
 // Liefert die gültige Startanleitung — oder anleitung: null, wenn keine da ist.

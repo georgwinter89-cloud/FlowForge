@@ -165,6 +165,9 @@ Beanstandungen mit Fundort, Erledigt/Offen, Anmerkung — statt als Textblock
 (Läufe von davor zeigen weiterhin ihren Text).
 Seit Bauschritt 41 steht je Block **Katalogname und Zusatzname** (§4.1) getrennt im
 Bericht — angezeigt zusammen („Prüfer · Datenbank"), gezählt wird der Blocktyp (§3.4).
+Seit 0.46.2 trägt das Blockergebnis eines Bauers das **Rauchtest-Ergebnis** (§8): grün,
+rot mit Fehlercode und letzter Ausgabezeile, oder übersprungen mit Grund — die Ausgabe des
+Startversuchs aufklappbar; bei einer Welle mit dem Vermerk, an welchem Bauer gemessen wurde.
 Der Verbrauch steht je Block und für den ganzen Lauf im Bericht — seit 13.08.2026 mit
 **Token-Aufschlüsselung** (Eingabe, Ausgabe, Cache gelesen, Cache geschrieben) und den
 **theoretischen API-Kosten**, die der Motor aus den Preisen der genutzten Modelle berechnet
@@ -770,8 +773,23 @@ wortlos, egal in welcher Reihenfolge die Zweige fertig wurden. Gemeldet wird nur
 was der Block überhaupt braucht. Ausgenommen von der Distanz-Regel sind Blöcke mit
 dem Kennzeichen **„führt zusammen"**: Sie bekommen **alle** Vorfahren mit passendem
 Etikett nummeriert, denn Zusammenführen ist ihre Aufgabe (Blöcke dafür gibt es mit
-Bauschritt 47). Dieselbe Entscheidung speist die braucht-Chips am Schaubild (§4.1) —
-sie zeigen nie einen anderen Lieferanten, als der Lauf nimmt. **Übergaben gehen
+Bauschritt 47). **Verdrängung durch Weiterverarbeitung** (seit 0.46.2): Liegen bei
+einem Empfänger mehrere Lieferungen desselben Etiketts vor, und hat Lieferant B die
+Lieferung von Lieferant A als Eingang genommen (A ist Vorfahr von B, und B braucht
+dieses Etikett — Pflicht oder optional), zählt am gemeinsamen Empfänger nur B: Die
+Prüfung der Prüfung ersetzt die Prüfung (Prüfer → Zweitaudit → Sessionende: das
+Sessionende bekommt nur den Beleg des Zweitaudits, auch wenn der erste Prüfer
+zusätzlich direkt davor liegt). Die Regel gilt allgemein für jeden Block, der ein
+Etikett braucht **und** liefert, und sie greift **vor** der Distanz-Regel: Zuerst
+fällt heraus, was weiterverarbeitet wurde, dann entscheidet unter den Übrigen die
+Distanz. Blöcke mit „führt zusammen" bleiben unberührt — dort kommt alles an. Der
+Ticker sagt es mit eigenem Wortlaut („‚Prüfbeleg' von Block 7 ‚Prüfer' ging in
+Block 9 ‚Zweitaudit' ein — bei Block 10 ‚Sessionende' zählt der von Block 9"), je
+Block und Etikett einmal; die Zeile „näher im Schaubild" gilt nur noch für die
+Distanz. Laufzeit-Grenze: **Nur wer geliefert hat, zählt** — meldet das Zweitaudit
+nichts, kommt der erste Beleg doch an. Dieselbe Entscheidung speist die braucht-Chips
+am Schaubild (§4.1) und den Auftrags-Vorspann — sie zeigen nie einen anderen
+Lieferanten oder Empfänger, als der Lauf nimmt. **Übergaben gehen
 vollständig** — einen Übergabe-Deckel gibt es seit 0.46.1 nicht mehr (der
 frühere von 8.000 Zeichen riss im Alltag mehrfach knapp und kostete Runden);
 dasselbe gilt für die Übertrags-Übergabe (§5) und die Wiederhol-Vorlage bei
@@ -802,6 +820,16 @@ technisch „frischer Agent ohne das Arbeitswissen des Bauers" — jeder Block l
 als frischer Agent in der Lauf-Session (§5); es ist kein anderes Gehirn.
 Prüfer-Blöcke melden ihr Urteil im Feld `urteil` ihres Prüfbelegs
 (bestanden/fehlgeschlagen) — daran hängen Rückführung und Reparatur-Runden.
+Der Katalog-Prüfer nimmt seit 0.46.2 einen **Prüfbeleg als optionalen Bedarf**
+(brauchtWozu: „prüft eine vorliegende Prüfung nach, statt sie zu wiederholen
+(Zweitaudit) — nenne Stichproben und Fundorte so, dass er sie nachvollziehen
+kann"): Steht ein Prüfer hinter einem Prüfer, ist er das **Zweitaudit** — der
+erste Beleg erreicht ihn (nummeriert, wenn mehrere gleich nah liefern), der
+Vorspann des ersten Prüfers nennt ihn als Empfänger, und sein Auftrag sagt ihm,
+den vorliegenden Beleg nachzuprüfen (Stichproben, Beanstandungen nachvollziehen)
+statt alles zu wiederholen. Da er das Etikett damit braucht und liefert, greift
+am gemeinsamen Empfänger die Verdrängung durch Weiterverarbeitung (oben,
+„Übergaben"). Die Gesamtprüfung nimmt keinen Prüfbeleg an.
 
 **Prüfordner je Prüf-Instanz** (seit Bauschritt 41): Die Prüfmappe `pruefung/`
 bleibt die gemeinsame Werkbank des Laufs, aber jeder **schreibende** Prüfer
@@ -1362,7 +1390,16 @@ Angreifer durch die Diagnose.
   schreibt (oder die lokale Vorreparatur gerade schreibt) — er misste einen Zwischenstand.
   Der Block geht dann in den **Nachlauf** („Rauchtest von „Bauer · UI" wartet, bis die Welle
   steht"), und FlowForge holt den Test nach, sobald kein Bauer mehr läuft — **bevor** es
-  Neues startet. Bei Rot bekommt der Block wie bisher genau eine Nachbesserungs-Runde.
+  Neues startet — **einmal für die ganze Welle** (seit 0.46.2, §8): Bei Rot bekommt genau
+  ein Bauer die Nachbesserungs-Runde (wer die Startanleitung zuletzt gesetzt hat), die
+  übrigen bleiben „erledigt". **Startanleitung in der Welle** (seit 0.46.2): Die
+  Startanleitung ist eine Projektdatei, kein Teil des Datenvertrags — jeder Bauer darf sie
+  setzen. Damit sich zwei Bauer nicht wortlos überschreiben, merkt `startanleitung_setzen`
+  den setzenden Block (`gesetztVon` in startanleitung.json), und ersetzt ein Block die
+  Anleitung eines anderen Blocks dieses Laufs, der gerade Revier belegt, sagt der Ticker es
+  mit beiden Befehlen („„Bauer · UI" hat die Startanleitung von „Bauer · Daten" ersetzt:
+  „npm start" → „node server.js""); derselbe Block in seiner Nachbesserungs-Runde tickert
+  nicht. Der Co-Pilot-Chat setzt ohne `gesetztVon`.
   **Körnung:** Ein Block gilt erst als **fertig** — für seine Nachfolger, für den Punkt „Nach
   Block …" (§3.3) und für den Laufstand der Wiederaufnahme —, wenn sein Nachlauf durch ist
   und sein Strang zusammengeführt wurde. Fertig-Meldung, Sicherungspunkt und Laufstand haben
@@ -1655,7 +1692,8 @@ Melde-Werkzeug, folgt die übliche Rechte-Rückfrage — dasselbe Muster wie bei
 Jeder Bau-Workflow muss eine **Startanleitung** als Pflicht-Artefakt hinterlassen (seit
 Bauschritt 10): ein maschinenlesbarer Datensatz (startanleitung.json) aus **Beschreibung**
 (ein Satz), **Befehl** (Kommandozeile im Projektordner) und/oder **Adresse** (http(s)-Adresse
-oder Datei im Projektordner). Der Agent schreibt sie ausschließlich über das eingebaute
+oder Datei im Projektordner; seit 0.46.2 dazu `gesetztVon` — die Block-Instanz, die sie
+zuletzt gesetzt hat, §5). Der Agent schreibt sie ausschließlich über das eingebaute
 Werkzeug `startanleitung_setzen` (hart validiert; die Datei selbst ist für ihn gesperrt wie
 alle Verwaltungsdateien, §3.1). Durchsetzung beim Bauer-Block: Fehlt die Startanleitung nach
 seinem Lauf, bekommt er genau eine Nachbesserungs-Runde (unabhängig von den Reparatur-Runden);
@@ -1673,16 +1711,37 @@ Motor, ohne Tokens und still (kein Eintrag im App-Tab, keine Zustandsanzeige, ke
 Browser-Fenster). Geprüft wird nur „läuft an": Ein Befehl, der mit Fehlercode stirbt, ist rot;
 bei einer Web-Adresse muss sie innerhalb von 25 Sekunden antworten; ohne Adresse genügt
 „läuft noch oder sauber durchgelaufen" nach 6 Sekunden Anlauf; eine Datei-Adresse muss
-existieren. Ist es rot, geht die Ausgabe als Rückmeldung an den Bauer und derselbe Block läuft
-genau **eine** Nachbesserungs-Runde erneut — bevor der Prüfer eine ganze Runde damit
-verbringt; danach macht der Lauf ehrlich vermerkt weiter. Läuft die App gerade im App-Tab,
-entfällt der Rauchtest (FlowForge nimmt ihr den Port nicht weg), ebenso bei einer
-Startanleitung ohne Befehl und Datei-Adresse. **Nach der Welle, nicht mittendrin** (seit
-Bauschritt 46): Schreibt nebenan noch ein anderer Bauer (oder die lokale Vorreparatur,
-§4.3), misst der Rauchtest nicht sofort — er träfe einen Zwischenstand, in dem halb
-geschrieben wurde. Der Block wartet dann im **Nachlauf** („Rauchtest von „Bauer · UI"
+existieren. Eine App, die FlowForge am Ende selbst stoppt, weil sie noch lief, zählt als
+„läuft noch" — der Fehlercode ihres eigenen Abräumens ist kein Urteil (seit 0.46.2; vorher
+galt genau dieser Code als Rot, jede weiterlaufende App war „lief nicht an"). Ist es rot,
+geht die Ausgabe als Rückmeldung an den Bauer und derselbe Block läuft genau **eine**
+Nachbesserungs-Runde erneut — bevor der Prüfer eine ganze Runde damit verbringt; danach
+macht der Lauf ehrlich vermerkt weiter. **Der Rauchtest sagt, warum** (seit 0.46.2): Der
+Ticker nennt bei Rot Fehlercode und letzte Ausgabezeile („Rauchtest: rot (Code 1) — Error:
+listen EADDRINUSE: address already in use :::3888 — „Bauer · UI" bekommt eine
+Nachbesserungs-Runde …"), und am Block-Ergebnis im Laufbericht steht `rauchtest`
+(grün/rot/übersprungen, Fehlercode, Grund, Ausgabe aufklappbar) — für jeden Bauer der Welle,
+mit dem Vermerk, an wem gemessen wurde. Läuft die App gerade im App-Tab, entfällt der
+Rauchtest (FlowForge nimmt ihr den Port nicht weg), ebenso bei einer Startanleitung ohne
+Befehl und Datei-Adresse; jedes Überspringen steht mit Grund im Ticker. **Port-Prüfung vor
+dem Rauchtest** (seit 0.46.2, Mechanik wie vor dem App-Start unten): Ist der Port einer
+lokalen Startanleitungs-Adresse belegt und der Besitzer stammt aus diesem Lauf/Projekt
+(Prozessgruppen des Spähers, Reste), beendet FlowForge ihn vorher, wartet, bis der Port frei
+ist, und tickert es („Waisenprozess node.exe (PID 1234, „node server.js") aus diesem Lauf
+beendet — Port 3888 war belegt"); gehört er nicht zum Lauf — Georgs eigener Server, ein
+Editor, FlowForge selbst, oder nur „vermutlich aus einem Lauf" —, wird der Rauchtest
+**übersprungen** mit Grund und Besitzer (kein Rot, keine Runde). **Nach der Welle, nicht
+mittendrin** (seit Bauschritt 46): Schreibt nebenan noch ein anderer Bauer (oder die lokale
+Vorreparatur, §4.3), misst der Rauchtest nicht sofort — er träfe einen Zwischenstand, in dem
+halb geschrieben wurde. Der Block wartet dann im **Nachlauf** („Rauchtest von „Bauer · UI"
 wartet, bis die Welle steht"), und FlowForge holt den Test nach, sobald kein Bauer mehr
-läuft — bevor es Neues startet; erst danach ist der Block fertig (§5, Körnung).
+läuft — bevor es Neues startet; erst danach ist der Block fertig (§5, Körnung). **Einmal je
+Welle** (seit 0.46.2): Es gibt eine Startanleitung je Projekt, also misst FlowForge für alle
+Bauer der Welle **einen** Rauchtest, nachdem sie steht. Bei Rot bekommt der Bauer die
+Nachbesserungs-Runde, der die Startanleitung **zuletzt gesetzt** hat (`gesetztVon`, §5);
+hat niemand aus der Welle sie gesetzt, der zuletzt fertig gewordene — der Ticker sagt es.
+Die übrigen Bauer der Welle bleiben „erledigt", ohne Etikett und ohne Runde. Ein Bauer
+allein verhält sich wie bisher: sofortiger Test, keine Wartezeile.
 
 Ausgeführt wird die Anleitung **im Tab „App"** der Projektansicht (seit Bauschritt 32; das
 frühere externe Konsolenfenster gibt es nicht mehr — Entscheidung Georg, 15.08.2026). Der

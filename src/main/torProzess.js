@@ -12,9 +12,16 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { spawn } from 'node:child_process'
-import { ausgabeAnhaengen } from './prozessRegeln.js'
-import { prozessgruppeAnlegen, prozessWurzelMelden, prozessgruppeAbraeumen } from './prozesse.js'
-import { appLaeuft, einmalAnfragen } from './appProzess.js'
+import { ausgabeAnhaengen, lokalerPort } from './prozessRegeln.js'
+import {
+  prozessgruppeAnlegen,
+  prozessWurzelMelden,
+  prozessgruppeAbraeumen,
+  portBesitzer,
+  prozessBeenden,
+  prozessZugehoerigkeit
+} from './prozesse.js'
+import { appLaeuft, einmalAnfragen, aufPortFreiWarten } from './appProzess.js'
 import { startanleitungLaden } from './startanleitung.js'
 import { texte } from '../shared/texte.js'
 
@@ -117,32 +124,76 @@ export async function befehlAbspielen(
 
 // Rauchtest der Startanleitung (BAUPLAN 35): Startet die gebaute App einmal
 // kurz und stoppt sie wieder — läuft der Befehl an, antwortet die Adresse?
-// Liefert { geprueft, gruen, ausgabe, grund }. geprueft: false heißt „konnte
-// nicht sinnvoll geprüft werden" (keine Startanleitung, App läuft schon im Tab,
-// nichts zu starten) — dann urteilt der Rauchtest über gar nichts.
-// gruppe (BAUPLAN 41): Prozessgruppe dieses Rauchtests — je Block-Instanz eine
-// eigene. Ohne sie räumte der fertige Rauchtest des einen Bauers den laufenden
-// des anderen ab und meldete ein falsches Rot.
+// Liefert IMMER (0.46.2) { geprueft, gruen, code, ausgabe, grund, port?,
+// besitzer?, abgeraeumt? }:
+//   geprueft: false — konnte nicht sinnvoll geprüft werden (grund 'keine' |
+//     'appLaeuft' | 'nichtsZuStarten' | 'abgebrochen' | 'portFremd'); dann
+//     gruen: null, und der Rauchtest urteilt über gar nichts.
+//   code — Fehlercode des Startversuchs; null = „lief noch, als abgeräumt
+//     wurde" (bei einer Web-Adresse der Normalfall).
+//   ausgabe — was der Startversuch schrieb (gedeckelt), auch bei Grün.
+// Port-Prüfung vor dem Start (0.46.2, Mechanik aus dem App-Tab): Ist der Port
+// der Adresse belegt und der Besitzer stammt aus diesem Lauf/Projekt (Späher-
+// Gruppen, Reste), räumt FlowForge ihn ab (abgeraeumt) und startet dann; ein
+// fremder Besitzer — Georgs eigener Server, ein Editor, FlowForge selbst, oder
+// nur „vermutlich aus einem Lauf" — führt zu 'portFremd' mit besitzer statt zu
+// einem falschen Rot (Befund Life-OS-Lauf 18.08.2026: Port 3888 von Waisen
+// aus den eigenen Bauer-Tests belegt, beide Bauer bekamen „läuft nicht an").
+// gruppe (BAUPLAN 41): Prozessgruppe dieses Rauchtests — je Aufruf eine
+// eigene (seit 0.46.2 einer je Welle, benannt nach dem attribuierten Block;
+// ein Bauer allein wie zuvor je Block-Instanz). Ohne sie räumte ein fertiger
+// Rauchtest einen noch laufenden ab und meldete ein falsches Rot.
 export async function rauchtest(projektPfad, { abbrechen = null, gruppe = null } = {}) {
+  const uebersprungen = (grund, weiteres = {}) => ({
+    geprueft: false,
+    gruen: null,
+    code: null,
+    ausgabe: '',
+    grund,
+    ...weiteres
+  })
   const { anleitung } = startanleitungLaden(projektPfad)
-  if (!anleitung) return { geprueft: false, grund: 'keine' }
+  if (!anleitung) return uebersprungen('keine')
   // Läuft die App gerade im App-Tab, würde der Rauchtest ihr den Port
   // wegnehmen und ein falsches Rot melden — dann lieber gar nicht prüfen.
-  if (appLaeuft(projektPfad)) return { geprueft: false, grund: 'appLaeuft' }
+  if (appLaeuft(projektPfad)) return uebersprungen('appLaeuft')
 
   // Nur Datei-Adresse, kein Befehl: Es gibt nichts zu starten — geprüft wird,
   // ob die Datei überhaupt existiert.
   if (!anleitung.befehl) {
-    if (!anleitung.adresse || istWebAdresse(anleitung.adresse))
-      return { geprueft: false, grund: 'nichtsZuStarten' }
+    if (!anleitung.adresse || istWebAdresse(anleitung.adresse)) return uebersprungen('nichtsZuStarten')
     const voll = path.resolve(projektPfad, anleitung.adresse)
     return fs.existsSync(voll)
-      ? { geprueft: true, gruen: true, ausgabe: '' }
+      ? { geprueft: true, gruen: true, code: null, ausgabe: '', grund: null }
       : {
           geprueft: true,
           gruen: false,
-          ausgabe: texte.tor.rauchtestDateiFehlt(anleitung.adresse)
+          code: null,
+          ausgabe: texte.tor.rauchtestDateiFehlt(anleitung.adresse),
+          grund: null
         }
+  }
+
+  // Port-Prüfung vor dem Start (0.46.2).
+  const port = anleitung.adresse ? lokalerPort(anleitung.adresse) : null
+  const abgeraeumt = []
+  if (port) {
+    const besitzer = await portBesitzer(port)
+    if (besitzer) {
+      const kurz = { pid: besitzer.pid, name: besitzer.name, befehl: besitzer.befehl }
+      const zugehoerig = prozessZugehoerigkeit(besitzer.pid, besitzer.start, projektPfad)
+      if (zugehoerig !== 'gruppe' && zugehoerig !== 'rest')
+        return uebersprungen('portFremd', { port, besitzer: kurz, zugehoerigkeit: zugehoerig })
+      const beendet = await prozessBeenden(besitzer.pid, besitzer.start)
+      if (beendet.ok) abgeraeumt.push(kurz)
+      if (!(await aufPortFreiWarten(port))) {
+        // Ließ sich nicht wegräumen — dann kein Urteil, statt eines Rots, das
+        // der Bauer nicht verschuldet hat.
+        const jetzt = await portBesitzer(port)
+        const wer = jetzt ? { pid: jetzt.pid, name: jetzt.name, befehl: jetzt.befehl } : kurz
+        return uebersprungen('portFremd', { port, besitzer: wer, abgeraeumt, zugehoerigkeit: zugehoerig })
+      }
+    }
   }
 
   const schluessel = gruppe ?? 'rauchtest:' + projektPfad
@@ -158,7 +209,15 @@ export async function rauchtest(projektPfad, { abbrechen = null, gruppe = null }
     })
   } catch (fehler) {
     await prozessgruppeAbraeumen(schluessel)
-    return { geprueft: true, gruen: false, ausgabe: String(fehler?.message ?? fehler) }
+    return {
+      geprueft: true,
+      gruen: false,
+      code: -1,
+      ausgabe: String(fehler?.message ?? fehler),
+      grund: null,
+      ...(port ? { port } : {}),
+      abgeraeumt
+    }
   }
   if (kind.pid) prozessWurzelMelden(schluessel, projektPfad, kind.pid)
 
@@ -194,21 +253,33 @@ export async function rauchtest(projektPfad, { abbrechen = null, gruppe = null }
     }
     await new Promise((weiter) => setTimeout(weiter, RAUCHTEST_ABSTAND_MS))
   }
+  // Der Stand VOR dem Abräumen zählt (0.46.2): Beendet FlowForge die noch
+  // laufende App selbst (taskkill /F), meldet Windows danach Fehlercode 1 —
+  // und genau dieser Code galt bis 0.46.1 als Rot: Jede App, die anlief und
+  // antwortete (oder ohne Adresse länger als der Anlauf lief), war „lief
+  // nicht an" (gemessen mit einem echten http-Server; Befund Life-OS-Lauf
+  // 18.08.2026: beide Bauer rot, obwohl der Code lief). code === null heißt
+  // seither ehrlich „lief noch, als abgeräumt wurde".
+  const ende = beendet
   await prozessgruppeAbraeumen(schluessel)
   // Ein abgebrochener Rauchtest urteilt über nichts — Georg hat den Lauf
   // gestoppt, das ist kein Befund über die gebaute App.
-  if (abgebrochen) return { geprueft: false, grund: 'abgebrochen' }
+  if (abgebrochen) return uebersprungen('abgebrochen', { ausgabe, ...(port ? { port } : {}), abgeraeumt })
 
   // Bewertung: Ein Befehl, der mit Fehlercode stirbt, ist immer rot. Eine
   // Web-Adresse muss antworten; ohne Adresse genügt „läuft noch oder sauber
   // durchgelaufen" — ein Kommandozeilen-Programm darf sich beenden.
-  if (beendet && beendet.code !== 0)
-    return { geprueft: true, gruen: false, ausgabe, code: beendet.code }
+  const urteil = (gruen, ausgabeText) => ({
+    geprueft: true,
+    gruen,
+    code: ende ? ende.code : null,
+    ausgabe: ausgabeText,
+    grund: null,
+    ...(port ? { port } : {}),
+    abgeraeumt
+  })
+  if (ende && ende.code !== 0) return urteil(false, ausgabe)
   if (webAdresse && !antwortet)
-    return {
-      geprueft: true,
-      gruen: false,
-      ausgabe: ausgabe + '\n' + texte.tor.rauchtestKeineAntwort(anleitung.adresse)
-    }
-  return { geprueft: true, gruen: true, ausgabe }
+    return urteil(false, ausgabe + '\n' + texte.tor.rauchtestKeineAntwort(anleitung.adresse))
+  return urteil(true, ausgabe)
 }

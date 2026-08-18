@@ -560,6 +560,14 @@ export const BLOCK_KATALOG = [
     beschreibung:
       'Frischer Agent ohne Bau-Wissen: schreibt eigene Tests, führt sie aus und liefert einen Rot-vor-Grün-Beleg.',
     braucht: ['Arbeitspaket', 'Umsetzungsbericht'],
+    // Prüfbeleg als optionaler Bedarf (0.46.2, Entscheidung Georg 18.08.2026):
+    // Liegt ein Prüfer hinter einem Prüfer, ist er das Zweitaudit — der erste
+    // Beleg erreicht ihn (nummeriert, wenn mehrere), und der Vorspann des
+    // ersten Prüfers nennt ihn als Empfänger. Da der Prüfer das Etikett damit
+    // braucht UND liefert, greift am gemeinsamen Empfänger die Verdrängung
+    // durch Weiterverarbeitung (kettenRegeln.uebergabenAuswahl): Beim
+    // Sessionende zählt nur der Beleg des Zweitaudits.
+    brauchtOptional: ['Prüfbeleg'],
     brauchtWozu: {
       Arbeitspaket:
         'prüft ausschließlich gegen die Fertig-Kriterien genau des Pakets, das für die Arbeit ' +
@@ -567,7 +575,10 @@ export const BLOCK_KATALOG = [
         'Kriterium so, dass es sich messen lässt, sonst hat er keinen Maßstab',
       Umsetzungsbericht:
         'misst deine Arbeit an den Fertig-Kriterien des Arbeitspakets — schreib ihn so, dass ' +
-        'er jedes einzelne bei dir findet, mit Fundort'
+        'er jedes einzelne bei dir findet, mit Fundort',
+      Prüfbeleg:
+        'prüft eine vorliegende Prüfung nach, statt sie zu wiederholen (Zweitaudit) — nenne ' +
+        'Stichproben und Fundorte so, dass er sie nachvollziehen kann'
     },
     liefert: ['Prüfbeleg'],
     nurLesen: false,
@@ -589,7 +600,9 @@ export const BLOCK_KATALOG = [
       'DIESEN Lauf: Er ist beim Laufstart geleert — baue deine Prüfungen frisch fürs ' +
       'aktuelle Paket, ohne Alttest-Ballast. Bilddateien sind dort verboten (hartes Nein). ' +
       'Verlasse dich nicht auf den Umsetzungsbericht: Prüfe selbst nach — aber lies nicht ' +
-      'das ganze Projekt. ARBEITSGEDÄCHTNIS-REGEL (dein Kontext ist der teuerste Teil des ' +
+      'das ganze Projekt. Liegt dir ein Prüfbeleg eines vorherigen Prüf-Blocks vor, bist du ' +
+      'das Zweitaudit: Prüfe ihn nach (Stichproben nachstellen, Beanstandungen nachvollziehen), ' +
+      'statt die ganze Prüfung zu wiederholen. ARBEITSGEDÄCHTNIS-REGEL (dein Kontext ist der teuerste Teil des ' +
       'Laufs): Starte als ersten Schritt EINE Unteraufgabe (bevorzugt das Werkzeug ' +
       'lokal_recherchieren, falls es bereitsteht — sonst das Agent-Werkzeug), die die ' +
       'Umsetzung an den im Arbeitspaket genannten Stellen einliest und dir je ' +

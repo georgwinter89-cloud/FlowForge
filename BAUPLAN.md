@@ -585,48 +585,68 @@ anderen Zweig stehen.
 nicht an", obwohl der Code lief — Port 3888 war durch Waisenprozesse aus den eigenen
 Bauer-Tests belegt, die Startanleitung wurde in der Welle gegenseitig überschrieben,
 und der Prüfbeleg des ersten Prüfers „kam bei niemandem an", obwohl ein Zweitaudit
-dahinter stand. **Nächste Session: zuerst diesen Zwischenschritt, dann 47.**)
-- **Rauchtest sagt, warum:** Ausgabe bzw. Fehlercode des Startversuchs (gedeckelt wie
-  Prozess-Ausgaben) stehen im Ticker und am Block-Ergebnis im Laufbericht
-  (`rauchtest: { gruen, code, ausgabe }`) — nicht nur im Auftrag des Bauers. Georg
-  liest „Port 3888 belegt (EADDRINUSE)" statt „läuft NICHT an".
-- **Port-Prüfung vor dem Rauchtest** (Mechanik aus dem App-Tab, SPEC §8): Ist der Port
-  der Startanleitungs-Adresse belegt und der Besitzer stammt aus diesem Lauf (Späher/
-  Prozessgruppen), räumt FlowForge ihn vorher ab und tickert es („Waisenprozess node.exe
-  (PID …) aus diesem Lauf beendet"); gehört er nicht zum Lauf, wird der Rauchtest
-  **übersprungen** mit Grund (kein Rot, keine Nachbesserungs-Runde, ehrlich im Ticker),
-  wie heute bei laufender App im Tab.
-- **Startanleitung in der Welle:** Sie ist eine Projektdatei, kein Teil des
-  Datenvertrags — der letzte Schreiber gewann still. Neu: `startanleitung_setzen`
-  merkt sich den setzenden Block (`gesetztVon`); überschreibt ein Block in derselben
-  Welle die Anleitung eines anderen, sagt der Ticker es mit beiden Befehlen. Der
-  Rauchtest läuft **einmal je Welle** (nachdem sie steht), nicht je Bauer; die
-  Nachbesserungs-Runde bekommt der Block, der die Anleitung zuletzt gesetzt hat — die
-  übrigen Bauer der Welle bekommen weder Etikett noch Runde (im Lauf vom 18.08. kosteten
-  zwei doppelte Runden ~190k Tokens für dieselbe Anleitung).
+dahinter stand. Gebaut in 0.46.2.)
+- **Rauchtest sagt, warum:** `rauchtest()` liefert immer `{ geprueft, gruen, code,
+  ausgabe, grund }`; bei Rot steht Fehlercode + letzte Ausgabezeile im Ticker
+  („Rauchtest: rot (Code 1) — Error: listen EADDRINUSE … — „Bauer · UI" bekommt eine
+  Nachbesserungs-Runde"), jedes Überspringen mit Grund; am Block-Ergebnis im
+  Laufbericht `rauchtest: { gruen, code, ausgabe, zeile, grund, gemessenAn? }`, in der
+  Berichts-Ansicht als Zeile mit aufklappbarer Ausgabe. **Nebenbefund beim Messen mit
+  echten Prozessen:** Der Fehlercode des eigenen Abräumens (taskkill → 1) galt bisher als
+  „stirbt mit Fehlercode" — jede weiterlaufende App war rot. Behoben: Der Stand VOR dem
+  Abräumen zählt, `code === null` = „lief noch".
+- **Port-Prüfung vor dem Rauchtest** (SPEC §8): `prozessZugehoerigkeit(pid, start,
+  projektPfad)` (prozesse.js) → 'gruppe' | 'rest' | 'vermutlich' | null; 'gruppe'/'rest'
+  desselben Projekts werden beendet (`aufPortFreiWarten` aus appProzess.js), getickert
+  („Waisenprozess node.exe (PID …, „…") aus diesem Lauf beendet — Port 3888 war belegt")
+  und als `abgeraeumt` gemeldet; 'vermutlich', fremd und FlowForge selbst → Grund
+  `portFremd` mit Besitzer, kein Rot, keine Runde.
+- **Startanleitung in der Welle:** `startanleitungSetzen(pfad, eingabe, { gesetztVon })`
+  speichert `gesetztVon` in startanleitung.json (Laden reicht es durch) und liefert
+  `vorher`; das Werkzeug bekommt `holeInstanz` (Chat: null) und meldet
+  `{ art: 'startanleitung', anleitung, gesetztVon, vorher }`; lauf.js tickert das
+  Überschreiben, wenn `vorher.gesetztVon` ein anderer Block ist, der gerade Revier belegt
+  („„Bauer · UI" hat die Startanleitung von „Bauer · Daten" ersetzt: „npm start" → „node
+  server.js""). Der Rauchtest läuft **einmal je Welle**: Jeder Bauer geht in den Nachlauf,
+  `nachlaeufeAbarbeiten` misst einen Test für alle Wartenden; bei Rot bekommt der Setzer
+  (`gesetztVon` ∈ Welle) die Runde, Rückfall der zuletzt fertig gewordene Bauer mit
+  Ticker-Zeile; die übrigen bleiben „erledigt" ohne Etikett und Runde. Ein Bauer allein:
+  wie bisher.
 - **Prüfbeleg-Weiterreichung durch Logik (Entscheidung Georg, 18.08.2026):** Der
-  Katalog-Prüfer bekommt `brauchtOptional: ['Prüfbeleg']` mit wozu-Satz („prüft
-  eine vorliegende Prüfung nach, statt sie zu wiederholen — Zweitaudit"); damit
-  erreicht der Prüfbeleg eines Prüfers den nächsten Prüfer dahinter (nummeriert, wenn
-  mehrere), und der Vorspann sagt es. **Verdrängung durch Weiterverarbeitung** in
-  `uebergabenAuswahl` (kettenRegeln.js): Liegen bei einem Empfänger mehrere
-  Lieferungen desselben Etiketts vor, und hat Lieferant B die Lieferung von Lieferant
-  A als Eingang genommen (A ist Vorfahr von B, B braucht/brauchtOptional dasselbe
-  Etikett), zählt am gemeinsamen Empfänger nur B — die Prüfung der Prüfung ersetzt die
-  Prüfung; A wird verdrängt, ehrlich getickert („Prüfbeleg von Prüfer 7 ging ins
-  Zweitaudit ein — beim Sessionende zählt der des Zweitaudits"). Das gilt zusätzlich
-  zur Distanz-Regel und unabhängig von ihr (Prüfer 7 → Sessionende direkt UND Prüfer 7
-  → Zweitaudit → Sessionende: Sessionende bekommt nur den Beleg des Zweitaudits).
-  `fuehrtZusammen` (47) bleibt davon unberührt: dort kommen alle an.
-- Nachzuziehen: SPEC §8 (Rauchtest: Grund sichtbar, Port-Prüfung, einmal je Welle),
-  §4.3 (Prüfer brauchtOptional Prüfbeleg; Übergaben: Verdrängung durch
-  Weiterverarbeitung), §5 (Startanleitung in der Welle).
+  Katalog-Prüfer (`pruefer`, nicht `gesamtpruefung`) hat `brauchtOptional: ['Prüfbeleg']`
+  mit wozu-Satz („prüft eine vorliegende Prüfung nach, statt sie zu wiederholen
+  (Zweitaudit) — nenne Stichproben und Fundorte so, dass er sie nachvollziehen kann")
+  und einen Auftragssatz fürs Zweitaudit (Beleg nachprüfen statt alles wiederholen);
+  damit erreicht der Prüfbeleg eines Prüfers den nächsten Prüfer dahinter (nummeriert,
+  wenn mehrere), Chip und Vorspann sagen es. **Verdrängung durch Weiterverarbeitung** in
+  `uebergabenAuswahl` (kettenRegeln.js), Reihenfolge: (1) `fuehrtZusammen` nimmt alles,
+  (2) Weiterverarbeitung, (3) Distanz unter den Übrigen. Lieferungen tragen dafür
+  optional `instanzId`, `braucht` (braucht + brauchtOptional des Lieferanten) und
+  `vorfahrenIds` — ohne sie exakt das alte Verhalten; `verdraengt`-Einträge sind die
+  Lieferung plus `grund: 'distanz' | 'weiterverarbeitung'` und `verdraengtVon`. Alle
+  Aufrufer liefern die Felder (kettenRegeln `brauchtHerkunft`/`empfaengerLage`, lauf.js
+  `uebergabenText`/`dateiListeFuer`). Ticker je Block und Etikett einmal („„Prüfbeleg"
+  von Block 7 „Prüfer" ging in Block 9 „Zweitaudit" ein — bei Block 10 „Sessionende"
+  zählt der von Block 9 „Zweitaudit"."); „näher im Schaubild" nur noch bei Distanz.
+  Laufzeit-Grenze: Nur wer geliefert hat, verdrängt. Prüfungen:
+  pruefbelegWeiterreichung.test.js (Regel, Regressionen, Chips/Vorspann, Ticker-Text),
+  pruefbelegWeiterreichungLauf.test.js (Prüfer → Zweitaudit → Sessionende im echten Lauf).
+- Nachgezogen: SPEC §8 (Rauchtest: Grund sichtbar, Abräum-Fehlercode kein Urteil,
+  Port-Prüfung, einmal je Welle), §5 (Startanleitung in der Welle, `gesetztVon`,
+  Überschreiben-Ticker), §4.3 (Prüfer brauchtOptional Prüfbeleg/Zweitaudit; Übergaben:
+  Verdrängung durch Weiterverarbeitung), §3.2 (Rauchtest am Blockergebnis).
 **Alltagstest:** Georg lässt den Life-OS-Workflow (zwei Bauer, zwei Prüfer, Zweitaudit,
-Sessionende) noch einmal laufen: Kein Bauer trägt mehr „Startanleitung lief nicht an",
-solange die App startet; schlägt der Rauchtest doch fehl, steht der Grund im Ticker.
-Der Vorspann des ersten Prüfers nennt das Zweitaudit als Empfänger seines Prüfbelegs,
-das Zweitaudit bekommt beide Prüfbelege nummeriert, und das Sessionende bekommt nur den
-des Zweitaudits — mit Ticker-Zeile, warum.
+Sessionende) noch einmal laufen. Vorher zwei Handgriffe am Schaubild: Am Zweitaudit
+„Bei Fehlschlag zurück zu" auf einen Bauer stellen (ohne Wahl geht die Kritik an den
+letzten Vorfahren — das wäre ein Prüfer); jede Prüfer-Karte zeigt jetzt den blassen Chip
+„braucht: Prüfbeleg (falls da)" — am Zweitaudit steht daran „← Prüfer · A + Prüfer · B",
+an den ersten Prüfern „← liefert keiner" (kein Mangel). Im Lauf: Kein Bauer trägt mehr
+„Startanleitung lief nicht an", solange die App startet (auch nicht, wenn sie einfach
+weiterläuft, bis FlowForge sie stoppt); schlägt der Rauchtest doch fehl, steht der Grund
+mit Fehlercode im Ticker und am Blockergebnis, und nur ein Bauer bekommt die Runde. Der
+Vorspann des ersten Prüfers nennt das Zweitaudit als Empfänger seines Prüfbelegs, das
+Zweitaudit bekommt beide Prüfbelege nummeriert, und das Sessionende bekommt nur den des
+Zweitaudits — mit Ticker-Zeile, warum.
 
 ### 47 — Integrator: die Nähte zwischen parallel gebauten Teilen
 (Entscheidung Georg: eigene **Blockart**, nicht ein fester Block — eine geteilte
