@@ -584,8 +584,8 @@ anderen Zweig stehen.
 Recherche zusammenzuführen ist etwas anderes als Code.)
 - Neues Kennzeichen `fuehrtZusammen`: Der Block erwartet **mehrere** Lieferungen
   desselben Etiketts und macht eine daraus. Das ändert drei Dinge in FlowForge — die
-  Distanz-Regel gilt nicht (Schritt 40), der Übergabe-Deckel liegt höher (drei
-  Berichte à 8.000 Zeichen passen sonst nicht), und die Steck-Prüfung verlangt
+  Distanz-Regel gilt nicht (Schritt 40), die Übergaben kommen vollständig an (kein
+  Übergabe-Deckel mehr seit 0.46.1), und die Steck-Prüfung verlangt
   **mindestens zwei** eingehende Lieferungen des Etiketts (sonst „führt zusammen",
   was nie geteilt war).
 - Der Inhalt steckt im Auftragstext wie bei jedem Block: Der Katalog liefert

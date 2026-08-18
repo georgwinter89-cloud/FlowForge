@@ -4,14 +4,15 @@
 // ist rein lesend (die lokale KI kann nur auflisten, lesen, suchen — hart im
 // Code begrenzt) und deshalb auch unter der Sperre „darf nur lesen" erlaubt.
 //
-// Lokale Entwürfe (BAUPLAN 21): Dazu kommen lokal_entwerfen (schablonenhafte
-// Schreibarbeit mit Vorbild — der Entwurf landet ausschließlich in der
-// arbeitsablage/) und entwurf_abnehmen (die ausdrückliche Abnahme-Meldung des
-// Block-Agenten: übernommen oder verworfen — ungeprüft zählt nichts). Beide
+// Lokale Entwürfe (BAUPLAN 21): Dazu kommen lokal_entwerfen (Schreibarbeit
+// mit Vorbild oder klarer Beschreibung — der Entwurf landet ausschließlich in
+// der arbeitsablage/) und entwurf_abnehmen (die ausdrückliche Abnahme-Meldung
+// des Block-Agenten: übernommen oder verworfen — ungeprüft zählt nichts). Beide
 // sind Schreibarbeit und unter „darf nur lesen" gesperrt (claudeCodeMotor).
 //
-// Lokaler Bauer (BAUPLAN 22): lokal_bauen delegiert einen eng umrissenen,
-// einzeln prüfbaren Bau-Teilauftrag an die lokale KI — mit echtem Schreibrecht
+// Lokaler Bauer (BAUPLAN 22): lokal_bauen delegiert einen zusammenhängenden,
+// einzeln prüfbaren Bau-Teilauftrag (seit 18.08.2026 ruhig auch mittelgroß:
+// ein ganzes Modul, mehrere Dateien) an die lokale KI — mit echtem Schreibrecht
 // im Projektordner. FlowForge legt vor jedem Teilauftrag einen Sicherungspunkt
 // an; die Abnahme meldet der Block-Agent mit teilstueck_abnehmen, und bei
 // „nicht gehalten" rollt FlowForge den Stand zurück, BEVOR der Agent selbst
@@ -282,9 +283,7 @@ export async function helferWerkzeugServer({ projektPfad, modell, adresse, bewer
     {
       auftrag: z
         .string()
-        .describe(
-          'Der Schreibauftrag in Alltagssprache: was der Entwurf leisten muss — und das Vorbild (Datei), an dem er sich orientieren soll.'
-        )
+        .describe(texte.agentenLokaleHelfer.entwerfenAuftragFeld)
     },
     async ({ auftrag }) => {
       blockwechselPruefen()
@@ -413,9 +412,7 @@ export async function helferWerkzeugServer({ projektPfad, modell, adresse, bewer
         .describe('Kurzname des Teilstücks für Ticker und Abnahme, z.B. "2 von 5: Speichern-Knopf".'),
       auftrag: z
         .string()
-        .describe(
-          'Der Teilauftrag: Fundstellen oder Vorbild, feste Schnittstellen (welche Datei, welcher Funktionsname, was rein, was raus) und das Fertig-Kriterium.'
-        )
+        .describe(texte.agentenLokaleHelfer.bauenAuftragFeld)
     },
     async ({ teilstueck, auftrag }) => {
       const sicherung = blockwechselPruefen()

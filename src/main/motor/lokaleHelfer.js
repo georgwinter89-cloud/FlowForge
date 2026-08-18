@@ -15,19 +15,40 @@
 // FlowForge-Verwaltungsdateien tabu. Die Nachprüfung des Prüfers bleibt der
 // Schiedsrichter; FlowForge rollt gescheiterte Versuche zurück (lauf.js).
 //
-// Lokale Entwürfe (BAUPLAN 21): Ein Entwurfs-Kreislauf für schablonenhafte
-// Schreibarbeit mit Vorbild. Sein Schreibwerkzeug ist hart auf den Ordner
+// Lokale Entwürfe (BAUPLAN 21): Ein Entwurfs-Kreislauf für Schreibarbeit mit
+// Vorbild oder klarer Beschreibung. Sein Schreibwerkzeug ist hart auf den Ordner
 // arbeitsablage/ begrenzt — die Wegwerf-Fläche, die am Laufende geleert wird.
 // Der Block-Agent (Motor) liest jeden Entwurf gegen und übernimmt ihn selbst
 // an den Zielort — ungeprüft zählt nichts.
 //
-// Lokaler Bauer (BAUPLAN 22): Ein Bau-Kreislauf für eng umrissene, einzeln
-// prüfbare Teilaufträge — mit echtem Schreibrecht im Projektordner (gezieltes
+// Lokaler Bauer (BAUPLAN 22): Ein Bau-Kreislauf für einzeln prüfbare
+// Teilaufträge — mit echtem Schreibrecht im Projektordner (gezieltes
 // Ersetzen plus ganze Dateien schreiben), unter denselben harten Sperren wie
 // der Bauer: Prüfmappe, Verwaltungsdateien und Git bleiben tabu. Den
 // Sicherungspunkt vor jedem Teilauftrag und das Rückrollen bei gescheiterter
 // Abnahme übernimmt FlowForge (helferWerkzeuge.js) — Opus liest jedes
 // Teilstück sofort gegen.
+//
+// Zuschnitt der Aufträge (Wunsch Georg 18.08.2026): Die lokale KI darf auch
+// mittelgroße, zusammenhängende Teilaufträge und Neues mit klarer Beschreibung
+// bekommen — ein ganzes Modul mit festgelegter Schnittstelle, mehrere
+// zusammengehörige Dateien, ein Entwurf ohne exaktes Vorbild. Schiedsrichter
+// bleibt die Abnahme durch den Block-Agenten (Gegenlesen, Rückroll bei „nicht
+// gehalten"); die Regeln „2 Anläufe, kein Pingpong, prüfe Fundorte selbst nach"
+// gelten weiter.
+//
+// Nachrichtenform (Wunsch Georg 18.08.2026): JEDE Nachricht, die FlowForge an
+// die lokale KI schickt, hat die Form { role: 'user', content: '<Text>' } —
+// kein system-Eintrag, keine tool-Rolle. Grund: Manche lokalen Modelle bzw.
+// ihre Chat-Vorlagen kommen mit system- und tool-Rollen nicht zurecht (Vorlage
+// ohne System-Slot, tool-Nachricht wird verschluckt oder als Fehler gewertet);
+// eine einheitliche Nutzer-Rolle läuft mit jeder Vorlage. Der bisherige
+// System-Text steht deshalb am Anfang der ersten Nutzer-Nachricht, Werkzeug-
+// Ergebnisse gehen als Nutzer-Nachricht mit Kennzeichnung („Ergebnis von
+// <werkzeug>:") — alle Ergebnisse einer Runde gebündelt in EINER Nachricht,
+// damit sich user und assistant strikt abwechseln —, das Nachhaken ebenso. Nur
+// die Antworten des Modells selbst (role assistant, ggf. mit tool_calls/
+// thinking) bleiben unverändert im Verlauf (fehlt die Rolle, wird sie ergänzt).
 //
 // Tabu-Liste (BAUPLAN 46): Vorreparatur und lokaler Bauer bekommen die
 // Dateiliste des Blocks, für den sie schreiben, und lehnen Schreiben außerhalb
@@ -57,7 +78,13 @@ const STANDARD_ADRESSE = 'http://127.0.0.1:11434'
 // verlieren kleine Modelle in Riesen-Kontexten den Faden; die kompakten
 // Werkzeug-Antworten sind auch Konzentrationshilfe (Wunsch Georg, 13.08.2026:
 // großzügiger als die alten 16k, aber ehrlich begrenzt).
-const MAX_RUNDEN = 32
+//
+// Runden-Deckel: 48 statt 32 (Wunsch Georg 18.08.2026 — die lokale KI bekommt
+// jetzt auch mittelgroße Aufträge: ein ganzes Modul, mehrere zusammengehörige
+// Dateien; die brauchen mehr Lese-, Such- und Schreib-Runden, bevor ein Fazit
+// ehrlich möglich ist). Das Kontext-Fenster bleibt bei 32k — die Werkzeug-
+// Antworten sind gestutzt, und die Begründung oben gilt weiter.
+const MAX_RUNDEN = 48
 const MAX_ZEILEN_JE_LESEN = 400
 const MAX_ZEICHEN_JE_ANTWORT = 24000
 const MAX_TREFFER_JE_SUCHE = 60
@@ -475,6 +502,96 @@ function werkzeugAusfuehren(projektPfad, name, eingabe, zaehler, dateiListe = nu
   return `Unbekanntes Werkzeug: ${name}`
 }
 
+// Die einzige Nachrichtenform von FlowForge an die lokale KI (Wunsch Georg
+// 18.08.2026, s. Kopf): immer role 'user' mit einem String als content — kein
+// system, kein tool. Wer eine Nachricht an die lokale KI baut, geht hier durch;
+// so kann kein Kreislauf still eine andere Rolle einschleusen.
+function nutzerNachricht(text) {
+  return { role: 'user', content: String(text ?? '') }
+}
+
+// Werkzeug-Ergebnisse zurück an die lokale KI: keine tool-Rolle mehr, sondern
+// eine Nutzer-Nachricht, die im Text klar sagt, von welchem Werkzeug jedes
+// Ergebnis stammt — sonst hielte das Modell den Dateiinhalt für eine neue
+// Anweisung. Alle Ergebnisse EINER Runde stehen in EINER Nutzer-Nachricht
+// (Prüfer-Hinweis 18.08.2026): Vorlagen mit strikter Abwechslung user/assistant
+// verschlucken sonst die zweite und dritte Nachricht hintereinander. Gilt für
+// echte tool_calls UND für den getarnten Pfad. `ergebnisse` = [[name, text], …].
+function werkzeugErgebnisNachricht(ergebnisse) {
+  return nutzerNachricht(
+    ergebnisse
+      .map(([name, ergebnis]) => texte.agentenLokaleHelfer.werkzeugErgebnis(name, String(ergebnis)))
+      .join('\n\n')
+  )
+}
+
+// Erste Nachricht eines Kreislaufs: der frühere System-Text, Leerzeile, dann
+// der Auftrag (der ggf. schon mit dem Projektwissen beginnt) — alles in EINER
+// Nutzer-Nachricht, damit auch Vorlagen ohne System-Slot den Rahmen lesen.
+function auftaktNachricht(systemText, auftrag) {
+  return nutzerNachricht(systemText + '\n\n' + String(auftrag ?? ''))
+}
+
+// System-Texte der vier Kreisläufe — hier gesammelt, damit Prüfungen den
+// Auftakt gegen genau diesen Wortlaut messen können.
+export const KREISLAUF_SYSTEMTEXTE = {
+  recherche:
+    'Du bist ein Recherche-Helfer, der in einem Projektordner liest und sucht — mehr ' +
+    'nicht. Du arbeitest allein: Niemand liest deine Antwort im Gespräch, Rückfragen ' +
+    'werden nie beantwortet. Stelle also KEINE Fragen — recherchiere mit dem, was der ' +
+    'Auftrag nennt; bleibt etwas unklar, schreibe ins Fazit, was du gefunden hast und ' +
+    'was offen blieb. Nutze die Werkzeuge gezielt: erst Überblick (ordner_auflisten, ' +
+    'suchen), dann die nötigen Stellen lesen — auch mehrere Dateien und größere ' +
+    'Zusammenhänge, wenn der Auftrag das verlangt. Wenn du genug weißt, ' +
+    'antworte OHNE weiteren Werkzeugaufruf mit deinem Fazit: kompakt, auf Deutsch, ' +
+    'mit Fundorten (Datei und Zeile). EISERNE REGEL: In dein Fazit gehört ' +
+    'ausschließlich, was wörtlich in den Werkzeug-Ergebnissen stand. Wurde ein ' +
+    'Zugriff abgelehnt oder nichts gefunden, schreibe genau das ins Fazit — erfinde ' +
+    'niemals Dateiinhalte, Namen oder Zeilennummern.',
+  // Empfänger im Auftrag (BAUPLAN 43): Der Reparatur-Text liegt zentral in
+  // texte.js — inline nannte er einen Blocknamen, während der Auftrag darunter
+  // (reparaturAuftrag) schon entnamentlicht war, und die Inventur-Prüfung
+  // konnte ihn hier gar nicht sehen.
+  reparatur: texte.agentenLokaleHelfer.reparaturSystem,
+  entwurf:
+    'Du bist ein Schreib-Helfer in einem Projektordner. Du arbeitest allein: ' +
+    'Rückfragen werden nie beantwortet — arbeite mit dem, was der Auftrag nennt, und ' +
+    'schreibe Unklares in deinen Bericht statt zu fragen. Du bekommst einen ' +
+    'Schreibauftrag mit einem Vorbild oder einer klaren Beschreibung — das kann eine ' +
+    'einzelne Datei nach Muster sein oder ein ganzes Modul mit festgelegter ' +
+    'Schnittstelle. Lies zuerst das Vorbild (datei_lesen) und die im Auftrag ' +
+    'genannten Stellen — dann schreibe deinen Entwurf mit entwurf_schreiben in den Ordner ' +
+    ENTWURF_ORDNER +
+    '/ (z.B. ' +
+    ENTWURF_ORDNER +
+    '/entwurf-name.js), als vollständige Datei; mehrere zusammengehörige Dateien sind ' +
+    'mehrere Aufrufe. Nur dort darfst du schreiben; ein ' +
+    'stärkeres Modell liest deinen Entwurf gegen und übernimmt ihn an den Zielort. ' +
+    'Halte dich an Vorbild, Beschreibung und die genannten Schnittstellen — keine ' +
+    'Extras, keine Verschönerungen. ' +
+    'Wenn du fertig bist, antworte OHNE weiteren Werkzeugaufruf mit einer kurzen ' +
+    'Liste auf Deutsch: welche Entwurfsdateien du geschrieben hast und was sie ' +
+    'enthalten. Konntest du etwas nicht, schreibe genau das — erfinde nichts.',
+  bau:
+    'Du bist ein Bau-Helfer in einem Projektordner. Du arbeitest allein: Rückfragen ' +
+    'werden nie beantwortet — arbeite mit dem, was der Auftrag nennt, und schreibe ' +
+    'Unklares in deinen Bericht statt zu fragen. Du bekommst einen zusammenhängenden ' +
+    'Teilauftrag mit Fundstellen oder Vorbild, festen Schnittstellen und einem ' +
+    'Fertig-Kriterium — das kann eine gezielte Änderung sein oder ein ganzes Modul, eine ' +
+    'ganze Funktion, mehrere zusammengehörige Dateien. Lies zuerst die im Auftrag ' +
+    'genannten Stellen (datei_lesen), ' +
+    'dann setze GENAU den Teilauftrag um: Bestehende Dateien änderst du mit ersetzen ' +
+    '(der alt-Text muss ZEICHENGENAU so in der Datei stehen, samt Einrückung, und ' +
+    'eindeutig sein — nimm zur Not umgebende Zeilen dazu); neue Dateien oder komplette ' +
+    'Neuschriebe schreibst du mit datei_schreiben als vollständige Datei. Halte dich ' +
+    'exakt an die im Auftrag genannten Datei- und Funktionsnamen und Schnittstellen — ' +
+    'keine Extras, keine Verschönerungen, nichts außerhalb des Teilauftrags. Ein ' +
+    'stärkeres Modell liest deine Arbeit sofort gegen. Wenn du fertig bist, antworte ' +
+    'OHNE weiteren Werkzeugaufruf mit einer kurzen Liste auf Deutsch: was du wo ' +
+    'geändert oder angelegt hast. Konntest du etwas nicht, schreibe genau das — ' +
+    'erfinde nichts.'
+}
+
 // Der Recherche-Kreislauf: Auftrag rein, kompaktes Fazit raus.
 // aufSchritt (optional) meldet jede Werkzeug-Nutzung für den Liveticker.
 // aufDenken (optional, BAUPLAN 24) meldet das Denken der lokalen KI für den
@@ -482,24 +599,7 @@ function werkzeugAusfuehren(projektPfad, name, eingabe, zaehler, dateiListe = nu
 // gpt-oss) — oder, bei Modellen ohne Denkfeld, ihren Antworttext vor den
 // Werkzeugaufrufen (das „laute Denken" kleiner Modelle).
 export function lokalRecherchieren({ projektPfad, auftrag, modell, adresse = STANDARD_ADRESSE, aufSchritt, aufDenken }) {
-  const nachrichten = [
-    {
-      role: 'system',
-      content:
-        'Du bist ein Recherche-Helfer, der in einem Projektordner liest und sucht — mehr ' +
-        'nicht. Du arbeitest allein: Niemand liest deine Antwort im Gespräch, Rückfragen ' +
-        'werden nie beantwortet. Stelle also KEINE Fragen — recherchiere mit dem, was der ' +
-        'Auftrag nennt; bleibt etwas unklar, schreibe ins Fazit, was du gefunden hast und ' +
-        'was offen blieb. Nutze die Werkzeuge gezielt und sparsam: erst Überblick (ordner_auflisten, ' +
-        'suchen), dann nur die wirklich nötigen Stellen lesen. Wenn du genug weißt, ' +
-        'antworte OHNE weiteren Werkzeugaufruf mit deinem Fazit: kompakt, auf Deutsch, ' +
-        'mit Fundorten (Datei und Zeile). EISERNE REGEL: In dein Fazit gehört ' +
-        'ausschließlich, was wörtlich in den Werkzeug-Ergebnissen stand. Wurde ein ' +
-        'Zugriff abgelehnt oder nichts gefunden, schreibe genau das ins Fazit — erfinde ' +
-        'niemals Dateiinhalte, Namen oder Zeilennummern.'
-    },
-    { role: 'user', content: String(auftrag ?? '') }
-  ]
+  const nachrichten = [auftaktNachricht(KREISLAUF_SYSTEMTEXTE.recherche, auftrag)]
   return kreislauf({ projektPfad, nachrichten, werkzeuge: WERKZEUGE, modell, adresse, aufSchritt, aufDenken })
 }
 
@@ -512,14 +612,7 @@ export function lokalRecherchieren({ projektPfad, auftrag, modell, adresse = STA
 // des RÜCKFÜHRUNGS-ZIELS (des Bauers, dessen Arbeit repariert wird), nicht die
 // des Prüfers; null = keine Sperre.
 export async function lokalReparieren({ projektPfad, auftrag, modell, adresse = STANDARD_ADRESSE, aufSchritt, aufDenken, dateiListe = null }) {
-  const nachrichten = [
-    // Empfänger im Auftrag (BAUPLAN 43): Der System-Text liegt jetzt zentral in
-    // texte.js — inline nannte er einen Blocknamen, während der Auftrag darunter
-    // (reparaturAuftrag) schon entnamentlicht war, und die Inventur-Prüfung
-    // konnte ihn hier gar nicht sehen.
-    { role: 'system', content: texte.agentenLokaleHelfer.reparaturSystem },
-    { role: 'user', content: String(auftrag ?? '') }
-  ]
+  const nachrichten = [auftaktNachricht(KREISLAUF_SYSTEMTEXTE.reparatur, auftrag)]
   const zaehler = { ersetzungen: 0 }
   const ergebnis = await kreislauf({
     projektPfad,
@@ -535,34 +628,13 @@ export async function lokalReparieren({ projektPfad, auftrag, modell, adresse = 
   return { ...ergebnis, ersetzungen: zaehler.ersetzungen }
 }
 
-// Der Entwurfs-Kreislauf (BAUPLAN 21): schablonenhafter Schreibauftrag mit
-// Vorbild rein, Entwurfsdateien in der Arbeitsablage raus. Zusätzlich zu den
-// Lese-Werkzeugen gibt es genau das Entwurf-Schreibwerkzeug (nur
+// Der Entwurfs-Kreislauf (BAUPLAN 21): Schreibauftrag mit Vorbild oder klarer
+// Beschreibung rein, Entwurfsdateien in der Arbeitsablage raus. Zusätzlich zu
+// den Lese-Werkzeugen gibt es genau das Entwurf-Schreibwerkzeug (nur
 // arbeitsablage/). ergebnis.dateien nennt die geschriebenen Entwürfe —
 // leer heißt „kein Entwurf entstanden".
 export async function lokalEntwerfen({ projektPfad, auftrag, modell, adresse = STANDARD_ADRESSE, aufSchritt, aufDenken }) {
-  const nachrichten = [
-    {
-      role: 'system',
-      content:
-        'Du bist ein Schreib-Helfer in einem Projektordner. Du arbeitest allein: ' +
-        'Rückfragen werden nie beantwortet — arbeite mit dem, was der Auftrag nennt, und ' +
-        'schreibe Unklares in deinen Bericht statt zu fragen. Du bekommst einen eng ' +
-        'umrissenen, schablonenhaften Schreibauftrag mit einem Vorbild. Lies zuerst das ' +
-        'Vorbild (datei_lesen) und die im Auftrag genannten Stellen — dann schreibe deinen ' +
-        'Entwurf mit entwurf_schreiben in den Ordner ' +
-        ENTWURF_ORDNER +
-        '/ (z.B. ' +
-        ENTWURF_ORDNER +
-        '/entwurf-name.js), als vollständige Datei. Nur dort darfst du schreiben; ein ' +
-        'stärkeres Modell liest deinen Entwurf gegen und übernimmt ihn an den Zielort. ' +
-        'Halte dich eng an Vorbild und Auftrag — keine Extras, keine Verschönerungen. ' +
-        'Wenn du fertig bist, antworte OHNE weiteren Werkzeugaufruf mit einer kurzen ' +
-        'Liste auf Deutsch: welche Entwurfsdateien du geschrieben hast und was sie ' +
-        'enthalten. Konntest du etwas nicht, schreibe genau das — erfinde nichts.'
-    },
-    { role: 'user', content: String(auftrag ?? '') }
-  ]
+  const nachrichten = [auftaktNachricht(KREISLAUF_SYSTEMTEXTE.entwurf, auftrag)]
   const zaehler = { dateien: [] }
   const ergebnis = await kreislauf({
     projektPfad,
@@ -577,8 +649,9 @@ export async function lokalEntwerfen({ projektPfad, auftrag, modell, adresse = S
   return { ...ergebnis, dateien: zaehler.dateien }
 }
 
-// Der Bau-Kreislauf (BAUPLAN 22): ein eng umrissener, einzeln prüfbarer
-// Teilauftrag rein, echte Änderungen im Projektordner raus. Zusätzlich zu den
+// Der Bau-Kreislauf (BAUPLAN 22): ein zusammenhängender, einzeln prüfbarer
+// Teilauftrag rein (auch ein ganzes Modul oder mehrere zusammengehörige
+// Dateien), echte Änderungen im Projektordner raus. Zusätzlich zu den
 // Lese-Werkzeugen gibt es gezieltes Ersetzen UND ganze Dateien schreiben —
 // unter den unveränderten Tabu-Zonen. ergebnis.ersetzungen und
 // ergebnis.dateien zählen die echten Änderungen: beides leer heißt „nichts
@@ -586,27 +659,7 @@ export async function lokalEntwerfen({ projektPfad, auftrag, modell, adresse = S
 // `dateiListe` (BAUPLAN 46): die Dateiliste des Blocks als Tabu-Liste; null =
 // keine Sperre. Gilt IMMER, wenn eine Liste vorliegt — nicht nur in der Welle.
 export async function lokalBauen({ projektPfad, auftrag, modell, adresse = STANDARD_ADRESSE, aufSchritt, aufDenken, dateiListe = null }) {
-  const nachrichten = [
-    {
-      role: 'system',
-      content:
-        'Du bist ein Bau-Helfer in einem Projektordner. Du arbeitest allein: Rückfragen ' +
-        'werden nie beantwortet — arbeite mit dem, was der Auftrag nennt, und schreibe ' +
-        'Unklares in deinen Bericht statt zu fragen. Du bekommst einen eng umrissenen ' +
-        'Teilauftrag mit Fundstellen oder Vorbild, festen Schnittstellen und einem ' +
-        'Fertig-Kriterium. Lies zuerst die im Auftrag genannten Stellen (datei_lesen), ' +
-        'dann setze GENAU den Teilauftrag um: Bestehende Dateien änderst du mit ersetzen ' +
-        '(der alt-Text muss ZEICHENGENAU so in der Datei stehen, samt Einrückung, und ' +
-        'eindeutig sein — nimm zur Not umgebende Zeilen dazu); neue Dateien oder komplette ' +
-        'Neuschriebe schreibst du mit datei_schreiben als vollständige Datei. Halte dich ' +
-        'exakt an die im Auftrag genannten Datei- und Funktionsnamen — keine Extras, keine ' +
-        'Verschönerungen, nichts außerhalb des Teilauftrags. Ein stärkeres Modell liest ' +
-        'deine Arbeit sofort gegen. Wenn du fertig bist, antworte OHNE weiteren ' +
-        'Werkzeugaufruf mit einer kurzen Liste auf Deutsch: was du wo geändert oder ' +
-        'angelegt hast. Konntest du etwas nicht, schreibe genau das — erfinde nichts.'
-    },
-    { role: 'user', content: String(auftrag ?? '') }
-  ]
+  const nachrichten = [auftaktNachricht(KREISLAUF_SYSTEMTEXTE.bau, auftrag)]
   const zaehler = { ersetzungen: 0, geschrieben: [] }
   const ergebnis = await kreislauf({
     projektPfad,
@@ -721,7 +774,14 @@ async function kreislauf({ projektPfad, nachrichten, werkzeuge, modell, adresse,
       }
     }
 
-    const nachricht = antwort.message ?? {}
+    // Die Modell-Nachricht wandert unverändert in den Verlauf — nur die Rolle
+    // wird ergänzt, falls sie fehlt (Prüfer-Befund 18.08.2026: eine Antwort
+    // ohne message oder ohne role landete als rollenloses Objekt im Verlauf,
+    // und die nächste Anfrage trug „user, null, user" — genau die Rollen-
+    // Unordnung, die die Nutzer-only-Form vermeiden soll). Trägt das Modell
+    // eine Rolle, bleibt sie stehen.
+    const roh = antwort?.message && typeof antwort.message === 'object' ? antwort.message : {}
+    const nachricht = typeof roh.role === 'string' && roh.role ? roh : { ...roh, role: 'assistant' }
     const aufrufe = Array.isArray(nachricht.tool_calls) ? nachricht.tool_calls : []
     // Denk-Ansicht (BAUPLAN 24): das thinking-Feld der Denk-Modelle — oder,
     // wenn es fehlt, der Antworttext VOR Werkzeugaufrufen (das „laute Denken"
@@ -741,34 +801,35 @@ async function kreislauf({ projektPfad, nachrichten, werkzeuge, modell, adresse,
       if (getarnt.length) {
         nachrichten.push(nachricht)
         aufSchritt?.('aufruf_uebersetzt', {})
+        const ergebnisse = []
         for (const { name, eingabe } of getarnt) {
           schritte++
           aufSchritt?.(name, eingabe)
           const ergebnis = werkzeugAusfuehren(projektPfad, name, eingabe, zaehler, dateiListe)
-          nachrichten.push({ role: 'tool', tool_name: name, content: String(ergebnis) })
+          ergebnisse.push([name, ergebnis])
         }
+        nachrichten.push(werkzeugErgebnisNachricht(ergebnisse))
         continue
       }
       if (fazit) return { ok: true, fazit, schritte }
       if (!nachgehakt) {
         nachgehakt = true
         nachrichten.push(nachricht)
-        nachrichten.push({
-          role: 'user',
-          content:
-            'Deine Antwort war leer. Gib jetzt dein Fazit als normale Antwort aus — ' +
-            'kompakt, auf Deutsch, mit Fundorten aus den Werkzeug-Ergebnissen. ' +
-            'Kein Werkzeugaufruf mehr.'
-        })
+        nachrichten.push(nutzerNachricht(texte.agentenLokaleHelfer.nachhaken))
         continue
       }
       return { ok: false, fehler: 'Die lokale KI hat kein Fazit geliefert.', schritte }
     }
 
     nachrichten.push(nachricht)
+    const ergebnisse = []
     for (const aufruf of aufrufe) {
-      const name = aufruf.function?.name ?? '?'
-      let eingabe = aufruf.function?.arguments ?? {}
+      // Dieselbe Absicherung wie im getarnten Pfad (Prüfer-Befund 18.08.2026):
+      // Ein Aufruf kann null sein, arguments kann als String "null" kommen —
+      // beides darf den Kreislauf nicht mit einem Wurf verlassen. Unbekanntes
+      // wird als unbekanntes Werkzeug beantwortet, kaputte Eingabe wird {}.
+      const name = aufruf?.function?.name ?? '?'
+      let eingabe = aufruf?.function?.arguments ?? {}
       if (typeof eingabe === 'string') {
         try {
           eingabe = JSON.parse(eingabe)
@@ -776,11 +837,13 @@ async function kreislauf({ projektPfad, nachrichten, werkzeuge, modell, adresse,
           eingabe = {}
         }
       }
+      if (!eingabe || typeof eingabe !== 'object') eingabe = {}
       schritte++
       aufSchritt?.(name, eingabe)
       const ergebnis = werkzeugAusfuehren(projektPfad, name, eingabe, zaehler, dateiListe)
-      nachrichten.push({ role: 'tool', tool_name: name, content: String(ergebnis) })
+      ergebnisse.push([name, ergebnis])
     }
+    nachrichten.push(werkzeugErgebnisNachricht(ergebnisse))
   }
   return {
     ok: false,

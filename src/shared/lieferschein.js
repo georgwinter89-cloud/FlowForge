@@ -8,8 +8,8 @@
 // Hier stehen die reinen Regeln (ohne Motor, ohne Electron), damit die
 // Prüfskripte sie direkt fahren können:
 //   - welches Werkzeug zu welchem liefert-Etikett gehört,
-//   - was eine Meldung enthalten muss (Ebene 2: Längen, Anzahl, Plausibilität —
-//     Claudes strenger Schema-Modus kennt keine Längengrenzen),
+//   - was eine Meldung enthalten muss (Ebene 2: Pflichtfelder, Auswahlwerte,
+//     Plausibilität — KEINE Längen- oder Anzahl-Grenzen mehr, siehe unten),
 //   - ob die Lieferung den Bedarf des Nachfolgers deckt (Ebene 3, Kanten-Prüfung),
 //   - wie eine Meldung als lesbarer Text aussieht (Übergabe und Laufbericht).
 // Die Schema-Ebene (Ebene 1) steht im Werkzeug selbst (lieferscheinWerkzeuge.js).
@@ -41,31 +41,17 @@ export const FESTE_TEILE = {
 export const RAHMEN_WERKZEUG = 'melde_ergebnis'
 export const WERKZEUG_PRAEFIX = 'mcp__lieferschein__'
 
-// Harte Grenzen (Ebene 2). Bewusst großzügig genug für echte Arbeit und eng
-// genug, dass ein Lieferschein den Kontext des nächsten Blocks nicht flutet.
-export const FAZIT_MAX = 300
-export const ZEILE_MAX = 300
-export const LISTE_MAX = 20
-export const ANMERKUNG_MAX = 1500
-export const FUNDORT_MAX = 200
-export const BEANSTANDUNG_MAX = 400
-export const BELEG_MAX = 1200
-export const INHALT_MAX = 6000
-
-// Zuschnitt je Ziel (BAUPLAN 44): So viele Pakete trägt EINE Meldung höchstens
-// — ein Schaubild mit mehr benannten Zielen ist keins mehr, das ein Mensch liest.
-export const PAKETE_MAX = 12
-// Der Datenvertrag hat eine EIGENE Anzahl-Grenze statt LISTE_MAX (20) zu erben:
-// Aus dieser Liste wird mit Bauschritt 46 die Schreibsperre — eine zu enge
-// Grenze wäre dann kein gekürzter Text, sondern ein blockierter Bauer.
-export const DATEILISTE_MAX = 60
-// Aufgaben-Kennungen zählen aus demselben Grund eigens (BAUPLAN 44): Die beiden
-// Enden derselben Rechnung müssen gleich weit reichen. Gälte hier LISTE_MAX (20),
-// während paket_melden mehr Karten annimmt, könnte ein Paket mit 21 Aufgaben die
-// Vollständigkeit nie bestehen — FlowForge forderte endlos etwas nach, das der
-// Agent gar nicht eintragen darf, und beschuldigte ihn für eine eigene Grenze.
-// Deshalb gilt diese Zahl an BEIDEN Enden (paketMeldungPruefen und hier).
-export const AUFGABEN_MAX = 200
+// Keine Längen- und Anzahl-Grenzen für Meldungen (Entscheidung Georg,
+// 18.08.2026): Bis 0.46.0 deckelte Ebene 2 jedes Textfeld (Fazit 300, Zeile 300,
+// Anmerkung 1.500, Beanstandung 400, Beleg 1.200, Inhalt 6.000 Zeichen …) und
+// jede Liste (20 Einträge; Dateiliste 60, Aufgaben-Kennungen 200, Pakete 12).
+// Im Alltag scheiterten Meldungen daran mehrfach knapp — selten viel länger
+// als erlaubt, aber jede Abweisung kostete eine Runde. Die Grenzen sind deshalb
+// ersatzlos weg, ohne Rückfall: Eine Meldung wird angenommen, wie sie ist, und
+// kommt vollständig beim Nachfolger an. Was bleibt, sind Pflichtfelder,
+// Auswahlwerte und Plausibilität. Einzige Ausnahme: die Prüfkarte, die den
+// Karten-Grenzen (TITEL_MAX/TEXT_MAX, SPEC §3.1) unterliegt — das sind
+// Karten-Regeln, keine Übergabe-Regeln.
 
 export const EINSTUFUNGEN = ['mechanisch', 'grundsaetzlich']
 export const URTEILE = ['bestanden', 'fehlgeschlagen']
@@ -154,42 +140,27 @@ function mehrzeilig(wert) {
     .trim()
 }
 
-// Ein Pflicht-Textfeld: gefüllt und in der Längengrenze (die Ablehnung nennt
-// die Ist-Länge — dieselbe Ehrlichkeit wie bei den Karten).
-function pflichtText(wert, max, feld, einzeilen = true) {
+// Ein Pflicht-Textfeld: gefüllt — sonst nichts. Eine Längengrenze gibt es seit
+// 0.46.1 nicht mehr (siehe Kopf).
+function pflichtText(wert, feld, einzeilen = true) {
   const text = einzeilen ? einzeilig(wert) : mehrzeilig(wert)
   if (!text) return { fehler: texte.lieferschein.feldFehlt(feld) }
-  if (text.length > max) return { fehler: texte.lieferschein.feldZuLang(feld, max, text.length) }
   return { text }
 }
 
-function freierText(wert, max, feld, einzeilen = true) {
-  const text = einzeilen ? einzeilig(wert) : mehrzeilig(wert)
-  if (!text) return { text: '' }
-  if (text.length > max) return { fehler: texte.lieferschein.feldZuLang(feld, max, text.length) }
-  return { text }
+function freierText(wert, einzeilen = true) {
+  return einzeilen ? einzeilig(wert) : mehrzeilig(wert)
 }
 
-// Eine Liste kurzer Zeilen: leere Einträge fliegen raus, Anzahl und Länge sind
-// gedeckelt. `zuViel` überschreibt die Abweisung bei zu vielen Einträgen — der
-// Standardrat („fasse zusammen") passt für Fließtext, aber nicht für Listen aus
-// Kennungen, wo es nichts zusammenzufassen gibt.
-function zeilenListe(roh, feld, { max = LISTE_MAX, zeileMax = ZEILE_MAX, zuViel = null } = {}) {
+// Eine Liste einzeiliger Einträge: leere fliegen raus, alle anderen bleiben —
+// ohne Deckel für Anzahl oder Länge.
+function zeilenListe(roh) {
   const zeilen = []
   for (const eintrag of Array.isArray(roh) ? roh : []) {
     const text = einzeilig(eintrag)
-    if (!text) continue
-    if (text.length > zeileMax)
-      return { fehler: texte.lieferschein.eintragZuLang(feld, zeileMax, text.length) }
-    zeilen.push(text)
+    if (text) zeilen.push(text)
   }
-  if (zeilen.length > max)
-    return {
-      fehler: zuViel
-        ? zuViel(max, zeilen.length)
-        : texte.lieferschein.zuVieleEintraege(feld, max, zeilen.length)
-    }
-  return { zeilen }
+  return zeilen
 }
 
 // Der gemeinsame Rahmen aller Meldungen (BAUPLAN 42): fazit · getan · offen ·
@@ -197,20 +168,14 @@ function zeilenListe(roh, feld, { max = LISTE_MAX, zeileMax = ZEILE_MAX, zuViel 
 // Feld passt und der nächste Block trotzdem wissen sollte.
 function rahmenPruefen(roh) {
   const tl = texte.lieferschein
-  const fazit = pflichtText(roh?.fazit, FAZIT_MAX, tl.felder.fazit)
+  const fazit = pflichtText(roh?.fazit, tl.felder.fazit)
   if (fazit.fehler) return fazit
-  const getan = zeilenListe(roh?.getan, tl.felder.getan)
-  if (getan.fehler) return getan
-  const offen = zeilenListe(roh?.offen, tl.felder.offen)
-  if (offen.fehler) return offen
-  const anmerkung = freierText(roh?.anmerkung, ANMERKUNG_MAX, tl.felder.anmerkung, false)
-  if (anmerkung.fehler) return anmerkung
   return {
     rahmen: {
       fazit: fazit.text,
-      getan: getan.zeilen,
-      offen: offen.zeilen,
-      anmerkung: anmerkung.text
+      getan: zeilenListe(roh?.getan),
+      offen: zeilenListe(roh?.offen),
+      anmerkung: freierText(roh?.anmerkung, false)
     }
   }
 }
@@ -348,14 +313,10 @@ function dateiListePruefen(roh) {
     const text = eintrag.pfad
     if (!text) continue
     if (/[*?[\]{}]/.test(text)) return { fehler: tl.dateiMuster(text) }
-    if (text.length > FUNDORT_MAX)
-      return { fehler: tl.eintragZuLang(tl.felder.erlaubteDateien, FUNDORT_MAX, text.length) }
     if (!eintraege.includes(text)) eintraege.push(text)
   }
-  if (eintraege.length > DATEILISTE_MAX)
-    return {
-      fehler: tl.zuVieleEintraege(tl.felder.erlaubteDateien, DATEILISTE_MAX, eintraege.length)
-    }
+  // Keine Anzahl-Grenze (seit 0.46.1): Die Liste IST die Schreibsperre — jeder
+  // Deckel hier wäre kein gekürzter Text, sondern ein blockierter Bauer.
   return { eintraege }
 }
 
@@ -365,45 +326,33 @@ function dateiListePruefen(roh) {
 // erfundene Adresse träfe sonst niemanden, ohne dass jemand es merkt.
 function zuschnittPruefen(roh, umfeld) {
   const tl = texte.lieferschein
-  const ziel = pflichtText(roh?.ziel, ZEILE_MAX, tl.felder.ziel)
+  const ziel = pflichtText(roh?.ziel, tl.felder.ziel)
   if (ziel.fehler) return ziel
-  const kriterien = zeilenListe(roh?.fertigKriterien, tl.felder.fertigKriterien)
-  if (kriterien.fehler) return kriterien
+  const kriterien = zeilenListe(roh?.fertigKriterien)
   // Kanten-Prüfung im Kleinen: Ein Arbeitspaket ohne Fertig-Kriterien ist keins
   // — der Prüfer hätte keinen Maßstab und der Bauer kein Ziel.
-  if (kriterien.zeilen.length === 0) return { fehler: tl.arbeitspaketOhneKriterien }
-  const schritte = zeilenListe(roh?.schritte, tl.felder.schritte)
-  if (schritte.fehler) return schritte
-  const fundstellen = zeilenListe(roh?.fundstellen, tl.felder.fundstellen)
-  if (fundstellen.fehler) return fundstellen
-  const nichtDabei = zeilenListe(roh?.nichtDabei, tl.felder.nichtDabei)
-  if (nichtDabei.fehler) return nichtDabei
-  const bausteine = zeilenListe(roh?.bausteine, tl.felder.bausteine)
-  if (bausteine.fehler) return bausteine
-  const schnittstellen = zeilenListe(roh?.schnittstellen, tl.felder.schnittstellen)
-  if (schnittstellen.fehler) return schnittstellen
+  if (kriterien.length === 0) return { fehler: tl.arbeitspaketOhneKriterien }
+  const schritte = zeilenListe(roh?.schritte)
+  const fundstellen = zeilenListe(roh?.fundstellen)
+  const nichtDabei = zeilenListe(roh?.nichtDabei)
+  const bausteine = zeilenListe(roh?.bausteine)
+  const schnittstellen = zeilenListe(roh?.schnittstellen)
   // Verbindung zur gemeldeten Aufgaben-Karte (BAUPLAN 44): Ohne sie wäre die
   // Vollständigkeitsprüfung ein Textvergleich — genau die Bauform, die
   // Bauschritt 42 abgeschafft hat. Geprüft wird deshalb HART gegen das mit
   // paket_melden gemeldete Paket (`umfeld.paket`, Muster: paketMeldungPruefen):
   // Eine erfundene id deckte sonst nichts ab und niemand merkte es.
   //
-  // Die Anzahl-Grenze ist AUFGABEN_MAX, dieselbe wie in paketMeldungPruefen —
-  // mit dem geerbten LISTE_MAX (20) wäre ein Paket mit 21 gemeldeten Aufgaben
-  // nicht mehr vollständig zuschneidbar gewesen.
-  const aufgabenIds = zeilenListe(roh?.aufgabenIds, tl.felder.aufgabenIds, {
-    max: AUFGABEN_MAX,
-    zeileMax: FUNDORT_MAX,
-    zuViel: (max, ist) => tl.zuVieleAufgabenIds(max, ist)
-  })
-  if (aufgabenIds.fehler) return aufgabenIds
-  if (umfeld && 'paket' in umfeld && aufgabenIds.zeilen.length) {
+  // Keine Anzahl-Grenze — weder hier noch in paketMeldungPruefen (seit 0.46.1):
+  // Beide Enden derselben Rechnung reichen damit gleich weit, nämlich beliebig.
+  const aufgabenIds = zeilenListe(roh?.aufgabenIds)
+  if (umfeld && 'paket' in umfeld && aufgabenIds.length) {
     const paket = Array.isArray(umfeld.paket) ? umfeld.paket : null
     // Noch gar kein Paket gemeldet: Die Reihenfolge ist die Antwort — erst
     // paket_melden, dann der Zuschnitt. Sonst zeigte die Verbindung ins Leere.
     if (!paket) return { fehler: tl.aufgabenIdsOhnePaket }
     const bekannt = new Set(paket.map((a) => String(a?.id)))
-    for (const id of aufgabenIds.zeilen)
+    for (const id of aufgabenIds)
       if (!bekannt.has(id))
         return {
           fehler: tl.aufgabeUnbekannt(
@@ -432,9 +381,7 @@ function zuschnittPruefen(roh, umfeld) {
     } else if (ziele) return { fehler: tl.zielBlockOhneZiele(rohZiel) }
     else {
       // Ohne Zielliste (Prüfskripte, selbstgebaute Wege) bleibt die Adresse
-      // stehen, wie sie kam — geprüft wird dann nur die Länge.
-      if (rohZiel.length > ZEILE_MAX)
-        return { fehler: tl.feldZuLang(tl.felder.zielBlock, ZEILE_MAX, rohZiel.length) }
+      // stehen, wie sie kam.
       zielBlock = rohZiel
       zielBezeichnung = rohZiel
     }
@@ -445,14 +392,14 @@ function zuschnittPruefen(roh, umfeld) {
       zielInstanzId,
       zielBezeichnung,
       ziel: ziel.text,
-      fertigKriterien: kriterien.zeilen,
-      schritte: schritte.zeilen,
-      fundstellen: fundstellen.zeilen,
-      nichtDabei: nichtDabei.zeilen,
-      bausteine: bausteine.zeilen,
-      schnittstellen: schnittstellen.zeilen,
+      fertigKriterien: kriterien,
+      schritte,
+      fundstellen,
+      nichtDabei,
+      bausteine,
+      schnittstellen,
       erlaubteDateien: dateien.eintraege,
-      aufgabenIds: aufgabenIds.zeilen
+      aufgabenIds
     }
   }
 }
@@ -467,8 +414,6 @@ function arbeitspaketPruefen(roh, umfeld) {
   // als Liste mit genau einem Eintrag.
   const rohe = Array.isArray(roh?.pakete) ? roh.pakete : roh?.ziel != null ? [roh] : []
   if (rohe.length === 0) return { fehler: tl.arbeitspaketOhnePaket }
-  if (rohe.length > PAKETE_MAX)
-    return { fehler: tl.zuVieleEintraege(tl.felder.pakete, PAKETE_MAX, rohe.length) }
   const pakete = []
   const belegt = new Set()
   for (let i = 0; i < rohe.length; i++) {
@@ -634,17 +579,11 @@ function pruefbelegPruefen(roh) {
   for (const eintrag of Array.isArray(roh?.beanstandungen) ? roh.beanstandungen : []) {
     const text = einzeilig(eintrag?.text)
     if (!text) continue
-    if (text.length > BEANSTANDUNG_MAX)
-      return { fehler: tl.eintragZuLang(tl.felder.beanstandungen, BEANSTANDUNG_MAX, text.length) }
     const einstufung = String(eintrag?.einstufung ?? '').trim().toLowerCase()
     if (!EINSTUFUNGEN.includes(einstufung)) return { fehler: tl.einstufungFehlt(EINSTUFUNGEN) }
     const fundort = einzeilig(eintrag?.fundort)
-    if (fundort.length > FUNDORT_MAX)
-      return { fehler: tl.eintragZuLang(tl.felder.fundort, FUNDORT_MAX, fundort.length) }
     beanstandungen.push({ einstufung, text, fundort })
   }
-  if (beanstandungen.length > LISTE_MAX)
-    return { fehler: tl.zuVieleEintraege(tl.felder.beanstandungen, LISTE_MAX, beanstandungen.length) }
   // Plausibilität (Ebene 2): Ein Fehlurteil ohne eine einzige Beanstandung ist
   // für den Bauer wertlos; ein bestandenes Urteil mit offenen Beanstandungen
   // führt zu nichts — beides wird sofort abgewiesen statt still übernommen.
@@ -652,12 +591,11 @@ function pruefbelegPruefen(roh) {
     return { fehler: tl.urteilOhneBeanstandung }
   if (urteil === 'bestanden' && beanstandungen.length > 0)
     return { fehler: tl.bestandenMitBeanstandung }
-  const rotVorGruen = freierText(roh?.rotVorGruen, BELEG_MAX, tl.felder.rotVorGruen, false)
-  if (rotVorGruen.fehler) return rotVorGruen
-  const geprueft = zeilenListe(roh?.geprueft, tl.felder.geprueft)
-  if (geprueft.fehler) return geprueft
+  const rotVorGruen = freierText(roh?.rotVorGruen, false)
+  const geprueft = zeilenListe(roh?.geprueft)
   // Prüfkarte: dieselben harten Längengrenzen wie für jede andere Karte —
-  // FlowForge legt sie nach bestandener Prüfung selbst an (BAUPLAN 18).
+  // FlowForge legt sie nach bestandener Prüfung selbst an (BAUPLAN 18). Das
+  // sind Karten-Regeln (SPEC §3.1), keine Übergabe-Grenzen — sie bleiben.
   let pruefkarte = null
   const kartenTitel = einzeilig(roh?.pruefkarteTitel)
   const kartenText = einzeilig(roh?.pruefkarteText)
@@ -673,8 +611,8 @@ function pruefbelegPruefen(roh) {
     teil: {
       urteil,
       beanstandungen,
-      rotVorGruen: rotVorGruen.text,
-      geprueft: geprueft.zeilen,
+      rotVorGruen,
+      geprueft,
       pruefkarte
     }
   }
@@ -688,38 +626,24 @@ function umsetzungsberichtPruefen(roh) {
     const wieUmgesetzt = einzeilig(eintrag?.wieUmgesetzt)
     if (!kriterium && !wieUmgesetzt) continue
     if (!kriterium || !wieUmgesetzt) return { fehler: tl.kriteriumUnvollstaendig }
-    if (kriterium.length > ZEILE_MAX)
-      return { fehler: tl.eintragZuLang(tl.felder.kriterien, ZEILE_MAX, kriterium.length) }
-    if (wieUmgesetzt.length > BEANSTANDUNG_MAX)
-      return { fehler: tl.eintragZuLang(tl.felder.kriterien, BEANSTANDUNG_MAX, wieUmgesetzt.length) }
     kriterien.push({ kriterium, wieUmgesetzt })
   }
-  if (kriterien.length > LISTE_MAX)
-    return { fehler: tl.zuVieleEintraege(tl.felder.kriterien, LISTE_MAX, kriterien.length) }
   const dateien = []
   for (const eintrag of Array.isArray(roh?.dateien) ? roh.dateien : []) {
     const pfad = einzeilig(eintrag?.pfad)
     if (!pfad) continue
-    if (pfad.length > FUNDORT_MAX)
-      return { fehler: tl.eintragZuLang(tl.felder.dateien, FUNDORT_MAX, pfad.length) }
     const art = String(eintrag?.art ?? '').trim().toLowerCase()
     if (!DATEI_ARTEN.includes(art)) return { fehler: tl.dateiArtFehlt(DATEI_ARTEN) }
     dateien.push({ pfad, art })
   }
-  if (dateien.length > LISTE_MAX)
-    return { fehler: tl.zuVieleEintraege(tl.felder.dateien, LISTE_MAX, dateien.length) }
   const angriffsliste = []
   for (const eintrag of Array.isArray(roh?.angriffsliste) ? roh.angriffsliste : []) {
     const fund = einzeilig(eintrag?.fund)
     const umgang = einzeilig(eintrag?.umgang)
     if (!fund && !umgang) continue
     if (!fund || !umgang) return { fehler: tl.fundUnvollstaendig }
-    if (fund.length > ZEILE_MAX || umgang.length > BEANSTANDUNG_MAX)
-      return { fehler: tl.eintragZuLang(tl.felder.angriffsliste, BEANSTANDUNG_MAX, Math.max(fund.length, umgang.length)) }
     angriffsliste.push({ fund, umgang })
   }
-  if (angriffsliste.length > LISTE_MAX)
-    return { fehler: tl.zuVieleEintraege(tl.felder.angriffsliste, LISTE_MAX, angriffsliste.length) }
   return { teil: { kriterien, dateien, angriffsliste } }
 }
 
@@ -729,27 +653,18 @@ function fundePruefen(roh) {
   for (const eintrag of Array.isArray(roh?.funde) ? roh.funde : []) {
     const text = einzeilig(eintrag?.text)
     if (!text) continue
-    if (text.length > BEANSTANDUNG_MAX)
-      return { fehler: tl.eintragZuLang(tl.felder.funde, BEANSTANDUNG_MAX, text.length) }
     const schwere = String(eintrag?.schwere ?? '').trim().toLowerCase()
     if (!SCHWEREN.includes(schwere)) return { fehler: tl.schwereFehlt(SCHWEREN) }
     const fundort = einzeilig(eintrag?.fundort)
-    if (fundort.length > FUNDORT_MAX)
-      return { fehler: tl.eintragZuLang(tl.felder.fundort, FUNDORT_MAX, fundort.length) }
     funde.push({ schwere, text, fundort })
   }
-  if (funde.length > LISTE_MAX)
-    return { fehler: tl.zuVieleEintraege(tl.felder.funde, LISTE_MAX, funde.length) }
   // Eine leere Fundliste ist ein gutes Ergebnis, kein Fehler — der Auftrag
   // verlangt ausdrücklich Ehrlichkeit statt erfundener Funde.
   return { teil: { funde } }
 }
 
 function rahmenTeilPruefen(roh) {
-  const tl = texte.lieferschein
-  const inhalt = freierText(roh?.inhalt, INHALT_MAX, tl.felder.inhalt, false)
-  if (inhalt.fehler) return inhalt
-  return { teil: { inhalt: inhalt.text } }
+  return { teil: { inhalt: freierText(roh?.inhalt, false) } }
 }
 
 const TEIL_PRUEFER = {

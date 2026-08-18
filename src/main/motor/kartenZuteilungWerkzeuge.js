@@ -13,7 +13,6 @@
 import { z } from 'zod'
 import { texte } from '../../shared/texte.js'
 import { zielFuerAdresse } from '../../shared/kettenRegeln.js'
-import { AUFGABEN_MAX } from '../../shared/lieferschein.js'
 
 // Reine Prüf-Funktion, exportiert für die Regel-Prüfungen.
 // zuteilung: [{ block, kartenIds }], karten: alle Projektkarten,
@@ -89,12 +88,9 @@ export function paketMeldungPruefen({ aufgabenIds, karten, ausgewaehlt, feldGefu
     if (feldGefuellt) return { ok: true, aufgaben: [] }
     return { fehler: tp.leerOhneFeld }
   }
-  // Dieselbe Grenze wie im Zuschnitt (BAUPLAN 44): Was hier hereinkommt, muss
-  // drüben in aufgabenIds abgedeckt werden können. Wären die beiden Enden
-  // verschieden weit, entstünde ein Paket, dessen Vollständigkeit niemand mehr
-  // erfüllen kann — und die Nachforderung beschuldigte den Agenten dafür.
-  if (ids.length > AUFGABEN_MAX)
-    return { fehler: texte.lieferschein.zuVieleAufgabenIds(AUFGABEN_MAX, ids.length) }
+  // Keine Anzahl-Grenze (seit 0.46.1) — wie im Zuschnitt (lieferschein.js,
+  // aufgabenIds): Beide Enden derselben Rechnung reichen gleich weit, sonst
+  // entstünde ein Paket, dessen Vollständigkeit niemand mehr erfüllen kann.
   const nachId = new Map((Array.isArray(karten) ? karten : []).map((k) => [k.id, k]))
   const auswahl = new Set(Array.isArray(ausgewaehlt) ? ausgewaehlt : [])
   const aufgaben = []

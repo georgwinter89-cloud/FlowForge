@@ -16,8 +16,7 @@ import fs from 'node:fs'
 import {
   meldungPruefen,
   zuschnittDeckung,
-  zuschnitteAusMeldungen,
-  AUFGABEN_MAX
+  zuschnitteAusMeldungen
 } from '../src/shared/lieferschein.js'
 import { paketMeldungPruefen } from '../src/main/motor/kartenZuteilungWerkzeuge.js'
 import { zielListe, budgetAusStand } from '../src/shared/kettenRegeln.js'
@@ -249,28 +248,41 @@ describe('BAUPLAN 44 · Beide Enden derselben Rechnung reichen gleich weit', () 
     expect(deckung.unbedienteZiele).toEqual([])
   })
 
-  it('weist an beiden Enden bei derselben Zahl ab — mit demselben Wortlaut', () => {
-    const zuViele = Array.from({ length: AUFGABEN_MAX + 1 }, (_, i) => `a${i + 1}`)
-    const karten = zuViele.map((id) => ({ id, titel: id, sorte: 'aufgabe', erledigt: false }))
-    const erwartet = tl.zuVieleAufgabenIds(AUFGABEN_MAX, zuViele.length)
-    expect(
-      paketMeldungPruefen({
-        aufgabenIds: zuViele,
-        karten,
-        ausgewaehlt: zuViele,
-        feldGefuellt: false
-      }).fehler
-    ).toBe(erwartet)
+  // 0.46.1 (Entscheidung Georg, 18.08.2026): keine Anzahl-Grenze mehr — an
+  // KEINEM der beiden Enden. Rot vor Grün: Bis 0.46.0 wiesen paketMeldungPruefen
+  // und der Zuschnitt 201 Kennungen ab (AUFGABEN_MAX = 200).
+  it('nimmt 250 Aufgaben-Kennungen an beiden Enden an und rechnet die Deckung vollständig', () => {
+    const viele = Array.from({ length: 250 }, (_, i) => `a${i + 1}`)
+    const karten = viele.map((id) => ({ id, titel: id, sorte: 'aufgabe', erledigt: false }))
+    const paketMeldung = paketMeldungPruefen({
+      aufgabenIds: viele,
+      karten,
+      ausgewaehlt: viele,
+      feldGefuellt: false
+    })
+    expect(paketMeldung.fehler).toBeUndefined()
+    expect(paketMeldung.aufgaben).toHaveLength(250)
     const ergebnis = meldungPruefen(
       'arbeitspaket',
-      { ...rahmen, pakete: [{ ziel: 'Alles', fertigKriterien: ['Läuft.'], aufgabenIds: zuViele }] },
-      'Arbeitspaket'
+      {
+        ...rahmen,
+        pakete: [
+          {
+            zielBlock: einZiel[0].adresse,
+            ziel: 'Alles',
+            fertigKriterien: ['Läuft.'],
+            aufgabenIds: viele
+          }
+        ]
+      },
+      'Arbeitspaket',
+      { ziele: einZiel, paket: paketMeldung.aufgaben }
     )
-    expect(ergebnis.fehler).toBe(tl.paketFehler(1, erwartet))
-    // Und der Rat passt zu Kennungen: „Fasse zusammen, was zusammengehört"
-    // wäre für Karten-ids ein Rat, den niemand befolgen kann.
-    expect(erwartet).not.toContain('Fasse zusammen')
-    expect(erwartet).toContain(String(zuViele.length))
+    expect(ergebnis.fehler).toBeUndefined()
+    expect(ergebnis.meldung.pakete[0].aufgabenIds).toHaveLength(250)
+    const deckung = zuschnittDeckung(einZiel, paketMeldung.aufgaben, [ergebnis.meldung])
+    expect(deckung.fehlendeAufgaben).toEqual([])
+    expect(deckung.unbedienteZiele).toEqual([])
   })
 })
 

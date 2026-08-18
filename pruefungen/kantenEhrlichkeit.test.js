@@ -1,8 +1,8 @@
 // Prüfungen zur Kanten-Ehrlichkeit (BAUPLAN 34), seit BAUPLAN 42 auf den
 // Lieferschein umgestellt: Die Beanstandungen stehen nicht mehr als
 // Marker-Zeilen im Fließtext, sondern als geprüfte Felder — prueferKritik baut
-// die Rückmeldung daraus. Was bleibt, ist die Mengen-Frage: alle
-// Beanstandungen vollständig, und eine Kürzung ist sichtbar.
+// die Rückmeldung daraus. Seit 0.46.1 ohne Deckel: alle Beanstandungen gehen
+// vollständig weiter, gekürzt werden nur noch Prozess-Ausgaben (mitteGekuerzt).
 import { describe, it, expect } from 'vitest'
 import { prueferKritik, mitteGekuerzt } from '../src/shared/kantenRegeln.js'
 import { vorfahrenDistanzen } from '../src/shared/kettenRegeln.js'
@@ -21,7 +21,6 @@ describe('BAUPLAN 34/42 · Prüferkritik vollständig aus den gemeldeten Feldern
   it('reicht alle Beanstandungen mit Einstufung und Fundort weiter', () => {
     const kritik = prueferKritik(beanstandungen)
     expect(kritik.anzahl).toBe(2)
-    expect(kritik.weggelassen).toBe(0)
     expect(kritik.text).toContain('0.5 statt 0.05')
     expect(kritik.text).toContain('Tunnel-Logik braucht einen Umbau')
     // Einstufung und Fundort stehen mit in der Zeile — ohne sie wüsste der
@@ -36,20 +35,27 @@ describe('BAUPLAN 34/42 · Prüferkritik vollständig aus den gemeldeten Feldern
     expect(kritik.text).toBe('')
   })
 
-  it('kürzt bei sehr vielen Beanstandungen sichtbar, statt still zu schneiden', () => {
+  // 0.46.1 (Entscheidung Georg, 18.08.2026): kein Deckel mehr. Rot vor Grün:
+  // Bis 0.46.0 schnitt prueferKritik bei 3.000 Zeichen ab und hängte eine
+  // „(… weitere Beanstandungen passten nicht …)"-Zeile an — hier kamen von 40
+  // Beanstandungen à 2.000 Zeichen nur zwei durch.
+  it('reicht 40 Beanstandungen à 2.000 Zeichen vollständig weiter — ohne Kürzungszeile', () => {
     const viele = Array.from({ length: 40 }, (_, i) => ({
       einstufung: 'mechanisch',
-      text: `Fundstelle ${i} — ` + 'x'.repeat(200),
-      fundort: ''
+      text: `Fundstelle ${i + 1} — ` + 'x'.repeat(2000),
+      fundort: `src/datei${i + 1}.js`
     }))
     const kritik = prueferKritik(viele)
     expect(kritik.anzahl).toBe(40)
-    expect(kritik.weggelassen).toBeGreaterThan(0)
-    expect(kritik.text).toContain('weitere Beanstandung')
+    expect(kritik.text.split('\n')).toHaveLength(40)
+    for (let i = 1; i <= 40; i++) expect(kritik.text).toContain(`Fundstelle ${i} — `)
+    expect(kritik.text).not.toContain('weitere Beanstandung')
+    expect(kritik.text).not.toContain('gekürzt')
+    expect(kritik.text.length).toBeGreaterThan(80000)
   })
 })
 
-describe('BAUPLAN 34 · Kürzung in der Mitte, nicht hinten', () => {
+describe('BAUPLAN 34 · Kürzung in der Mitte, nicht hinten (nur Prozess-Ausgaben)', () => {
   it('behält Anfang und Ende und sagt, wie viel wegfiel', () => {
     const lang = 'A'.repeat(9000) + 'ENDE-DES-TEXTES'
     const gekuerzt = mitteGekuerzt(lang, 8000)

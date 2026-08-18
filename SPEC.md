@@ -30,9 +30,11 @@ Sitzungen hinweg Software entsteht — ohne dass dem Agenten der Kontext überl�
     (Umschalter in den Einstellungen, kein Umbau). Im API-Modus gilt statt der
     Kontingent-Pause eine einstellbare **Ausgaben-Obergrenze** pro Lauf.
   - **Lokale KI schon in V1 — aber nur als Helfer** (Experiment, seit 13.08.2026): Die
-    Block-Agenten können Recherche-, Entwurfs- und kleine Bau-Aufträge an eine lokale KI
+    Block-Agenten können Recherche-, Entwurfs- und Bau-Aufträge — auch mittelgroße,
+    zusammenhängende Teilaufträge und Neues mit klarer Beschreibung — an eine lokale KI
     über Ollama abgeben (§4.3 „Lokale Helfer-KI") — eigene kleine Helfer-Kreisläufe von
-    FlowForge, kein Motor. Der Motor selbst bleibt die Claude-CLI.
+    FlowForge, kein Motor; die Abnahme durch den Block-Agenten bleibt der Schiedsrichter.
+    Der Motor selbst bleibt die Claude-CLI.
   - **Modellklasse je Block** (seit Bauschritt 37, Entscheidung Georg: frei je Block
     wählbar — auch Bauer und Prüfer, gegen die Empfehlung „nur Nebenrollen fest"; die
     Folge einer zu sparsamen Wahl sind mehr Reparatur-Runden, und genau die zeigen die
@@ -475,8 +477,9 @@ Seite aufs Projekt vorgefiltert zeigt (eigener Baustein, nicht Teil der Leinwand
 - **Fehlschlag-Rückführung:** „bei Fehlschlag zurück zu Block X" (braucht der Prüfer sofort).
   Urteil und Beanstandungen kommen seit Bauschritt 42 aus den **gemeldeten Feldern**
   des Prüfbelegs (§4.3). Die Rückmeldung an den Zielblock enthält **alle
-  Beanstandungen vollständig**, je eine Zeile mit Einstufung und Fundort
-  (großzügig gedeckelt; passt eine nicht mehr hinein, steht das sichtbar dabei).
+  Beanstandungen vollständig**, je eine Zeile mit Einstufung und Fundort —
+  ohne Deckel (seit 0.46.1; der frühere Deckel von 3.000 Zeichen riss im
+  Alltag knapp und kostete Runden).
   Ein Urteil „fehlgeschlagen" **ohne eine einzige Beanstandung** kommt gar nicht
   mehr durch: FlowForge weist die Meldung schon am Werkzeug ab (sichtbar im
   Ticker), und der Prüfer korrigiert im selben Anlauf — die Nachforderung aus
@@ -629,16 +632,15 @@ als dasselbe — Schrägstriche in beide Richtungen, `./` davor und ein führend
 `/` („relativ zum Projektordner"); Melden und Schreibsperre (§7) rechnen dabei
 mit **derselben** Normalisierung, sonst sperrte die Liste eine Datei, die
 sichtbar in ihr steht.
-Die Liste hat eine eigene, großzügige Obergrenze (60 Einträge) statt der
-Listen-Grenze der übrigen Felder: Sie **ist** die Schreibsperre (§7), und eine
-zu enge Grenze wäre kein gekürzter Text, sondern ein blockierter Bauer.
+Die Liste hat keine Anzahl-Grenze: Sie **ist** die Schreibsperre (§7), und ein
+Deckel wäre kein gekürzter Text, sondern ein blockierter Bauer.
 Zieladresse und Datenvertrag stehen sichtbar im übergebenen Lieferschein und im
 Laufbericht. Je Zuschnitt nennt `aufgabenIds` außerdem die Aufgaben-Karten aus
 der `paket_melden`-Meldung, die dieses Paket abdeckt — daraus rechnet FlowForge
 die Vollständigkeit (§4.1); erfundene Kennungen weist es am Werkzeug ab. Auch
-`aufgabenIds` hat eine eigene Obergrenze (200 Kennungen), und **dieselbe** gilt
-für `paket_melden` selbst: Wären die beiden Enden derselben Rechnung verschieden
-weit, entstünde ein Paket, dessen Vollständigkeit niemand mehr erfüllen kann.
+`aufgabenIds` hat keine Anzahl-Grenze, und dasselbe gilt für `paket_melden`
+selbst: Beide Enden derselben Rechnung reichen gleich weit, sonst entstünde ein
+Paket, dessen Vollständigkeit niemand mehr erfüllen kann.
 
 **Spec-Interview:** grillt den Nutzer über das Gespräch (§6) nach der
 Entscheidungsbaum-Methode (Entscheidung Georg, 07.08.2026: originalgetreu nach
@@ -728,12 +730,16 @@ umgesetzt, Dateiliste mit Art, Angriffsliste behandelt) und Angriffs-/Befundlist
 Kontext laden, Frage an den Menschen und der Karten-Prüfer: Rahmen plus ein
 Freitext-Feld — enge Schemata kosten Nuance bei explorativer Arbeit.
 **Drei Durchsetzungs-Ebenen:** das Schema (Struktur, Typen, Auswahlwerte),
-FlowForge im Code (Längen, Anzahl, Plausibilität — ein Urteil „fehlgeschlagen"
-ohne eine einzige Beanstandung wird abgewiesen, ebenso ein „bestanden" mit
-offenen Beanstandungen, und ein Arbeitspaket ohne Fertig-Kriterien) und die
-Kanten-Prüfung nach dem Block (deckt die Lieferung, was er laut Schaubild
-liefert). Jede Abweisung steht im Ticker; der Agent korrigiert sofort im selben
-Anlauf. **Meldet ein Block nichts**, greift das erprobte Nachforderungs-Muster
+FlowForge im Code (Pflichtfelder, Auswahlwerte, Plausibilität — ein Urteil
+„fehlgeschlagen" ohne eine einzige Beanstandung wird abgewiesen, ebenso ein
+„bestanden" mit offenen Beanstandungen, und ein Arbeitspaket ohne
+Fertig-Kriterien) und die Kanten-Prüfung nach dem Block (deckt die Lieferung,
+was er laut Schaubild liefert). **Längen- und Anzahl-Grenzen gibt es für
+Meldungen nicht** (seit 0.46.1, Entscheidung Georg): Die früheren Feld- und
+Listen-Deckel rissen im Alltag mehrfach knapp und kosteten Runden — eine
+Meldung wird angenommen, wie sie ist. Einzige Ausnahme ist die Prüfkarte, für
+die die Karten-Grenzen (§3.1) gelten. Jede Abweisung steht im Ticker; der Agent
+korrigiert sofort im selben Anlauf. **Meldet ein Block nichts**, greift das erprobte Nachforderungs-Muster
 (einmal je Block, sein eigener Abschlusstext liegt bei) — danach gilt der Block
 als fehlgeschlagen. Einen Rückfall auf den Abschlusstext gibt es nicht: Er wird
 nirgends mehr ausgewertet. Läuft ein Block erneut (Reparatur-Runde,
@@ -765,11 +771,15 @@ was der Block überhaupt braucht. Ausgenommen von der Distanz-Regel sind Blöcke
 dem Kennzeichen **„führt zusammen"**: Sie bekommen **alle** Vorfahren mit passendem
 Etikett nummeriert, denn Zusammenführen ist ihre Aufgabe (Blöcke dafür gibt es mit
 Bauschritt 47). Dieselbe Entscheidung speist die braucht-Chips am Schaubild (§4.1) —
-sie zeigen nie einen anderen Lieferanten, als der Lauf nimmt. Gekürzt wird auf 8.000 Zeichen je
-Übergabe — **in der Mitte statt hinten**, damit Anfang und Fazit überleben; jede
-Kürzung steht sichtbar im Ticker und damit im Laufbericht. Die Feldgrenzen des
-Lieferscheins halten die Übergaben ohnehin klein, die Kürzung ist seit Bauschritt
-42 nur noch die Notbremse. Daneben gibt es
+sie zeigen nie einen anderen Lieferanten, als der Lauf nimmt. **Übergaben gehen
+vollständig** — einen Übergabe-Deckel gibt es seit 0.46.1 nicht mehr (der
+frühere von 8.000 Zeichen riss im Alltag mehrfach knapp und kostete Runden);
+dasselbe gilt für die Übertrags-Übergabe (§5) und die Wiederhol-Vorlage bei
+einer Nachforderung. Gedeckelt bleiben allein Dinge, die keine Übergabe sind:
+Prozess-Ausgaben (Tor-Protokoll, Baseline, Rauchtest-Ausgabe, die
+Beanstandungs-Zeilen des Tors) und der Reparatur-Diff (§5) — dort steht die
+Kürzung sichtbar im Text.
+Daneben gibt es
 **optionale Bedarfe** („falls da"): Der Bauer verlangt nur das Arbeitspaket;
 eine Angriffsliste wird mitgereicht und muss eingearbeitet werden, wenn ein
 Block davor eine liefert — so kommt „Bug jagen" ohne Angreifer aus.
@@ -922,16 +932,28 @@ zwei Unteraufgaben pro Angreifer-Lauf, jede eng umrissen; gelesen werden nur die
 Arbeitspaket genannten Stellen und ihre direkte Nachbarschaft, nicht das ganze Projekt.
 
 **Lokale Helfer-KI** (Experiment, Wunsch Georg, 13.08.2026): In den Einstellungen
-zuschaltbar (Standard: aus) — Recherche-Aufträge gehen dann an eine kleine KI über
+zuschaltbar (Standard: aus) — Recherche-Aufträge gehen dann an eine lokale KI über
 Ollama (Modellname und Adresse einstellbar: der eigene Rechner oder ein anderer im
 Heimnetz, z.B. ein Gaming-PC mit stärkerer Grafikkarte) statt an eine Motor-Unteraufgabe;
 das kostet kein Kontingent, nur Rechenzeit. Die Block-Agenten bekommen dafür das
-Werkzeug `lokal_recherchieren`; beim Recherchieren hat die lokale KI genau drei rein
+Werkzeug `lokal_recherchieren` — auch für größere Einlese-Aufträge über mehrere Dateien
+und Zusammenhänge; beim Recherchieren hat die lokale KI genau drei rein
 lesende Werkzeuge (Ordner auflisten, Datei lesen, suchen), hart im Code auf den
 Projektordner begrenzt — schreiben, ausführen oder außerhalb lesen kann sie dabei
 nicht, deshalb ist das Werkzeug auch unter „darf nur lesen" erlaubt. Steht die lokale KI bereit, weisen die
 Blockaufträge sie als **erste Wahl** fürs Delegieren aus (das Agent-Werkzeug ist der
-Rückfall). Denk-Modelle (z.B. gpt-oss), die ihre Antwort leer lassen und alles ins
+Rückfall). **Nachrichtenform** (Wunsch Georg, 18.08.2026): Jede Nachricht, die
+FlowForge an die lokale KI schickt, hat die Form `{"role":"user","content":"…"}` —
+kein System-Eintrag (der Rahmentext steht am Anfang der ersten Nutzer-Nachricht,
+davor nichts), keine tool-Rolle (Werkzeug-Ergebnisse gehen als Nutzer-Nachricht
+„Ergebnis von <werkzeug>: …" zurück, für echte wie für getarnte Aufrufe — alle
+Ergebnisse einer Runde gebündelt in EINER Nutzer-Nachricht, damit sich Nutzer- und
+Modell-Nachrichten strikt abwechseln), auch das Nachhaken ist eine Nutzer-Nachricht;
+nur die Antworten des Modells selbst bleiben unverändert im Verlauf (fehlt ihnen die
+Rolle, ergänzt FlowForge `assistant`). Grund: Manche lokalen Modelle bzw. Chat-Vorlagen kommen mit
+system- und tool-Rollen nicht zurecht — eine einheitliche Nutzer-Rolle läuft mit
+jeder Vorlage. Ein Kreislauf hat höchstens 48 Werkzeug-Runden, das Kontext-Fenster
+bleibt bei 32k. Denk-Modelle (z.B. gpt-oss), die ihre Antwort leer lassen und alles ins
 Denkfeld schreiben, werden einmal nachgehakt, bevor ein Fehlschlag gemeldet wird.
 Modelle, die Werkzeugaufrufe als bloßen JSON-Text in die Antwort schreiben statt
 ins Werkzeug-Format (Befund 14.08.2026: qwen2.5-coder), fängt FlowForge selbst
@@ -990,11 +1012,13 @@ Lokale-Helfer-Zeile des Laufberichts. Aktiv nur, wenn die lokale KI
 eingeschaltet und beim Laufstart erreichbar war — sonst läuft die Rückführung
 wie gehabt.
 
-**Lokale Entwürfe** (seit Bauschritt 21): Eng umrissene, **schablonenhafte
-Schreibarbeit mit klarem Vorbild** („eine weitere Prüfdatei nach dem Muster
-von X") können die Block-Agenten über das Werkzeug `lokal_entwerfen` an die
-lokale KI abgeben — die Ersparnis trägt, weil Gegenlesen (Eingabe) deutlich
-billiger ist als Selberschreiben (Ausgabe). Das Schreibwerkzeug der lokalen KI
+**Lokale Entwürfe** (seit Bauschritt 21): **Schreibarbeit mit Vorbild oder klarer
+Beschreibung** — von „eine weitere Prüfdatei nach dem Muster von X" bis zu einem
+ganzen Modul mit festgelegter Schnittstelle, mehreren zusammengehörigen Dateien
+oder Neuem ohne exaktes Vorbild (Entscheidung Georg, 18.08.2026: die lokale KI
+darf auch anspruchsvollere Aufträge bekommen) — können die Block-Agenten über das
+Werkzeug `lokal_entwerfen` an die lokale KI abgeben — die Ersparnis trägt, weil
+Gegenlesen (Eingabe) deutlich billiger ist als Selberschreiben (Ausgabe). Das Schreibwerkzeug der lokalen KI
 ist dabei hart auf die **Arbeitsablage** begrenzt (`arbeitsablage/`, die
 Wegwerf-Fläche — am Laufende geleert, von Sicherungspunkten ausgenommen): In
 Projektdateien oder die Prüfmappe schreibt sie hier nie; der einzige direkte
@@ -1009,15 +1033,20 @@ Entwerfen und Abnehmen sind Schreibarbeit und unter „darf nur lesen" gesperrt;
 das Häkchen je Block (s.u.) gilt auch fürs Entwerfen.
 
 **Lokaler Bauer** (seit Bauschritt 22): Über das Werkzeug `lokal_bauen` delegiert
-der Block-Agent eng umrissene, **einzeln prüfbare Bau-Teilaufträge** an die lokale
-KI — sie baut mit echtem Schreibrecht direkt im Projektordner, unter den
-unveränderten harten Sperren (Prüfmappe, Verwaltungsdateien, Git tabu; gezieltes
-Ersetzen plus ganze Dateien schreiben, hart im Code begrenzt). Der Bauer-Auftrag
-weist den Agenten an, das Arbeitspaket in möglichst kleine Teilaufträge zu
-zerlegen — jeder mit Fundstellen/Vorbild, eigenem Fertig-Kriterium und vorher
-festgenagelten Schnittstellen —, dabei aber nach Zusammengehörigkeit zu bündeln
-und Kleinst-Änderungen selbst zu erledigen (einen trivialen Auftrag präzise zu
-beschreiben kostet fast so viel wie ihn selbst zu erledigen). Vor jedem
+der Block-Agent zusammenhängende, **einzeln prüfbare Bau-Teilaufträge** an die
+lokale KI — ruhig auch mittelgroße Stücke: ein ganzes Modul, eine ganze Funktion
+mit festgelegter Schnittstelle, mehrere zusammengehörige Dateien, auch Neues ohne
+exaktes Vorbild (Entscheidung Georg, 18.08.2026). Sie baut mit echtem Schreibrecht
+direkt im Projektordner, unter den unveränderten harten Sperren (Prüfmappe,
+Verwaltungsdateien, Git tabu; gezieltes Ersetzen plus ganze Dateien schreiben,
+hart im Code begrenzt). Der Bauer-Auftrag weist den Agenten an, das Arbeitspaket
+in zusammenhängende, einzeln prüfbare Teilaufträge zu zerlegen — jeder mit
+Fundstellen, Vorbild oder klarer Beschreibung, eigenem Fertig-Kriterium und vorher
+festgenagelten Schnittstellen —, dabei nach Zusammengehörigkeit zu bündeln
+(Kleinigkeiten lieber zu einem zusammenhängenden Teilauftrag zusammenfassen; nur
+eine einzelne, für sich stehende Kleinst-Änderung erledigt er direkt selbst — einen
+trivialen Auftrag präzise zu beschreiben kostet fast so viel wie ihn selbst zu
+erledigen). Vor jedem
 Teilauftrag legt FlowForge einen Sicherungspunkt „Stand vor lokalem Teilstück"
 an. Die **Abnahme je Teilstück** liegt beim Agenten: Er liest sofort gegen
 (Gegenlesen ist billiger als Selberschreiben) und meldet mit

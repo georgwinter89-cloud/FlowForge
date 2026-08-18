@@ -515,7 +515,7 @@ export const BLOCK_KATALOG = [
       'ARBEITSGEDÄCHTNIS-REGEL (dein Kontext ist der teuerste Teil des Laufs): Musst du mehr ' +
       'als zwei Dateien einlesen oder im Projekt suchen, erledigt das EINE Unteraufgabe ' +
       '(bevorzugt das Werkzeug lokal_recherchieren, falls es bereitsteht — es kostet kein ' +
-      'Kontingent; sonst das Agent-Werkzeug) mit eng umrissenem Auftrag — der Helfer wühlt ' +
+      'Kontingent; sonst das Agent-Werkzeug) mit klar umrissenem Auftrag — der Helfer wühlt ' +
       'in seinem eigenen ' +
       'Kontext und liefert dir nur ein kompaktes Fazit mit Fundorten. Selbst öffnest du nur ' +
       'die Stellen, die du in diesem Paket wirklich änderst, keine Datei doppelt und nichts ' +

@@ -314,11 +314,6 @@ export const texte = {
     fehlerWaehrendWarteschlange:
       'Dieser Workflow wartet in der Warteschlange auf seinen Start. Nimm ihn erst aus der Warteschlange, wenn du ihn ändern willst.',
     unbekannterBlock: 'Diesen Block kennt FlowForge nicht.',
-    // Kanten-Ehrlichkeit (BAUPLAN 34): Passen nicht alle Beanstandungen in die
-    // Rückmeldung, steht das dort — still schneiden wäre genau der Kanten-Verlust.
-    kritikWeggelassen: (anzahl) =>
-      `(${anzahl} weitere Beanstandung${anzahl === 1 ? '' : 'en'} passte nicht mehr in die ` +
-      'Rückmeldung — sieh im Prüfbeleg nach, wenn diese hier behoben sind.)',
     // Zusatzname je Blockkarte (BAUPLAN 41): unterscheidbar machen und dem
     // Zuschnitt sagen, wonach zu schneiden ist.
     zusatzLabel: 'Zusatzname',
@@ -1313,18 +1308,31 @@ export const texte = {
       `- „${titel}" (keine aufbewahrten Prüfdateien — prüfe das Beschriebene mit frisch geschriebenen Prüfungen): ${text}\n`
   },
   // Lokale Helfer-KI (Experiment, Wunsch Georg 13.08.2026): Recherche über
-  // Ollama statt über Motor-Unteraufgaben — kostet kein Kontingent. Das kleine
+  // Ollama statt über Motor-Unteraufgaben — kostet kein Kontingent. Das lokale
   // Modell kann erfinden — deshalb trägt jedes Fazit einen ehrlichen
   // Warnhinweis, und die Agenten prüfen wichtige Fundorte selbst nach.
+  // Zuschnitt (Wunsch Georg 18.08.2026): Die lokale KI darf auch mittelgroße,
+  // zusammenhängende Aufträge und Neues mit klarer Beschreibung bekommen — die
+  // Abnahme durch den Block-Agenten bleibt der Schiedsrichter.
   agentenLokaleHelfer: {
     werkzeugBeschreibung:
       'Delegiert einen rein lesenden Recherche-Auftrag (Dateien auflisten, lesen, ' +
       'durchsuchen) an die lokale Helfer-KI — sie kostet kein Kontingent. Liefert ein ' +
-      'kompaktes Fazit mit Fundorten. Achtung: kleines Modell — nutze es für Überblick ' +
-      'und Vorarbeit; die Stellen, auf die du deine Arbeit stützt, liest du selbst nach.',
+      'kompaktes Fazit mit Fundorten. Ruhig auch größere Aufträge: mehrere Dateien, ein ' +
+      'ganzer Zusammenhang, eine Frage quer durchs Projekt. Die Stellen, auf die du deine ' +
+      'Arbeit stützt, liest du selbst nach.',
     serverHinweis:
-      'Die lokale Helfer-KI recherchiert rein lesend im Projektordner. Nutze sie ' +
-      'bevorzugt für Einlese- und Suchaufträge, statt eine Unteraufgabe des Motors zu starten.',
+      'Die lokale Helfer-KI recherchiert rein lesend im Projektordner — auch bei größeren ' +
+      'Einlese-Aufträgen. Nutze sie bevorzugt für Einlese- und Suchaufträge, statt eine ' +
+      'Unteraufgabe des Motors zu starten.',
+    // Nachrichtenform an die lokale KI (Wunsch Georg 18.08.2026): alles als
+    // Nutzer-Nachricht — Werkzeug-Ergebnisse tragen deshalb ihre Herkunft im
+    // Text, und das Nachhaken bei leerer Antwort ist eine gewöhnliche Nachricht.
+    werkzeugErgebnis: (werkzeug, ergebnis) => `Ergebnis von ${werkzeug}:\n${ergebnis}`,
+    nachhaken:
+      'Deine Antwort war leer. Gib jetzt dein Fazit als normale Antwort aus — ' +
+      'kompakt, auf Deutsch, mit Fundorten aus den Werkzeug-Ergebnissen. ' +
+      'Kein Werkzeugaufruf mehr.',
     fazit: (text) =>
       'Fazit der lokalen Helfer-KI (kleines Modell — prüfe Fundorte, auf die du deine ' +
       'Arbeit stützt, selbst nach):\n' + text,
@@ -1390,29 +1398,41 @@ export const texte = {
       'Für Einlese- und Suchaufträge steht dir das Werkzeug lokal_recherchieren bereit ' +
       '(lokale KI, kostet kein Kontingent) — nutze es bevorzugt für Recherche: sowohl ' +
       'dort, wo dein Auftrag Unteraufgaben fürs Einlesen vorsieht, als auch für dein ' +
-      'eigenes Umsehen im Projekt. Es ist ein kleines Modell: gut für Überblick und ' +
-      'Fundstellen; die Stellen, auf die du deine Arbeit stützt, liest du selbst nach. ' +
+      'eigenes Umsehen im Projekt — ruhig auch größere Einlese-Aufträge über mehrere ' +
+      'Dateien. Die Stellen, auf die du deine Arbeit stützt, liest du selbst nach. ' +
       'Scheitert es, nutze wie gewohnt das Agent-Werkzeug.\n' +
-      'Für eng umrissene, schablonenhafte Schreibarbeit mit klarem Vorbild (z.B. „eine ' +
-      'weitere Prüfdatei nach dem Muster von X") steht dir lokal_entwerfen bereit: Die ' +
-      'lokale KI schreibt einen Entwurf in die arbeitsablage/ — nie an den Zielort. Du ' +
-      'liest den Entwurf gegen, übernimmst ihn selbst an den Zielort (oder verwirfst ihn ' +
-      'und schreibst selbst — ungeprüft zählt nichts) und meldest die Entscheidung mit ' +
-      'entwurf_abnehmen. Für Neues ohne Vorbild schreibst du direkt selbst.\n' +
-      'Für eng umrissene, einzeln prüfbare Umsetzungs-Teilaufträge steht dir lokal_bauen ' +
+      'Für Schreibarbeit mit Vorbild oder klarer Beschreibung (z.B. „eine weitere ' +
+      'Prüfdatei nach dem Muster von X", aber auch ein neues Modul mit festgelegter ' +
+      'Schnittstelle oder mehrere zusammengehörige Dateien) steht dir lokal_entwerfen ' +
+      'bereit: Die lokale KI schreibt einen Entwurf in die arbeitsablage/ — nie an den ' +
+      'Zielort. Du liest den Entwurf gegen, übernimmst ihn selbst an den Zielort (oder ' +
+      'verwirfst ihn und schreibst selbst — ungeprüft zählt nichts) und meldest die ' +
+      'Entscheidung mit entwurf_abnehmen. Auch Neues ohne exaktes Vorbild darf sie ' +
+      'entwerfen, wenn du Schnittstelle und Fertig-Kriterium klar beschreibst.\n' +
+      'Für zusammenhängende, einzeln prüfbare Umsetzungs-Teilaufträge — ruhig auch ' +
+      'mittelgroße Stücke wie ein ganzes Modul oder eine ganze Funktion mit fester ' +
+      'Schnittstelle — steht dir lokal_bauen ' +
       'bereit: Die lokale KI baut das Teilstück direkt im Projekt (FlowForge legt vorher ' +
       'einen Sicherungspunkt an). Du liest jedes Teilstück SOFORT gegen und meldest die ' +
       'Abnahme mit teilstueck_abnehmen — bei „nicht gehalten" rollt FlowForge den Stand ' +
       'automatisch zurück und du baust selbst. Höchstens 2 lokale Anläufe je Teilstück, ' +
       'dann baust du es selbst — kein Pingpong.\n',
-    // Lokale Entwürfe (BAUPLAN 21): schablonenhafte Schreibarbeit lokal
-    // entwerfen lassen, Abnahme beim Block-Agenten — ungeprüft zählt nichts.
+    // Lokale Entwürfe (BAUPLAN 21): Schreibarbeit mit Vorbild oder klarer
+    // Beschreibung lokal entwerfen lassen, Abnahme beim Block-Agenten —
+    // ungeprüft zählt nichts.
     entwerfenBeschreibung:
-      'Delegiert eng umrissene, schablonenhafte Schreibarbeit mit klarem Vorbild an die ' +
-      'lokale Helfer-KI — sie kostet kein Kontingent und schreibt einen ENTWURF in die ' +
-      'arbeitsablage/, nie an den Zielort. Danach liest du den Entwurf gegen, übernimmst ' +
-      'ihn selbst an den Zielort oder verwirfst ihn, und meldest die Entscheidung mit ' +
-      'entwurf_abnehmen. Nur für Schablonen-Arbeit mit Vorbild — Neues schreibst du selbst.',
+      'Delegiert Schreibarbeit mit Vorbild oder klarer Beschreibung an die lokale ' +
+      'Helfer-KI — sie kostet kein Kontingent und schreibt einen ENTWURF in die ' +
+      'arbeitsablage/, nie an den Zielort. Auch mittelgroße Stücke sind erlaubt: ein ' +
+      'ganzes Modul mit festgelegter Schnittstelle, mehrere zusammengehörige Dateien, ' +
+      'Neues ohne exaktes Vorbild — nenne dann Schnittstelle und Fertig-Kriterium. Danach ' +
+      'liest du den Entwurf gegen, übernimmst ihn selbst an den Zielort oder verwirfst ' +
+      'ihn, und meldest die Entscheidung mit entwurf_abnehmen.',
+    // Feld-Beschreibung des Auftrags (Prüfer-Befund 18.08.2026: klang nach
+    // Pflicht-Vorbild — eine klare Beschreibung reicht seit dem Zuschnitt).
+    entwerfenAuftragFeld:
+      'Der Schreibauftrag in Alltagssprache: was der Entwurf leisten muss — und das ' +
+      'Vorbild (Datei) oder eine klare Beschreibung mit Schnittstelle und Fertig-Kriterium.',
     entwurfFazit: (fazit, dateien) =>
       'Entwurf der lokalen Helfer-KI (kleines Modell — ungeprüft zählt nichts):\n' +
       'Entwurfsdateien: ' +
@@ -1434,17 +1454,23 @@ export const texte = {
       uebernommen
         ? `Abnahme vermerkt: Entwurf „${entwurf}" übernommen.`
         : `Abnahme vermerkt: Entwurf „${entwurf}" verworfen — du schreibst selbst.`,
-    // Lokaler Bauer (BAUPLAN 22): kleine Teilaufträge baut die lokale KI
-    // direkt im Projekt — Opus zerlegt, liest jedes Teilstück sofort gegen
+    // Lokaler Bauer (BAUPLAN 22): zusammenhängende Teilaufträge baut die lokale
+    // KI direkt im Projekt — Opus zerlegt, liest jedes Teilstück sofort gegen
     // und bleibt der Schiedsrichter. Ungeprüft zählt nichts.
     bauenBeschreibung:
-      'Delegiert einen eng umrissenen, einzeln prüfbaren Bau-Teilauftrag an die lokale ' +
-      'Helfer-KI — sie baut mit Schreibrecht direkt im Projektordner (Prüfmappe und ' +
-      'FlowForge-Verwaltungsdateien bleiben gesperrt; FlowForge legt vorher automatisch ' +
-      'einen Sicherungspunkt an). Nenne im Auftrag Fundstellen oder Vorbild, feste ' +
-      'Schnittstellen (Datei, Funktionsname, was rein, was raus) und das Fertig-Kriterium. ' +
-      'Danach liest du das Teilstück sofort gegen und meldest die Abnahme mit ' +
-      'teilstueck_abnehmen — Pflicht, bevor du das nächste Teilstück baust.',
+      'Delegiert einen zusammenhängenden, einzeln prüfbaren Bau-Teilauftrag an die lokale ' +
+      'Helfer-KI — ruhig auch ein mittelgroßes Stück: ein ganzes Modul, eine ganze ' +
+      'Funktion mit festgelegter Schnittstelle, mehrere zusammengehörige Dateien, auch ' +
+      'Neues ohne exaktes Vorbild. Sie baut mit Schreibrecht direkt im Projektordner ' +
+      '(Prüfmappe und FlowForge-Verwaltungsdateien bleiben gesperrt; FlowForge legt vorher ' +
+      'automatisch einen Sicherungspunkt an). Nenne im Auftrag Fundstellen oder Vorbild ' +
+      'bzw. eine klare Beschreibung, feste Schnittstellen (Datei, Funktionsname, was rein, ' +
+      'was raus) und das Fertig-Kriterium. Danach liest du das Teilstück sofort gegen und ' +
+      'meldest die Abnahme mit teilstueck_abnehmen — Pflicht, bevor du das nächste ' +
+      'Teilstück baust.',
+    bauenAuftragFeld:
+      'Der Teilauftrag: Fundstellen, Vorbild oder klare Beschreibung, feste Schnittstellen ' +
+      '(welche Datei, welcher Funktionsname, was rein, was raus) und das Fertig-Kriterium.',
     bauenFazit: (fazit, dateien, ersetzungen) =>
       'Teilstück der lokalen Helfer-KI (kleines Modell — ungeprüft zählt nichts):\n' +
       (dateien.length ? 'Geschriebene Dateien: ' + dateien.join(', ') + '\n' : '') +
@@ -1529,18 +1555,22 @@ export const texte = {
     // und das Häkchen am Block an ist — eingesetzt von der Lauf-Verwaltung).
     bauenAuftragZusatz:
       '\n\nZusatz von FlowForge — lokales Bauen (die lokale KI steht bereit): Zerlege das ' +
-      'Arbeitspaket in möglichst kleine, einzeln prüfbare Teilaufträge — jeder mit ' +
-      'Fundstellen oder Vorbild, eigenem Fertig-Kriterium und vorher festgelegten ' +
-      'Schnittstellen (welche Datei, welcher Funktionsname, was rein, was raus), damit die ' +
-      'Teile zusammenstecken. Rufe je Teilauftrag lokal_bauen und lies das Teilstück ' +
-      'SOFORT gegen — Gegenlesen ist billiger als Selberschreiben; melde jede Abnahme mit ' +
-      'teilstueck_abnehmen, bevor du das nächste Teilstück baust. Hält ein Teilauftrag ' +
-      'nach 2 lokalen Anläufen nicht, baue GENAU dieses Teilstück selbst und mach mit dem ' +
-      'nächsten weiter — kein Pingpong. Bündle nach Zusammengehörigkeit: Einen trivialen ' +
-      'Auftrag präzise zu beschreiben kostet fast so viel, wie ihn selbst zu erledigen — ' +
-      'Kleinst-Änderungen erledigst du direkt selbst. Ein verworfenes Teilstück ist KEIN ' +
-      'Urteil über die übrigen: Versuche jedes Teilstück zuerst lokal — erst wenn mehrere ' +
-      'hintereinander nicht halten, bau den Rest selbst.',
+      'Arbeitspaket in zusammenhängende, einzeln prüfbare Teilaufträge — ruhig auch ' +
+      'größere Stücke mit klarer Schnittstelle (ein ganzes Modul, eine ganze Funktion, ' +
+      'mehrere zusammengehörige Dateien, auch Neues ohne exaktes Vorbild) — jeder mit ' +
+      'Fundstellen, Vorbild oder klarer Beschreibung, eigenem Fertig-Kriterium und vorher ' +
+      'festgelegten Schnittstellen (welche Datei, welcher Funktionsname, was rein, was ' +
+      'raus), damit die Teile zusammenstecken. Rufe je Teilauftrag lokal_bauen und lies ' +
+      'das Teilstück SOFORT gegen — Gegenlesen ist billiger als Selberschreiben; melde ' +
+      'jede Abnahme mit teilstueck_abnehmen, bevor du das nächste Teilstück baust. Hält ' +
+      'ein Teilauftrag nach 2 lokalen Anläufen nicht, baue GENAU dieses Teilstück selbst ' +
+      'und mach mit dem nächsten weiter — kein Pingpong. Bündle nach Zusammengehörigkeit: ' +
+      'Einen trivialen Auftrag präzise zu beschreiben kostet fast so viel, wie ihn selbst ' +
+      'zu erledigen — fasse Kleinigkeiten lieber zu einem zusammenhängenden Teilauftrag ' +
+      'zusammen; nur eine einzelne, für sich stehende Kleinst-Änderung erledigst du direkt ' +
+      'selbst. Ein verworfenes Teilstück ist KEIN Urteil über die übrigen: Versuche jedes ' +
+      'Teilstück zuerst lokal — erst wenn mehrere hintereinander nicht halten, bau den ' +
+      'Rest selbst.',
     // Tabu-Liste der lokalen Helfer-KI (BAUPLAN 46): Der Schreibpfad der lokalen
     // KI lief bis Bauschritt 45 an der Dateiliste des Blocks vorbei (SPEC §7,
     // „ehrliche Grenze"). Jetzt gilt sie auch hier — Ablehnung mit demselben Weg
@@ -1766,44 +1796,21 @@ export const texte = {
     ohneMeldung:
       'Der Block hat sein Ergebnis auch nach der Nachforderung nicht gemeldet — ohne Meldung ' +
       'hat er in diesem Lauf nichts geliefert.',
+    // Feldnamen, die in Ablehnungen genannt werden. Seit 0.46.1 (keine Längen-
+    // und Anzahl-Grenzen mehr für Meldungen) sind das nur noch die Pflichtfelder
+    // und die Prüfkarte, für die die Karten-Grenzen gelten.
     felder: {
       fazit: 'fazit',
-      getan: 'getan',
-      offen: 'offen',
-      anmerkung: 'anmerkung',
-      inhalt: 'inhalt',
       ziel: 'ziel',
-      fertigKriterien: 'fertigKriterien',
-      schritte: 'schritte',
-      fundstellen: 'fundstellen',
-      nichtDabei: 'nichtDabei',
-      // Zuschnitt je Ziel und Datenvertrag (BAUPLAN 44).
-      pakete: 'pakete',
-      zielBlock: 'zielBlock',
-      aufgabenIds: 'aufgabenIds',
-      erlaubteDateien: 'erlaubteDateien',
-      bausteine: 'bausteine',
-      schnittstellen: 'schnittstellen',
-      beanstandungen: 'beanstandungen',
-      fundort: 'fundort',
-      rotVorGruen: 'rotVorGruen',
-      geprueft: 'geprueft',
       pruefkarteTitel: 'pruefkarteTitel',
-      pruefkarteText: 'pruefkarteText',
-      kriterien: 'kriterien',
-      dateien: 'dateien',
-      angriffsliste: 'angriffsliste',
-      funde: 'funde'
+      pruefkarteText: 'pruefkarteText'
     },
     // Ablehnungen nennen immer die Ist-Länge bzw. die erlaubten Werte — der
-    // Agent soll korrigieren können, ohne zu raten.
+    // Agent soll korrigieren können, ohne zu raten. feldZuLang gilt nur noch
+    // für die Prüfkarte (Karten-Grenzen, SPEC §3.1).
     feldFehlt: (feld) => `Das Feld ${feld} fehlt oder ist leer — es ist Pflicht.`,
     feldZuLang: (feld, max, ist) =>
       `Das Feld ${feld} ist zu lang: ${ist} Zeichen, erlaubt sind höchstens ${max}. Fasse dich kürzer.`,
-    eintragZuLang: (feld, max, ist) =>
-      `Ein Eintrag in ${feld} ist zu lang: ${ist} Zeichen, erlaubt sind höchstens ${max} je Eintrag.`,
-    zuVieleEintraege: (feld, max, ist) =>
-      `${feld} hat ${ist} Einträge — erlaubt sind höchstens ${max}. Fasse zusammen, was zusammengehört.`,
     unbekannteArt: (art) => `Unbekannte Meldungsart „${art}".`,
     etikettFehlt: (etiketten) =>
       `Dein Block liefert mehreres — gib im Feld etikett an, worum es geht: ${etiketten.join(', ')}.`,
@@ -1855,14 +1862,6 @@ export const texte = {
     aufgabeUnbekannt: (id, gueltig) =>
       `„${id}" gehört nicht zu deinem gemeldeten Paket. In aufgabenIds gehören nur ids aus ` +
       `deiner paket_melden-Meldung: ${gueltig}.`,
-    // Eigener Wortlaut statt zuVieleEintraege: Kennungen lassen sich nicht
-    // „zusammenfassen". Und die Grenze gilt an beiden Enden (paket_melden und
-    // Zuschnitt), damit kein Paket entsteht, das niemand mehr vollständig
-    // zuschneiden kann.
-    zuVieleAufgabenIds: (max, ist) =>
-      `${ist} Aufgaben-Karten in einer Meldung — höchstens ${max} sind erlaubt. So viele ` +
-      'Aufgaben auf einmal sind kein Lauf mehr, den ein Mensch nachvollziehen kann: Nimm ' +
-      'weniger Karten in die Kartenauswahl und lass den Rest einen zweiten Lauf machen.',
     dateiMuster: (eintrag) =>
       `„${eintrag}" ist ein Muster, kein Pfad — Platzhalter wie * ? [ ] { } versteht FlowForge ` +
       'nicht und würde nichts treffen. Nenne die Dateien einzeln (z.B. „src/main/lauf.js") oder ' +
@@ -2163,11 +2162,12 @@ export const texte = {
     obergrenzeHinweis: 'Erreicht ein Lauf diese Grenze, hält der Motor von selbst an.',
     // Lokale Helfer-KI (Experiment, Wunsch Georg 13.08.2026).
     lokaleHelferUeberschrift: 'Lokale Helfer-KI (Experiment)',
-    lokaleHelferAktiv: 'Recherche-, Entwurfs- und kleine Bau-Aufträge an eine lokale KI (Ollama) geben',
+    lokaleHelferAktiv: 'Recherche-, Entwurfs- und Bau-Aufträge an eine lokale KI (Ollama) geben',
     lokaleHelferHinweis:
-      'Die Block-Agenten geben Einlesen, Suchen, schablonenhafte Entwürfe und kleine ' +
-      'Bau-Teilaufträge an eine kleine KI auf deinem Rechner ab — das kostet kein ' +
-      'Abo-Kontingent, nur Rechenzeit. Schreiben darf die lokale KI nur an kurzer Leine: ' +
+      'Die Block-Agenten geben Einlesen, Suchen, Entwürfe und zusammenhängende ' +
+      'Bau-Teilaufträge — auch mittelgroße Stücke wie ein ganzes Modul — an eine KI auf ' +
+      'deinem Rechner ab; das kostet kein Abo-Kontingent, nur Rechenzeit. Schreiben darf ' +
+      'die lokale KI nur an kurzer Leine: ' +
       'Entwürfe landen in der Wegwerf-Ablage und werden vom Motor gegengelesen, die ' +
       'Vorreparatur ersetzt gezielt nach Prüfer-Beanstandungen, und jedes gebaute ' +
       'Teilstück wird sofort abgenommen — immer mit Sicherungspunkt und automatischem ' +
@@ -2889,9 +2889,6 @@ export const texte = {
     // Ticker — und damit im Laufbericht.
     beanstandungenUebergeben: (anzahl, name) =>
       `${anzahl} ${anzahl === 1 ? 'Beanstandung' : 'Beanstandungen'} an „${name}" übergeben.`,
-    beanstandungenTeilweise: (weggelassen) =>
-      `${weggelassen} ${weggelassen === 1 ? 'Beanstandung passte' : 'Beanstandungen passten'} ` +
-      'nicht mehr in die Rückmeldung — sie kommen in der nächsten Runde dran.',
     diffUebergeben: (name, dateien, zeilen) =>
       `Änderungen der letzten Runde an „${name}" übergeben: ${dateien} ` +
       `${dateien === 1 ? 'Datei' : 'Dateien'}, ${zeilen} ${zeilen === 1 ? 'Zeile' : 'Zeilen'}.`,
@@ -2906,9 +2903,6 @@ export const texte = {
     uebergabeVerdraengt: (etikett, empfaenger, gewinner, verdraengt) =>
       `„${etikett}" für ${empfaenger} kommt von ${gewinner} — näher im Schaubild. ` +
       `Verdrängt: ${verdraengt}; diese Arbeit geht nicht in den Auftrag.`,
-    uebergabeGekuerzt: (name, von, auf) =>
-      `Übergabe von „${name}" gekürzt: ${von.toLocaleString('de-DE')} → ` +
-      `${auf.toLocaleString('de-DE')} Zeichen (in der Mitte, das Ende bleibt vollständig).`,
     // Folgen-Frage je Zweig (BAUPLAN 46): Mehrere können offen sein, und jede
     // Wahl trifft nur ihren Zweig — deshalb nennt jede Zeile den Prüfer.
     entscheidungGestellt: (name) =>

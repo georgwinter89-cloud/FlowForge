@@ -28,8 +28,7 @@ import {
   meldungPruefen,
   lieferscheinText,
   zuschnitteAusMeldung,
-  zuschnittSchluessel,
-  DATEILISTE_MAX
+  zuschnittSchluessel
 } from '../src/shared/lieferschein.js'
 import { texte } from '../src/shared/texte.js'
 
@@ -243,19 +242,21 @@ describe('BAUPLAN 44 · Zuschnitt und Datenvertrag als geprüfte Felder', () => 
     expect(ergebnis.fehler).toBe(tl.paketFehler(1, tl.dateiMuster('src/**/*.js')))
   })
 
-  it('hat für die Dateiliste eine eigene, großzügigere Anzahl-Grenze', () => {
-    const viele = Array.from({ length: DATEILISTE_MAX + 1 }, (_, i) => `src/datei${i}.js`)
+  // 0.46.1 (Entscheidung Georg, 18.08.2026): keine Anzahl-Grenze für die
+  // Dateiliste — sie IST die Schreibsperre, ein Deckel wäre ein blockierter
+  // Bauer. Rot vor Grün: Bis 0.46.0 wies meldungPruefen 61 Einträge ab
+  // (DATEILISTE_MAX = 60).
+  it('nimmt 80 Dateilisten-Einträge an und bringt sie alle in den Lieferschein', () => {
+    const viele = Array.from({ length: 80 }, (_, i) => `src/datei${i}.js`)
     const ergebnis = meldungPruefen(
       'arbeitspaket',
       { ...rahmen, pakete: [{ ziel: 'Viel', fertigKriterien: ['Läuft.'], erlaubteDateien: viele }] },
       'Arbeitspaket'
     )
-    expect(ergebnis.fehler).toBe(
-      tl.paketFehler(
-        1,
-        tl.zuVieleEintraege(tl.felder.erlaubteDateien, DATEILISTE_MAX, viele.length)
-      )
-    )
+    expect(ergebnis.fehler).toBeUndefined()
+    expect(ergebnis.meldung.pakete[0].erlaubteDateien).toEqual(viele)
+    const text = lieferscheinText(ergebnis.meldung)
+    for (const datei of viele) expect(text).toContain(datei)
   })
 
   it('bringt Ziel und Dateiliste in den lesbaren Lieferschein — je Empfänger seinen', () => {

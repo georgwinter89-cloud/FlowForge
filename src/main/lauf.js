@@ -69,8 +69,7 @@ import {
   zuschnittDeckung,
   dateiListeVereinigen,
   dateilistenUeberschneidung,
-  RAHMEN_WERKZEUG,
-  BEANSTANDUNG_MAX
+  RAHMEN_WERKZEUG
 } from '../shared/lieferschein.js'
 import { fehlerZeilen, neueFehler } from '../shared/torRegeln.js'
 import { diffTextBauen, diffBilanz } from '../shared/laufDiff.js'
@@ -1015,26 +1014,26 @@ function projektwissenFuerHelfer(projektPfad, kartenIds) {
 }
 
 // Übergaben zwischen Blöcken (SPEC §4.3): Was ein Block „liefert", ist sein
-// Abschlusstext — Nachfahren entlang der Pfeile mit passendem „braucht"
-// bekommen ihn in den Auftrag. Gekürzt, damit ein ausufernder Abschlusstext
-// den Kontext des nächsten Blocks nicht flutet.
-// Seit BAUPLAN 34 wird schema-bewusst gekürzt: in der MITTE, nicht hinten —
-// die Marker-Zeilen am Ende (BEANSTANDUNG, PRUEFKARTE, PRUEFUNG) überleben,
-// und die Kürzung steht sichtbar im Ticker (also auch im Laufbericht).
-const LIEFERUNG_MAX = 8000
-
-function gekuerzt(text) {
-  return mitteGekuerzt(text, LIEFERUNG_MAX).text
-}
+// geprüfter Lieferschein — Nachfahren entlang der Pfeile mit passendem
+// „braucht" bekommen ihn vollständig in den Auftrag. Einen Übergabe-Deckel
+// (bis 0.46.0: 8.000 Zeichen, in der Mitte gekürzt) gibt es seit 0.46.1 nicht
+// mehr (Entscheidung Georg, 18.08.2026): Er riss im Alltag mehrfach knapp und
+// kostete Runden. Dasselbe gilt für die Übertrags-Übergabe, die Wiederhol-
+// Vorlage und den Nachforderungs-Beleg — alles Übergaben, keine Prozess-Ausgaben.
 
 // Tor ohne KI (BAUPLAN 35): So viel Befehls-Ausgabe geht als Tatsache in einen
 // Auftrag — großzügig genug für ein echtes Testprotokoll, klein genug, dass es
-// den Kontext des Bauers nicht flutet.
+// den Kontext des Bauers nicht flutet. Das sind Prozess-Ausgaben, keine
+// Übergaben — sie bleiben gedeckelt.
 const TOR_PROTOKOLL_MAX = 6000
 const BASELINE_MAX = 3000
 // So viele Fehlerzeilen werden zu Beanstandungs-Zeilen; der Rest steht im
 // Protokoll darunter (sonst wird aus einer kaputten Suite eine Bleiwüste).
 const TOR_BEANSTANDUNGEN_MAX = 8
+// So lang darf eine Fehlerzeile als Beanstandungs-Zeile werden — eine
+// Testausgabe kann eine Zeile mit einem ganzen Stack-Trace füllen; das volle
+// Protokoll steht ohnehin daneben.
+const TOR_BEANSTANDUNG_ZEILE_MAX = 400
 
 // Hat der Prüfordner dieser Instanz überhaupt Dateien? Ohne sie misst ein
 // aufbewahrter Prüfbefehl nichts Sinnvolles (die Baseline bliebe ein
@@ -3059,9 +3058,7 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         // inhaltlich meist nichts geändert: Seine eigene Meldung von eben liegt
         // bei, damit er sie nicht neu erarbeiten muss.
         if (k.meldungWiederholen && k.meldungenVorher.length)
-          auftrag += texte.agentenUebergabe.meldungWiederholen(
-            gekuerzt(meldungenText(k.meldungenVorher))
-          )
+          auftrag += texte.agentenUebergabe.meldungWiederholen(meldungenText(k.meldungenVorher))
         // Hat er gar nichts gemeldet, ist die Nachforderung deutlicher: sein
         // freier Abschlusstext liegt bei, mehr hat FlowForge nicht bekommen.
         else if (k.meldungWiederholen && k.nachforderungBeleg)
@@ -3161,7 +3158,7 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           laufSessionTokens = 0
           const text = String(ergebnis.ergebnisText ?? '').trim()
           k.uebergabeVerloren = !text
-          k.uebergabe = gekuerzt(text)
+          k.uebergabe = text
           bericht.uebertraege.push({
             zeit: jetztIso(),
             block: k.name,
@@ -3323,7 +3320,7 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           : [texte.tor.beanstandungOhneZeilen(befehl)]
         ).map((zeile) => ({
           einstufung: texte.tor.einstufung,
-          text: zeile.slice(0, BEANSTANDUNG_MAX),
+          text: zeile.slice(0, TOR_BEANSTANDUNG_ZEILE_MAX),
           fundort: texte.tor.beanstandungFundort(befehl)
         })),
         rotVorGruen: '',
@@ -4009,7 +4006,7 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           // Der Auftrag legt den freien Abschlusstext bei — daraus trägt der
           // Agent die Meldung nach, ohne die Arbeit zu wiederholen.
           k.meldungenVorher = k.meldungen.length ? k.meldungen : k.meldungenVorher
-          k.nachforderungBeleg = gekuerzt(String(ergebnis.ergebnisText ?? ''))
+          k.nachforderungBeleg = String(ergebnis.ergebnisText ?? '')
           return
         }
         tickern(texte.ticker.meldungFehlt(k.name, fehlende))
@@ -4057,13 +4054,9 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       // geprüfte Lieferschein — nicht mehr ein Fließtext, aus dem FlowForge
       // sich etwas heraussucht.
       k.lieferungen = lieferungenAusMeldungen(k.meldungen)
-      const gesamtText = meldungenText(k.meldungen)
-      const lieferung = mitteGekuerzt(gesamtText, LIEFERUNG_MAX)
-      k.lieferung = lieferung.text
-      // Kürzung sichtbar (BAUPLAN 34): Eine stillschweigend gestutzte Übergabe
-      // ist genau die Art Kanten-Verlust, die dieser Schritt abstellt.
-      if (lieferung.gekuerzt)
-        tickern(texte.ticker.uebergabeGekuerzt(k.name, lieferung.von, lieferung.auf))
+      // Vollständig, ohne Deckel (seit 0.46.1) — was der Block gemeldet hat,
+      // kommt genau so beim Nachfolger an.
+      k.lieferung = meldungenText(k.meldungen)
       const blockErgebnis = {
         instanzId: id,
         // Katalogname für die Metriken, Zusatzname daneben (BAUPLAN 41).
@@ -4072,8 +4065,10 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         zeit: jetztIso(),
         zustand: 'erfolgreich',
         // Der lesbare Lieferschein — alte Berichte tragen hier den früheren
-        // Abschlusstext, die Anzeige kommt mit beidem zurecht.
-        ergebnisText: gesamtText.slice(0, 4000),
+        // Abschlusstext, die Anzeige kommt mit beidem zurecht. (Nur die
+        // Bericht-Anzeige ist gestutzt; die vollständigen Felder stehen in
+        // `meldungen` darunter, und die Übergabe selbst ist ungekürzt.)
+        ergebnisText: k.lieferung.slice(0, 4000),
         // Anzeige strukturierter Ergebnisse (SPEC §6, BAUPLAN 42): die Felder
         // selbst, damit der Laufbericht gegliederte Abschnitte zeigen kann.
         meldungen: k.meldungen,
@@ -4487,8 +4482,6 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
             tickern(texte.ticker.rueckfuehrung(ziel.name, genutzt, rundenStandard))
             if (belegKritik.anzahl > 0)
               tickern(texte.ticker.beanstandungenUebergeben(belegKritik.anzahl, ziel.name))
-            if (belegKritik.weggelassen > 0)
-              tickern(texte.ticker.beanstandungenTeilweise(belegKritik.weggelassen))
             return
           }
           // Folgen-Frage je Zweig (BAUPLAN 46, Vertrag F8): Sie hält den

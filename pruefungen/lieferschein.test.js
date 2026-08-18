@@ -11,9 +11,6 @@ import {
   FESTE_TEILE,
   RAHMEN_WERKZEUG,
   WERKZEUG_PRAEFIX,
-  FAZIT_MAX,
-  BEANSTANDUNG_MAX,
-  LISTE_MAX,
   werkzeugeFuerBlock,
   werkzeugeFuerKette,
   etikettFuerWerkzeug,
@@ -159,40 +156,74 @@ describe('BAUPLAN 42 · Ebene 2: FlowForge prüft im Code', () => {
     expect(mit.meldung.pakete[0].fertigKriterien).toHaveLength(1)
   })
 
-  // Claudes strenger Schema-Modus kennt KEINE Längengrenzen — deshalb muss
-  // FlowForge sie selbst durchsetzen, und die Ablehnung nennt die Ist-Länge.
-  it('setzt die Längengrenzen durch, die das Schema nicht kennt', () => {
-    const zuLang = meldungPruefen(
-      'rahmen',
-      { ...rahmen, fazit: 'x'.repeat(FAZIT_MAX + 1) },
-      null
-    )
-    expect(zuLang.fehler).toContain(String(FAZIT_MAX + 1))
-    const beanstandungZuLang = meldungPruefen(
-      'pruefbeleg',
-      {
-        ...rahmen,
-        urteil: 'fehlgeschlagen',
-        beanstandungen: [{ text: 'y'.repeat(BEANSTANDUNG_MAX + 1), einstufung: 'mechanisch' }]
-      },
-      'Prüfbeleg'
-    )
-    expect(beanstandungZuLang.fehler).toBeTruthy()
+  // 0.46.1 (Entscheidung Georg, 18.08.2026): Keine Längen- und Anzahl-Grenzen
+  // mehr für Meldungen — sie scheiterten im Alltag mehrfach knapp und kosteten
+  // Runden. Gemessen wird das Verhalten: eine überlange Meldung wird ANGENOMMEN,
+  // und ihr Text kommt vollständig beim Nachfolger an. Rot vor Grün: Bis 0.46.0
+  // wies meldungPruefen ein 5.000-Zeichen-Fazit (Grenze 300) und 40
+  // Beanstandungen à 2.000 Zeichen (Grenzen 20 bzw. 400) ab.
+  it('nimmt ein 5.000-Zeichen-Fazit an und reicht es vollständig weiter', () => {
+    const fazit = 'Fazit '.repeat(834).trim()
+    expect(fazit.length).toBeGreaterThanOrEqual(5000)
+    const ergebnis = meldungPruefen('rahmen', { ...rahmen, fazit }, null)
+    expect(ergebnis.fehler).toBeUndefined()
+    expect(ergebnis.meldung.fazit).toBe(fazit)
+    expect(lieferscheinText(ergebnis.meldung)).toContain(fazit)
   })
 
-  it('deckelt die Anzahl der Einträge', () => {
-    const zuViele = meldungPruefen(
+  it('nimmt 40 Beanstandungen à 2.000 Zeichen an — alle stehen im Text, keine Kürzungszeile', () => {
+    const beanstandungen = Array.from({ length: 40 }, (_, i) => ({
+      text: `Beanstandung ${i + 1}: ` + 'x'.repeat(2000),
+      einstufung: 'mechanisch',
+      fundort: `src/datei${i + 1}.js:${i + 1}`
+    }))
+    const ergebnis = meldungPruefen(
+      'pruefbeleg',
+      { ...rahmen, urteil: 'fehlgeschlagen', beanstandungen },
+      'Prüfbeleg'
+    )
+    expect(ergebnis.fehler).toBeUndefined()
+    expect(ergebnis.meldung.beanstandungen).toHaveLength(40)
+    const text = lieferscheinText(ergebnis.meldung)
+    for (let i = 1; i <= 40; i++) expect(text).toContain(`Beanstandung ${i}: `)
+    expect(text).not.toContain('gekürzt')
+    expect(text).not.toContain('weitere Beanstandung')
+    // Und die Ebene-3-Leser sehen alle.
+    expect(beanstandungenAusMeldungen([ergebnis.meldung])).toHaveLength(40)
+  })
+
+  it('nimmt beliebig viele Funde und lange Freitexte an', () => {
+    const viele = meldungPruefen(
       'funde',
       {
         ...rahmen,
-        funde: Array.from({ length: LISTE_MAX + 1 }, (_, i) => ({
-          text: 'Fund ' + i,
-          schwere: 'mittel'
-        }))
+        anmerkung: 'Anmerkung. '.repeat(1000),
+        funde: Array.from({ length: 200 }, (_, i) => ({ text: 'Fund ' + i, schwere: 'mittel' }))
       },
       'Angriffsliste'
     )
-    expect(zuViele.fehler).toBeTruthy()
+    expect(viele.fehler).toBeUndefined()
+    expect(viele.meldung.funde).toHaveLength(200)
+    const inhalt = 'Sehr langer Überblick. '.repeat(2000)
+    const frei = meldungPruefen('rahmen', { ...rahmen, inhalt }, null)
+    expect(frei.fehler).toBeUndefined()
+    expect(frei.meldung.inhalt).toBe(inhalt.trim())
+  })
+
+  // Was BLEIBT: Pflicht, Auswahl, Plausibilität — und die Karten-Grenzen der
+  // Prüfkarte (SPEC §3.1), denn das sind Karten-Regeln, keine Übergabe-Grenzen.
+  it('hält an den Karten-Grenzen der Prüfkarte fest', () => {
+    const zuLang = meldungPruefen(
+      'pruefbeleg',
+      {
+        ...rahmen,
+        urteil: 'bestanden',
+        pruefkarteTitel: 'Tunnelfahrt',
+        pruefkarteText: 'x'.repeat(401)
+      },
+      'Prüfbeleg'
+    )
+    expect(zuLang.fehler).toContain('401')
   })
 
   it('lässt eine leere Fundliste zu — nichts gefunden ist ein gutes Ergebnis', () => {

@@ -6,9 +6,9 @@
 //
 // Drei Durchsetzungs-Ebenen (BAUPLAN 42):
 //   1. Schema — Struktur, Typen, Auswahlwerte (hier, über zod).
-//   2. FlowForge im Code — Längen, Anzahl, Plausibilität (lieferschein.js).
-//      Claudes strenger Schema-Modus kennt KEINE Längengrenzen, deshalb
-//      reicht Ebene 1 nicht.
+//   2. FlowForge im Code — Pflichtfelder, Auswahlwerte, Plausibilität
+//      (lieferschein.js). Längen- und Anzahl-Grenzen gibt es seit 0.46.1
+//      bewusst nicht mehr — auch nicht im Schema (kein .max/.maxLength).
 //   3. Kanten-Prüfung — deckt die Lieferung den Bedarf des Nachfolgers
 //      (lauf.js, nach dem Block).
 import { z } from 'zod'

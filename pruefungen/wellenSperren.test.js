@@ -125,11 +125,17 @@ function antwortMit(...aufrufe) {
 const fazit = { message: { role: 'assistant', content: 'Fertig: alles gemeldet.' } }
 
 // Was FlowForge der lokalen KI als Werkzeug-Ergebnis zurückgab — steht in den
-// FOLGENDEN Anfragen als tool-Nachricht; die letzte Anfrage trägt den ganzen
-// Verlauf, also alle Ergebnisse in Reihenfolge.
+// FOLGENDEN Anfragen als Nutzer-Nachricht „Ergebnis von <werkzeug>:\n…" (seit
+// 18.08.2026 keine tool-Rolle mehr, s. lokaleHelferRollen.test.js); die letzte
+// Anfrage trägt den ganzen Verlauf, also alle Ergebnisse in Reihenfolge. Die
+// erste Nachricht ist der Auftakt (Rahmentext + Auftrag) und zählt nicht.
 function werkzeugErgebnisse(anfragen) {
   const letzte = anfragen[anfragen.length - 1]
-  return letzte.messages.filter((m) => m.role === 'tool').map((m) => m.content)
+  const kopf = /^Ergebnis von [^\n]+:\n/
+  return letzte.messages
+    .slice(1)
+    .filter((m) => m.role === 'user' && kopf.test(m.content))
+    .map((m) => m.content.replace(kopf, ''))
 }
 
 describe('BAUPLAN 46 · Die lokale Helfer-KI hält die Dateiliste', () => {
