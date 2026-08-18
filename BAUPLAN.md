@@ -579,6 +579,55 @@ Begründung. Ein Prüfer, der durchfällt, stellt seine Folgen-Frage, während d
 Zweig weiterläuft; „Stand wiederherstellen" nennt vorher, was es trifft, und lässt den
 anderen Zweig stehen.
 
+### Zwischenschritt 0.46.2 — Rauchtest ehrlich, Startanleitung in der Welle, Prüfbeleg-Weiterreichung
+(Befund Georg + Auswertung des Life-OS-Laufs vom 18.08.2026, 13:07 [Laufbericht
+`2026-08-18T11-07-58-083Z.json`]: Beide Bauer der Welle bekamen „Startanleitung lief
+nicht an", obwohl der Code lief — Port 3888 war durch Waisenprozesse aus den eigenen
+Bauer-Tests belegt, die Startanleitung wurde in der Welle gegenseitig überschrieben,
+und der Prüfbeleg des ersten Prüfers „kam bei niemandem an", obwohl ein Zweitaudit
+dahinter stand. **Nächste Session: zuerst diesen Zwischenschritt, dann 47.**)
+- **Rauchtest sagt, warum:** Ausgabe bzw. Fehlercode des Startversuchs (gedeckelt wie
+  Prozess-Ausgaben) stehen im Ticker und am Block-Ergebnis im Laufbericht
+  (`rauchtest: { gruen, code, ausgabe }`) — nicht nur im Auftrag des Bauers. Georg
+  liest „Port 3888 belegt (EADDRINUSE)" statt „läuft NICHT an".
+- **Port-Prüfung vor dem Rauchtest** (Mechanik aus dem App-Tab, SPEC §8): Ist der Port
+  der Startanleitungs-Adresse belegt und der Besitzer stammt aus diesem Lauf (Späher/
+  Prozessgruppen), räumt FlowForge ihn vorher ab und tickert es („Waisenprozess node.exe
+  (PID …) aus diesem Lauf beendet"); gehört er nicht zum Lauf, wird der Rauchtest
+  **übersprungen** mit Grund (kein Rot, keine Nachbesserungs-Runde, ehrlich im Ticker),
+  wie heute bei laufender App im Tab.
+- **Startanleitung in der Welle:** Sie ist eine Projektdatei, kein Teil des
+  Datenvertrags — der letzte Schreiber gewann still. Neu: `startanleitung_setzen`
+  merkt sich den setzenden Block (`gesetztVon`); überschreibt ein Block in derselben
+  Welle die Anleitung eines anderen, sagt der Ticker es mit beiden Befehlen. Der
+  Rauchtest läuft **einmal je Welle** (nachdem sie steht), nicht je Bauer; die
+  Nachbesserungs-Runde bekommt der Block, der die Anleitung zuletzt gesetzt hat — die
+  übrigen Bauer der Welle bekommen weder Etikett noch Runde (im Lauf vom 18.08. kosteten
+  zwei doppelte Runden ~190k Tokens für dieselbe Anleitung).
+- **Prüfbeleg-Weiterreichung durch Logik (Entscheidung Georg, 18.08.2026):** Der
+  Katalog-Prüfer bekommt `brauchtOptional: ['Prüfbeleg']` mit wozu-Satz („prüft
+  eine vorliegende Prüfung nach, statt sie zu wiederholen — Zweitaudit"); damit
+  erreicht der Prüfbeleg eines Prüfers den nächsten Prüfer dahinter (nummeriert, wenn
+  mehrere), und der Vorspann sagt es. **Verdrängung durch Weiterverarbeitung** in
+  `uebergabenAuswahl` (kettenRegeln.js): Liegen bei einem Empfänger mehrere
+  Lieferungen desselben Etiketts vor, und hat Lieferant B die Lieferung von Lieferant
+  A als Eingang genommen (A ist Vorfahr von B, B braucht/brauchtOptional dasselbe
+  Etikett), zählt am gemeinsamen Empfänger nur B — die Prüfung der Prüfung ersetzt die
+  Prüfung; A wird verdrängt, ehrlich getickert („Prüfbeleg von Prüfer 7 ging ins
+  Zweitaudit ein — beim Sessionende zählt der des Zweitaudits"). Das gilt zusätzlich
+  zur Distanz-Regel und unabhängig von ihr (Prüfer 7 → Sessionende direkt UND Prüfer 7
+  → Zweitaudit → Sessionende: Sessionende bekommt nur den Beleg des Zweitaudits).
+  `fuehrtZusammen` (47) bleibt davon unberührt: dort kommen alle an.
+- Nachzuziehen: SPEC §8 (Rauchtest: Grund sichtbar, Port-Prüfung, einmal je Welle),
+  §4.3 (Prüfer brauchtOptional Prüfbeleg; Übergaben: Verdrängung durch
+  Weiterverarbeitung), §5 (Startanleitung in der Welle).
+**Alltagstest:** Georg lässt den Life-OS-Workflow (zwei Bauer, zwei Prüfer, Zweitaudit,
+Sessionende) noch einmal laufen: Kein Bauer trägt mehr „Startanleitung lief nicht an",
+solange die App startet; schlägt der Rauchtest doch fehl, steht der Grund im Ticker.
+Der Vorspann des ersten Prüfers nennt das Zweitaudit als Empfänger seines Prüfbelegs,
+das Zweitaudit bekommt beide Prüfbelege nummeriert, und das Sessionende bekommt nur den
+des Zweitaudits — mit Ticker-Zeile, warum.
+
 ### 47 — Integrator: die Nähte zwischen parallel gebauten Teilen
 (Entscheidung Georg: eigene **Blockart**, nicht ein fester Block — eine geteilte
 Recherche zusammenzuführen ist etwas anderes als Code.)
