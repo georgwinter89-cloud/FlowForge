@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8" />
+<title>Banner</title>
+<style>
+  @font-face { font-family: 'Archivo'; src: url('../../src/renderer/src/assets/fonts/Archivo-Variable.ttf') format('truetype'); font-weight: 100 900; }
+  @font-face { font-family: 'JetBrains Mono'; src: url('../../src/renderer/src/assets/fonts/JetBrainsMono-Variable.ttf') format('truetype'); font-weight: 100 800; }
+  html, body { margin: 0; background: #0a0e18; font-family: Archivo, sans-serif; color: #eef2fa; }
+  #rahmen { width: 1600px; height: 360px; box-sizing: border-box; position: relative; overflow: hidden;
+    background: radial-gradient(1200px 420px at 18% 120%, rgba(37, 99, 235, 0.28), transparent 60%),
+                radial-gradient(900px 300px at 92% -20%, rgba(225, 29, 46, 0.22), transparent 60%),
+                #0a0e18; }
+  .raster { position: absolute; inset: 0; background-image: radial-gradient(#1c2438 1px, transparent 1px); background-size: 28px 28px; opacity: 0.9; }
+  .inhalt { position: absolute; left: 72px; top: 74px; display: flex; align-items: center; gap: 34px; }
+  .logo { width: 140px; height: 140px; border-radius: 34px; background: #2563eb; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 1px #3b82f6, 0 24px 60px rgba(37, 99, 235, 0.45); }
+  .logo svg { width: 84px; height: 84px; }
+  .wort .name { font-size: 92px; font-weight: 800; letter-spacing: -0.02em; line-height: 0.95; }
+  .wort .name b { color: #7db0ff; font-weight: 800; }
+  .wort .werk { font-size: 20px; letter-spacing: 0.42em; color: #9db1d9; font-weight: 600; margin-top: 10px; text-transform: uppercase; }
+  .claim { position: absolute; left: 72px; bottom: 46px; font-size: 24px; color: #c3cde0; max-width: 1100px; line-height: 1.35; }
+  .claim b { color: #eef2fa; font-weight: 700; }
+  .pille { position: absolute; right: 72px; top: 78px; display: flex; flex-direction: column; gap: 12px; align-items: flex-end; }
+  .pille span { font-family: 'JetBrains Mono', monospace; font-size: 15px; color: #9db1d9; border: 1px solid #22304e; border-radius: 999px; padding: 6px 14px; background: rgba(14, 21, 38, 0.8); }
+  .pille span.rot { color: #f4606e; border-color: #e11d2e; }
+  .pille span.blau { color: #7db0ff; border-color: #33518f; }
+</style>
+</head>
+<body>
+<div id="rahmen">
+  <div class="raster"></div>
+  <div class="inhalt">
+    <div class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 L5 13 H11 L9.5 22 L19 9.5 H12.5 Z" /></svg></div>
+    <div class="wort">
+      <div class="name">Flow<b>Forge</b></div>
+      <div class="werk">Werkbank</div>
+    </div>
+  </div>
+  <div class="pille">
+    <span class="blau">Windows · Electron · Claude Code CLI</span>
+    <span class="rot">Blöcke erzwingen, statt zu bitten</span>
+    <span>V1 · Deutsch · MIT</span>
+  </div>
+  <div class="claim">Coding-Workflows aus Blöcken bauen — <b>ein KI-Agent führt sie aus</b>, mit harten Sperren, Sicherungspunkten und einem Laufbericht, der ehrlich sagt, was passiert ist.</div>
+</div>
+<script>
+  document.fonts.ready.then(() => { document.title = 'FERTIG 1600x360' })
+</script>
+</body>
+</html>

@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8" />
+<title>Überblick</title>
+<style>
+  @font-face { font-family: 'Archivo'; src: url('../../src/renderer/src/assets/fonts/Archivo-Variable.ttf') format('truetype'); font-weight: 100 900; }
+  @font-face { font-family: 'JetBrains Mono'; src: url('../../src/renderer/src/assets/fonts/JetBrainsMono-Variable.ttf') format('truetype'); font-weight: 100 800; }
+  :root {
+    --hintergrund: #0a0e18; --flaeche: #0e1526; --flaeche-tief: #070b13; --flaeche-hervor: #101c36;
+    --rand: #1c2438; --rand-panel: #22304e; --rand-block: #33518f;
+    --text: #eef2fa; --text-zweit: #c3cde0; --text-gedimmt: #9db1d9; --text-leise: #8b96ad;
+    --akzent: #2563eb; --akzent-hell: #3b82f6; --akzent-text: #7db0ff;
+    --signal: #e11d2e; --signal-text: #f4606e; --gut-text: #4ade80; --gut-rand: #2f9e63; --lesend: #f4a05f; --eigen: #b79bff;
+  }
+  html, body { margin: 0; background: var(--hintergrund); color: var(--text); font-family: Archivo, sans-serif; }
+  #rahmen { width: 1600px; padding: 36px 40px 40px; box-sizing: border-box; background: var(--hintergrund); }
+  h1 { margin: 0 0 4px; font-size: 34px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; }
+  .unter { margin: 0 0 26px; color: var(--text-gedimmt); font-size: 16px; }
+  .reihe { display: grid; grid-template-columns: 1fr 44px 1fr 44px 1fr 44px 1fr; gap: 0; align-items: stretch; }
+  .spalte { background: var(--flaeche); border: 1px solid var(--rand-panel); border-radius: 14px; padding: 18px 18px 16px; display: flex; flex-direction: column; gap: 12px; min-height: 560px; }
+  .kicker { font-size: 11px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: var(--text-gedimmt); }
+  .titel { font-size: 20px; font-weight: 800; margin: -6px 0 2px; }
+  .pfeil { display: flex; align-items: center; justify-content: center; color: var(--akzent-text); }
+  .pfeil svg { width: 30px; height: 30px; }
+  .karte { background: var(--flaeche-tief); border: 1px solid var(--rand-block); border-radius: 10px; padding: 9px 11px; font-size: 14px; }
+  .karte .kopf { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 14px; }
+  .karte .nr { display: inline-flex; width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--rand-block); align-items: center; justify-content: center; font-size: 11px; color: var(--text-zweit); }
+  .chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+  .chip { font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--rand-block); color: var(--akzent-text); background: var(--flaeche); }
+  .chip.sperre { color: var(--lesend); border-color: var(--lesend); }
+  .chip.liefert { color: var(--gut-text); border-color: var(--gut-rand); }
+  .chip.pruefer { color: var(--signal-text); border-color: var(--signal); }
+  .karte.lesend { border-color: var(--lesend); }
+  .karte.pruefer { border-color: var(--signal); }
+  .karte.bauer { border-color: var(--akzent-hell); }
+  .kettenpfeil { text-align: center; color: var(--akzent-text); font-size: 16px; line-height: 10px; margin: -4px 0; }
+  .kettenpfeil.rot { color: var(--signal-text); font-size: 12px; }
+  .liste { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+  .liste li { background: var(--flaeche-tief); border: 1px solid var(--rand); border-radius: 10px; padding: 9px 11px; font-size: 14px; line-height: 1.35; color: var(--text-zweit); }
+  .liste li b { color: var(--text); display: block; font-size: 14px; margin-bottom: 1px; }
+  .liste li.hart { border-color: var(--signal); }
+  .liste li.frage { border-color: var(--lesend); }
+  .liste li.gut { border-color: var(--gut-rand); }
+  .liste li.akzent { border-color: var(--akzent-hell); }
+  .mono { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--akzent-text); }
+  .fuss { margin-top: 10px; font-size: 13px; color: var(--text-leise); line-height: 1.4; }
+  .fuss b { color: var(--text-gedimmt); }
+  .mensch { margin-top: auto; background: var(--flaeche-hervor); border: 1px solid var(--gut-rand); border-radius: 10px; padding: 9px 11px; font-size: 13px; color: var(--text-zweit); }
+  .mensch b { color: var(--gut-text); }
+  .motor-kasten { background: var(--flaeche-tief); border: 1px solid var(--rand-block); border-radius: 10px; padding: 10px 11px; font-size: 13px; color: var(--text-zweit); }
+  .motor-kasten b { color: var(--text); font-size: 14px; }
+  .motor-kasten .ebene { margin: 6px 0 0 12px; padding-left: 10px; border-left: 2px solid var(--rand-block); }
+  .legende { display: flex; gap: 18px; margin-top: 22px; font-size: 12px; color: var(--text-gedimmt); align-items: center; flex-wrap: wrap; }
+  .legende span::before { content: ''; display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; border: 2px solid currentColor; }
+  .l-blau { color: var(--akzent-hell); } .l-orange { color: var(--lesend); } .l-rot { color: var(--signal); } .l-gruen { color: var(--gut-text); }
+  .legende i { font-style: normal; color: var(--text-leise); }
+</style>
+</head>
+<body>
+<div id="rahmen">
+  <h1>So arbeitet FlowForge</h1>
+  <p class="unter">Du baust ein Schaubild aus Blöcken — FlowForge steuert den Lauf und erzwingt die Regeln — ein frischer KI-Agent je Block arbeitet im Projektordner — du siehst, was passiert ist.</p>
+
+  <div class="reihe">
+    <!-- 1 -->
+    <div class="spalte">
+      <div class="kicker">1 · Du baust</div>
+      <div class="titel">Das Schaubild</div>
+      <div class="karte lesend"><div class="kopf"><span class="nr">1</span>✂️ Paket schneiden</div>
+        <div class="chips"><span class="chip sperre">darf nur lesen</span><span class="chip liefert">liefert: Arbeitspaket</span></div></div>
+      <div class="kettenpfeil">↓</div>
+      <div class="karte lesend"><div class="kopf"><span class="nr">2</span>⚔️ Angreifer</div>
+        <div class="chips"><span class="chip sperre">darf nur lesen</span><span class="chip">braucht: Arbeitspaket</span><span class="chip liefert">liefert: Angriffsliste</span></div></div>
+      <div class="kettenpfeil">↓</div>
+      <div class="karte bauer"><div class="kopf"><span class="nr">3</span>🔨 Bauer</div>
+        <div class="chips"><span class="chip">braucht: Arbeitspaket</span><span class="chip">braucht: Angriffsliste</span><span class="chip liefert">liefert: Umsetzungsbericht</span></div></div>
+      <div class="kettenpfeil">↓ &nbsp;&nbsp;<span style="color:#f4606e;font-size:12px">⟲ bei Rot zurück: Reparatur-Runde</span></div>
+      <div class="karte pruefer"><div class="kopf"><span class="nr">4</span>🔬 Prüfer</div>
+        <div class="chips"><span class="chip pruefer">Prüfer</span><span class="chip">braucht: Arbeitspaket</span><span class="chip liefert">liefert: Prüfbeleg</span></div></div>
+      <div class="kettenpfeil">↓</div>
+      <div class="karte"><div class="kopf"><span class="nr">5</span>🌙 Sessionende</div>
+        <div class="chips"><span class="chip">braucht: Umsetzungsbericht</span><span class="chip">braucht: Prüfbeleg</span></div></div>
+      <div class="fuss"><b>braucht / liefert</b> wird beim Stecken geprüft — ein Prüfer ohne Arbeitspaket startet gar nicht. Zwei Bauer mit getrennten Dateilisten laufen als <b>Welle</b> gleichzeitig.</div>
+    </div>
+
+    <div class="pfeil"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h15M13 6l6 6-6 6"/></svg></div>
+
+    <!-- 2 -->
+    <div class="spalte">
+      <div class="kicker">2 · FlowForge steuert · 0 Tokens</div>
+      <div class="titel">Die Werkbank erzwingt</div>
+      <ul class="liste">
+        <li class="akzent"><b>Ein Auftrag je Block</b>Arbeitspaket, Übergaben der Vorgänger, Vorspann: wer bekommt dein Ergebnis und wozu.</li>
+        <li class="hart"><b>Harte Sperren am Werkzeugaufruf</b>Git · Verwaltungsdateien · „darf nur lesen" · fremdes Revier — ein Nein mit Begründung, keine Bitte im Prompt.</li>
+        <li class="frage"><b>Rechte-Rückfragen an dich</b>Außerhalb des Projektordners, Internet, Unumkehrbares — in Alltagssprache, oder im Automodus vermerkt.</li>
+        <li class="gut"><b>Sicherungspunkte</b>vor dem Lauf und nach jedem schreibenden Block — unsichtbares Git, jederzeit zurückholbar.</li>
+        <li><b>Lieferschein statt Freitext</b>Pflichtfelder je Block; fehlt etwas, genau eine Nachforderung — dann hält der Lauf an.</li>
+        <li><b>Reparatur-Runde bei Rot</b>Prüfer-Beanstandungen als Felder + Diff zurück an den Bauer; Tor ohne KI spielt den Prüfbefehl vorher ab.</li>
+        <li><b>Übertrag bei ~85 % Kontext</b>Übergabe, frische Session, derselbe Block läuft weiter.</li>
+      </ul>
+    </div>
+
+    <div class="pfeil"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h15M13 3l6 6-6 6"/><path d="M20 16H5M11 22l-6-6 6-6"/></svg></div>
+
+    <!-- 3 -->
+    <div class="spalte">
+      <div class="kicker">3 · Der Motor arbeitet</div>
+      <div class="titel">Claude Code CLI über das Agent SDK</div>
+      <div class="motor-kasten"><b>Anmeldung</b>: dein Claude-Abo (Abo-Kontingent) oder API-Schlüssel mit Ausgaben-Obergrenze je Lauf — du wählst beim ersten Start.</div>
+      <div class="motor-kasten"><b>Koordinator</b> <span class="mono">Haiku</span> — eine Session je Lauf, delegiert nur
+        <div class="ebene"><b>Block-Agent</b> — frisch je Block, erbt kein Arbeitsgedächtnis<br/><span class="mono">Standard Opus · sparsam Sonnet · sehr sparsam Haiku</span> — wählbar je Karte
+          <div class="ebene">Unteraufgaben: Späher, Einlese-Helfer, Audit-Blickwinkel</div>
+        </div>
+      </div>
+      <div class="motor-kasten"><b>Werkzeuge</b>: lesen, schreiben, Befehle, Karten-Werkzeuge, Lieferschein melden — jeder Aufruf geht durch FlowForges Sperren (Spalte 2).</div>
+      <div class="motor-kasten" style="border-color:#f4a05f"><b>Lokale Helfer-KI</b> (Ollama, optional): Recherche, Entwürfe, Bau-Teilaufträge — kostet kein Kontingent; der Agent nimmt ab, Sicherungspunkt davor.</div>
+      <div class="motor-kasten" style="border-color:#3b82f6"><b>Projektordner</b>: Code · Karten · Prüfmappe — die Wahrheit liegt auf der Platte, nicht im Chat.</div>
+    </div>
+
+    <div class="pfeil"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h15M13 6l6 6-6 6"/></svg></div>
+
+    <!-- 4 -->
+    <div class="spalte">
+      <div class="kicker">4 · Du siehst</div>
+      <div class="titel">Ehrlich, was passiert ist</div>
+      <ul class="liste">
+        <li><b>Live-Ticker</b>Jeder Werkzeugschritt, jede Sperre, jeder Wartegrund („Prüfer wartet auf Bauer") — Kontext-Füllstand als Balken.</li>
+        <li><b>Laufbericht</b>Blöcke mit Ausgang, Tokens und Modell, theoretische Kosten, Rechte-Rückfragen, Überträge, Vorschlag fürs nächste Paket.</li>
+        <li class="gut"><b>Sicherungspunkte</b>„21:32 — Bauer fertig" — Wiederherstellen mit Vorschau, selbst wieder rückgängig.</li>
+        <li><b>Karten</b>Status, Aufgaben, Entscheidungen, Wissen — vom Sessionende gepflegt, von dir bearbeitbar.</li>
+        <li><b>Metriken</b>Prüfer besteht beim ersten Mal, Reparatur-Runden je Lauf, Trefferquote der lokalen KI — kein Agent sieht sie.</li>
+      </ul>
+      <div class="mensch"><b>Du entscheidest</b> bei Rechte-Rückfragen, Folgen-Fragen („was bedeutet das für dich") und im Gespräch mit dem Block „Frage an den Menschen" — sonst läuft der Lauf allein.</div>
+    </div>
+  </div>
+
+  <div class="legende">
+    <span class="l-blau">schreibender Block</span>
+    <span class="l-orange">darf nur lesen</span>
+    <span class="l-rot">Prüfer / harte Sperre</span>
+    <span class="l-gruen">Sicherung / Mensch</span>
+    <i>— Farben wie in der Werkbank. Verbindlich ist SPEC.md; dieses Bild ist die Landkarte.</i>
+  </div>
+</div>
+<script>
+  document.fonts.ready.then(() => {
+    const r = document.getElementById('rahmen').getBoundingClientRect()
+    document.title = 'FERTIG ' + Math.ceil(r.width) + 'x' + Math.ceil(r.height)
+  })
+</script>
+</body>
+</html>

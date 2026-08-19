@@ -6,132 +6,18 @@ werden hier nachgezogen (Historie liefert git).
 
 ## Überblick im Bild
 
-Fünf Schaubilder, die das System zeigen, bevor die Paragraphen es im Einzelnen
-festlegen. Sie sind Landkarte, nicht Gesetz — gilt im Zweifel der Paragraph, der
-jeweils genannt ist.
+![So arbeitet FlowForge — du baust das Schaubild, FlowForge steuert und erzwingt, der Motor arbeitet, du siehst, was passiert ist](docs/bilder/ueberblick.png)
 
-**Die Bausteine** (§2, §3, §6, §9): FlowForge ist die Werkbank, der Motor der
-Arbeiter. Alles, was erzwingt, sitzt im Hauptprozess — der Agent sieht nur Aufträge
-und Ja/Nein am Werkzeugaufruf.
-
-```mermaid
-flowchart TB
-    subgraph App["FlowForge — Electron-App"]
-        direction TB
-        UI["Oberfläche (§9)<br/>Projektübersicht · Schaubild · Lauf · Laufberichte ·<br/>Sicherungspunkte · Metriken · App · Co-Pilot"]
-        Steuer["Lauf-Steuerung (§4.1, §5)<br/>Reihenfolge, Wellen, Reparatur-Runden,<br/>Übertrag, Folgen-Fragen, Startanleitung & Rauchtest"]
-        Sperren["Sperren am Werkzeugaufruf (§7)<br/>Git · Verwaltungsdateien · #quot;nur lesen#quot; ·<br/>Wirkbereich · Prüfmappen-Besitz"]
-        Punkte["Sicherungspunkte (§3.3)<br/>eigenes verstecktes Git außerhalb des Projekts,<br/>Punkt-Strang je Schreiber, Diff für Reparatur-Runden"]
-        Karten["Karten & Berichte (§3)<br/>Projektkarten · Laufberichte · Metriken · Prüfkarten"]
-        UI <--> Steuer
-        Steuer --> Sperren
-        Steuer --> Punkte
-        Steuer --> Karten
-    end
-    subgraph Motor["KI-Motor (§2): Claude Code CLI über das Agent SDK — Abo-Login oder API-Schlüssel"]
-        direction TB
-        Ko["Koordinator (Haiku) — eine Session je Lauf<br/>delegiert nur: je Block ein frischer Agent"]
-        Ag["Block-Agent — Modellklasse je Block<br/>Standard Opus · sparsam Sonnet · sehr sparsam Haiku"]
-        Unter["Unteraufgaben (Späher, Einlese-Helfer, Audit-Blickwinkel)"]
-        Ko --> Ag --> Unter
-    end
-    Steuer <== "↓ Auftrag je Block + Vorspann, Ja/Nein je Werkzeugaufruf<br/>↑ Werkzeugaufrufe, Lieferschein, Verbrauch" ==> Motor
-    Ag <--> Projekt[("Projektordner<br/>Code · karten/ · pruefung/ · arbeitsablage/")]
-    Ag -. "optional (§4.3): Recherche, Entwurf,<br/>Bau-Teilauftrag, Vorreparatur" .-> Ollama["Lokale Helfer-KI (Ollama)<br/>kein Kontingent, Abnahme durch den Agenten"]
-    Mensch(["Mensch"]) <-- "Rechte-Rückfragen · Folgen-Fragen ·<br/>Gespräch · Stopp · Co-Pilot" --> UI
-    Daten[("Datenordner<br/>Einstellungen · Projektliste · Sicherungs-Gits ·<br/>Laufberichte · Metriken · eigene Blöcke")] --- Steuer
-```
-
-**Das Schaubild und seine Regeln** (§4): Karten und Pfeile. Was ein Block braucht,
-muss ein Vorfahre liefern — die Steck-Prüfung läuft vor dem Start, die Lieferungen
-laufen im Lauf entlang derselben Pfeile. Schreiben dürfen mehrere nur als Welle mit
-getrennten Dateilisten; Prüfer urteilen nie über einen halben Stand.
-
-```mermaid
-flowchart TB
-    KL["Kontext laden"] --> PS["Paket schneiden<br/><i>liefert: Arbeitspaket<br/>je benanntem Ziel (Zuschnitt)</i>"]
-    PS --> AN["Angreifer · nur lesend<br/><i>liefert: Angriffsliste<br/>bekommt ALLE Zuschnitte</i>"]
-    AN --> B1["Bauer · Daten<br/><i>braucht: Arbeitspaket (Zuschnitt 3)<br/>Wirkbereich: seine Dateiliste</i>"]
-    AN --> B2["Bauer · Oberfläche<br/><i>braucht: Arbeitspaket (Zuschnitt 4)<br/>Wirkbereich: seine Dateiliste</i>"]
-    B1 --> P1["Prüfer · A<br/><i>eigener Prüfordner in pruefung/<br/>liefert: Prüfbeleg</i>"]
-    B2 --> P2["Prüfer · B<br/><i>liefert: Prüfbeleg</i>"]
-    P1 --> ZA["Zweitaudit (Prüfer)<br/><i>braucht optional: Prüfbeleg — beide, nummeriert</i>"]
-    P2 --> ZA
-    ZA -- "bestanden" --> SE["Sessionende<br/><i>bekommt nur den Prüfbeleg des Zweitaudits</i>"]
-    P1 -. "Beanstandungen als Felder<br/>→ Reparatur-Runde mit Diff + Vor-Fazit" .-> B1
-    P2 -. "Reparatur-Runde" .-> B2
-    ZA -. "Bei Fehlschlag zurück zu: Bauer · Daten" .-> B1
-```
-
-Lesart: Bauer · Daten und Bauer · Oberfläche sind eine **Welle** (§5) — gleichzeitig,
-weil ihre Dateilisten getrennt sind. Der Angreifer bekommt alle Zuschnitte, jeder Bauer
-nur seinen, jeder Prüfer den seines Umsetzer-Vorfahren (§4.1 „Zustellung"). Lieferungen
-gleichen Etiketts: die nähere gewinnt, Weiterverarbeitung verdrängt (§4.3 „Übergaben").
-
-**Ein Lauf von Anfang bis Ende** (§4.1, §5, §8): FlowForge prüft erst, ob der Lauf
-überhaupt starten darf, und verarbeitet dann Block für Block — mit festen
-Rückwegen, die keine KI entscheidet.
-
-```mermaid
-flowchart TD
-    Start([Lauf starten]) --> Pruef["Start-Prüfung: Schaubild vollständig,<br/>braucht/liefert gesteckt, Pflichtfelder gefüllt,<br/>Auftragsquelle da, Motor-Modus gewählt"]
-    Pruef --> Pr{bestanden?}
-    Pr -- nein --> Hinweis["freundlicher Hinweis, kein Lauf"]
-    Pr -- ja --> WS{"Platz frei?"}
-    WS -- nein --> Warte["Warteschlange (3 Läufe, ein Lauf je Projekt)<br/>— läuft von allein an"]
-    WS -- ja --> SP0["Sicherungspunkt #quot;vor dem Lauf#quot;<br/>Prüfmappe leeren, Session öffnen (Koordinator)"]
-    Warte --> SP0
-    SP0 --> Block["nächster Block, dessen Vorgänger fertig sind<br/>(Welle: mehrere, wenn Wirkbereiche getrennt)"]
-    Block --> Auftrag["Auftrag + Vorspann + Übergaben<br/>→ frischer Agent mit seiner Modellklasse"]
-    Auftrag --> Arbeit["Agent arbeitet<br/>Werkzeugaufrufe gegen Sperren & Rechte (§7)<br/>Füllstand ~85 %? → Übertrag in frische Session"]
-    Arbeit --> LS{"Lieferschein<br/>vollständig?"}
-    LS -- "nein, einmal" --> Nach["Nachforderung — genau eine kurze Runde"] --> LS
-    LS -- ja --> Art{"Blockart?"}
-    Art -- "schreibend (Bauer)" --> SP1["Sicherungspunkt #quot;fertig#quot;<br/>Startanleitung setzen/ausführen, Rauchtest je Welle"]
-    Art -- "prüfend" --> Tor["bei Nachprüfung zuerst das Tor ohne KI:<br/>Prüfbefehl ohne Motor abspielen (0 Tokens) —<br/>bleibt rot, geht das Protokoll direkt zurück"] --> Urteil{"Urteil?"}
-    Art -- "Auftragsquelle" --> Voll["Vollständigkeit des Zuschnitts gerechnet<br/>(jede Aufgabe, jedes Ziel) — sonst einmal nachtragen"]
-    Art -- "nur lesend / Frage" --> Weiter
-    Urteil -- "rot, Budget da" --> Rep["Reparatur-Runde: Kritik als Felder + Diff + Vor-Fazit<br/>→ frischer Agent des Rückführungs-Ziels"] --> Arbeit
-    Urteil -- "rot, Budget verbraucht" --> Ende
-    Urteil -- "grün" --> Weiter
-    SP1 --> Weiter
-    Voll --> Weiter
-    Weiter{"noch Blöcke?"} -- ja --> Block
-    Weiter -- nein --> Ende["Sessionende: Karten auf Stand, Laufbericht,<br/>Vorschlag fürs nächste Paket; arbeitsablage/ geleert"]
-    Ende --> Fertig([Ergebnis erleben — App-Tab, Laufbericht, Metriken])
-```
-
-**Was der Agent darf** (§7): Die Entscheidung fällt je Werkzeugaufruf in FlowForge —
-drei Stufen, und der Automodus betrifft nur die mittlere.
-
-```mermaid
-flowchart TB
-    W["Werkzeugaufruf des Agenten"] --> H{"harte Sperre?"}
-    H -- "ja — Git · Verwaltungsdateien · Datenordner ·<br/>#quot;nur lesen#quot; · fremder Wirkbereich · fremde Prüfmappe" --> Nein["Nein, mit Begründung zurück an den Agenten<br/>keine Rückfrage, auch nicht im Automodus"]
-    H -- nein --> R{"im Rahmen?"}
-    R -- "ja — Projektordner · Tests · offizielle Paketquellen ·<br/>bekannte Entwickler-Befehle" --> Ja["Ja, ohne Rückfrage"]
-    R -- "nein — außerhalb des Projektordners ·<br/>sonstiges Internet · Unumkehrbares" --> F{"Automodus?"}
-    F -- aus --> Mensch["Rückfrage an den Menschen in Alltagssprache<br/>Live-Ansicht und Benachrichtigung — die Antwort entscheidet"]
-    F -- an --> Auto["automatisch erlaubt —<br/>im Ticker und Laufbericht vermerkt"]
-```
-
-**Die Oberfläche** (§9): dunkle Werkbank, eine Kopfleiste, drei Spalten, Tabs in der Mitte.
-
-```mermaid
-block-beta
-    columns 6
-    Kopf["Kopfleiste: Blitz · FlowForge WERKBANK · Brotkrume · Co-Pilot · Metriken · Einstellungen"]:6
-    Karten["Karten-Seitenleiste<br/>(filterbar)"]:1
-    Tabs["Schaubild · Lauf · Laufberichte · Sicherungspunkte · Metriken · App"]:4
-    Bib["Blockbibliothek<br/>Vorlagen + eigene Blöcke"]:1
-    space:1
-    Mitte["Schaubild: Karten ziehen, Pfeile ziehen, Zusatzname, Modellklasse, Kartenauswahl, Start<br/>Lauf: Verbrauch, Stopp, Gespräch, Liveticker, Denk-Bereich, Ergebnis"]:4
-    space:1
-    Chat["Co-Pilot seitlich (§6): Bedienung + Projekt, setzt die Lauf-Session fort"]:6
-```
-
-Davor liegt beim allerersten Start der **Erststart-Dialog** (§2, §9) — Abo-Login
-oder API-Schlüssel, kein stiller Standard.
+Das Bild ist die Landkarte, die Paragraphen sind das Gesetz: (1) Du baust das
+Schaubild aus Blöcken — braucht/liefert wird beim Stecken geprüft (§4). (2) FlowForge
+steuert den Lauf ohne Tokens: ein Auftrag je Block, harte Sperren am Werkzeugaufruf,
+Rechte-Rückfragen, Sicherungspunkte, Lieferschein, Reparatur-Runde, Übertrag (§3.3, §5,
+§7). (3) Der Motor — die Claude Code CLI über das Agent SDK, Abo-Login oder
+API-Schlüssel — arbeitet mit einem Koordinator und je Block einem frischen Agenten im
+Projektordner, optional mit lokaler Helfer-KI (§2, §4.3). (4) Du siehst Live-Ticker,
+Laufbericht, Sicherungspunkte, Karten und Metriken (§3, §6, §9). Die echten Ansichten
+zeigt das README (docs/bilder/); gerendert wird das Überblicksbild mit
+`npm run schaubilder` aus tools/schaubilder/.
 
 ## 1. Was FlowForge ist
 

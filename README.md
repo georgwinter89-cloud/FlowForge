@@ -1,4 +1,4 @@
-# FlowForge
+<p align="center"><img src="docs/bilder/banner.png" alt="FlowForge Werkbank" width="100%"></p>
 
 Eine Windows-Desktop-App, mit der Nicht-Programmierer per Drag & Drop
 Coding-Workflows aus Blöcken bauen — Angreifer, Bauer, Prüfer, Sessionende … —
@@ -7,88 +7,60 @@ Rechte-Rückfragen und einem Laufbericht, der ehrlich sagt, was passiert ist.
 
 Ich bin Georg, ich programmiere nicht. Den gesamten Code hat Claude geschrieben,
 Schritt für Schritt nach [BAUPLAN.md](BAUPLAN.md); was die App heute tut, steht
-in [SPEC.md](SPEC.md) — dort ganz oben auch die Schaubilder zum ganzen System.
-Diese beiden Dateien sind die Dokumentation; dieses README verweist nur.
+in [SPEC.md](SPEC.md). Diese beiden Dateien sind die Dokumentation; dieses README
+zeigt Bilder und verweist.
 
-## Die Idee in einem Bild
+## So arbeitet FlowForge
 
-Man legt Block-Karten auf ein Schaubild und zieht Pfeile. Jeder Block ist ein
-Arbeitsauftrag für einen frischen KI-Agenten; was er **braucht** und was er
-**liefert**, ist an der Karte sichtbar und wird beim Stecken geprüft — ein
-Prüfer ohne Arbeitspaket lässt sich gar nicht erst starten.
+<img src="docs/bilder/ueberblick.png" alt="So arbeitet FlowForge: Du baust das Schaubild — FlowForge steuert und erzwingt — der Motor arbeitet — du siehst, was passiert ist" width="100%">
 
-```mermaid
-flowchart TB
-    K["Kontext laden<br/><i>liefert: Projektkontext</i>"] --> P["Paket schneiden<br/><i>liefert: Arbeitspaket je Ziel</i>"]
-    P --> A["Angreifer <small>(nur lesend)</small><br/><i>liefert: Angriffsliste</i>"]
-    A --> B1["Bauer · Daten<br/><i>braucht: Arbeitspaket, Angriffsliste</i>"]
-    A --> B2["Bauer · Oberfläche<br/><i>braucht: Arbeitspaket, Angriffsliste</i>"]
-    B1 --> PR["Prüfer<br/><i>braucht: Arbeitspaket · liefert: Prüfbeleg</i>"]
-    B2 --> PR
-    PR -- "bestanden" --> S["Sessionende<br/><i>Karten auf Stand, Vorschlag fürs nächste Paket</i>"]
-    PR -. "Beanstandung → Reparatur-Runde" .-> B1
-    PR -. "Beanstandung → Reparatur-Runde" .-> B2
-```
+Die Werkbank ist nicht der Arbeiter: FlowForge bekommt keine Tokens, entscheidet
+aber alles, was zählt — Reihenfolge, Sperren, Sicherungspunkte, Reparatur-Runden.
+Die KI ist die offizielle Claude Code CLI, über das Agent SDK im Hintergrund
+gestartet; sie bekommt Block für Block genau einen Auftrag.
 
-Zwei Bauer mit getrennten Dateilisten arbeiten gleichzeitig (eine „Welle"); ein
-Prüfer urteilt nie über einen halben Stand. Schlägt er fehl, schickt FlowForge
-den Bauer mit den Beanstandungen zurück — mechanisch, ohne dass die KI darüber
-entscheidet.
+## Die Werkbank in Bildern
 
-## Wie es unter der Haube läuft
+**Das Schaubild.** Block-Karten auf der Leinwand, Pfeile bestimmen die
+Reihenfolge. An jeder Karte steht, was der Block **braucht** und **liefert**, und
+woher es kommt („← Paket schneiden"); ein Prüfer ohne Arbeitspaket lässt sich gar
+nicht erst starten. Der rote Prüf-Block schickt den Bauer bei Rot zurück
+(„Fehlschlag, 2 Runden") — mechanisch, ohne dass die KI darüber entscheidet.
 
-FlowForge ist die Werkbank, nicht der Arbeiter. Die KI kommt aus der offiziellen
-Claude Code CLI, die FlowForge über das Claude Agent SDK im Hintergrund startet.
-FlowForge behält Reihenfolge, Sperren, Sicherungspunkte und Prüfer-Urteile
-selbst in der Hand; der Agent bekommt Block für Block genau einen Auftrag.
+<img src="docs/bilder/schaubild.png" alt="Schaubild: Paket schneiden → Angreifer → Bauer → Prüfer → Sessionende, mit braucht/liefert-Chips und Rückführungspfeil" width="100%">
 
-```mermaid
-flowchart TB
-    subgraph App["FlowForge (Electron)"]
-        direction TB
-        UI["Oberfläche<br/>Schaubild · Live-Ticker · Laufberichte · Karten · Co-Pilot"]
-        Steuer["Lauf-Steuerung<br/>Reihenfolge & Wellen · Sperren am Werkzeugaufruf ·<br/>Sicherungspunkte (Git, unsichtbar) · Lieferschein-Prüfung · Laufbericht"]
-        UI <--> Steuer
-    end
-    subgraph Motor["KI-Motor: Claude Code CLI über das Agent SDK"]
-        direction TB
-        Ko["Koordinator (Haiku)<br/>startet je Block einen frischen Agenten, sammelt Fazite"]
-        Ag["Block-Agent (Opus / Sonnet / Haiku je Block)<br/>Werkzeuge: lesen, schreiben, Befehle, Unteraufgaben"]
-        Ko --> Ag
-    end
-    Steuer <== "↓ Auftrag je Block, Ja/Nein je Werkzeugaufruf<br/>↑ Werkzeugaufrufe, Lieferschein, Verbrauch" ==> Motor
-    Ag <--> Projekt[("Projektordner<br/>Code · Karten · Prüfmappe")]
-    Ag -. "optional: Recherche, Entwürfe,<br/>Bau-Teilaufträge" .-> Ollama["Lokale Helfer-KI (Ollama)<br/>kostet kein Kontingent"]
-    Mensch(["Mensch"]) <-- "Rechte-Rückfragen, Folgen-Fragen,<br/>Gespräch, Stopp" --> UI
-```
+**Die Projektansicht nach einem Lauf.** Links die Karten (Status, Aufgaben,
+Entscheidungen, Wissen — vom Sessionende gepflegt), in der Mitte der Laufbericht
+mit Tokens, Modell, lokaler Helfer-KI, den Blöcken und jeder Rechte-Rückfrage
+samt Antwort, rechts die Blockbibliothek.
 
-Und so sieht ein einzelner Block im Lauf aus — das Wichtige ist, **wer entscheidet**:
+<img src="docs/bilder/werkbank-laufbericht.png" alt="Projektansicht mit Karten-Seitenleiste, Laufbericht und Blockbibliothek" width="100%">
 
-```mermaid
-sequenceDiagram
-    participant F as FlowForge
-    participant M as Motor (Koordinator → Agent)
-    participant P as Projektordner
-    participant G as Georg
-    Note over F,P: Stand ist gesichert — Punkt vor dem Lauf bzw. nach dem letzten schreibenden Block
-    F->>M: Auftrag „Bauer": Arbeitspaket + Angriffsliste + Vorspann (wer bekommt dein Ergebnis, wozu)
-    loop je Werkzeugaufruf
-        M->>F: will schreiben / Befehl ausführen
-        alt harte Sperre (Git, Verwaltungsdateien, „nur lesen", fremdes Revier)
-            F-->>M: abgelehnt, mit Begründung
-        else außerhalb des Rahmens (Internet, außerhalb des Projektordners)
-            F->>G: Rückfrage in Alltagssprache
-            G-->>F: erlaubt / abgelehnt
-        else im Rahmen
-            F-->>M: erlaubt
-            M->>P: liest, schreibt, testet
-        end
-    end
-    M->>F: Lieferschein (geprüfte Felder, kein Freitext-Fazit)
-    F->>F: Felder prüfen — fehlt etwas, genau eine Nachforderung
-    F->>P: Sicherungspunkt „Bauer fertig"
-    F->>F: Startanleitung ausführen, Rauchtest — dann der nächste Block
-```
+**Rechte des Agenten.** Drei Stufen, die FlowForge je Werkzeugaufruf durchsetzt:
+ohne Rückfrage · nur mit deiner Erlaubnis · immer gesperrt. Der Automodus betrifft
+nur die mittlere Spalte — die harten Sperren gelten immer.
+
+<p align="center"><img src="docs/bilder/rechte.png" alt="Projekt-Einstellungen: Rechte des Agenten in drei Spalten" width="860"></p>
+
+**Sicherungspunkte.** Vor dem Lauf und nach jedem schreibenden Block — technisch
+Git, für dich eine Liste mit „Wiederherstellen" (mit Vorschau, selbst wieder
+rückgängig). Aus zwei Punkten rechnet FlowForge den Diff, den die Reparatur-Runde
+bekommt.
+
+<p align="center"><img src="docs/bilder/sicherungspunkte.png" alt="Sicherungspunkte-Liste mit Wiederherstellen-Knöpfen" width="860"></p>
+
+**Metriken.** Nicht was es kostet, sondern was es taugt: Prüfer besteht beim
+ersten Mal, Reparatur-Runden je Lauf, Rückfragen je Lauf — und die Trefferquote
+der lokalen KI. Kein Agent bekommt diese Zahlen zu sehen.
+
+<img src="docs/bilder/metriken.png" alt="Metriken-Seite: lokale KI, Motor, wie gut trägt das Gerüst, je Kette" width="100%">
+
+**Projektübersicht und erster Start.** Läuft etwas, liegt der Lauf als große
+Kachel obenauf; beim allerersten Start fragt FlowForge, wie sich der Motor
+anmelden soll (siehe unten).
+
+<img src="docs/bilder/projektuebersicht.png" alt="Projektübersicht mit Kacheln" width="100%">
+<img src="docs/bilder/erststart.png" alt="Erststart-Dialog: Abo-Login oder API-Schlüssel" width="100%">
 
 Was FlowForge **erzwingt**, statt darum zu bitten (die Lehre aus dem Vorgängerprojekt,
 in dem Regeln nur als Text im Prompt standen):
@@ -144,7 +116,9 @@ steht nicht im Bauplan — die fachlichen Schritte gehen vor.
 
 Aus dem Quellcode: `npm install`, `npm run dev` (Entwicklung) bzw.
 `npm run installer` (Setup-Datei nach `dist/`). `npm test` fährt die
-Regel-Prüfungen in `pruefungen/`.
+Regel-Prüfungen in `pruefungen/`. Die Bilder in `docs/bilder/` sind Screenshots
+der App; Banner und Überblick rendert `npm run schaubilder` aus
+`tools/schaubilder/` mit den Schriften und Farben der App.
 
 ## Abo oder API-Schlüssel
 
