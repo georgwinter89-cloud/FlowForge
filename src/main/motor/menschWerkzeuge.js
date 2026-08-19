@@ -22,8 +22,7 @@ export async function menschWerkzeugServer({ aufMenschFrage }) {
       frage: z
         .string()
         .describe('Die Frage an den Nutzer — Alltagssprache, Folgen statt Technik'),
-      optionen: liste(z.string())
-        .max(4)
+      optionen: liste(z.string(), 4)
         .optional()
         .describe(
           '2 bis 4 kurze Antwort-Optionen, die Empfehlung zuerst und als solche benannt. ' +

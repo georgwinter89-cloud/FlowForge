@@ -2032,9 +2032,17 @@ export function starteLaufMotor(optionen) {
       }
     }
   })()
-  // Fehler der Schleife selbst (z.B. beim Start) landen im offenen Block —
-  // unbeobachtete Ablehnungen soll es nie geben.
-  schleife.catch(() => {})
+  // Fehler der Schleife selbst (z.B. beim Server-Aufbau VOR dem try) dürfen
+  // den Motor nicht still sterben lassen: Ohne diesen Fänger bliebe tot=false,
+  // blockAusfuehren wartete ewig, und der Lauf hinge für immer am ersten Block
+  // (Befund Prüfer 2, Bauschritt 50 — ein TypeError beim Werkzeug-Schema).
+  schleife.catch((fehler) => {
+    tot = true
+    eingabeSchliessen()
+    blockAufloesen('fehlgeschlagen', {
+      fehlertext: String(fehler?.message ?? texte.fehler.unbekannt)
+    })
+  })
 
   return {
     // Führt genau einen Block in der Lauf-Session aus: Der Koordinator
@@ -2579,7 +2587,14 @@ export function starteChatMotor(optionen) {
       }
     }
   })()
-  schleife.catch(() => {})
+  // Gleiches Netz wie beim Lauf-Motor: Stirbt die Schleife vor dem try (z.B.
+  // Server-Aufbau), darf die offene Chat-Nachricht nicht ewig hängen.
+  schleife.catch((fehler) => {
+    tot = true
+    aufloesen('fehlgeschlagen', {
+      fehlertext: String(fehler?.message ?? texte.fehler.unbekannt)
+    })
+  })
 
   return {
     // Schickt eine Chat-Nachricht (Text oder Inhalts-Blöcke mit Bildern) und

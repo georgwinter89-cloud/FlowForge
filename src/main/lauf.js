@@ -46,6 +46,7 @@ import {
   vorspannText,
   vorspannZeile,
   rueckfuehrungsZiel,
+  schaubildHinweise,
   zwischenBloecke,
   budgetNehmen,
   budgetAusStand,
@@ -1820,6 +1821,11 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
   // (der Lauf endet dann gleich als Fehlschlag, s. Planer).
   if (lokal) tickern(texte.ticker.lokalBereit(lokal.modell, lokal.kontext))
   else if (lokalFehler) tickern(lokalFehler)
+  // Lokaler Prüfer ohne Claude-Abnahme (BAUPLAN 50): Hinweis, keine Sperre
+  // („Rückfrage statt Sperre") — steht im Ticker und damit im Laufbericht,
+  // derselbe Befund wie an der Karte und im Schaubild-Kopf (schaubildHinweise).
+  for (const hinweis of schaubildHinweise(workflow.bloecke, workflow.pfeile))
+    tickern(texte.ticker.lokalerPrueferOhneAbnahme(hinweis.name))
   if (pruefmappeGeleert) tickern(texte.ticker.pruefmappeGeleert)
   if (pruefkartenEingelegt > 0) tickern(texte.ticker.pruefkartenEingelegt(pruefkartenEingelegt))
   // Baseline (BAUPLAN 35): schon vor dem ersten Block gemessen, hier erst
@@ -2387,6 +2393,11 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
                 torProtokoll: nk.torProtokoll,
                 pruefbefehlNachforderung: nk.pruefbefehlNachforderung,
                 rauchtestRueckmeldung: nk.rauchtestRueckmeldung,
+                // Tor-Anker des lokalen Prüfers (BAUPLAN 50): Urteil und
+                // Tor-Ausgang überleben die Wiederaufnahme — die Abnahme liest
+                // sonst „kein Nachspiel", obwohl nachgespielt wurde.
+                urteilLokal: nk.urteilLokal ?? null,
+                torBestaetigung: nk.torBestaetigung ?? null,
                 // Vollständigkeit des Zuschnitts (BAUPLAN 44): Ein offener
                 // Nachtrag überlebt den App-Neustart — sonst liefe der Block
                 // erneut, ohne zu erfahren, was ihm fehlt.
@@ -2498,6 +2509,9 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           // Tor ohne KI (BAUPLAN 35): ebenso tolerant gegenüber alten
           // Laufständen — ohne Eintrag läuft alles wie vor diesem Schritt.
           if (typeof kante.torProtokoll === 'string') nk.torProtokoll = kante.torProtokoll
+          // Tor-Anker (BAUPLAN 50) — tolerant: alte Laufstände haben die Felder nicht.
+          if (typeof kante.urteilLokal === 'string') nk.urteilLokal = kante.urteilLokal
+          if (typeof kante.torBestaetigung === 'string') nk.torBestaetigung = kante.torBestaetigung
           // Seit BAUPLAN 42 ein Ja/Nein: Der Prüfbeleg, den der Prüfer beim
           // Nachtragen wiederholen soll, steckt in meldungenVorher.
           nk.pruefbefehlNachforderung = Boolean(kante.pruefbefehlNachforderung)
@@ -3099,6 +3113,12 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       // Prüfbefehl vor, prüft FlowForge zuerst selbst nach. Ist es rot, ist
       // dieser Block-Anlauf hier schon zu Ende — ohne Motor, ohne Tokens.
       if (k.def.prueft && k.nachpruefung) {
+        // Abnahme (BAUPLAN 50): Endet dieser Anlauf schon am Vor-Tor, baut
+        // niemand den Auftrag neu — die Quellen des letzten Auftragsbaus
+        // trügen dann einen veralteten Tor-Ausgang des lokalen Partners.
+        // Dieselben Partner, frisch gelesen.
+        if (k.abnahmeQuellen?.length)
+          k.abnahmeQuellen = k.abnahmeQuellen.map((q) => abnahmeQuelleVon(q.instanzId) ?? q)
         const torErgebnis = await torAbspielen(k)
         if (torErgebnis) {
           // Auch das Tor liefert eine Meldung — sie ersetzt die des letzten
@@ -3632,7 +3652,10 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       k.urteilLokal = urteil ? 'bestanden' : 'fehlgeschlagen'
       k.torBestaetigung = null
       if (!urteil) return { ...ergebnis, urteilLokal: k.urteilLokal, torBestaetigung: null }
-      if (k.torGruenBefehl) {
+      // Nur überspringen, wenn der Prüfer in diesem Anlauf keinen NEUEN
+      // Prüfbefehl hinterlegt hat (Befund Prüfer 1, Bauschritt 50): Sonst
+      // gälte ein nie gespielter Befehl als „mechanisch bestätigt".
+      if (k.torGruenBefehl && pruefbefehlLaden(projektPfad, k.eintrag.instanzId) === k.torGruenBefehl) {
         k.torBestaetigung = 'gruen'
         tickern(texte.ticker.torBestaetigtLokal(k.name))
         return { ...ergebnis, urteilLokal: k.urteilLokal, torBestaetigung: 'gruen' }
@@ -4819,10 +4842,14 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
             widerspruch: paar.widerspruch
           }
         const lokalName = knoten.get(paar.instanzId)?.name ?? paar.block
+        // Kam das Urteil aus dem Vor-Tor der Abnahme, hat kein Agent gelesen —
+        // der Ticker sagt es ehrlich statt „Abnahme widerspricht".
         tickern(
-          paar.widerspruch
-            ? texte.ticker.abnahmeWiderspricht(k.name, lokalName, paar.urteilLokal, urteilAbnahme)
-            : texte.ticker.abnahmeBestaetigt(k.name, lokalName, urteilAbnahme)
+          durchTor
+            ? texte.ticker.abnahmeDurchTor(k.name, lokalName, paar.urteilLokal, urteilAbnahme)
+            : paar.widerspruch
+              ? texte.ticker.abnahmeWiderspricht(k.name, lokalName, paar.urteilLokal, urteilAbnahme)
+              : texte.ticker.abnahmeBestaetigt(k.name, lokalName, urteilAbnahme)
         )
       }
     }

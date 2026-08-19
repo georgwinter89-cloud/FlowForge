@@ -22,6 +22,12 @@ export function listeAusText(wert) {
   }
 }
 
-export function liste(element) {
-  return z.preprocess(listeAusText, z.array(element))
+// deckel (optional): Höchstzahl der Einträge. Er MUSS hier hinein, denn die
+// Rückgabe ist ein ZodPipe — `.max()` gibt es dort nicht, und genau so ein
+// nachgestelltes `liste(...).max(4)` warf beim Server-Aufbau einen TypeError,
+// der jeden Motorstart der gebauten App still verschluckte (Befund Prüfer 2,
+// Bauschritt 50; der Wurf lag vor dem try des Motors).
+export function liste(element, deckel = null) {
+  const feld = deckel ? z.array(element).max(deckel) : z.array(element)
+  return z.preprocess(listeAusText, feld)
 }

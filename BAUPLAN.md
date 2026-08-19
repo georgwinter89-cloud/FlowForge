@@ -991,6 +991,41 @@ beim Bauer „lokal (qwen…)" und in den Metriken eine eigene Zeile dafür.
   nachgespielt, das Urteil hängt nicht allein an seiner Urteilskraft.
 - Metrik „Urteil lokal vs. Abnahme Opus" (wie oft widerspricht die Abnahme?) — das ist die
   Zahl, an der Georg entscheidet, ob der lokale Prüfer bleibt.
+- **Gebaut (19.08.2026):** Tor-Anker in knotenAusfuehren (Messung torMessen aus torAbspielen
+  herausgelöst; Rot dreht das Urteil mechanisch, die Tor-Meldung ersetzt den Beleg; kein
+  doppeltes Abspielen nach grünem Vor-Tor, außer der Prüfer hat einen NEUEN Prüfbefehl
+  gesetzt); Abnahme-Erkennung beim Auftragsbau (abnahmeQuellen aus uebergabenAuswahl, Zusatz
+  „du bist die Abnahme" hinter dem Beleg, vor einem durchTor-Anlauf frisch gelesen); Bericht-
+  Felder urteilLokal/torBestaetigung/abnahme/abnahmeFuer (wandern in den Laufstand); Steck-
+  Hinweis ohne Sperre (kettenRegeln.schaubildHinweise, Karte + Schaubild-Kopf + Start-Ticker,
+  Knopf „Abnahme-Prüfer einfügen" = abnahmeKarteEinfuegen); rueckfuehrungsZiel-Standard =
+  nächster NICHT-prüfender Vorfahre; Vorlage „Feature hinzufügen · lokal" (Vorlagen-Glieder
+  tragen jetzt modell/zusatz/zurueckZu); Metrik abnahmeAuswerten (zwei Kacheln + Tabelle
+  lokales Modell × Abnahme-Modell; je Paar zählt nur das erste Agenten-Urteil der Abnahme,
+  durchTor zählt nicht).
+- **Messwerte der Bausession (19.08.2026, 1 Angreifer, 2 Bauer mit Vertrag, 2 Prüfer, Integrator):**
+  - Prüfer 1 (Mechanik, 24 Wegwerf-Prüfungen am echten Ablaufplaner): Drehung, Altlasten,
+    kein Prüfbefehl, Fan-in (zwei lokale Prüfer vor einer Abnahme → 2 Paare), Rückführung
+    der Abnahme zum Bauer (auch ohne gespeicherte Wahl), Verdrängung am Sessionende — alles
+    bestanden; 3 Befunde nachgearbeitet (neuer Prüfbefehl nach grünem Vor-Tor wird jetzt
+    gespielt; abnahmeQuellen vor dem Vor-Tor frisch; urteilLokal/torBestaetigung im Laufstand,
+    eigener Ticker-Text abnahmeDurchTor).
+  - Prüfer 2 (Ende-zu-Ende, gebaute App, eigener Datenordner): Vorlage per Drag & Drop korrekt;
+    Hinweis + Knopf an der Karte, Einfügen hängt Pfeile um; echter Lauf Paket schneiden →
+    Bauer (lokal) → Prüfer (lokal) → Prüfer · Abnahme (Sonnet) → Sessionende: 1457 s
+    (33/422/914/56/28), Tor-Anker grün, Abnahme bestätigt, beide Urteile im Bericht und in
+    den Metrik-Kacheln, lokale Blöcke Kosten 0.
+  - **Kritischer Fund (Prüfer 2): 0.49.0 war im Installer funktionsunfähig** — das in
+    Bauschritt 49 eingeführte `liste(z.string()).max(4)` (menschWerkzeuge) warf beim
+    Server-Aufbau einen TypeError VOR dem try des Motors, schleife.catch verschluckte ihn:
+    kein Motor startete, jeder Lauf hing still am ersten Block (die 49er-Messläufe liefen
+    vor diesem Commit). Behoben: liste(element, deckel); die Motor-Schleife löst den offenen
+    Block bei einem Schleifen-Fehler jetzt als Fehlschlag auf (Lauf- und Chat-Motor); neue
+    Prüfung baut jeden Werkzeug-Server wirklich. **Georg muss 0.50.0 installieren — 0.49.0
+    startet keine Läufe.**
+  - Offen (bewusst, Schwere 3): In der Kette lokal → lokal → Abnahme trägt der ERSTE lokale
+    Prüfer immer den Hinweis (sein Beleg wird vom zweiten verdrängt — konsistent mit dem
+    Lauf); Bibliothek-Klappentitel überlappt beim Scrollen (vorbestehend, kosmetisch).
 **Alltagstest:** Kette Bauer (lokal) → Prüfer (lokal) → Prüfer (Opus) → Sessionende; der
 Laufbericht zeigt beide Urteile nebeneinander.
 

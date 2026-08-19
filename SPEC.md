@@ -158,6 +158,13 @@ Sitzungen hinweg Software entsteht — ohne dass dem Agenten der Kontext überl�
     **ein lokaler Block zur Zeit** (§5). Der Ticker nennt „lokal (<Ollama-Modell>)";
     Laufbericht und Metriken führen die Klasse „lokal (Ollama)" und das Ollama-Modell als
     eigene Modellzeile, mit „Denktiefe: gilt hier nicht" und „Kosten: keine" (§3, §3.4).
+    **Lokaler Prüfer mit Opus-Abnahme** (seit Bauschritt 50): Auch der Prüfer darf lokal
+    laufen — sein Urteil hängt dann an zwei Ankern: dem **Tor-Anker** (sein Prüfbefehl wird
+    nach einem „bestanden" mechanisch nachgespielt, Rot dreht das Urteil; §4.1) und der
+    **Abnahme** durch einen Claude-Prüfer dahinter (Zweitaudit-Muster; §4.3). Fehlt die
+    Abnahme, sagt es das Schaubild als Hinweis ohne Sperre; die Vorlage „Feature hinzufügen ·
+    lokal" (§4.4) bringt sie mit. Die Metrik „Urteil lokal vs. Abnahme" (§3.4) ist die Zahl,
+    an der Georg entscheidet, ob der lokale Prüfer bleibt.
   - **V2-Motoren:** eigene Agenten-Kreisläufe gegen beliebige Anbieter-APIs. Der
     lokale Weg ist keine V2-Arbeit mehr, sondern die zweite Motor-Instanz mit
     Ollama-Umgebung (seit Bauschritt 49 gebaut). Die restliche App merkt nicht,
@@ -281,7 +288,14 @@ als „Modell: nicht vermerkt". Seit 0.48.1 steht darunter je Block die **gewäh
 Klasse und Denktiefe** („Klasse: Extra (Fable 5) · Denktiefe: xhigh (wirksam: xhigh)") —
 die Wahl an der Karte neben dem, was der Motor gemeldet hat; bei Klassen ohne Denktiefe
 (Haiku, lokal) steht „Denktiefe: gilt hier nicht". Bei einem lokalen Block (Bauschritt 49)
-ersetzt „Kosten: keine — lief auf deiner lokalen KI" die theoretischen API-Kosten. Ebenfalls seit Bauschritt 36 führt der Bericht die
+ersetzt „Kosten: keine — lief auf deiner lokalen KI" die theoretischen API-Kosten. Seit
+Bauschritt 50 stehen bei einem **lokalen Prüfer** sein eigenes Urteil und das Ergebnis des
+Tor-Ankers nebeneinander („Urteil des lokalen Prüfers: bestanden · Tor ohne KI: grün / rot —
+mechanisch gedreht / kein Prüfbefehl"), dazu die Zeile der **Abnahme** („Abnahme durch ‚Prüfer ·
+Abnahme': bestätigt / widerspricht"); am Eintrag des Abnahme-Prüfers steht je lokalem Partner
+„lokal ‚bestanden' · Abnahme ‚fehlgeschlagen' — Widerspruch", mit Tor-Kurzwort und dem Vermerk,
+wenn das Urteil der Abnahme aus ihrem eigenen Vor-Tor kam. Widersprüche sind farblich
+hervorgehoben; Berichte von vor Bauschritt 50 tragen die Zeilen nicht. Ebenfalls seit Bauschritt 36 führt der Bericht die
 **Zusammenfassungen des Motors** als eigenen Abschnitt (der Motor dampft ein volles
 Arbeitsgedächtnis selbst ein — das erklärt später, warum ein Agent Details vergessen
 hat). Seit Bauschritt 27 vermerkt der Bericht
@@ -496,6 +510,15 @@ Seite aufs Projekt vorgefiltert zeigt (eigener Baustein, nicht Teil der Leinwand
   Reparatur-Runden, Dauer und die von Ollama gemeldeten Tokens — bei **Kosten 0**
   (die erfundenen CLI-Kosten verwirft der Motor), Denktiefe leer. So sieht Georg, ob
   sich die Karte rechnet: Tokens und Zeit statt Dollar.
+- **Lokaler Prüfer × Abnahme** (seit Bauschritt 50): zwei Kacheln in der Harness-Reihe —
+  **„Abnahme widerspricht dem lokalen Prüfer"** (Paare lokaler Prüfer → Claude-Abnahme,
+  davon Widersprüche, Quote) und **„Tor widerspricht dem lokalen Prüfer"** (Nachspiele des
+  Prüfbefehls nach einem lokalen „bestanden", davon rot) — dazu eine Tabelle lokales
+  Modell × Abnahme-Modell (Paare, einig, Widersprüche, Quote). Aus den Laufberichten
+  gerechnet (§3.2, keine zweite Wahrheit): je lokalem Prüfer und Abnahme zählt nur das
+  **erste** Urteil der Abnahme im Lauf; Reparatur-Runden und Urteile aus dem Vor-Tor der
+  Abnahme zählen nicht. Ohne Paare steht „—" statt 0. Das ist die Zahl, an der Georg
+  entscheidet, ob der lokale Prüfer bleibt.
 - **Zusatznamen zerfasern die Metriken nicht** (seit Bauschritt 41): Der Laufbericht
   führt Katalognamen und **Zusatzname** (§4.1) getrennt. Gezählt wird ausschließlich
   der Katalogname — „Bauer · Datenbank" und „Bauer · Oberfläche" sind derselbe
@@ -599,7 +622,14 @@ Seite aufs Projekt vorgefiltert zeigt (eigener Baustein, nicht Teil der Leinwand
   vorübergehend in Stücke zerfallen (z.B. um einen Block herauszunehmen); die
   braucht/liefert-Steck-Prüfung greift, sobald die Pfeile wieder alle Karten zu einem
   zusammenhängenden Schaubild verbinden — und spätestens beim Start, der immer streng
-  prüft. Parallelität **innerhalb** eines Blocks gibt es beim Audit (seit Bauschritt 25):
+  prüft. **Hinweis ohne Sperre** (seit Bauschritt 50, „Rückfrage statt Sperre"): Steht ein
+  Prüfer der Klasse „lokal" ohne **Claude-Abnahme** — kein nicht-lokaler Prüf-Block bekommt
+  seinen Prüfbeleg als Eingang (Sessionende und Gesamtprüfung zählen nicht, ein zweiter
+  lokaler Prüfer auch nicht) —, zeigt das Schaubild es an der Karte (mit Knopf
+  **„Abnahme-Prüfer einfügen"**, der einen Standard-Prüfer „Abnahme" dahinter einhängt: seine
+  Pfeile übernimmt die neue Karte, Rückführung auf das Ziel des lokalen Prüfers) und als
+  ⚠-Zeile im Schaubild-Kopf; der Laufstart lehnt nicht ab, sondern schreibt den Hinweis in
+  den Ticker. Parallelität **innerhalb** eines Blocks gibt es beim Audit (seit Bauschritt 25):
   Sein Agent startet die drei Blickwinkel-Prüfer als gleichzeitige Unteraufgaben —
   ob der Motor sie wirklich parallel ausführt, entscheidet das Modell; sonst laufen
   sie nacheinander (jede Unteraufgabe steht sichtbar im Ticker, seit Bauschritt 25
@@ -648,6 +678,21 @@ Seite aufs Projekt vorgefiltert zeigt (eigener Baustein, nicht Teil der Leinwand
   Beanstandungen nach; was seine Tests abdecken, gilt mit Grün als erledigt. Nach einer
   lokalen Vorreparatur bleibt es bewusst bei der vollen Nachprüfung (ein kleines Modell
   könnte den Test statt des Codes angefasst haben). Ohne Prüfbefehl läuft alles wie zuvor.
+  **Tor-Anker des lokalen Prüfers** (seit Bauschritt 50): Meldet ein Prüfer der Klasse
+  „lokal" (§2) **„bestanden"**, spielt FlowForge seinen Prüfbefehl noch im selben Anlauf
+  einmal ohne KI ab — sein Urteil hängt nicht allein an seiner Urteilskraft. Grün oder nur
+  Altlasten: bestätigt (Ticker „Tor-Anker: … grün"). Rot mit neuen Fehlerzeilen: FlowForge
+  **dreht das Urteil mechanisch auf „fehlgeschlagen"** (die Tor-Zeilen werden seine
+  Beanstandungen, das Protokoll geht ans Rückführungs-Ziel, eine reguläre Reparatur-Runde
+  wird verbraucht — wie beim Vor-Tor); das selbst gemeldete Urteil bleibt im Laufbericht
+  daneben stehen. Kein Prüfbefehl hinterlegt: keine mechanische Bestätigung möglich, der
+  Ticker sagt es, das Urteil gilt ungeprüft. War das Vor-Tor einer Nachprüfung in diesem
+  Anlauf schon grün, wird nicht doppelt abgespielt (es zählt als bestätigt). Meldet der
+  lokale Prüfer „fehlgeschlagen", gibt es kein Nachspiel. Ehrliche Grenzen: Prüfkarte und
+  Prüfbefehl-Archiv entstehen nach dem bestätigten lokalen „bestanden" auch dann, wenn die
+  Abnahme (§4.3) später widerspricht; nach einer Wiederaufnahme aus dem Laufstand liest die
+  Abnahme „kein Nachspiel"; Drehung und Abnahme-Fehlschlag können zwei Reparatur-Runden
+  desselben Ziels verbrauchen.
   Standard **2 Reparatur-Runden** (pro Workflow verstellbar) — seit Bauschritt 41
   **je Rückführungs-Ziel** statt je Lauf: Zwei Prüfer hinter zwei Bauern aßen sich
   sonst die Runden gegenseitig weg, und der zweite Zweig bekam die Folgen-Frage,
@@ -655,6 +700,10 @@ Seite aufs Projekt vorgefiltert zeigt (eigener Baustein, nicht Teil der Leinwand
   eine Folgen-Frage („Weitermachen, zurückstellen oder Stand wiederherstellen?"). Im
   Verzweigten laufen genau die Blöcke auf den Wegen von X zum Prüfer erneut — parallele
   Zweige daneben behalten ihr Ergebnis; als Ziel wählbar sind alle Vorfahren des Prüfers.
+  Ohne gespeicherte Wahl gilt seit Bauschritt 50 der **nächste nicht-prüfende Vorfahre**
+  als Ziel (Rückfall: der nächste Vorfahre) — ein Prüfer hinter einem Prüfer (Zweitaudit,
+  Abnahme) schickt damit zum Bauer zurück, nicht zum Prüfer davor, der nichts repariert;
+  das Auswahlfeld an der Karte und der gestrichelte Bogen zeigen denselben Standard.
   Seit Bauschritt 36 ist der Weg zurück **im Schaubild sichtbar**: ein gestrichelter,
   roter Bogen vom Prüfer zu seinem Ziel, beschriftet mit „bei Fehlschlag, 2 Runden"
   (bei 0 Runden: „es folgt sofort die Folgen-Frage").
@@ -1037,7 +1086,17 @@ Vorspann des ersten Prüfers nennt ihn als Empfänger, und sein Auftrag sagt ihm
 den vorliegenden Beleg nachzuprüfen (Stichproben, Beanstandungen nachvollziehen)
 statt alles zu wiederholen. Da er das Etikett damit braucht und liefert, greift
 am gemeinsamen Empfänger die Verdrängung durch Weiterverarbeitung (oben,
-„Übergaben"). Die Gesamtprüfung nimmt keinen Prüfbeleg an.
+„Übergaben"). Die Gesamtprüfung nimmt keinen Prüfbeleg an. **Abnahme eines lokalen
+Prüfers** (seit Bauschritt 50): Stammt der vorliegende Prüfbeleg von einem Prüfer der
+Klasse „lokal" (§2), ist der Claude-Prüfer dahinter seine **Abnahme** — sein Auftrag
+nennt Block und Ollama-Modell des lokalen Prüfers, das Ergebnis von dessen Tor-Anker
+(§4.1: grün, Altlasten, gedreht, kein Prüfbefehl) und die Ansage, nichts ungeprüft zu
+übernehmen (ein kleines Modell übersieht Fehler und erklärt Dinge für geprüft, die es
+nicht angefasst hat); sein Rückführungs-Ziel ist standardmäßig der Bauer (§4.1). Ticker
+und Laufbericht stellen beide Urteile nebeneinander („Abnahme: ‚Prüfer · Abnahme'
+widerspricht dem lokalen Prüfer ‚Prüfer' — lokal ‚bestanden', Abnahme ‚fehlgeschlagen'"),
+die Metriken zählen die Paare (§3.4). Liegen der Abnahme die Belege mehrerer lokaler
+Prüfer vor (Fan-in), gilt das je Partner.
 
 **Prüfordner je Prüf-Instanz** (seit Bauschritt 41): Die Prüfmappe `pruefung/`
 bleibt die gemeinsame Werkbank des Laufs, aber jeder **schreibende** Prüfer
@@ -1394,17 +1453,21 @@ erscheint. Die Einklapp-Zustände merkt FlowForge je Projekt im Datenordner (§3
 | **Neue App starten** | Nur das Spec-Interview (grillt den Nutzer, erzeugt erste Karten) — Entscheidung Georg, 07.08.2026: Spec-Erfassung getrennt vom Bauen; gebaut wird danach mit „Feature hinzufügen" |
 | **Feature hinzufügen** | Paket schneiden → Angreifer → Bauer → Prüfer → Sessionende |
 | **Bug jagen** | Diagnose (Ursache belegen, bevor etwas angefasst wird) → Bauer (minimaler Fix) → Prüfer mit Rot-vor-Grün → Sessionende |
+| **Feature hinzufügen · lokal** (seit Bauschritt 50) | Paket schneiden → Angreifer → Bauer **(lokal)** → Prüfer **(lokal)** → Prüfer · Abnahme (Standard, Rückführung zum Bauer) → Sessionende — Opus an den Enden, die lokale KI in der Mitte; die Vorlage bringt die Pflicht-Abnahme hinter dem lokalen Prüfer mit (§2, §4.3) |
 
 Ohne „Kontext laden" (Entscheidung Georg, 12.08.2026): Jeder Block liest ohnehin
 selbst im Projekt — ein eigener Einlese-Block kostete nur eine volle Extra-Session.
 Der Block bleibt in der Bibliothek; Paket schneiden und Diagnose verlangen den
 Projekt-Überblick nicht mehr (nur noch „falls da", z.B. vom Spec-Interview).
 
-Alle drei Vorlagen sind verfügbar (seit Bauschritt 9) — als ziehbare Vorlagen
+Alle Vorlagen sind verfügbar (seit Bauschritt 9; die lokale seit Bauschritt 50) — als ziehbare Vorlagen
 in der Blockbibliothek. Liegt schon ein Schaubild auf der Leinwand, ersetzt die
 Vorlage es nach einer Rückfrage — so folgt auf das Spec-Interview direkt die
 Bau-Vorlage auf derselben Leinwand. „Bug jagen" ersetzt Paket schneiden +
-Angreifer durch die Diagnose.
+Angreifer durch die Diagnose. Seit Bauschritt 50 darf ein Vorlagen-Glied neben dem Block
+eine **Modellklasse, einen Zusatznamen und ein Rückführungs-Ziel** tragen (die Bibliothek
+zeigt es als „Bauer (lokal)", „Prüfer · Abnahme"); die Vorlage legt diese Werte je Karte ab,
+umstellbar wie jede Karte.
 
 ### 4.5 Block-Editor (seit Bauschritt 14)
 

@@ -3499,6 +3499,10 @@ export const texte = {
       `Abnahme: „${abnahmeName}" bestätigt das Urteil „${urteil}" des lokalen Prüfers „${lokalName}".`,
     abnahmeWiderspricht: (abnahmeName, lokalName, urteilLokal, urteilAbnahme) =>
       `Abnahme: „${abnahmeName}" widerspricht dem lokalen Prüfer „${lokalName}" — lokal „${urteilLokal}", Abnahme „${urteilAbnahme}".`,
+    // Das Urteil der Abnahme kam aus ihrem eigenen Vor-Tor (Reparatur-Runde),
+    // kein Agent hat den Beleg gelesen — ehrlich benannt, zählt in der Metrik nicht.
+    abnahmeDurchTor: (abnahmeName, lokalName, urteilLokal, urteilAbnahme) =>
+      `Abnahme: Das Urteil „${urteilAbnahme}" von „${abnahmeName}" kam aus ihrem Vor-Tor ohne KI (lokaler Prüfer „${lokalName}": „${urteilLokal}") — kein Agent hat den Beleg gelesen.`,
     // Steck-Hinweis beim Laufstart (keine Sperre): Ein lokaler Prüfer ohne
     // Claude-Prüfer dahinter prüft ohne Abnahme — der Lauf startet trotzdem.
     lokalerPrueferOhneAbnahme: (name) =>

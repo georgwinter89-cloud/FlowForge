@@ -60,7 +60,7 @@ vi.mock('../src/main/einstellungen.js', async (importOriginal) => {
         einstellungen: {
           ...einstellungen,
           motorModus: 'api',
-          apiSchluessel: 'sk-ant-pruefung',
+          apiSchluessel: 'pruef-schluessel',
           lokaleHelferAktiv: true,
           lokalBlockAgent: true,
           lokaleHelferModell: 'qwen3.8:27b',
