@@ -1,6 +1,6 @@
 # FlowForge — Produkt-Spezifikation V1
 
-Stand: 19.08.2026 (Bauschritt 47) · Ursprung: Grilling-Session vom 07.08.2026 (von Georg freigegeben) ·
+Stand: 19.08.2026 (Bauschritt 48) · Ursprung: Grilling-Session vom 07.08.2026 (von Georg freigegeben) ·
 fortlaufend gepflegt — dieses Dokument beschreibt die Gegenwart, Verhaltensänderungen
 werden hier nachgezogen (Historie liefert git).
 
@@ -588,7 +588,11 @@ Name · Symbol · **Arbeitsauftrag** (Anweisung an den Agenten) · **braucht / l
 **„wozu"** (ein Satz aus der Sicht dieses Blocks, gelesen wird er vom Lieferanten —
 §4.3 Auftrags-Vorspann) · optionale **Sperren**
 („darf nur lesen", „Pflichtfeld leer = Lauf hält an") · **Modellklasse** (§2) ·
-Kennzeichen **„führt zusammen"** (§4.3 „Integrator", seit Bauschritt 47).
+Kennzeichen **„führt zusammen"** (§4.3 „Integrator", seit Bauschritt 47) und die weiteren
+Katalog-Kennzeichen (§4.5, seit Bauschritt 48 auch für eigene Blöcke) · optionale
+**braucht-Etiketten** („falls da") · **Formularfelder** an der Blockkarte.
+Ein **Etikett** ist seit Bauschritt 48 ein Eintrag der Etiketten-Bibliothek (§4.5) mit
+eindeutigem Namen und optionaler **Form** (bis zu acht Felder, §4.3 Lieferschein).
 Der **Zusatzname** (§4.1) gehört nicht zum Block, sondern zu seiner Karte im
 Schaubild — derselbe Block darf mehrfach mit verschiedenen Zusatznamen liegen.
 
@@ -819,7 +823,12 @@ Laufstart steht das Schaubild fest, also registriert FlowForge genau die
 Melde-Werkzeuge, die diese Kette braucht — **eines je liefert-Etikett**
 (`melde_arbeitspaket`, `melde_pruefbeleg`, `melde_umsetzungsbericht`,
 `melde_angriffsliste`, `melde_befundliste`), für alles Übrige den Rahmen
-`melde_ergebnis`. Freigeschaltet ist je Block nur das zu seinem Etikett passende;
+`melde_ergebnis`. Eigene Etiketten **mit Feldern** (§4.5 Etiketten-Bibliothek, seit
+Bauschritt 48) bekommen ein eigenes Werkzeug (`melde_<name>`), das den Rahmen plus
+ihre Felder trägt; Pflichtfelder und Auswahlwerte prüft FlowForge wie bei den festen
+Teilen (Abweisung im Ticker, der Agent korrigiert), und die Meldung bleibt
+selbsttragend lesbar (Bezeichnung + Wert je Feld), auch wenn das Etikett später
+geändert wird. Freigeschaltet ist je Block nur das zu seinem Etikett passende;
 ein fremdes löst die übliche Rechte-Rückfrage aus. Gemeinsamer Rahmen für alle:
 `fazit` (ein Satz für Ticker, Blockkarte und Bericht), `getan`, `offen` und
 `anmerkung` — das Freifeld gegen die Formular-Falle, für alles, was in kein Feld
@@ -1305,7 +1314,8 @@ Angreifer durch die Diagnose.
 
 - Nutzer kann eigene Blöcke **erstellen, bearbeiten, löschen** — als Formular entlang der
   Block-Anatomie (§4.2). Eigene Blöcke gelten **global** (Abschnitt „Eigene Blöcke" in der
-  Bibliothek jedes Projekts); sie sind nie Prüfer und haben keine Formularfelder. Seit
+  Bibliothek jedes Projekts); bis Bauschritt 47 waren sie nie Prüfer und hatten keine
+  Formularfelder — seit Bauschritt 48 können sie alles, was ein Katalog-Block kann (unten). Seit
   Bauschritt 30 wählt jeder eigene Block eine **Kategorie** in der Bibliothek (eine der
   vier festen, „Eigene" oder eine frei benannte, höchstens 30 Zeichen — global gespeichert
   wie der Block selbst; Altbestand ohne Kategorie liegt unter „Eigene") und seit
@@ -1323,8 +1333,31 @@ Angreifer durch die Diagnose.
   braucht-Etikett lehnt der Editor das Häkchen mit Begründung ab — es gäbe nichts, was
   mehrfach ankommen könnte. Der KI-Assistent kennt das Feld und schlägt es nur vor,
   wenn der Block mehrere gleichartige Lieferungen zu einer machen soll.
+- **Alle Kennzeichen für eigene Blöcke** (seit Bauschritt 48, Regel „Kein Kennzeichen ohne
+  Editor-Feld"): In Schritt 3 wählt Georg die **Rolle** (darf nur lesen · prüft · führt zusammen)
+  und das Modell; darunter liegen zugeklappt die **Feinheiten** — Prüfbefehl-Pflicht,
+  Startanleitungs-Pflicht (macht den Block zum Bau-Block: Rauchtest, alle Baselines, lokale
+  Bauhilfe), teilt Karten zu (Auftragsquelle: Zuteilung, Paket melden, Zuschnitt-Vollständigkeit),
+  legt Aufgaben-Karten an (zählt als Auftragsquelle, darf Karten trotz „nur lesen" anlegen),
+  schlägt Karten vor, schlägt den nächsten Lauf vor, Unteraufgaben wie der Block, Audit-Hinweis
+  (nur der Kosten-Hinweis im Ticker). Jedes Häkchen trägt einen Folgen-Hinweis; `uebung` bleibt
+  Katalog-Blöcken vorbehalten (kein Können, sondern „Demo-Block"). Eine
+  **Verträglichkeitsprüfung** lehnt beim Speichern mit Klartext ab, was strukturell nicht
+  zusammengeht: prüft + nur lesen (kann keine Tests schreiben); prüft ohne „Prüfbeleg" in liefert
+  (das Urteil käme nie an); Prüfbefehl-Pflicht ohne prüft; Startanleitungs-Pflicht + nur lesen;
+  teilt Karten zu ohne „Arbeitspaket" in liefert; führt zusammen ohne braucht; ein Formularfeld,
+  das nicht als {{id}} im Auftrag steht. Der Editor zieht beim Anhaken die Folgen nach (prüft an →
+  nur lesen aus und „Prüfbeleg" ergänzt; teilt Karten zu → „Arbeitspaket" ergänzt; Prüfbefehl-
+  Pflicht → prüft an; Startanleitungs-Pflicht → nur lesen aus) und entfernt beim Abwählen nichts.
+  Schritt 2 kennt zusätzlich **braucht — falls da** (optionale Übergaben wie `brauchtOptional` im
+  Katalog, mit Wozu-Satz; ein Etikett steht nie in beiden Listen) und bis zu **drei
+  Formularfelder** an der Blockkarte (Bezeichnung ≤ 60, Platzhalter-Text ≤ 120, Pflicht; die
+  Kennung entsteht aus der Bezeichnung, bleibt nach dem Speichern eingefroren — sonst verwürfe
+  das Schaubild eingetippte Werte — und muss als {{id}} im Auftrag stehen; fremde {{x}} ohne Feld
+  sind nur ein Hinweis). Der KI-Assistent schlägt Kennzeichen, optionale Etiketten und Felder vor
+  und begründet jedes gesetzte Kennzeichen in einem Satz, der im Editor neben dem Häkchen steht.
 - **Erstellungsassistent in 4 Schritten:** Was soll der Block tun? → Was braucht/liefert er? →
-  Sperren („darf nur lesen", „führt zusammen") und Modellklasse → Probelauf-Vorschau (der exakte
+  Rolle, Feinheiten & Modell → Probelauf-Vorschau (der exakte
   Arbeitsauftrag, den der Agent bekäme). Eine **Stepper-Leiste** zeigt die Schritte
   (erledigte sind anklickbar), und die Blockkarte liegt auf allen Schritten als
   **Live-Vorschau** rechts daneben — so, wie sie in der Bibliothek läge. Bearbeiten
@@ -1339,6 +1372,29 @@ Angreifer durch die Diagnose.
   Leinwand liegt, lässt sich nicht löschen (Hinweis nennt die Projekte — sonst würde er
   beim nächsten Laden stillschweigend aus dem Schaubild fallen). Ändern ist gesperrt,
   solange ein Projekt mit diesem Block läuft oder in der Warteschlange wartet.
+- **Etiketten-Bibliothek** (seit Bauschritt 48): Etiketten (braucht/liefert) sind eigene
+  Einträge, nicht mehr nur Zeichenketten — jedes mit Kennung, **eindeutigem Namen** (ohne
+  Groß/Klein- und Leerzeichen-Unterschied, auch gegen den Katalog) und **optionaler Form**:
+  bis zu acht flache Felder (Satz, mehrzeiliger Text, Liste oder Auswahl mit festen Werten; je
+  Pflicht oder nicht; die Rahmen-Namen fazit/getan/offen/anmerkung/etikett/inhalt sind als
+  Feld-Schlüssel gesperrt). Ohne Form ist ein Etikett nur ein Name (der Block meldet über den
+  Rahmen plus Freitext); mit Form meldet der liefernde Block genau diese Felder (§4.3
+  Lieferschein). In der Blockbibliothek liegt die Klappe **„Etiketten"** mit allen
+  Katalog-Etiketten (Marke „Katalog", bei den fünf festen „feste Felder", „genutzt von: …") und
+  den eigenen; ein Editor mit KI-Assistent (schlägt Felder vor) und Klartext-Gegenlesen („So
+  liest es der Agent") legt eigene an und ändert sie. Eigene Etiketten gelten global wie eigene
+  Blöcke (Datenordner). Katalog-Etiketten sind weder änder- noch löschbar — die lockeren lassen
+  sich **kopieren** (die Kopie ist ein neues Etikett; Katalog-Blöcke kennen es nicht, es steckt
+  nur an Blöcke mit genau diesem Namen). Ein Etikett anzulegen bleibt Tippen: Wer einem eigenen
+  Block ein unbekanntes Etikett gibt, bekommt es beim Speichern automatisch als Etikett ohne
+  Form angelegt (Marke „automatisch, aus Block X"); abweichende Schreibweisen bekannter
+  Etiketten werden auf die gespeicherte gezogen — der Editor sagt beides nach dem Speichern.
+  **Umbenennen** zieht in allen eigenen Blöcken nach (braucht, falls da, liefert, Wozu-Sätze);
+  **Löschen** ist gesperrt, solange ein eigener Block das Etikett nutzt (Hinweis nennt die
+  Blöcke), Name- oder Formänderung, solange ein Projekt mit einem solchen Block läuft oder
+  wartet. Bekannte Grenze: Ändert man Name oder Form, während ein unterbrochener Lauf
+  wiederaufnehmbar ist, fordert FlowForge den betroffenen Block nach der Wiederaufnahme einmal
+  nach (seine alte Meldung trägt den alten Namen).
 - Import/Export von Blöcken: V2.
 
 ## 5. Sessions & Autonomie

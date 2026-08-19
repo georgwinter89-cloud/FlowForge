@@ -6,9 +6,12 @@ import {
   BEREICH_EIGENE,
   blockKategorie,
   blockDefinition,
-  blockBereich
+  blockBereich,
+  katalogEtiketten
 } from '../../shared/blockKatalog.js'
 import { useKlappen, Klappe } from './klappen.jsx'
+// Etiketten-Bibliothek (SPEC §4.5, BAUPLAN 48): Inhalt der Klappe „Etiketten".
+import EtikettenBibliothek from './EtikettenBibliothek.jsx'
 
 const t = texte.kette
 const tp = texte.projektansicht
@@ -100,18 +103,33 @@ export function bereichName(bereich) {
 // Klappen-Schlüssel für die gemerkten Zustände (main/klappen.js).
 const KLAPPE_VORLAGEN = 'bib:vorlagen'
 const KLAPPE_UEBUNG = 'bib:uebung'
+// Etiketten (BAUPLAN 48, K17): eigener Schlüssel, nicht 'bib:etiketten' — der
+// kollidierte mit einer freien Kategorie „etiketten" eigener Blöcke.
+const KLAPPE_ETIKETTEN = 'bib:etikett-bibliothek'
 const klappeSchluessel = (bereich) => 'bib:' + bereich
 
 // Blockbibliothek in Klappen (BAUPLAN 30), nach der Aufgabe im Ablauf:
 // Vorlagen · Auftrag finden · Bauen · Prüfen · Gedächtnis · Eigene · [je freie
-// Kategorie eigener Blöcke eine Klappe, alphabetisch] · Übung (standardmäßig
-// zu). Eigene Blöcke (SPEC §4.5, BAUPLAN 14) kommen als Liste von der
-// Projektansicht — sie hält den Stand und öffnet den Block-Editor. Eigene
-// Blöcke mit Katalog-Bereich liegen hinter den Katalog-Blöcken ihrer Klappe.
-// `pfad` = Projektpfad für die gemerkten Klappen-Zustände (ohne pfad: nur
-// Standardzustand, nichts wird gespeichert).
-export default function Blockbibliothek({ pfad, eigene, onNeuerBlock, onBearbeiten, onLoeschen }) {
-  const [istOffen, umschalten] = useKlappen(pfad, [KLAPPE_UEBUNG])
+// Kategorie eigener Blöcke eine Klappe, alphabetisch] · Etiketten (BAUPLAN 48,
+// standardmäßig zu) · Übung (standardmäßig zu). Eigene Blöcke (SPEC §4.5,
+// BAUPLAN 14) kommen als Liste von der Projektansicht — sie hält den Stand und
+// öffnet den Block-Editor; dasselbe gilt für die eigenen Etiketten und den
+// Etikett-Editor. Eigene Blöcke mit Katalog-Bereich liegen hinter den
+// Katalog-Blöcken ihrer Klappe. `pfad` = Projektpfad für die gemerkten
+// Klappen-Zustände (ohne pfad: nur Standardzustand, nichts wird gespeichert).
+export default function Blockbibliothek({
+  pfad,
+  eigene,
+  onNeuerBlock,
+  onBearbeiten,
+  onLoeschen,
+  etiketten = [],
+  onNeuesEtikett,
+  onEtikettBearbeiten,
+  onEtikettLoeschen,
+  onEtikettKopieren
+}) {
+  const [istOffen, umschalten] = useKlappen(pfad, [KLAPPE_UEBUNG, KLAPPE_ETIKETTEN])
   const uebungsbloecke = BLOCK_KATALOG.filter((b) => b.uebung)
 
   // Eigene Blöcke je Bereich einsortieren; freie Kategorien alphabetisch.
@@ -210,6 +228,36 @@ export default function Blockbibliothek({ pfad, eigene, onNeuerBlock, onBearbeit
           ))}
         </Klappe>
       ))}
+
+      {/* Etiketten-Bibliothek (SPEC §4.5, BAUPLAN 48): Katalog-Etiketten und
+          eigene — mit Knopf für ein neues Etikett. Der Zähler zählt alles,
+          was in der Klappe liegt (wie die anderen Klappen); der Knopf heißt
+          kurz „+ Neu", sonst schnitt er den Klappentitel ab (Prüfer-Befund). */}
+      <Klappe
+        titel={texte.etiketten.klappeTitel}
+        anzahl={katalogEtiketten().length + etiketten.length}
+        offen={istOffen(KLAPPE_ETIKETTEN)}
+        onUmschalten={() => umschalten(KLAPPE_ETIKETTEN)}
+        rechts={
+          onNeuesEtikett && (
+            <button
+              className="knopf-primaer knopf-klein"
+              title={texte.etiketten.neuesEtikett}
+              onClick={onNeuesEtikett}
+            >
+              + {texte.etiketten.neuKnopf}
+            </button>
+          )
+        }
+      >
+        <EtikettenBibliothek
+          etiketten={etiketten}
+          eigene={eigene}
+          onBearbeiten={onEtikettBearbeiten}
+          onLoeschen={onEtikettLoeschen}
+          onKopieren={onEtikettKopieren}
+        />
+      </Klappe>
 
       <Klappe
         titel={bereichName('uebung')}

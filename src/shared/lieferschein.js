@@ -22,10 +22,16 @@
 import { texte } from './texte.js'
 import { TITEL_MAX, TEXT_MAX } from './kartenRegeln.js'
 import { zielFuerAdresse } from './kettenRegeln.js'
+import { eigenesEtikett, eigeneEtikettenListe } from './blockKatalog.js'
 
 // Ein Werkzeug je liefert-Etikett, nicht je Blocksorte: Die MCP-Server werden
 // einmal je Motor gebaut und ein Lauf-Motor bedient alle Blöcke (BAUPLAN 19) —
 // ein Werkzeug, das sein Schema je Block wechselt, ist damit unmöglich.
+//
+// Die Namen dieser fünf Etiketten führt blockKatalog.js als FESTE_ETIKETTEN
+// (BAUPLAN 48) — es darf diese Datei nicht importieren (Kreis über
+// kettenRegeln.js), braucht die Menge aber für die Etiketten-Bibliothek. Eine
+// Prüfung (pruefungen/etiketten.test.js) hält beide Mengen gleich.
 export const FESTE_TEILE = {
   Arbeitspaket: { werkzeug: 'melde_arbeitspaket', art: 'arbeitspaket' },
   Prüfbeleg: { werkzeug: 'melde_pruefbeleg', art: 'pruefbeleg' },
@@ -58,8 +64,25 @@ export const URTEILE = ['bestanden', 'fehlgeschlagen']
 export const SCHWEREN = ['hoch', 'mittel', 'niedrig']
 export const DATEI_ARTEN = ['neu', 'geaendert', 'geloescht']
 
+// Der Teil eines Etiketts: fest aus dem Katalog — oder, seit der Etiketten-
+// Bibliothek (BAUPLAN 48), ein eigenes Etikett MIT Feldern: Es trägt sein
+// persistiertes Werkzeug und seine Form (Art 'eigen'). Ein eigenes Etikett ohne
+// Felder hat keinen Teil und läuft wie bisher über den Rahmen.
 export function teilFuerEtikett(etikett) {
-  return FESTE_TEILE[etikett] ?? null
+  const fest = FESTE_TEILE[etikett]
+  if (fest) return fest
+  const eigen = eigenesEtikett(etikett)
+  if (eigen?.werkzeug && Array.isArray(eigen.felder) && eigen.felder.length > 0)
+    return { werkzeug: eigen.werkzeug, art: 'eigen', etikett: eigen.name, felder: eigen.felder }
+  return null
+}
+
+// Die eigenen Etiketten, die ein Werkzeug tragen (Form mit Feldern) — für
+// Werkzeug-Server und Art-Auflösung.
+function eigeneTeile() {
+  return eigeneEtikettenListe().filter(
+    (e) => e?.werkzeug && Array.isArray(e.felder) && e.felder.length > 0
+  )
 }
 
 // Die Etiketten dieses Blocks ohne eigenes Werkzeug — sie laufen über den
@@ -96,7 +119,15 @@ export function werkzeugeFuerKette(defs) {
 export function artFuerWerkzeug(werkzeug) {
   if (werkzeug === RAHMEN_WERKZEUG) return 'rahmen'
   for (const teil of Object.values(FESTE_TEILE)) if (teil.werkzeug === werkzeug) return teil.art
+  // Eigenes Etikett mit Feldern (BAUPLAN 48): sein persistiertes Werkzeug.
+  if (eigeneTeile().some((e) => e.werkzeug === werkzeug)) return 'eigen'
   return null
+}
+
+// Das eigene Etikett zu einem Werkzeugnamen (BAUPLAN 48) — null für Rahmen
+// und feste Werkzeuge. Der Werkzeug-Server baut daraus die Felder.
+export function eigenesEtikettFuerWerkzeug(werkzeug) {
+  return eigeneTeile().find((e) => e.werkzeug === werkzeug) ?? null
 }
 
 // Welches Etikett meldet dieser Block mit dem festen Werkzeug? Es gilt genau
@@ -667,24 +698,81 @@ function rahmenTeilPruefen(roh) {
   return { teil: { inhalt: freierText(roh?.inhalt, false) } }
 }
 
+// Eigenes Etikett mit Feldern (BAUPLAN 48): Ebene 2 für eine Form, die Georg
+// selbst definiert hat. Die Form kommt aus der Registry (eigenesEtikett), die
+// Regeln sind dieselben wie bei den festen Teilen: Pflicht gefüllt (Text nicht
+// leer, Liste mindestens ein Eintrag, Auswahl gesetzt), Auswahl nur aus den
+// erlaubten Werten (ohne Groß/Klein; gespeichert wird der kanonische Wert),
+// keine Längen- oder Anzahl-Grenzen. Die Auswahl prüft ALLEIN diese Ebene
+// (K12): Eine Schema-Ablehnung liefe am Ticker vorbei, hier steht sie sichtbar.
+//
+// Die Meldung ist SELBSTTRAGEND: Sie trägt je Feld Schlüssel, Bezeichnung, Art
+// und Wert — wird das Etikett später umbenannt oder umgebaut, bleibt der alte
+// Laufbericht lesbar, ohne dass jemand die damalige Form nachschlagen müsste.
+// Leere optionale Felder stehen mit leerem Wert drin; Text und Anzeige lassen
+// sie weg.
+function eigenPruefen(roh, _umfeld, etikett) {
+  const tl = texte.lieferschein
+  const te = texte.lieferscheinEtiketten
+  const def = eigenesEtikett(etikett)
+  const form = Array.isArray(def?.felder) ? def.felder : []
+  if (!def || form.length === 0) return { fehler: te.etikettOhneForm(String(etikett ?? '')) }
+  const felder = []
+  for (const feld of form) {
+    const schluessel = feld.schluessel
+    // Im Fehlertext beides: den Schlüssel (so heißt das Feld im Werkzeug) und
+    // die Bezeichnung (so heißt es für Georg im Ticker) — Prüfer-Befund 48.
+    const name =
+      feld.bezeichnung && feld.bezeichnung !== schluessel
+        ? schluessel + ' („' + feld.bezeichnung + '")'
+        : schluessel
+    const rohWert = roh?.[schluessel]
+    let wert
+    if (feld.art === 'liste') {
+      wert = zeilenListe(rohWert)
+      if (feld.pflicht && wert.length === 0) return { fehler: tl.feldFehlt(name) }
+    } else if (feld.art === 'auswahl') {
+      const gewaehlt = einzeilig(rohWert)
+      if (!gewaehlt) {
+        if (feld.pflicht) return { fehler: tl.feldFehlt(name) }
+        wert = ''
+      } else {
+        const werte = Array.isArray(feld.werte) ? feld.werte : []
+        const treffer = werte.find((w) => w.toLowerCase() === gewaehlt.toLowerCase())
+        if (!treffer) return { fehler: te.auswahlUngueltig(name, werte) }
+        wert = treffer
+      }
+    } else {
+      wert = feld.art === 'langtext' ? mehrzeilig(rohWert) : einzeilig(rohWert)
+      if (feld.pflicht && !wert) return { fehler: tl.feldFehlt(name) }
+    }
+    felder.push({ schluessel, bezeichnung: feld.bezeichnung, art: feld.art, wert })
+  }
+  return { teil: { felder } }
+}
+
 const TEIL_PRUEFER = {
   rahmen: rahmenTeilPruefen,
   arbeitspaket: arbeitspaketPruefen,
   pruefbeleg: pruefbelegPruefen,
   umsetzungsbericht: umsetzungsberichtPruefen,
-  funde: fundePruefen
+  funde: fundePruefen,
+  eigen: eigenPruefen
 }
 
 // Die eine Stelle, an der eine Meldung geprüft wird — für Werkzeug und
 // Prüfskripte gleichermaßen. `umfeld` (BAUPLAN 44) reicht durch, was nur der
 // Lauf weiß: `ziele` sind die benannten Ziele des rufenden Blocks, gegen die
-// eine Zieladresse validiert wird. Liefert { fehler } oder { meldung }.
+// eine Zieladresse validiert wird. Das Etikett geht an die Teil-Prüfer weiter
+// (K11, BAUPLAN 48) — nur die Art 'eigen' liest es (ihre Form hängt am
+// Etikett), die festen Prüfer ignorieren den dritten Parameter. Liefert
+// { fehler } oder { meldung }.
 export function meldungPruefen(art, roh, etikett = null, umfeld = null) {
   const pruefer = TEIL_PRUEFER[art]
   if (!pruefer) return { fehler: texte.lieferschein.unbekannteArt(String(art)) }
   const rahmen = rahmenPruefen(roh)
   if (rahmen.fehler) return rahmen
-  const teil = pruefer(roh, umfeld)
+  const teil = pruefer(roh, umfeld, etikett)
   if (teil.fehler) return teil
   return { meldung: { art, etikett: etikett ?? null, ...rahmen.rahmen, ...teil.teil } }
 }
@@ -786,6 +874,12 @@ export function lieferscheinText(meldung, zielSchluessel = undefined) {
     text += meldung.funde.length
       ? abschnitt(tl.labels.funde, meldung.funde.map(fundZeile))
       : tl.keineFunde + '\n'
+  } else if (meldung.art === 'eigen') {
+    // Eigenes Etikett mit Feldern (BAUPLAN 48): je Feld „Bezeichnung: Wert",
+    // Listen und mehrzeilige Texte als Abschnitt; leere optionale Felder weg.
+    for (const { bezeichnung, zeilen } of eigeneFelderZeilen(meldung))
+      text +=
+        zeilen.length === 1 ? `${bezeichnung}: ${zeilen[0]}\n` : abschnitt(bezeichnung, zeilen)
   } else if (meldung.inhalt) {
     text += meldung.inhalt + '\n'
   }
@@ -793,6 +887,26 @@ export function lieferscheinText(meldung, zielSchluessel = undefined) {
   text += abschnitt(tl.labels.offen, meldung.offen)
   if (meldung.anmerkung) text += `${tl.labels.anmerkung}:\n${meldung.anmerkung}\n`
   return text.trim()
+}
+
+// Die Felder einer Meldung der Art 'eigen' als Anzeige-Zeilen (BAUPLAN 48,
+// K4): [{ bezeichnung, zeilen: [] }] — Liste → ihre Einträge, mehrzeiliger
+// Text → seine Zeilen, Satz/Auswahl → eine Zeile; leere optionale Felder
+// fallen weg. Reine Hilfsfunktion für Blockkarte und Laufbericht (Leinwand.jsx)
+// und für lieferscheinText — beide zeigen damit dieselben Zeilen.
+export function eigeneFelderZeilen(meldung) {
+  const ergebnis = []
+  for (const feld of Array.isArray(meldung?.felder) ? meldung.felder : []) {
+    let zeilen
+    if (Array.isArray(feld?.wert)) zeilen = feld.wert.filter(Boolean)
+    else {
+      const text = String(feld?.wert ?? '').trim()
+      zeilen = text ? text.split('\n').map((z) => z.trimEnd()) : []
+    }
+    if (zeilen.length === 0) continue
+    ergebnis.push({ bezeichnung: String(feld?.bezeichnung ?? feld?.schluessel ?? ''), zeilen })
+  }
+  return ergebnis
 }
 
 // --- Was FlowForge aus einer Meldung liest -----------------------------------

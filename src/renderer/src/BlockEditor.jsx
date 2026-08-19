@@ -17,6 +17,16 @@ import {
   BEREICH_MAX,
   BRAUCHT_WOZU_MAX,
   ETIKETTEN_MAX,
+  FORMULARFELDER_MAX,
+  FELD_LABEL_MAX,
+  FELD_PLATZHALTER_MAX,
+  KENNZEICHEN,
+  KENNZEICHEN_ROLLE,
+  KENNZEICHEN_FEINHEITEN,
+  PRUEFBELEG_ETIKETT,
+  feldIdBereinigen,
+  fremdePlatzhalter,
+  kennzeichenAngleichen,
   pruefeBereich
 } from '../../shared/blockRegeln.js'
 import { BlockChips, bereichName } from './Blockbibliothek.jsx'
@@ -36,12 +46,24 @@ function Zaehler({ wert, max }) {
 
 // braucht/liefert als Chips mit Eingabefeld — Vorschläge sind die Etiketten
 // der vorhandenen Blöcke, damit eigene Blöcke zu ihnen zusammenstecken.
-function EtikettenFeld({ label, hinweis, etiketten, onAendern, datalistId, vorschlaege }) {
+// `ausgeschlossen` (BAUPLAN 48): Etiketten der Schwester-Liste (braucht ↔
+// braucht — falls da) — ein Etikett ist Pflicht ODER optional, nie beides.
+function EtikettenFeld({
+  label,
+  hinweis,
+  etiketten,
+  onAendern,
+  datalistId,
+  vorschlaege,
+  ausgeschlossen = [],
+  optional = false
+}) {
   const [eingabe, setEingabe] = useState('')
 
   function hinzufuegen() {
     const wert = eingabe.trim()
     if (!wert || etiketten.includes(wert) || etiketten.length >= ETIKETTEN_MAX) return
+    if (ausgeschlossen.includes(wert)) return
     onAendern([...etiketten, wert])
     setEingabe('')
   }
@@ -51,7 +73,10 @@ function EtikettenFeld({ label, hinweis, etiketten, onAendern, datalistId, vorsc
       <span>{label}</span>
       <div className="chip-zeile">
         {etiketten.map((etikett) => (
-          <span key={etikett} className="block-chip chip-braucht">
+          <span
+            key={etikett}
+            className={'block-chip chip-braucht' + (optional ? ' chip-optional' : '')}
+          >
             {etikett}
             <button
               className="chip-entfernen"
@@ -77,7 +102,7 @@ function EtikettenFeld({ label, hinweis, etiketten, onAendern, datalistId, vorsc
         />
         <datalist id={datalistId}>
           {vorschlaege
-            .filter((v) => !etiketten.includes(v))
+            .filter((v) => !etiketten.includes(v) && !ausgeschlossen.includes(v))
             .map((v) => (
               <option key={v} value={v} />
             ))}
@@ -95,7 +120,8 @@ function EtikettenFeld({ label, hinweis, etiketten, onAendern, datalistId, vorsc
 // Editor-Feld"): ein einzeiliges Freitext-Feld pro Etikett, direkt unter der
 // braucht-Liste. Der Satz landet im Auftrag des Blocks, der das Etikett
 // liefert — deshalb steht „Er …" als Anlauf im Label. Ohne Angabe greift im
-// Vorspann der ehrliche Rückfall-Satz, kein erfundenes Wozu.
+// Vorspann der ehrliche Rückfall-Satz, kein erfundenes Wozu. Seit BAUPLAN 48
+// auch für die optionalen Etiketten („falls da").
 function WozuFelder({ etiketten, wozu, onAendern }) {
   if (!etiketten.length) return null
   return (
@@ -117,6 +143,143 @@ function WozuFelder({ etiketten, wozu, onAendern }) {
   )
 }
 
+// Formularfelder an der Blockkarte (BAUPLAN 48, „Kein Kennzeichen ohne
+// Editor-Feld"): höchstens drei, je Bezeichnung · Platzhalter-Text · Pflicht.
+// Die Kennung (id) entsteht live aus der Bezeichnung — aber nur bei NEUEN
+// Feldern (Korrektur K5): Ein gespeichertes Feld behält seine id, auch wenn
+// die Bezeichnung sich ändert, sonst verwürfe das Schaubild die schon
+// eingetippten Werte stumm. Jedes Feld muss als {{id}} im Auftrag stehen —
+// der Knopf hängt die Zeile an, wenn sie fehlt; die harte Regel sitzt im
+// Hauptprozess. Fremde {{x}} ohne Feld sind nur ein Hinweis (K6).
+function FelderEditor({ felder, auftrag, onAendern, onEinfuegen }) {
+  function aendern(index, teil) {
+    onAendern(
+      felder.map((feld, i) => {
+        if (i !== index) return feld
+        const neu = { ...feld, ...teil }
+        if (!neu.eingefroren && 'label' in teil) neu.id = feldIdBereinigen(teil.label)
+        return neu
+      })
+    )
+  }
+  const fremde = fremdePlatzhalter(auftrag, felder)
+  return (
+    <div className="feld editor-formularfelder">
+      <span>{t.felderUeberschrift}</span>
+      <span className="feld-hinweis">{t.felderHinweis}</span>
+      {felder.map((feld, i) => {
+        const imAuftrag = Boolean(feld.id) && auftrag.includes('{{' + feld.id + '}}')
+        return (
+          <div key={i} className="editor-formularfeld">
+            <div className="feld-nebeneinander">
+              <label className="feld">
+                <span>{t.feldLabel}</span>
+                <input
+                  value={feld.label}
+                  onChange={(e) => aendern(i, { label: e.target.value })}
+                />
+                <Zaehler wert={feld.label} max={FELD_LABEL_MAX} />
+              </label>
+              <button
+                className="knopf-klein editor-formularfeld-entfernen"
+                title={t.feldEntfernen}
+                onClick={() => onAendern(felder.filter((_, j) => j !== i))}
+              >
+                ×
+              </button>
+            </div>
+            <label className="feld">
+              <span>{t.feldPlatzhalter}</span>
+              <input
+                value={feld.platzhalter}
+                onChange={(e) => aendern(i, { platzhalter: e.target.value })}
+              />
+              <Zaehler wert={feld.platzhalter} max={FELD_PLATZHALTER_MAX} />
+            </label>
+            <label className="feld feld-schalter">
+              <input
+                type="checkbox"
+                checked={feld.pflicht}
+                onChange={(e) => aendern(i, { pflicht: e.target.checked })}
+              />
+              <span>{t.feldPflicht}</span>
+            </label>
+            <div className="editor-formularfeld-id">
+              {feld.id ? (
+                <>
+                  <code>{t.feldIdHinweis(feld.id)}</code>
+                  {imAuftrag ? (
+                    <span className="feld-hinweis">{t.feldIdImAuftrag}</span>
+                  ) : (
+                    <>
+                      <button
+                        className="knopf-sekundaer knopf-klein"
+                        onClick={() => onEinfuegen(feld)}
+                      >
+                        {t.feldIdEinfuegen(feld.id)}
+                      </button>
+                      <span className="feld-hinweis zaehler-rot">
+                        {t.feldOhnePlatzhalterHinweis(feld.label)}
+                      </span>
+                    </>
+                  )}
+                </>
+              ) : (
+                <span className="feld-hinweis">{t.feldIdLeer}</span>
+              )}
+            </div>
+          </div>
+        )
+      })}
+      {felder.length < FORMULARFELDER_MAX && (
+        <div className="dialog-knoepfe knoepfe-links">
+          <button
+            className="knopf-sekundaer knopf-klein"
+            onClick={() =>
+              onAendern([
+                ...felder,
+                { id: '', label: '', platzhalter: '', pflicht: false, eingefroren: false }
+              ])
+            }
+          >
+            {t.feldHinzufuegen}
+          </button>
+        </div>
+      )}
+      {fremde.length > 0 && <span className="feld-hinweis">{t.fremderPlatzhalter(fremde)}</span>}
+    </div>
+  )
+}
+
+// Ein Kennzeichen-Häkchen (BAUPLAN 48): Name + Folgen-Hinweis aus
+// texte.blockEditor.kennzeichen (dieselbe Quelle wie der KI-Assistent),
+// darunter die „KI: …"-Begründung, falls der Assistent es vorgeschlagen hat,
+// und die Folgen-Sätze der Komfort-Reaktion beim Anhaken.
+function KennzeichenHaekchen({ schluessel, wert, onAendern, hinweise, kiSatz }) {
+  const k = t.kennzeichen[schluessel]
+  return (
+    <label className="feld feld-schalter">
+      <input
+        type="checkbox"
+        checked={wert}
+        onChange={(e) => onAendern(schluessel, e.target.checked)}
+      />
+      <span>
+        {k.name}
+        <span className="feld-hinweis">{k.hinweis}</span>
+        {kiSatz && (
+          <span className="feld-hinweis editor-feinheiten-ki">{t.kiBegruendung(kiSatz)}</span>
+        )}
+        {hinweise.map((satz) => (
+          <span key={satz} className="feld-hinweis editor-feinheiten-folge">
+            {satz}
+          </span>
+        ))}
+      </span>
+    </label>
+  )
+}
+
 // Gespeicherter Bereich → Text im Kategorie-Feld: Katalog-Schlüssel werden
 // als Anzeigename gezeigt, „eigene"/leer bleibt leer, freie Namen wie sie sind.
 function bereichAnzeige(bereich) {
@@ -127,20 +290,29 @@ function bereichAnzeige(bereich) {
 
 // Block-Editor mit KI-Assistent (SPEC §4.5, BAUPLAN 14): Erstellungsassistent
 // in 4 Schritten entlang der Block-Anatomie — Was tun? → braucht/liefert →
-// Sperren → Probelauf-Vorschau. Bearbeiten nutzt denselben Assistenten,
-// mit vorbefüllten Feldern. Die harte Prüfung passiert im Hauptprozess.
+// Rolle, Feinheiten & Modell → Probelauf-Vorschau. Bearbeiten nutzt denselben
+// Assistenten, mit vorbefüllten Feldern. Die harte Prüfung passiert im
+// Hauptprozess.
 export default function BlockEditor({ block, onSpeichern, onAbbrechen }) {
   const bearbeiten = Boolean(block)
   const [schritt, setSchritt] = useState(1)
   const [wunsch, setWunsch] = useState('')
   const [kiLaeuft, setKiLaeuft] = useState(false)
   const [fehler, setFehler] = useState('')
+  // Kennzeichen (BAUPLAN 48): alle als Boolean im State, flach wie im
+  // gespeicherten Block. Altbestand ohne Feld startet ohne Häkchen; ein neuer
+  // Block startet sicher mit „darf nur lesen".
+  const kennzeichenStart = {}
+  for (const { schluessel } of KENNZEICHEN) kennzeichenStart[schluessel] = Boolean(block?.[schluessel])
+  kennzeichenStart.nurLesen = block?.nurLesen ?? true
   const [werte, setWerte] = useState({
     name: block?.name ?? '',
     symbol: block?.symbol ?? '',
     beschreibung: block?.beschreibung ?? '',
     auftrag: block?.auftrag ?? '',
     braucht: block?.braucht ?? [],
+    // brauchtOptional (BAUPLAN 48): Übergaben „falls da".
+    brauchtOptional: block?.brauchtOptional ?? [],
     // Empfänger im Auftrag (BAUPLAN 43): Etikett → ein Satz. Altbestand ohne
     // Feld startet leer; beim Speichern fallen Sätze zu entfernten Etiketten
     // von selbst weg (pruefeEigenenBlock).
@@ -153,11 +325,20 @@ export default function BlockEditor({ block, onSpeichern, onAbbrechen }) {
     // Modellklasse (BAUPLAN 37): Voreinstellung des eigenen Blocks —
     // Altbestand ohne Feld läuft auf Standard.
     modell: blockModellKlasse(block),
-    nurLesen: block?.nurLesen ?? true,
-    // Führt zusammen (BAUPLAN 47, „Kein Kennzeichen ohne Editor-Feld"):
-    // Altbestand ohne Feld startet ohne Häkchen.
-    fuehrtZusammen: block?.fuehrtZusammen ?? false
+    ...kennzeichenStart,
+    // Formularfelder (BAUPLAN 48): gespeicherte Felder sind „eingefroren" —
+    // ihre id bleibt, auch wenn die Bezeichnung sich ändert (Korrektur K5).
+    felder: (block?.felder ?? []).map((feld) => ({ ...feld, eingefroren: true }))
   })
+  // Begründungen des KI-Assistenten je Kennzeichen (BAUPLAN 48) und die
+  // Folgen-Sätze der Komfort-Reaktionen beim Anhaken — beides nur Anzeige.
+  const [kiBegruendungen, setKiBegruendungen] = useState({})
+  const [hinweise, setHinweise] = useState({})
+  // Feinheiten zugeklappt, außer eines ist schon gesetzt (Bearbeiten) oder
+  // die KI hat eines vorgeschlagen.
+  const [feinheitenOffen, setFeinheitenOffen] = useState(
+    KENNZEICHEN_FEINHEITEN.some((s) => kennzeichenStart[s])
+  )
   const vorschlaege = bekannteEtiketten()
   // Vorschläge fürs Kategorie-Feld: feste Klappen (Anzeigename), „Eigene" und
   // die freien Kategorien vorhandener eigener Blöcke.
@@ -171,6 +352,63 @@ export default function BlockEditor({ block, onSpeichern, onAbbrechen }) {
     setWerte((alt) => ({ ...alt, [feld]: wert }))
   }
 
+  // Kennzeichen setzen (BAUPLAN 48) — Komfort, die Regel bleibt im
+  // Hauptprozess: Beim Anhaken zieht kennzeichenAngleichen die Folgen nach
+  // (prueft ⇒ nurLesen aus + „Prüfbeleg" in liefert; kartenZuteilung ⇒
+  // „Arbeitspaket"; pruefbefehlPflicht ⇒ prueft; startanleitungPflicht ⇒
+  // nurLesen aus) und sagt es unter dem Häkchen. Beim Abwählen wird nichts
+  // automatisch entfernt.
+  //
+  // „darf nur lesen" WIEDER anhaken, während „prüft" oder „Startanleitung ist
+  // Pflicht" gesetzt ist (Prüfer-Befund 48): Die Angleichung würde das Häkchen
+  // sofort und stumm wieder ausschalten — ein Klick ohne Wirkung und ohne
+  // Erklärung. Stattdessen bleibt der Klick stehen und der Satz darunter sagt,
+  // womit er sich beißt; beim Speichern lehnt die harte Regel mit Begründung ab
+  // (Rückfrage statt Sperre — Georg entscheidet, welches Häkchen geht).
+  function nurLesenKonflikt(w) {
+    if (!w.nurLesen) return []
+    const konflikte = ['prueft', 'startanleitungPflicht']
+      .filter((k) => w[k])
+      .map((k) => t.kennzeichen[k].name)
+    return konflikte.length ? [t.kennzeichenKonflikt(konflikte)] : []
+  }
+
+  function kennzeichenSetzen(schluessel, wert) {
+    const vorher = { ...werte, [schluessel]: wert }
+    if (!wert || schluessel === 'nurLesen') {
+      setWerte(vorher)
+      // Beim Abwählen verschwindet der eigene Satz; der Konflikt-Satz unter
+      // „nur lesen" wird neu gerechnet (weg, sobald das Gegenstück fehlt).
+      setHinweise((alt) => ({
+        ...alt,
+        [schluessel]: [],
+        nurLesen: nurLesenKonflikt(vorher)
+      }))
+      return
+    }
+    // Die Folgen-Sätze nur für das Häkchen, das sie wirklich auslöst (Prüfer-
+    // Befund 48): Die Angleichung rechnet immer alles durch — steht z.B. noch
+    // „Prüfbefehl ist Pflicht", zieht sie „prüft" auch dann nach, wenn gerade
+    // ein anderes Häkchen geklickt wurde; der Satz darunter nannte dann das
+    // falsche Häkchen.
+    const neu = kennzeichenAngleichen(vorher)
+    const name = t.kennzeichen[schluessel].name
+    const saetze = []
+    if (neu.prueft && !werte.prueft && schluessel === 'pruefbefehlPflicht')
+      saetze.push(t.kennzeichenPrueftAn(name))
+    if (
+      !neu.nurLesen &&
+      werte.nurLesen &&
+      ['prueft', 'pruefbefehlPflicht', 'startanleitungPflicht'].includes(schluessel)
+    )
+      saetze.push(t.kennzeichenNurLesenAus(name))
+    if (['prueft', 'pruefbefehlPflicht', 'kartenZuteilung'].includes(schluessel))
+      for (const etikett of neu.liefert)
+        if (!werte.liefert.includes(etikett)) saetze.push(t.kennzeichenErgaenzt(name, etikett))
+    setWerte(neu)
+    setHinweise((alt) => ({ ...alt, [schluessel]: saetze, nurLesen: nurLesenKonflikt(neu) }))
+  }
+
   async function kiAusfuellen() {
     if (kiLaeuft) return
     setFehler('')
@@ -181,27 +419,54 @@ export default function BlockEditor({ block, onSpeichern, onAbbrechen }) {
     // Der Assistent liefert den Bereich als Schlüssel — im Feld steht der Name.
     // Das „wozu" (BAUPLAN 43) füllt der Assistent nicht: Es steht nie leer da,
     // sondern fehlt ehrlich, bis der Nutzer es tippt.
-    // fuehrtZusammen (BAUPLAN 47) mit Rückfall false: Ein Vorschlag ohne das
-    // Feld darf das Häkchen nicht auf undefined setzen — die Checkbox kippte
-    // sonst von „gesteuert" auf „ungesteuert".
+    // Kennzeichen (BAUPLAN 48) mit Rückfall false: Ein Vorschlag ohne ein Feld
+    // darf kein Häkchen auf undefined setzen — die Checkbox kippte sonst von
+    // „gesteuert" auf „ungesteuert". Die Begründungen wandern neben die
+    // Häkchen; die KI-Felder sind neu (id läuft live mit der Bezeichnung).
+    const { begruendungen, ...vorschlag } = ergebnis.vorschlag
     setWerte({
       brauchtWozu: {},
-      ...ergebnis.vorschlag,
-      fuehrtZusammen: Boolean(ergebnis.vorschlag.fuehrtZusammen),
-      bereich: bereichAnzeige(ergebnis.vorschlag.bereich)
+      brauchtOptional: [],
+      ...Object.fromEntries(KENNZEICHEN.map(({ schluessel }) => [schluessel, false])),
+      ...vorschlag,
+      felder: (vorschlag.felder ?? []).map((feld) => ({ ...feld, eingefroren: false })),
+      bereich: bereichAnzeige(vorschlag.bereich)
     })
+    setKiBegruendungen(begruendungen ?? {})
+    setHinweise({})
+    setFeinheitenOffen(KENNZEICHEN_FEINHEITEN.some((s) => vorschlag[s]))
   }
 
   async function speichern() {
-    const ergebnis = await onSpeichern(bearbeiten ? { ...werte, id: block.id } : werte)
+    // Das Editor-Merkmal „eingefroren" bleibt hier; der Hauptprozess bekommt
+    // die Felder so, wie sie gespeichert werden.
+    const daten = {
+      ...werte,
+      felder: werte.felder.map(({ id, label, platzhalter, pflicht }) => ({
+        id,
+        label,
+        platzhalter,
+        pflicht
+      }))
+    }
+    const ergebnis = await onSpeichern(bearbeiten ? { ...daten, id: block.id } : daten)
     if (ergebnis && !ergebnis.ok) setFehler(ergebnis.fehler)
   }
 
-  // Vorschau (Schritt 4): der Block genau so, wie er in der Bibliothek liegt.
+  // Platzhalter eines Feldes an den Auftrag anhängen (BAUPLAN 48) — als Zeile
+  // „Bezeichnung: {{id}}", dieselbe Form wie beim KI-Vorschlag (K20).
+  function platzhalterEinfuegen(feld) {
+    const zeile = `${feld.label.trim() || feld.id}: {{${feld.id}}}`
+    const auftrag = werte.auftrag.trimEnd()
+    setzen('auftrag', auftrag ? auftrag + '\n' + zeile : zeile)
+  }
+
+  // Vorschau: der Block genau so, wie er in der Bibliothek liegt — seit
+  // BAUPLAN 48 mit Prüfer-Chip und optionalen Etiketten, nicht mehr
+  // prueft: false erzwungen.
   const vorschauDef = {
     ...werte,
-    symbol: werte.symbol.trim() || '🧱',
-    prueft: false
+    symbol: werte.symbol.trim() || '🧱'
   }
   // Kategorie in der Vorschau: so, wie sie nach dem Speichern heißen wird
   // (Anzeigename einer festen Klappe oder der freie Name; leer → „Eigene").
@@ -209,6 +474,10 @@ export default function BlockEditor({ block, onSpeichern, onAbbrechen }) {
   const vorschauBereich = bereichGeprueft.fehler
     ? werte.bereich.trim()
     : bereichName(bereichGeprueft.bereich)
+  // Fremde {{x}} im Auftrag (Korrektur K6): Hinweis, kein Fehler.
+  const fremde = fremdePlatzhalter(werte.auftrag, werte.felder)
+  // Wie viele Feinheiten hat die KI gesetzt? Satz am Kopf von Schritt 3.
+  const kiFeinheiten = KENNZEICHEN_FEINHEITEN.filter((s) => werte[s] && kiBegruendungen[s]).length
 
   const titel = [t.schritt1Titel, t.schritt2Titel, t.schritt3Titel, t.schritt4Titel]
 
@@ -312,6 +581,9 @@ export default function BlockEditor({ block, onSpeichern, onAbbrechen }) {
                     onChange={(e) => setzen('auftrag', e.target.value)}
                   />
                   <span className="feld-hinweis">{t.auftragHinweis}</span>
+                  {fremde.length > 0 && (
+                    <span className="feld-hinweis">{t.fremderPlatzhalter(fremde)}</span>
+                  )}
                   <Zaehler wert={werte.auftrag} max={BLOCK_AUFTRAG_MAX} />
                 </label>
               </>
@@ -326,9 +598,22 @@ export default function BlockEditor({ block, onSpeichern, onAbbrechen }) {
                   onAendern={(neu) => setzen('braucht', neu)}
                   datalistId="etiketten-braucht"
                   vorschlaege={vorschlaege}
+                  ausgeschlossen={werte.brauchtOptional}
+                />
+                {/* braucht — falls da (BAUPLAN 48): optionale Übergaben, wie
+                    sie Katalog-Blöcke seit Bauschritt 9 kennen. */}
+                <EtikettenFeld
+                  label={t.brauchtOptionalFeld}
+                  hinweis={t.brauchtOptionalHinweis}
+                  etiketten={werte.brauchtOptional}
+                  onAendern={(neu) => setzen('brauchtOptional', neu)}
+                  datalistId="etiketten-braucht-optional"
+                  vorschlaege={vorschlaege}
+                  ausgeschlossen={werte.braucht}
+                  optional
                 />
                 <WozuFelder
-                  etiketten={werte.braucht}
+                  etiketten={[...werte.braucht, ...werte.brauchtOptional]}
                   wozu={werte.brauchtWozu}
                   onAendern={(neu) => setzen('brauchtWozu', neu)}
                 />
@@ -340,38 +625,40 @@ export default function BlockEditor({ block, onSpeichern, onAbbrechen }) {
                   datalistId="etiketten-liefert"
                   vorschlaege={vorschlaege}
                 />
+                {/* Prüfbeleg ohne „Prüft" (Korrektur K21): Das Urteil käme an,
+                    würde aber nicht ausgewertet. */}
+                {werte.liefert.includes(PRUEFBELEG_ETIKETT) && !werte.prueft && (
+                  <p className="feld-hinweis editor-feinheiten-folge">
+                    {t.pruefbelegOhnePrueft(PRUEFBELEG_ETIKETT)}
+                  </p>
+                )}
+                <FelderEditor
+                  felder={werte.felder}
+                  auftrag={werte.auftrag}
+                  onAendern={(neu) => setzen('felder', neu)}
+                  onEinfuegen={platzhalterEinfuegen}
+                />
               </>
             )}
 
             {schritt === 3 && (
               <>
-                <label className="feld feld-schalter">
-                  <input
-                    type="checkbox"
-                    checked={werte.nurLesen}
-                    onChange={(e) => setzen('nurLesen', e.target.checked)}
+                {kiFeinheiten > 0 && (
+                  <p className="feld-hinweis editor-feinheiten-ki">{t.kiFeinheiten(kiFeinheiten)}</p>
+                )}
+                {/* Rolle (BAUPLAN 48): nur lesen · prüft · führt zusammen —
+                    „Kein Kennzeichen ohne Editor-Feld". Die Verträglichkeit
+                    prüft pruefeEigenenBlock beim Speichern. */}
+                {KENNZEICHEN_ROLLE.map((schluessel) => (
+                  <KennzeichenHaekchen
+                    key={schluessel}
+                    schluessel={schluessel}
+                    wert={werte[schluessel]}
+                    onAendern={kennzeichenSetzen}
+                    hinweise={hinweise[schluessel] ?? []}
+                    kiSatz={werte[schluessel] ? kiBegruendungen[schluessel] : ''}
                   />
-                  <span>
-                    {t.nurLesenFeld}
-                    <span className="feld-hinweis">{t.nurLesenHinweis}</span>
-                  </span>
-                </label>
-                {/* Führt zusammen (BAUPLAN 47): „Kein Kennzeichen ohne
-                    Editor-Feld" — der Block nimmt ALLE Lieferungen seiner
-                    braucht-Etiketten, und das Schaubild verlangt mindestens
-                    zwei Lieferanten. Die Verträglichkeit (braucht darf nicht
-                    leer sein) prüft pruefeEigenenBlock beim Speichern. */}
-                <label className="feld feld-schalter">
-                  <input
-                    type="checkbox"
-                    checked={werte.fuehrtZusammen}
-                    onChange={(e) => setzen('fuehrtZusammen', e.target.checked)}
-                  />
-                  <span>
-                    {t.fuehrtZusammenFeld}
-                    <span className="feld-hinweis">{t.fuehrtZusammenHinweis}</span>
-                  </span>
-                </label>
+                ))}
                 {/* Modellklasse (BAUPLAN 37): „Kein Kennzeichen ohne
                     Editor-Feld" — was ein Katalog-Block kann, kann ein
                     eigener auch. */}
@@ -389,6 +676,27 @@ export default function BlockEditor({ block, onSpeichern, onAbbrechen }) {
                   </select>
                   <span className="feld-hinweis">{t.modellHinweis}</span>
                 </label>
+                {/* Feinheiten (BAUPLAN 48): die übrigen Kennzeichen des
+                    Katalogs, zugeklappt — offen, wenn eines gesetzt ist oder
+                    die KI eines vorgeschlagen hat. */}
+                <details
+                  className="editor-feinheiten"
+                  open={feinheitenOffen}
+                  onToggle={(e) => setFeinheitenOffen(e.currentTarget.open)}
+                >
+                  <summary>{t.feinheitenTitel}</summary>
+                  <p className="feld-hinweis">{t.feinheitenHinweis}</p>
+                  {KENNZEICHEN_FEINHEITEN.map((schluessel) => (
+                    <KennzeichenHaekchen
+                      key={schluessel}
+                      schluessel={schluessel}
+                      wert={werte[schluessel]}
+                      onAendern={kennzeichenSetzen}
+                      hinweise={hinweise[schluessel] ?? []}
+                      kiSatz={werte[schluessel] ? kiBegruendungen[schluessel] : ''}
+                    />
+                  ))}
+                </details>
               </>
             )}
 

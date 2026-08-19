@@ -8,7 +8,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'node:crypto'
 import { texte } from '../shared/texte.js'
-import { eigeneBloeckeSetzen } from '../shared/blockKatalog.js'
+import { eigeneBloeckeSetzen, etikettNameSchluessel } from '../shared/blockKatalog.js'
 import { pruefeEigenenBlock } from '../shared/blockRegeln.js'
 import { projekteLaden } from './projekte.js'
 import { workflowLaden } from './workflow.js'
@@ -51,18 +51,85 @@ export function eigeneBloeckeListe() {
   return { ok: true, bloecke }
 }
 
-// In welchen bekannten Projekten liegt dieser Block auf der Leinwand?
+// In welchen bekannten Projekten liegt einer dieser Blöcke auf der Leinwand?
 // Grundlage für die Lösch-Sperre: workflow.js würde einen unbekannt gewordenen
-// Block beim nächsten Laden stillschweigend aus dem Schaubild werfen.
-function projekteMitBlock(blockId) {
+// Block beim nächsten Laden stillschweigend aus dem Schaubild werfen. Seit
+// BAUPLAN 48 auch für mehrere Blöcke auf einmal — die Etiketten-Bibliothek
+// fragt so, ob ein Projekt läuft, dessen Schaubild einen Block mit einem
+// bestimmten Etikett trägt (Umbenenn-/Feldänderungs-Sperre).
+export function projekteMitBloecken(blockIds) {
+  const ids = new Set(Array.isArray(blockIds) ? blockIds : [])
+  if (ids.size === 0) return []
   const treffer = []
   for (const projekt of projekteLaden().projekte) {
     if (!projekt.gefunden) continue
     const geladen = workflowLaden(projekt.pfad)
-    if (geladen.ok && geladen.workflow.bloecke.some((b) => b.blockId === blockId))
+    if (geladen.ok && geladen.workflow.bloecke.some((b) => ids.has(b.blockId)))
       treffer.push(projekt)
   }
   return treffer
+}
+
+function projekteMitBlock(blockId) {
+  return projekteMitBloecken([blockId])
+}
+
+// Welche eigenen Blöcke tragen dieses Etikett (braucht, brauchtOptional oder
+// liefert, Schlüsselvergleich ohne Groß/Klein)? Grundlage der Lösch-Sperre für
+// Etiketten (BAUPLAN 48) — diese Datei bleibt dabei etikettenfrei: Sie kennt
+// nur ihre Blöcke, die Etiketten-Bibliothek wohnt in eigeneEtiketten.js (K2).
+export function bloeckeMitEtikett(name) {
+  const schluessel = etikettNameSchluessel(name)
+  if (!schluessel) return []
+  return bloecke.filter((b) =>
+    [...(b.braucht ?? []), ...(b.brauchtOptional ?? []), ...(b.liefert ?? [])].some(
+      (e) => etikettNameSchluessel(e) === schluessel
+    )
+  )
+}
+
+// Ein Etikett in ALLEN eigenen Blöcken umbenennen (BAUPLAN 48): braucht,
+// brauchtOptional, liefert und die Schlüssel von brauchtWozu ziehen nach —
+// sonst zeigte ein umbenanntes Etikett in der Bibliothek auf Blöcke, die es
+// nicht mehr tragen, und der Lauf fände keine Lieferung mehr. Dieselbe
+// Funktion zieht eine abweichende Schreibweise („prüfbeleg") auf die
+// kanonische („Prüfbeleg"). Speichert und setzt die Registry; liefert
+// { ok, bloecke, geaendert } — geaendert = Anzahl betroffener Blöcke.
+export function etikettUmbenennen(alt, neu) {
+  const schluessel = etikettNameSchluessel(alt)
+  const neuerName = String(neu ?? '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (!schluessel || !neuerName) return { ok: true, bloecke, geaendert: 0 }
+  const trifft = (e) => etikettNameSchluessel(e) === schluessel
+  const liste = (eintraege) => {
+    const ergebnis = []
+    for (const e of Array.isArray(eintraege) ? eintraege : []) {
+      const wert = trifft(e) ? neuerName : e
+      if (!ergebnis.includes(wert)) ergebnis.push(wert)
+    }
+    return ergebnis
+  }
+  let geaendert = 0
+  bloecke = bloecke.map((b) => {
+    const betroffen = [...(b.braucht ?? []), ...(b.brauchtOptional ?? []), ...(b.liefert ?? [])].some(
+      trifft
+    )
+    if (!betroffen) return b
+    geaendert++
+    const wozu = {}
+    for (const [etikett, satz] of Object.entries(b.brauchtWozu ?? {}))
+      wozu[trifft(etikett) ? neuerName : etikett] = satz
+    return {
+      ...b,
+      braucht: liste(b.braucht),
+      brauchtOptional: liste(b.brauchtOptional),
+      liefert: liste(b.liefert),
+      brauchtWozu: wozu
+    }
+  })
+  if (geaendert > 0) speichern()
+  return { ok: true, bloecke, geaendert }
 }
 
 export function eigenenBlockSpeichern(roh) {

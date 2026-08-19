@@ -1220,14 +1220,91 @@ export function blockDefinition(blockId) {
   )
 }
 
-// Wortschatz für braucht/liefert: die Etiketten der Arbeitsblöcke und der
-// eigenen Blöcke. Eigene Blöcke stecken nur zusammen, wenn ihre Etiketten zu
-// den vorhandenen passen — KI-Assistent und Formular schlagen deshalb diese vor.
+// Etiketten-Bibliothek (SPEC §4.5, BAUPLAN 48): Etiketten sind nicht mehr nur
+// Zeichenketten an den Blöcken, sondern eigene Einträge — global gespeichert
+// wie eigene Blöcke, mit optionaler Form (Felder). Hauptprozess und Oberfläche
+// befüllen diese Registry jeweils selbst (Muster eigeneBloecke); danach kennt
+// der Lieferschein (teilFuerEtikett) ein eigenes Etikett mit Feldern genauso
+// wie ein festes des Katalogs.
+//
+// Die fünf festen Katalog-Etiketten mit eigenem Melde-Werkzeug stehen HIER als
+// Liste, weil lieferschein.js sie braucht, diese Datei lieferschein.js aber
+// nicht importieren darf (Kreis über kettenRegeln.js). lieferschein.js gleicht
+// seine FESTE_TEILE dagegen ab — eine Prüfung hält beide Mengen gleich.
+// Der Prüfbeleg hat einen eigenen Namen: An ihm hängen Urteil, Reparatur-Runde,
+// Tor und Prüfkarte (lauf.js, blockRegeln.js) — eine Quelle statt drei Literale.
+export const PRUEFBELEG_ETIKETT = 'Prüfbeleg'
+export const FESTE_ETIKETTEN = [
+  'Arbeitspaket',
+  PRUEFBELEG_ETIKETT,
+  'Umsetzungsbericht',
+  'Angriffsliste',
+  'Befundliste'
+]
+
+// Der Vergleichsschlüssel eines Etikett-Namens: „Marktanalyse", „marktanalyse"
+// und „Markt  analyse" meinen dasselbe Etikett — eindeutig ist ein Name ohne
+// Groß/Klein und ohne Mehrfach-Leerzeichen. Die gespeicherte Schreibweise ist
+// die kanonische; Blöcke werden beim Speichern darauf gezogen (eigeneEtiketten.js).
+export function etikettNameSchluessel(name) {
+  return String(name ?? '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLowerCase()
+}
+
+let eigeneEtiketten = []
+
+export function eigeneEtikettenSetzen(liste) {
+  eigeneEtiketten = Array.isArray(liste) ? liste : []
+}
+
+export function eigeneEtikettenListe() {
+  return eigeneEtiketten
+}
+
+// Ein eigenes Etikett über seinen Namen (Schlüsselvergleich) — null, wenn es
+// keines gibt. Darüber findet der Lieferschein Form und Werkzeug.
+export function eigenesEtikett(name) {
+  const schluessel = etikettNameSchluessel(name)
+  if (!schluessel) return null
+  return eigeneEtiketten.find((e) => etikettNameSchluessel(e?.name) === schluessel) ?? null
+}
+
+// Die Etiketten des Katalogs mit ihrer Herkunft (BAUPLAN 48): je Name einmal,
+// `fest` = hat ein eigenes Melde-Werkzeug, `uebung` = kommt NUR in Übungs-
+// Blöcken vor, `blockNamen` = welche Katalog-Blöcke es nutzen. Übungs-Etiketten
+// zählen bewusst zur Katalogmenge — sonst legte ein eigener Block mit
+// „Textdatei" ein zweites, eigenes Etikett gleichen Namens an. Im Wortschatz
+// bekannteEtiketten() bleiben sie wie bisher draußen.
+export function katalogEtiketten() {
+  const karte = new Map()
+  for (const block of BLOCK_KATALOG)
+    for (const etikett of [...block.braucht, ...(block.brauchtOptional ?? []), ...block.liefert]) {
+      if (!karte.has(etikett))
+        karte.set(etikett, {
+          name: etikett,
+          fest: FESTE_ETIKETTEN.includes(etikett),
+          uebung: true,
+          blockNamen: []
+        })
+      const eintrag = karte.get(etikett)
+      if (!block.uebung) eintrag.uebung = false
+      if (!eintrag.blockNamen.includes(block.name)) eintrag.blockNamen.push(block.name)
+    }
+  return [...karte.values()]
+}
+
+// Wortschatz für braucht/liefert: die Etiketten der Arbeitsblöcke, der
+// eigenen Blöcke und der Etiketten-Bibliothek (BAUPLAN 48). Eigene Blöcke
+// stecken nur zusammen, wenn ihre Etiketten zu den vorhandenen passen —
+// KI-Assistent und Formular schlagen deshalb diese vor.
 export function bekannteEtiketten() {
   const menge = new Set()
   for (const block of [...BLOCK_KATALOG.filter((b) => !b.uebung), ...eigeneBloecke])
     for (const etikett of [...block.braucht, ...(block.brauchtOptional ?? []), ...block.liefert])
       menge.add(etikett)
+  for (const etikett of eigeneEtiketten) if (etikett?.name) menge.add(etikett.name)
   return [...menge]
 }
 

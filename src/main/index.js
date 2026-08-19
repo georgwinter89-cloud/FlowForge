@@ -51,13 +51,17 @@ import {
   alleAppsStoppen
 } from './appProzess.js'
 import { verwaisteListe, prozessBeenden, alleProzesseAbraeumen } from './prozesse.js'
-import {
-  eigeneBloeckeLaden,
-  eigeneBloeckeListe,
-  eigenenBlockSpeichern,
-  eigenenBlockLoeschen
-} from './eigeneBloecke.js'
+import { eigeneBloeckeLaden, eigeneBloeckeListe, eigenenBlockLoeschen } from './eigeneBloecke.js'
 import { blockVorschlagErstellen } from './blockAssistent.js'
+import {
+  eigeneEtikettenLaden,
+  eigeneEtikettenListe,
+  eigenesEtikettSpeichern,
+  eigenesEtikettLoeschen,
+  blockSpeichernMitEtiketten,
+  etikettenAbgleichen
+} from './eigeneEtiketten.js'
+import { etikettVorschlagErstellen } from './etikettAssistent.js'
 import { klappenLaden, klappenSpeichern } from './klappen.js'
 import { metrikenLaden } from './metriken.js'
 import {
@@ -146,9 +150,18 @@ function registriereIpc() {
 
   // Block-Editor mit KI-Assistent (SPEC §4.5, BAUPLAN 14).
   ipcMain.handle('eigene-bloecke-laden', () => eigeneBloeckeListe())
-  ipcMain.handle('eigener-block-speichern', (_e, block) => eigenenBlockSpeichern(block))
+  // Block speichern MIT Etiketten-Abgleich (BAUPLAN 48, K2): kanonische
+  // Schreibweise bekannter Etiketten, Auto-Anlage unbekannter — Rückgabe
+  // { ok, bloecke, etiketten, hinweise }.
+  ipcMain.handle('eigener-block-speichern', (_e, block) => blockSpeichernMitEtiketten(block))
   ipcMain.handle('eigener-block-loeschen', (_e, id) => eigenenBlockLoeschen(id))
   ipcMain.handle('block-assistent', (_e, beschreibung) => blockVorschlagErstellen(beschreibung))
+  // Etiketten-Bibliothek (SPEC §4.5, BAUPLAN 48): Rückgaben immer der
+  // Gesamtstand { ok, etiketten } bzw. { ok: false, fehler }.
+  ipcMain.handle('eigene-etiketten-laden', () => eigeneEtikettenListe())
+  ipcMain.handle('eigenes-etikett-speichern', (_e, etikett) => eigenesEtikettSpeichern(etikett))
+  ipcMain.handle('eigenes-etikett-loeschen', (_e, id) => eigenesEtikettLoeschen(id))
+  ipcMain.handle('etikett-assistent', (_e, eingabe) => etikettVorschlagErstellen(eingabe ?? {}))
   // Einklapp-Zustände je Projekt (BAUPLAN 30): Karten-Gruppen, Themen,
   // Bibliotheks-Klappen — im Datenordner, nicht in projekt.json.
   ipcMain.handle('klappen-laden', (_e, pfad) => klappenLaden(pfad))
@@ -275,7 +288,13 @@ app.whenReady().then(() => {
   if (app.isPackaged) Menu.setApplicationMenu(null)
   // Eigene Blöcke VOR der IPC-Registrierung laden: workflowLaden wirft Blöcke,
   // die es nicht auflösen kann, stillschweigend aus dem Schaubild.
+  // Reihenfolge (BAUPLAN 48, K18): erst die Etiketten (der Lieferschein löst
+  // eigene Etiketten mit Feldern über die Registry auf), dann die Blöcke, dann
+  // der Abgleich des Altbestands — jedes Etikett eigener Blöcke existiert
+  // danach in der Bibliothek und steht in kanonischer Schreibweise.
+  eigeneEtikettenLaden()
   eigeneBloeckeLaden()
+  etikettenAbgleichen()
   registriereIpc()
   createWindow()
 

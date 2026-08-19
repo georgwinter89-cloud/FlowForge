@@ -11,6 +11,9 @@
 //      bewusst nicht mehr — auch nicht im Schema (kein .max/.maxLength).
 //   3. Kanten-Prüfung — deckt die Lieferung den Bedarf des Nachfolgers
 //      (lauf.js, nach dem Block).
+// Seit der Etiketten-Bibliothek (BAUPLAN 48) bekommt auch ein EIGENES Etikett
+// mit Feldern sein Werkzeug — Name und Form kommen aus der Registry
+// (blockKatalog.eigenesEtikett), der Aufbau ist derselbe wie bei den festen.
 import { z } from 'zod'
 import { texte } from '../../shared/texte.js'
 import {
@@ -22,9 +25,11 @@ import {
   DATEI_ARTEN,
   artFuerWerkzeug,
   etikettFuerWerkzeug,
+  eigenesEtikettFuerWerkzeug,
   rahmenEtikett,
   meldungPruefen
 } from '../../shared/lieferschein.js'
+import { etikettKlartext } from '../../shared/etikettRegeln.js'
 
 // Der gemeinsame Rahmen — identisch in jedem Werkzeug.
 function rahmenFelder() {
@@ -131,6 +136,33 @@ function teilFelder(art) {
   }
 }
 
+// Eigenes Etikett mit Feldern (BAUPLAN 48): die Form, die Georg in der
+// Etiketten-Bibliothek gebaut hat, als Schema — Satz und mehrzeiliger Text als
+// Zeichenkette, Liste als Zeichenketten-Liste, Auswahl ebenfalls als
+// Zeichenkette mit den erlaubten Werten in der Beschreibung (K12): Die Werte
+// prüft allein Ebene 2 (lieferschein.js), damit die Abweisung sichtbar im
+// Ticker steht statt in einer stummen Schema-Ablehnung. Pflicht/optional
+// steht im Schema, die Feldbeschreibung ist der Hinweis des Etiketts, sonst
+// die Bezeichnung.
+function eigeneFelder(etikett) {
+  const te = texte.lieferscheinEtiketten
+  const felder = {}
+  for (const feld of etikett?.felder ?? []) {
+    let schema = feld.art === 'liste' ? z.array(z.string()) : z.string()
+    if (!feld.pflicht) schema = schema.optional()
+    // Bezeichnung voran, dann der Hinweis als Satz (Satzende ergänzen, sonst
+    // klebt „Pflicht" an einen halben Satz) — der Agent sieht nur diesen Text.
+    let beschreibung = feld.bezeichnung
+    const hinweis = String(feld.hinweis ?? '').trim()
+    if (hinweis) beschreibung += ': ' + hinweis + (/[.!?]$/.test(hinweis) ? '' : '.')
+    else beschreibung += '.'
+    if (feld.art === 'auswahl') beschreibung += ' ' + te.auswahlBeschreibung(feld.werte ?? [])
+    if (feld.pflicht) beschreibung += te.pflichtZusatz
+    felder[feld.schluessel] = schema.describe(beschreibung)
+  }
+  return felder
+}
+
 // holeBlock() liefert die Blockdefinition (liefert-Etiketten) des gerade
 // laufenden Blocks; aufMeldung(meldung) reicht die geprüfte Meldung an die
 // Lauf-Verwaltung weiter. holeZiele() liefert die benannten Ziele des laufenden
@@ -157,11 +189,13 @@ export async function lieferscheinWerkzeugServer({
     return { content: [{ type: 'text', text }], isError: true }
   }
 
-  function bauen(name, beschreibung, art) {
+  // `teilSchema`: die Felder des Teils — fest je Art, bei einem eigenen
+  // Etikett (BAUPLAN 48) aus seiner Form.
+  function bauen(name, beschreibung, art, teilSchema = teilFelder(art)) {
     return tool(
       name,
       beschreibung,
-      { ...rahmenFelder(), ...teilFelder(art) },
+      { ...rahmenFelder(), ...teilSchema },
       async (eingabe) => {
         const def = holeBlock?.() ?? null
         // Welches Etikett trägt diese Meldung? Beim festen Werkzeug ergibt es
@@ -208,6 +242,26 @@ export async function lieferscheinWerkzeugServer({
         teil.werkzeug,
         tl.werkzeuge[schluessel] ?? tl.werkzeuge.rahmen,
         artFuerWerkzeug(teil.werkzeug)
+      )
+    )
+  }
+  // Eigene Etiketten mit Feldern (BAUPLAN 48): je gewünschtem Werkzeug, das
+  // zu einem eigenen Etikett gehört, ein Werkzeug mit Rahmen plus seiner Form.
+  // Die Beschreibung ist der Klartext, den auch Georg im Editor liest — so
+  // liest der Agent genau das, was Georg beim Bauen gegengelesen hat (K14:
+  // eigener Schlüssel, nicht tl.werkzeuge[…], sonst träfe ein Etikett „Eigen"
+  // den Rahmen-Eintrag).
+  const festeNamen = new Set([RAHMEN_WERKZEUG, ...Object.values(FESTE_TEILE).map((t) => t.werkzeug)])
+  for (const name of gewuenscht) {
+    if (festeNamen.has(name)) continue
+    const eigen = eigenesEtikettFuerWerkzeug(name)
+    if (!eigen) continue
+    gebaut.push(
+      bauen(
+        name,
+        texte.lieferscheinEtiketten.werkzeugEigen(eigen.name, etikettKlartext(eigen)),
+        'eigen',
+        eigeneFelder(eigen)
       )
     )
   }

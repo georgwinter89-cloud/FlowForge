@@ -26,6 +26,12 @@ contextBridge.exposeInMainWorld('flowforge', {
   eigenenBlockSpeichern: (block) => ipcRenderer.invoke('eigener-block-speichern', block),
   eigenenBlockLoeschen: (id) => ipcRenderer.invoke('eigener-block-loeschen', id),
   blockAssistent: (beschreibung) => ipcRenderer.invoke('block-assistent', beschreibung),
+  // Etiketten-Bibliothek (SPEC §4.5, BAUPLAN 48).
+  eigeneEtikettenLaden: () => ipcRenderer.invoke('eigene-etiketten-laden'),
+  eigenesEtikettSpeichern: (etikett) => ipcRenderer.invoke('eigenes-etikett-speichern', etikett),
+  eigenesEtikettLoeschen: (id) => ipcRenderer.invoke('eigenes-etikett-loeschen', id),
+  etikettAssistent: (beschreibung, name) =>
+    ipcRenderer.invoke('etikett-assistent', { beschreibung, name }),
   klappenLaden: (pfad) => ipcRenderer.invoke('klappen-laden', pfad),
   klappenSpeichern: (pfad, zustaende) => ipcRenderer.invoke('klappen-speichern', { pfad, zustaende }),
 

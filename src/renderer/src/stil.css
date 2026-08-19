@@ -3241,3 +3241,183 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* Block-Editor, Bauschritt 48: Feinheiten (zugeklappte Kennzeichen) und
+   Formularfelder an der Blockkarte. Bauer A — additiv, eigene Präfixe. */
+.editor-feinheiten {
+  padding: 8px 12px;
+  border: 1px solid var(--rand-panel);
+  border-radius: var(--radius-karte);
+  background: var(--flaeche-tief);
+}
+
+.editor-feinheiten summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-zweit);
+}
+
+.editor-feinheiten[open] summary {
+  margin-bottom: 6px;
+}
+
+.editor-feinheiten .feld-schalter {
+  margin-top: 10px;
+}
+
+/* „KI: …"-Begründung neben dem Häkchen und Folgen-Satz der Komfort-Reaktion. */
+.editor-feinheiten-ki {
+  display: block;
+  margin-top: 4px;
+  color: var(--akzent-text);
+}
+
+.editor-feinheiten-folge {
+  display: block;
+  margin-top: 4px;
+  color: var(--lesend);
+}
+
+.editor-formularfelder {
+  gap: 10px;
+}
+
+.editor-formularfeld {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--rand-panel);
+  border-radius: var(--radius-karte);
+  background: var(--flaeche-tief);
+}
+
+.editor-formularfeld .feld-nebeneinander {
+  align-items: flex-start;
+}
+
+.editor-formularfeld-entfernen {
+  flex: 0 0 auto;
+  margin-top: 22px;
+}
+
+.editor-formularfeld-id {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.editor-formularfeld-id code {
+  font-family: var(--schrift-mono);
+  font-size: 12px;
+  color: var(--text-gedimmt);
+}
+
+/* Etiketten-Bibliothek und Etikett-Editor (SPEC §4.5, BAUPLAN 48, Bauer B).
+   Additiv, Präfix etikett-. */
+
+.etikett-eintrag {
+  cursor: default;
+}
+
+.etikett-kopf {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.etikett-marke {
+  border-color: var(--rand-kontrolle);
+  color: var(--text-gedimmt);
+}
+
+.etikett-marke-katalog {
+  border-color: var(--rand-block);
+  color: var(--akzent-text);
+}
+
+.etikett-marke-fest {
+  border-color: var(--gut-rand);
+  color: var(--gut-text);
+}
+
+.etikett-marke-felder {
+  border-color: var(--eigen);
+  color: var(--eigen);
+}
+
+/* Die Klartext-Zeile — dieselbe Fassung, die der Agent liest. */
+.etikett-klartext {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-zweit);
+}
+
+.etikett-nutzung {
+  font-style: italic;
+}
+
+/* Editor: Felder-Liste */
+.etikett-felder {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.etikett-feld-zeile {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--rand-panel);
+  border-radius: var(--radius-karte);
+  background: var(--flaeche-tief);
+}
+
+.etikett-feld-kopf {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.etikett-feld-bezeichnung {
+  flex: 1;
+}
+
+.etikett-feld-art {
+  flex: 0 0 160px;
+}
+
+.etikett-feld-pflicht {
+  flex: 0 0 auto;
+  margin-top: 24px;
+}
+
+.etikett-feld-entfernen {
+  flex: 0 0 auto;
+  margin-top: 22px;
+}
+
+.etikett-feld-schluessel {
+  font-family: var(--schrift-mono);
+  font-size: 11px;
+  color: var(--text-gedimmt);
+}
+
+.etikett-vorschau {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid var(--rand-panel);
+  border-radius: var(--radius-karte);
+  background: var(--flaeche-tief);
+}
+
+.etikett-kopie-hinweis {
+  line-height: 1.45;
+}

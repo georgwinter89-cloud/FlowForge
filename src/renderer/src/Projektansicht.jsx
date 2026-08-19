@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react'
 import { texte } from '../../shared/texte.js'
-import { eigeneBloeckeSetzen } from '../../shared/blockKatalog.js'
+import { ETIKETT_BESCHREIBUNG_MAX } from '../../shared/etikettRegeln.js'
+import { eigeneBloeckeSetzen, eigeneEtikettenSetzen } from '../../shared/blockKatalog.js'
 import { THEMEN_SORTEN, themaSchluessel, vorhandeneThemen, THEMA_MAX } from '../../shared/kartenRegeln.js'
 import KartenFormular from './KartenFormular.jsx'
 import Bestaetigung from './Bestaetigung.jsx'
 import Leinwand from './Leinwand.jsx'
 import Blockbibliothek from './Blockbibliothek.jsx'
 import BlockEditor from './BlockEditor.jsx'
+import EtikettEditor from './EtikettEditor.jsx'
 import ProjektEinstellungen from './ProjektEinstellungen.jsx'
 import { useKlappen, Klappe } from './klappen.jsx'
 
@@ -205,6 +207,12 @@ export default function Projektansicht({ pfad, initialTab }) {
   // nicht auflösen. false = Editor zu, 'neu' = neuer Block, sonst der Block.
   const [eigene, setEigene] = useState(null)
   const [blockEditor, setBlockEditor] = useState(false)
+  // Etiketten-Bibliothek (SPEC §4.5, BAUPLAN 48): eigene Etiketten, global wie
+  // die Blöcke; Registry im Renderer, damit Block-Editor (Wortschatz) und
+  // Bibliothek sie auflösen. false = Editor zu, 'neu' = neues Etikett, sonst
+  // { etikett, kopieVon } (bearbeiten: etikett mit id; Kopie: ohne id).
+  const [etiketten, setEtiketten] = useState([])
+  const [etikettEditor, setEtikettEditor] = useState(false)
   // Projekt-Einstellungen (BAUPLAN 15): zeigen den Rechte-Standard des Agenten.
   const [einstellungenOffen, setEinstellungenOffen] = useState(false)
   // Eigener Bestätigungs-Dialog statt window.confirm/alert (Bugfix 13.08.2026):
@@ -241,6 +249,12 @@ export default function Projektansicht({ pfad, initialTab }) {
       eigeneBloeckeSetzen(ergebnis.bloecke)
       setEigene(ergebnis.bloecke)
     })
+    // Etiketten (BAUPLAN 48): Registry zuerst, dann der Stand für die Anzeige.
+    window.flowforge.eigeneEtikettenLaden?.().then((ergebnis) => {
+      if (!ergebnis?.ok) return
+      eigeneEtikettenSetzen(ergebnis.etiketten)
+      setEtiketten(ergebnis.etiketten)
+    })
   }, [])
 
   useEffect(() => {
@@ -260,8 +274,74 @@ export default function Projektansicht({ pfad, initialTab }) {
     return ergebnis
   }
 
+  // Etiketten (BAUPLAN 48): jede Änderung liefert den Gesamtstand zurück —
+  // Registry zuerst (Muster eigeneUebernehmen).
+  function etikettenUebernehmen(ergebnis) {
+    if (ergebnis?.ok && Array.isArray(ergebnis.etiketten)) {
+      eigeneEtikettenSetzen(ergebnis.etiketten)
+      setEtiketten(ergebnis.etiketten)
+    }
+    return ergebnis
+  }
+
   async function blockSpeichern(block) {
-    return eigeneUebernehmen(await window.flowforge.eigenenBlockSpeichern(block))
+    const ergebnis = eigeneUebernehmen(await window.flowforge.eigenenBlockSpeichern(block))
+    // Block speichern zieht die Etiketten nach (K2, K19): kanonische
+    // Schreibweise und Auto-Anlage — beide Registries aus der Rückgabe, und die
+    // Hinweise einmalig als Dialog ohne Gefahr-Knopf.
+    etikettenUebernehmen(ergebnis)
+    if (ergebnis.ok && Array.isArray(ergebnis.hinweise) && ergebnis.hinweise.length)
+      setBestaetigung({
+        frage: [texte.etiketten.hinweiseTitel, ...ergebnis.hinweise.map((h) => '• ' + h)].join('\n')
+      })
+    return ergebnis
+  }
+
+  async function etikettSpeichern(etikett) {
+    const ergebnis = etikettenUebernehmen(await window.flowforge.eigenesEtikettSpeichern(etikett))
+    if (ergebnis.ok) {
+      setEtikettEditor(false)
+      // Ein Umbenennen zieht in allen eigenen Blöcken nach — Blockliste frisch.
+      const bloecke = await window.flowforge.eigeneBloeckeLaden()
+      if (bloecke.ok) {
+        eigeneBloeckeSetzen(bloecke.bloecke)
+        setEigene(bloecke.bloecke)
+      }
+    }
+    return ergebnis
+  }
+
+  function etikettLoeschen(etikett) {
+    setBestaetigung({
+      frage: texte.etiketten.loeschenBestaetigung(etikett.name),
+      knopf: texte.bestaetigung.loeschen,
+      gefahr: true,
+      aktion: async () => {
+        const ergebnis = etikettenUebernehmen(
+          await window.flowforge.eigenesEtikettLoeschen(etikett.id)
+        )
+        // Lösch-Sperre (BAUPLAN 48): nutzt ein eigener Block das Etikett noch,
+        // lehnt der Hauptprozess ab — mit den Blocknamen.
+        if (!ergebnis.ok) setBestaetigung({ frage: ergebnis.fehler })
+      }
+    })
+  }
+
+  // Kopie eines lockeren Katalog-Etiketts (K9): ein NEUES Etikett mit dem
+  // Zusatz „(eigen)", ohne Felder — der Editor sagt, was eine Kopie bedeutet.
+  function etikettKopieren(katalogEintrag) {
+    setEtikettEditor({
+      etikett: {
+        name: `${katalogEintrag.name} (eigen)`,
+        // Beschreibung vorbelegt (Prüfer-Befund 48): Herkunft und Nutzer des
+        // Originals — mehr weiß der Katalog über ein lockeres Etikett nicht.
+        beschreibung: texte.etiketten
+          .kopieBeschreibung(katalogEintrag.name, katalogEintrag.blockNamen ?? [])
+          .slice(0, ETIKETT_BESCHREIBUNG_MAX),
+        felder: []
+      },
+      kopieVon: katalogEintrag.name
+    })
   }
 
   function blockLoeschen(block) {
@@ -525,6 +605,11 @@ export default function Projektansicht({ pfad, initialTab }) {
             onNeuerBlock={() => setBlockEditor('neu')}
             onBearbeiten={setBlockEditor}
             onLoeschen={blockLoeschen}
+            etiketten={etiketten}
+            onNeuesEtikett={() => setEtikettEditor('neu')}
+            onEtikettBearbeiten={(etikett) => setEtikettEditor({ etikett, kopieVon: null })}
+            onEtikettLoeschen={etikettLoeschen}
+            onEtikettKopieren={etikettKopieren}
           />
         </aside>
       </div>
@@ -574,6 +659,14 @@ export default function Projektansicht({ pfad, initialTab }) {
           block={blockEditor === 'neu' ? null : blockEditor}
           onSpeichern={blockSpeichern}
           onAbbrechen={() => setBlockEditor(false)}
+        />
+      )}
+      {etikettEditor && (
+        <EtikettEditor
+          etikett={etikettEditor === 'neu' ? null : etikettEditor.etikett}
+          kopieVon={etikettEditor === 'neu' ? null : etikettEditor.kopieVon}
+          onSpeichern={etikettSpeichern}
+          onAbbrechen={() => setEtikettEditor(false)}
         />
       )}
       {einstellungenOffen && (

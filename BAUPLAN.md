@@ -11,8 +11,9 @@ einzeln im Ein-Block-Workflow erprobt wurde (nie im Ernstfall zum ersten Mal).
 Block-Fähigkeit ist ein Kennzeichen, kein Sonderfall — und wird im selben Bauschritt
 im Block-Editor wählbar gemacht. Prüfstein: Kann Georg den Block nachbauen? Kann ein
 Katalog-Block etwas, das ein selbstgebauter nicht kann, ist es ein Sonderfall und
-gehört repariert (Rückstand aus 14: heute darf ein eigener Block von 12 Kennzeichen
-nur `nurLesen` setzen, seit 47 auch `fuehrtZusammen` — der Rest wird in Schritt 48 aufgeholt).
+gehört repariert (der Rückstand aus 14 — eigene Blöcke durften nur `nurLesen` und
+`fuehrtZusammen` setzen — ist seit Schritt 48 aufgeholt; einzig `uebung` bleibt Katalog-Sache,
+weil es kein Können ist, sondern „Demo-Block").
 
 Bauschritte 1–32 sind abgeschlossen und stehen im [BAUPLAN-ARCHIV.md](BAUPLAN-ARCHIV.md)
 — Verweise wie „BAUPLAN 19" zeigen dorthin.
@@ -794,8 +795,23 @@ offenstehen — und Etiketten sollen bearbeitbar sein wie Blöcke.)
   Vorlagen still). Etiketten brauchen eine eigene Kennung und Namens-Eindeutigkeit —
   heute sind sie überall reine Zeichenketten — und eine Lösch-Sperre, solange ein
   Block sie nutzt (Muster: `projekteMitBlock`).
-- Nachzuziehen: SPEC §4.5 (Editor mit allen Kennzeichen, Etiketten-Bibliothek),
-  §4.2 (Etikett mit Form).
+- **Gebaut, Entscheidungen aus Angriffsliste und Prüfung:** Elf Kennzeichen für eigene
+  Blöcke — drei als Rolle (nur lesen, prüft, führt zusammen), acht zugeklappt als
+  Feinheiten; `uebung` bleibt Katalog-Sache (kein Können), `darfKartenAnlegen` folgt aus
+  „legt Aufgaben-Karten an" (ein Häkchen, zwei Flags — so arbeitet das Audit). Die
+  Verträglichkeit prüft eine reine Funktion (sieben Regeln, Klartext), der Editor zieht beim
+  Anhaken nur nach, nie zurück. Formularfelder (≤ 3) mit eingefrorener Kennung nach dem
+  Speichern (sonst verwürfe workflow.js eingetippte Werte stumm); fremde `{{x}}` sind nur ein
+  Hinweis, weil ein Hauptprozess-Fehler Altbestand beim App-Start stumm verwerfen würde.
+  Etiketten: Speicher-Reihenfolge kanonisieren → prüfen → anlegen; Auto-Anlage und
+  Schreibweisen-Angleich werden nach dem Speichern gesagt (Hinweis-Dialog, Marke
+  „automatisch"); Kopieren nur für lockere Katalog-Etiketten (eine Kopie des Prüfbelegs
+  wäre eine Falle: kein Prüfer, keine Reparatur-Runde); Rahmen-Namen als Feld-Schlüssel
+  gesperrt; Auswahlwerte nur in Ebene 2 geprüft (eine Schema-Ablehnung liefe am Ticker
+  vorbei); Meldungen eigener Etiketten sind selbsttragend (Bezeichnung + Wert), damit der
+  Laufbericht ein späteres Umbauen des Etiketts überlebt.
+- Nachgezogen: SPEC §4.5 (Editor mit allen Kennzeichen, Etiketten-Bibliothek),
+  §4.2 (Etikett mit Form), §4.3 (Lieferschein: eigenes Werkzeug je Etikett mit Feldern).
 **Alltagstest:** Georg baut sich per Assistent einen eigenen Prüf-Block und ein
 eigenes Etikett „Marktanalyse" mit drei Feldern, steckt beides in eine Kette und lässt
 sie laufen: Sein Block meldet über den Lieferschein wie ein Katalog-Block, und eine

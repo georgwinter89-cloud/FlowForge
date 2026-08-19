@@ -27,7 +27,8 @@ import {
   zusatznameBereinigen,
   sdkModell,
   unterModellFuer,
-  UEBERTRAG_GRENZE_STANDARD
+  UEBERTRAG_GRENZE_STANDARD,
+  PRUEFBELEG_ETIKETT
 } from '../shared/blockKatalog.js'
 import {
   pruefeSchaubild,
@@ -3364,7 +3365,7 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       // bei einem Prüfer nach, der nie gestartet ist.
       const torMeldung = {
         art: 'pruefbeleg',
-        etikett: 'Prüfbeleg',
+        etikett: PRUEFBELEG_ETIKETT,
         fazit: kopf,
         getan: [],
         offen: [],

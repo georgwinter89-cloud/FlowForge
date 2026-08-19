@@ -191,7 +191,7 @@ export const texte = {
     ueberschriftBearbeiten: 'Block bearbeiten',
     schritt1Titel: 'Was soll der Block tun?',
     schritt2Titel: 'Was braucht und liefert er?',
-    schritt3Titel: 'Sperren & Modell',
+    schritt3Titel: 'Rolle, Feinheiten & Modell',
     schritt4Titel: 'Probelauf-Vorschau',
     kiFeld: 'Beschreib in deinen Worten, was der Block tun soll',
     kiPlatzhalter: 'z.B. Ein Block, der alle Texte im Projekt auf Rechtschreibfehler durchsieht',
@@ -210,7 +210,7 @@ export const texte = {
       'Nur eintragen, was wirklich nötig ist: Der Block lässt sich dann nur hinter Blöcke stecken, die das liefern. Ohne „braucht" kann er auch am Anfang stehen.',
     liefertFeld: 'liefert — Etikett für das Ergebnis dieses Blocks',
     liefertHinweis:
-      'Unter diesem Etikett bekommen spätere Blöcke die Ergebnis-Meldung dieses Blocks gereicht. Nutze möglichst die vorgeschlagenen Etiketten — dann passt der Block zu den vorhandenen, und bei „Arbeitspaket", „Prüfbeleg", „Umsetzungsbericht", „Angriffsliste" und „Befundliste" meldet der Agent sogar in geprüften Feldern statt als Fließtext.',
+      'Unter diesem Etikett bekommen spätere Blöcke die Ergebnis-Meldung dieses Blocks gereicht. Nutze möglichst die vorgeschlagenen Etiketten — dann passt der Block zu den vorhandenen, und bei „Arbeitspaket", „Prüfbeleg", „Umsetzungsbericht", „Angriffsliste", „Befundliste" und jedem eigenen Etikett mit Feldern (Klappe „Etiketten" in der Bibliothek) meldet der Agent sogar in geprüften Feldern statt als Fließtext.',
     etikettPlatzhalter: 'Etikett eintippen oder Vorschlag wählen …',
     etikettHinzufuegen: 'Hinzufügen',
     // Empfänger im Auftrag (BAUPLAN 43, „Kein Kennzeichen ohne Editor-Feld"):
@@ -221,15 +221,120 @@ export const texte = {
       'Je Etikett ein Satz aus der Sicht deines Blocks — er steht später im Auftrag des Blocks, der es liefert, hinter „Er …". Beispiel: „misst deine Arbeit an den Fertig-Kriterien — schreib sie so, dass er jedes bei dir findet". Lässt du es leer, steht dort nur, dass dein Block das Etikett verlangt.',
     brauchtWozuFeld: (etikett) => `„${etikett}" — Er …`,
     brauchtWozuPlatzhalter: 'z.B. misst deine Arbeit an den Fertig-Kriterien des Arbeitspakets',
-    nurLesenFeld: 'Sperre „darf nur lesen"',
-    nurLesenHinweis:
-      'Der Block darf dann nichts verändern: kein Schreiben, keine verändernden Befehle (rein lesende laufen durch), kein Internet — nur lesen. Die sichere Wahl für alles, was nur ansehen und berichten soll. Nur-lesende Blöcke dürfen außerdem parallel zu einem schreibenden laufen.',
-    // Führt zusammen (BAUPLAN 47, „Kein Kennzeichen ohne Editor-Feld"): Der
-    // Block nimmt ALLE Lieferungen seiner braucht-Etiketten statt nur der
-    // nächsten — und das Schaubild verlangt dafür mindestens zwei Lieferanten.
-    fuehrtZusammenFeld: 'Führt zusammen',
-    fuehrtZusammenHinweis:
-      'Für einen Block, der mehrere gleichartige Lieferungen zu einer macht (z.B. die Berichte von drei Bauern). Er bekommt dann ALLE Lieferungen seiner „braucht"-Etiketten statt nur der nächstgelegenen — und das Schaubild verlangt, dass mindestens zwei Blöcke vor ihm das Etikett liefern; sonst gäbe es nichts zusammenzuführen.',
+    // brauchtOptional (BAUPLAN 48): Übergaben, die der Block nutzt, wenn sie
+    // da sind — ohne Steck-Zwang. brauchtOptionalLabel ist das kurze Wort für
+    // Fehlermeldungen (wie kette.brauchtLabel).
+    brauchtOptionalLabel: 'braucht — falls da',
+    brauchtOptionalFeld: 'braucht — falls da (optional)',
+    brauchtOptionalHinweis:
+      'Übergaben, die der Block gern nutzt, aber nicht verlangt: Liefert ein Block davor sie, bekommt er sie gereicht — sonst arbeitet er ohne. Der Block lässt sich also auch stecken, wenn niemand das liefert. Ein Etikett steht entweder hier oder oben bei „braucht", nicht in beiden.',
+    // Prüfbeleg ohne Prüfer-Häkchen (BAUPLAN 48, Korrektur K21): Das Urteil
+    // käme an, würde aber nicht ausgewertet.
+    pruefbelegOhnePrueft: (etikett) =>
+      `Ohne das Häkchen „Prüft" (Schritt 3) wertet FlowForge das Urteil in „${etikett}" nicht aus — „fehlgeschlagen" löst dann nichts aus: keine Reparatur-Runde, kein Tor, keine Prüfkarte.`,
+    // Formularfelder an der Blockkarte (BAUPLAN 48): Eingaben, die Georg im
+    // Schaubild tippt und die per {{id}} in den Auftrag wandern.
+    felderUeberschrift: 'Felder an der Blockkarte',
+    felderHinweis:
+      'Felder erscheinen auf der Blockkarte im Schaubild — dort tippt man den Inhalt ein, und er landet im Arbeitsauftrag an der Stelle, wo der Platzhalter steht. Nur was der Block wirklich je Lauf anders braucht (z.B. „Was soll gebaut werden?"). Ein Pflicht-Feld hält den Start an, solange es leer ist.',
+    feldLabel: 'Bezeichnung',
+    feldPlatzhalter: 'Platzhalter-Text (grau im leeren Feld)',
+    feldPflicht: 'Pflicht — leer hält der Start an',
+    feldEntfernen: 'Feld entfernen',
+    feldHinzufuegen: '+ Feld',
+    feldIdHinweis: (id) => `Im Auftrag einsetzen als {{${id}}}`,
+    feldIdEinfuegen: (id) => `{{${id}}} in den Auftrag einfügen`,
+    feldIdImAuftrag: 'steht im Auftrag ✓',
+    feldIdLeer: 'Gib dem Feld erst eine Bezeichnung — daraus entsteht der Platzhalter.',
+    feldOhnePlatzhalterHinweis: (label) =>
+      `„${label}" kommt im Auftrag noch nicht vor — ohne Platzhalter tippt man es ein, und nichts passiert damit.`,
+    // Fremde Platzhalter (Korrektur K6): kein Fehler, nur ein Hinweis.
+    fremderPlatzhalter: (namen) =>
+      namen.length === 1
+        ? `{{${namen[0]}}} hat kein Feld — bleibt so im Auftrag stehen.`
+        : `${namen.map((n) => `{{${n}}}`).join(', ')} haben kein Feld — bleiben so im Auftrag stehen.`,
+    // Kennzeichen eigener Blöcke (BAUPLAN 48, „Kein Kennzeichen ohne
+    // Editor-Feld"): EINE Quelle für Name + Folgen-Hinweis je Kennzeichen —
+    // Editor (Schritt 3) und KI-Assistent lesen beide hier. Reihenfolge und
+    // Gruppen stehen in blockRegeln.KENNZEICHEN.
+    kennzeichen: {
+      nurLesen: {
+        name: 'Sperre „darf nur lesen"',
+        hinweis:
+          'Der Block darf dann nichts verändern: kein Schreiben, keine verändernden Befehle (rein lesende laufen durch), kein Internet — nur lesen. Die sichere Wahl für alles, was nur ansehen und berichten soll. Nur-lesende Blöcke dürfen außerdem parallel zu einem schreibenden laufen.'
+      },
+      prueft: {
+        name: 'Prüft',
+        hinweis:
+          'Der Block ist ein Prüfer: Er schreibt und führt Tests in seiner eigenen Prüfmappe aus und meldet ein Urteil im „Prüfbeleg". „Fehlgeschlagen" schickt den Lauf zur Reparatur zurück (so oft, wie die Reparatur-Runden am Schaubild erlauben), das Tor spielt seinen Prüfbefehl später ohne KI nach, und seine Beanstandungen werden Prüfkarten. Ein Prüfer muss schreiben dürfen — „nur lesen" geht nicht zusammen.'
+      },
+      fuehrtZusammen: {
+        name: 'Führt zusammen',
+        hinweis:
+          'Für einen Block, der mehrere gleichartige Lieferungen zu einer macht (z.B. die Berichte von drei Bauern). Er bekommt dann ALLE Lieferungen seiner „braucht"-Etiketten statt nur der nächstgelegenen — und das Schaubild verlangt, dass mindestens zwei Blöcke vor ihm das Etikett liefern; sonst gäbe es nichts zusammenzuführen.'
+      },
+      pruefbefehlPflicht: {
+        name: 'Prüfbefehl ist Pflicht',
+        hinweis:
+          'Nur für Prüfer: Der Block muss einen Prüfbefehl hinterlegen (den Befehl, der seine Tests startet) — sonst fordert FlowForge ihn einmal nach, statt den Lauf weiterzulassen. Mit Prüfbefehl kann das Tor die Prüfung später ohne KI wiederholen.'
+      },
+      startanleitungPflicht: {
+        name: 'Startanleitung ist Pflicht',
+        hinweis:
+          'Macht den Block zum Bau-Block: Fehlt nach ihm eine Startanleitung (wie man das Projekt startet), fordert der Lauf sie in einer Nachbesserungs-Runde ein — und danach greift der Rauchtest (die App wird probeweise gestartet), er bekommt alle Baselines und die lokale Bauhilfe. Bei „nur lesen" könnte der Block sie nie anlegen.'
+      },
+      kartenZuteilung: {
+        name: 'Teilt Karten zu',
+        hinweis:
+          'Der Block darf Aufgaben-Karten auf die nächsten Blöcke verteilen und schneidet damit das Arbeitspaket — so arbeitet „Paket schneiden". FlowForge prüft am Ende des Laufs, ob jedes zugeteilte Ziel gemeldet wurde. Dafür muss der Block „Arbeitspaket" liefern.'
+      },
+      erzeugtAufgaben: {
+        name: 'Legt Aufgaben-Karten an',
+        hinweis:
+          'Der Block darf selbst Aufgaben-Karten anlegen — auch bei „nur lesen" (so arbeitet das Audit). Er zählt damit als Auftragsquelle: Seine neuen offenen Karten rutschen von selbst in die Kartenauswahl des Laufs, spätere Bau-Blöcke nehmen sie als Auftrag.'
+      },
+      kartenVorschlaege: {
+        name: 'Schlägt Karten vor',
+        hinweis:
+          'Der Block darf dir Karten-Änderungen VORSCHLAGEN statt sie selbst zu machen — jeder Vorschlag kommt als Frage zu dir: übernehmen, bearbeiten oder ablehnen (so arbeitet der Karten-Prüfer). Für Blöcke, die das Projektgedächtnis nachmessen, ohne es eigenmächtig umzuschreiben.'
+      },
+      laufVorschlag: {
+        name: 'Schlägt den nächsten Lauf vor',
+        hinweis:
+          'Am Ende darf der Block vorschlagen, welcher Workflow als Nächstes laufen sollte (mit Begründung). Du siehst den Vorschlag als Knopf und entscheidest — von selbst startet nichts.'
+      },
+      unteraufgabenWieBlock: {
+        name: 'Unteraufgaben wie der Block selbst',
+        hinweis:
+          'Startet der Block Helfer für Unteraufgaben, arbeiten sie mit demselben Modell wie er — statt auf das sparsamere Modell aus den Einstellungen herabgestuft zu werden. Für Blöcke, deren Helfer der Kern der Arbeit sind (wie die Blickwinkel-Prüfer des Audits). Kostet entsprechend mehr.'
+      },
+      audit: {
+        name: 'Audit-Hinweis',
+        hinweis:
+          'Nur ein Hinweis im Ticker beim Start: „bewusst gründlich und teuer". Sonst ändert das Häkchen nichts.'
+      }
+    },
+    // Komfort-Reaktionen beim Anhaken (BAUPLAN 48) — die Regel selbst sitzt im
+    // Hauptprozess (blockRegeln.pruefeVertraeglichkeit).
+    feinheitenTitel: 'Feinheiten',
+    feinheitenHinweis:
+      'Selten nötig. Jedes Häkchen schaltet ein Werkzeug oder eine Pflicht frei, die sonst nur Katalog-Blöcke haben — der Hinweis daneben sagt, was es im Lauf bedeutet.',
+    kennzeichenErgaenzt: (kennzeichen, etikett) =>
+      `Weil „${kennzeichen}" gesetzt ist, steht jetzt „${etikett}" bei „liefert" (Schritt 2) — darüber kommt die Meldung bei FlowForge an.`,
+    kennzeichenNurLesenAus: (kennzeichen) =>
+      `„${kennzeichen}" braucht Schreibrechte — die Sperre „darf nur lesen" ist deshalb aus.`,
+    // Prüfer-Befund 48: „nur lesen" bleibt beim Klick stehen, der Satz sagt den
+    // Konflikt — entschieden wird beim Speichern (harte Regel mit Begründung).
+    kennzeichenKonflikt: (namen) =>
+      `Geht nicht zusammen mit ${namen.map((n) => '„' + n + '"').join(' und ')}: Ein Prüfer oder Bau-Block muss schreiben dürfen. Beim Speichern lehnt FlowForge das ab — nimm eines der Häkchen wieder heraus.`,
+    kennzeichenPrueftAn: (kennzeichen) =>
+      `„${kennzeichen}" gibt es nur für Prüfer — „Prüft" ist deshalb jetzt gesetzt.`,
+    kiFeinheiten: (anzahl) =>
+      anzahl === 1
+        ? 'Die KI hat eine Feinheit vorgeschlagen — unten unter „Feinheiten", mit ihrer Begründung.'
+        : `Die KI hat ${anzahl} Feinheiten vorgeschlagen — unten unter „Feinheiten", mit ihrer Begründung.`,
+    kiBegruendung: (satz) => `KI: ${satz}`,
+    kiBegruendungFehlt: 'Die KI hat das Häkchen gesetzt, aber nicht gesagt, warum — prüf selbst, ob es passt.',
     // Modellklasse eigener Blöcke (BAUPLAN 37): Voreinstellung des Blocks —
     // auf der Leinwand bleibt sie je Karte änderbar.
     modellFeld: 'Modell (Voreinstellung dieses Blocks)',
@@ -277,7 +382,34 @@ export const texte = {
     // Führt zusammen (BAUPLAN 47): ohne Pflicht-Etikett gäbe es nichts, was
     // mehrfach ankommen könnte — das Häkchen liefe ins Leere.
     fuehrtZusammenOhneBraucht:
-      'Ein Block, der zusammenführt, braucht mindestens ein „braucht"-Etikett — sonst gibt es nichts, was mehrfach bei ihm ankommen könnte. Trag eines ein oder nimm das Häkchen wieder heraus.'
+      'Ein Block, der zusammenführt, braucht mindestens ein „braucht"-Etikett — sonst gibt es nichts, was mehrfach bei ihm ankommen könnte. Trag eines ein oder nimm das Häkchen wieder heraus.',
+    // brauchtOptional (BAUPLAN 48): ein Etikett ist Pflicht ODER „falls da".
+    brauchtOptionalDoppelt: (etikett) =>
+      `„${etikett}" steht bei „braucht" und bei „braucht — falls da". Entscheide dich: Pflicht (der Block steckt nur hinter Lieferanten) oder „falls da" (er nimmt es mit, wenn es kommt).`,
+    // Formularfelder (BAUPLAN 48).
+    zuVieleFelder: (max) => `Höchstens ${max} Felder je Block — mehr macht die Blockkarte unübersichtlich.`,
+    feldLabelFehlt: 'Jedes Feld braucht eine Bezeichnung — sie steht auf der Blockkarte über dem Eingabefeld.',
+    feldLabelZuLang: (max) => `Eine Feld-Bezeichnung ist zu lang (höchstens ${max} Zeichen).`,
+    feldPlatzhalterZuLang: (label, max) =>
+      `Der Platzhalter-Text zu „${label}" ist zu lang (höchstens ${max} Zeichen).`,
+    feldIdLeer: (label) =>
+      `Aus der Bezeichnung „${label}" lässt sich kein Platzhalter bilden — sie braucht mindestens einen Buchstaben.`,
+    feldIdDoppelt: (id) =>
+      `Zwei Felder ergeben denselben Platzhalter {{${id}}} — gib ihnen verschiedene Bezeichnungen.`,
+    feldOhnePlatzhalter: (label, id) =>
+      `Das Feld „${label}" kommt im Arbeitsauftrag nicht vor. Schreib {{${id}}} an die Stelle, wo der Agent den Inhalt lesen soll — sonst tippt man es ein, und nichts passiert damit.`,
+    // Verträglichkeit der Kennzeichen (BAUPLAN 48): Jede Meldung nennt die
+    // Folge im Lauf, nicht die Mechanik.
+    prueftNurLesen:
+      'Ein Prüfer muss Tests schreiben und ausführen dürfen — mit der Sperre „darf nur lesen" liefe jede Prüfung ins Leere. Nimm die Sperre heraus oder das Häkchen „Prüft".',
+    prueftOhnePruefbeleg: (etikett) =>
+      `Ein Prüfer muss „${etikett}" liefern — nur darüber kommt sein Urteil bei FlowForge an. Ohne das Etikett gäbe es keine Reparatur-Runde, kein Tor und keine Prüfkarte. Trag „${etikett}" bei „liefert" ein.`,
+    pruefbefehlOhnePrueft:
+      '„Prüfbefehl ist Pflicht" gibt es nur für Prüfer: Das Werkzeug dafür ist sonst gesperrt, und jeder Versuch löste eine Rechte-Rückfrage aus. Setz „Prüft" dazu oder nimm die Pflicht heraus.',
+    startanleitungNurLesen:
+      '„Startanleitung ist Pflicht" passt nicht zu „darf nur lesen": Der Block dürfte die Anleitung nie anlegen, und der Lauf forderte sie endlos nach. Nimm eines von beiden heraus.',
+    kartenZuteilungOhneArbeitspaket: (etikett) =>
+      `Ein Block, der Karten zuteilt, schneidet damit das Arbeitspaket — er muss „${etikett}" liefern, sonst prüft FlowForge am Ende eine Vollständigkeit, die der Block nie melden kann. Trag „${etikett}" bei „liefert" ein.`
   },
   kette: {
     starten: 'Workflow starten',
@@ -1625,7 +1757,9 @@ export const texte = {
       'Antworte AUSSCHLIESSLICH mit einem JSON-Objekt, ohne Erklärtext und ohne ' +
       'Markdown-Zäune, mit genau diesen Feldern:\n' +
       '{"name": "...", "symbol": "...", "beschreibung": "...", "auftrag": "...", ' +
-      '"braucht": ["..."], "liefert": ["..."], "nurLesen": true, "fuehrtZusammen": false}\n\n' +
+      '"braucht": ["..."], "brauchtOptional": ["..."], "liefert": ["..."], ' +
+      '"kennzeichen": {"nurLesen": true}, "begruendungen": {"nurLesen": "..."}, ' +
+      '"felder": []}\n\n' +
       'Regeln:\n' +
       '- name: kurzer deutscher Name (höchstens 40 Zeichen).\n' +
       '- symbol: genau ein passendes Emoji.\n' +
@@ -1637,23 +1771,54 @@ export const texte = {
       'Auftrag mit einer Anweisung, was inhaltlich in seine Ergebnis-Meldung gehört — ' +
       'kompakt (höchstens etwa 25 Zeilen), denn sie ist die Übergabe an die folgenden ' +
       'Blöcke. WIE gemeldet wird, sagt FlowForge dem Agenten selbst; schreibe darüber ' +
-      'nichts. Ist nurLesen true, schreibe ausdrücklich hinein: „Du darfst nichts ' +
-      'verändern — nur lesen."\n' +
+      'nichts. Ist das Kennzeichen nurLesen gesetzt, schreibe ausdrücklich hinein: „Du ' +
+      'darfst nichts verändern — nur lesen."\n' +
       '- braucht: Etiketten der Übergaben, die dieser Block von vorherigen Blöcken ' +
       'zwingend benötigt (höchstens 5, je höchstens 40 Zeichen). Nur was wirklich nötig ' +
       'ist — ein Block ohne braucht kann am Anfang des Workflows stehen.\n' +
+      '- brauchtOptional: Etiketten, die der Block nutzt, wenn ein Block davor sie ' +
+      'liefert, aber nicht verlangt (höchstens 5; ein Etikett steht nie in braucht UND ' +
+      'brauchtOptional). Meist leer.\n' +
       '- liefert: Etiketten für das Ergebnis dieses Blocks, wenn spätere Blöcke es ' +
       'nutzen sollen (höchstens 5).\n' +
-      '- Verwende bei braucht/liefert möglichst diese vorhandenen Etiketten, statt neue ' +
-      'zu erfinden: ' +
+      '- Verwende bei braucht/brauchtOptional/liefert möglichst diese vorhandenen ' +
+      'Etiketten, statt neue zu erfinden: ' +
       etiketten.join(', ') +
-      '.\n' +
-      '- nurLesen: true, wenn der Block nichts am Projekt verändern muss (ansehen, ' +
-      'prüfen, berichten) — im Zweifel die sichere Wahl.\n' +
-      '- fuehrtZusammen: true NUR, wenn der Block mehrere gleichartige Lieferungen ' +
-      'desselben braucht-Etiketts zu einer machen soll (z.B. die Berichte mehrerer ' +
-      'paralleler Blöcke); er bekommt dann alle statt nur der nächsten, und vor ihm ' +
-      'müssen mindestens zwei Blöcke das Etikett liefern. Sonst false.',
+      '.',
+    // Kennzeichen-Zusatz (BAUPLAN 48): alle Kennzeichen, die ein eigener Block
+    // tragen darf, mit Name und Folgen-Hinweis aus DERSELBEN Quelle wie der
+    // Editor (texte.blockEditor.kennzeichen) — plus die Verträglichkeitsregeln
+    // in Klartext. Jedes gesetzte Kennzeichen braucht eine Begründung in
+    // Folgen-Sprache; der Editor zeigt sie neben dem Häkchen.
+    kennzeichenZusatz: (liste) =>
+      '\n- kennzeichen: ein Objekt { schluessel: true/false } mit den Fähigkeiten und ' +
+      'Pflichten des Blocks. Nimm NUR, was die Beschreibung wirklich verlangt — ein ' +
+      'Block ohne besondere Kennzeichen ist der Normalfall. Erlaubte Schlüssel, je mit ' +
+      'Bedeutung für den Lauf:\n' +
+      liste.map((k) => `  · "${k.schluessel}" (${k.name}): ${k.hinweis}`).join('\n') +
+      '\n  Regeln, die zusammenpassen müssen (sonst lehnt FlowForge den Block ab): ' +
+      'nurLesen true, wenn der Block nichts am Projekt verändern muss (ansehen, ' +
+      'berichten) — im Zweifel die sichere Wahl; prueft verlangt nurLesen false und ' +
+      '„Prüfbeleg" in liefert; pruefbefehlPflicht verlangt prueft; ' +
+      'startanleitungPflicht verlangt nurLesen false; kartenZuteilung verlangt ' +
+      '„Arbeitspaket" in liefert; fuehrtZusammen verlangt mindestens ein braucht-Etikett ' +
+      'und gilt NUR, wenn der Block mehrere gleichartige Lieferungen desselben Etiketts ' +
+      'zu einer machen soll (vor ihm müssen dann mindestens zwei Blöcke es liefern).\n' +
+      '- begruendungen: ein Objekt { schluessel: "ein Satz" } NUR für die Kennzeichen, ' +
+      'die du auf true setzt — je ein Satz in Folgen-Sprache für einen ' +
+      'Nicht-Programmierer, warum dieser Block das braucht (höchstens 200 Zeichen). ' +
+      'Kein gesetztes Kennzeichen ohne Begründung.',
+    // Felder-Zusatz (BAUPLAN 48): Formularfelder nur, wenn der Block je Lauf
+    // wirklich eine Eingabe von Georg braucht.
+    felderZusatz: (max) =>
+      '\n- felder: Eingabefelder auf der Blockkarte, deren Inhalt in den Auftrag ' +
+      'eingesetzt wird — je { "label": "...", "platzhalter": "...", "pflicht": true/false }. ' +
+      `Höchstens ${max}; nur, wenn der Block je Lauf wirklich eine Eingabe des Nutzers ` +
+      'braucht (z.B. „Was soll gebaut werden?"). Meist eine leere Liste. Für jedes Feld ' +
+      'schreibe an die passende Stelle im Auftrag den Platzhalter {{id}}, wobei id die ' +
+      'Bezeichnung klein, ohne Umlaute (ae/oe/ue/ss) und mit _ statt Leerzeichen ist ' +
+      '(„Was soll gebaut werden?" → {{was_soll_gebaut_werden}}). pflicht true heißt: ' +
+      'Leer hält der Start an.',
     // Kategorie-Zusatz (BAUPLAN 30): wird an den Auftrag angehängt; die KI
     // wählt eine der vorhandenen Bibliotheks-Klappen, Standard „eigene".
     bereichZusatz: (bereiche) =>
@@ -3341,5 +3506,189 @@ export const texte = {
     chatLabel: 'Nachlauf-Chat',
     chatRolleDu: 'Du',
     chatRolleKi: 'Chat'
+  },
+  // Etiketten-Bibliothek (SPEC §4.5, BAUPLAN 48): Etiketten werden bearbeitbar
+  // wie Blöcke — Klappe in der Blockbibliothek, eigener Editor, Klartext-
+  // Gegenlesen. Texte in Alltagssprache: Folgen, nicht Mechanik.
+  etiketten: {
+    klappeTitel: 'Etiketten',
+    hinweis:
+      'Etiketten verbinden Blöcke: Was ein Block unter einem Etikett liefert, bekommt der nächste, der es braucht. Ein Etikett ohne Felder ist nur ein Name — der Agent meldet dann frei. Mit Feldern weiß er genau, was hinein muss, und FlowForge weist eine unvollständige Meldung sichtbar zurück.',
+    neuesEtikett: 'Neues Etikett',
+    // Kurzform für den Klappen-Kopf (die Bibliotheksspalte ist schmal).
+    neuKnopf: 'Neu',
+    markeKatalog: 'Katalog',
+    markeFest: 'feste Felder',
+    markeUebung: 'Übung',
+    markeMitFeldern: 'mit Feldern',
+    markeAutomatisch: (quelle) =>
+      quelle ? `automatisch, aus Block „${quelle}"` : 'automatisch angelegt',
+    kopieren: 'Kopieren',
+    bearbeiten: 'Bearbeiten',
+    loeschen: 'Löschen',
+    genutztVon: (namen) => `genutzt von: ${namen.join(', ')}`,
+    ungenutzt: 'noch von keinem Block genutzt',
+    loeschenBestaetigung: (name) => `Das Etikett „${name}" wirklich löschen?`,
+    // Editor
+    ueberschriftNeu: 'Neues Etikett',
+    ueberschriftBearbeiten: 'Etikett bearbeiten',
+    ueberschriftKopie: 'Etikett kopieren',
+    // Vorbelegte Beschreibung einer Kopie — nennt Herkunft und wer das Original
+    // im Katalog nutzt; Georg darf sie überschreiben.
+    kopieBeschreibung: (vonName, blockNamen) =>
+      `Eigene Fassung von „${vonName}" (Katalog` +
+      (blockNamen?.length ? `, dort genutzt von ${blockNamen.join(', ')}` : '') +
+      ').',
+    kopieHinweis: (vonName) =>
+      `Eine Kopie ist ein NEUES Etikett: Die Katalog-Blöcke kennen es nicht, es steckt nur an Blöcke, die genau diesen Namen nutzen. Die festen Felder des Katalogs bleiben beim Katalog — hier legst du eigene an. (Kopie von „${vonName}")`,
+    kiFeld: 'Beschreib in deinen Worten, was unter diesem Etikett gemeldet werden soll',
+    kiPlatzhalter:
+      'z.B. Eine Marktanalyse: Zielgruppe in einem Satz, die wichtigsten Wettbewerber als Liste und eine Einschätzung des Preisniveaus',
+    kiKnopf: 'KI schlägt Felder vor',
+    kiLaeuft: 'Die KI schlägt Felder vor …',
+    kiHinweis:
+      'Die KI füllt Name, Beschreibung und Felder aus — du kannst danach alles von Hand ändern. Oder du füllst das Formular gleich selbst aus.',
+    nameFeld: 'Name des Etiketts',
+    namePlatzhalter: 'z.B. Marktanalyse',
+    nameHinweis:
+      'So heißt das Etikett an den Blöcken (braucht/liefert). Groß/Klein zählt nicht: „marktanalyse" und „Marktanalyse" sind dasselbe Etikett.',
+    beschreibungFeld: 'Beschreibung (optional)',
+    beschreibungHinweis:
+      'Ein Satz, was unter diesem Etikett geliefert wird — steht in der Bibliothek und als Vorschlag im Block-Editor.',
+    felderTitel: 'Felder (optional)',
+    felderHinweis: (max) =>
+      `Ohne Felder meldet der Agent frei (Fazit, Erledigt, Offen, Anmerkung und ein Freitext). Mit Feldern meldet er genau diese — Pflichtfelder müssen gefüllt sein, sonst weist FlowForge die Meldung zurück und er bessert nach. Höchstens ${max} Felder, keine Verschachtelung.`,
+    feldBezeichnung: 'Bezeichnung',
+    feldBezeichnungPlatzhalter: 'z.B. Zielgruppe',
+    feldArt: 'Art',
+    feldWerte: 'Auswahlwerte (durch Komma getrennt)',
+    feldWertePlatzhalter: 'z.B. niedrig, mittel, hoch',
+    feldPflicht: 'Pflicht',
+    feldHinweis: 'Hinweis für den Agenten (optional)',
+    feldHinweisPlatzhalter: 'z.B. In einem Satz: für wen das Produkt gedacht ist',
+    feldEntfernen: 'Feld entfernen',
+    feldHinzufuegen: '+ Feld',
+    feldSchluesselAnzeige: (schluessel) => `Feldname im Werkzeug: ${schluessel}`,
+    artNamen: {
+      text: 'ein Satz',
+      langtext: 'Text (mehrzeilig)',
+      liste: 'Liste',
+      auswahl: 'Auswahl'
+    },
+    vorschauTitel: 'So liest es der Agent',
+    speichern: 'Etikett speichern',
+    abbrechen: 'Abbrechen',
+    // Klartext (etikettRegeln.etikettKlartext) — EINE Quelle für Editor-
+    // Vorschau, Bibliothek und das Gegenlesen des Assistenten.
+    klartext: {
+      mitFeldern: (name, teile) =>
+        `Wer „${name}" liefert, gibt an: ${teile.join(' · ')}. Dazu immer Fazit, Erledigt, Offen und eine Anmerkung.`,
+      ohneFelder: (name) =>
+        `Wer „${name}" liefert, meldet frei: Fazit, Erledigt, Offen, Anmerkung und einen Freitext.`,
+      fest: (name, werkzeug) =>
+        `Wer „${name}" liefert, meldet in den festen Feldern des Katalogs (Werkzeug ${werkzeug}).`,
+      arten: {
+        text: 'ein Satz',
+        langtext: 'Text',
+        liste: 'Liste',
+        auswahl: (werte) => `Auswahl: ${werte.join(', ')}`
+      },
+      pflicht: 'Pflicht'
+    },
+    // Hinweise nach dem Block-Speichern (K2): einmalig, kein Gefahr-Knopf.
+    hinweiseTitel: 'Beim Speichern des Blocks ist Folgendes passiert:'
+  },
+  // Harte Regeln für Etiketten (etikettRegeln.js, BAUPLAN 48) — durchgesetzt im
+  // Hauptprozess, die Oberfläche zeigt die Sätze.
+  etikettRegeln: {
+    nameFehlt: 'Bitte gib dem Etikett einen Namen.',
+    nameZuLang: (max) => `Der Name ist zu lang (höchstens ${max} Zeichen).`,
+    nameKatalog: (name, fest = false) =>
+      `„${name}" ist ein Etikett des Katalogs — das lässt sich nicht überschreiben, sonst brächen die Vorlagen still. ` +
+      (fest ? 'Nimm einen anderen Namen.' : 'Kopiere es oder nimm einen anderen Namen.'),
+    nameVergeben: (name) =>
+      `Ein Etikett „${name}" gibt es schon (Groß/Klein zählt nicht). Bearbeite das vorhandene oder nimm einen anderen Namen.`,
+    beschreibungZuLang: (max) => `Die Beschreibung ist zu lang (höchstens ${max} Zeichen).`,
+    zuVieleFelder: (max) => `Höchstens ${max} Felder je Etikett — was darüber hinausgeht, gehört in die Anmerkung.`,
+    feldBezeichnungFehlt: (nummer) => `Feld ${nummer} braucht eine Bezeichnung.`,
+    feldBezeichnungZuLang: (bezeichnung, max) =>
+      `Die Bezeichnung „${bezeichnung}" ist zu lang (höchstens ${max} Zeichen).`,
+    feldArtUnbekannt: (bezeichnung, arten) =>
+      `Das Feld „${bezeichnung}" hat keine gültige Art. Möglich ist: ${arten.join(', ')}.`,
+    feldSchluesselLeer: (bezeichnung) =>
+      `Aus der Bezeichnung „${bezeichnung}" lässt sich kein Feldname bilden — sie braucht mindestens einen Buchstaben.`,
+    feldSchluesselReserviert: (bezeichnung, schluessel) =>
+      `Das Feld „${bezeichnung}" hieße im Werkzeug „${schluessel}" — dieser Name ist schon der gemeinsame Rahmen jeder Meldung (Fazit, Erledigt, Offen, Anmerkung, Etikett, Inhalt). Nimm eine andere Bezeichnung.`,
+    feldSchluesselDoppelt: (bezeichnung, schluessel) =>
+      `Zwei Felder hießen im Werkzeug gleich („${schluessel}", bei „${bezeichnung}") — der Agent könnte sie nicht auseinanderhalten. Gib ihnen verschiedene Bezeichnungen.`,
+    auswahlWerte: (bezeichnung, min, max) =>
+      `Eine Auswahl „${bezeichnung}" braucht ${min} bis ${max} Werte, durch Komma getrennt.`,
+    auswahlWertZuLang: (bezeichnung, max) =>
+      `Ein Auswahlwert bei „${bezeichnung}" ist zu lang (höchstens ${max} Zeichen).`,
+    feldHinweisZuLang: (bezeichnung, max) =>
+      `Der Hinweis zu „${bezeichnung}" ist zu lang (höchstens ${max} Zeichen).`,
+    fehlerWaehrendLauf: (projekt) =>
+      `Im Projekt „${projekt}" läuft oder wartet gerade ein Workflow mit einem Block, der dieses Etikett nutzt. Warte, bis er fertig ist — dann kannst du Name oder Felder ändern.`,
+    fehlerNochVerwendet: (namen) =>
+      `Dieses Etikett nutzen noch diese Blöcke: ${namen.join(', ')}. Nimm es dort erst aus braucht/liefert — dann lässt es sich löschen.`,
+    fehlerUnbekannt: 'Dieses Etikett gibt es nicht (mehr).',
+    fehlerBeschreibungFehlt: 'Beschreib zuerst in ein paar Worten, was unter dem Etikett gemeldet werden soll.',
+    fehlerKeinVorschlag:
+      'Die KI hat keinen brauchbaren Vorschlag geliefert. Versuch es noch einmal — oder füll die Felder von Hand aus.',
+    // Hinweise aus dem Block-Speichern (K2): Auto-Anlage und Schreibweise.
+    hinweisNeuAngelegt: (name) =>
+      `Etikett „${name}" wurde neu angelegt (ohne Felder — der Agent meldet frei). Du findest es in der Klappe „Etiketten".`,
+    hinweisSchreibweise: (alt, neu) => `„${alt}" wurde zu „${neu}" — so heißt das Etikett schon.`
+  },
+  // KI-Assistent des Etikett-Editors (BAUPLAN 48): Beschreibung in
+  // Alltagssprache → Name, Beschreibung, Felder.
+  agentenEtikettAssistent: {
+    auftrag: (beschreibung, name, arten, felderMax) =>
+      'Du hilfst im Etikett-Editor von FlowForge, einer App, in der ein Nicht-Programmierer ' +
+      'Coding-Workflows aus Blöcken baut. Ein Etikett ist der Name einer Übergabe zwischen ' +
+      'Blöcken: Ein Block liefert sie, der nächste braucht sie. Ein Etikett kann Felder ' +
+      'haben — dann meldet der KI-Agent des liefernden Blocks genau diese Felder über ein ' +
+      'Werkzeug, und FlowForge weist eine unvollständige Meldung zurück. Der Nutzer hat ' +
+      'beschrieben, was unter dem Etikett gemeldet werden soll — du füllst daraus das ' +
+      'Formular aus.\n\n' +
+      'Beschreibung des Nutzers:\n' +
+      beschreibung +
+      (name ? `\n\nVorhandener Name des Etiketts (behalte ihn, wenn er passt): ${name}` : '') +
+      '\n\n' +
+      'Antworte AUSSCHLIESSLICH mit einem JSON-Objekt, ohne Erklärtext und ohne ' +
+      'Markdown-Zäune, mit genau diesen Feldern:\n' +
+      '{"name": "...", "beschreibung": "...", "felder": [{"bezeichnung": "...", "art": "text", ' +
+      '"werte": [], "pflicht": true, "hinweis": "..."}]}\n\n' +
+      'Regeln:\n' +
+      '- name: kurzer deutscher Name des Etiketts (höchstens 40 Zeichen), ein Hauptwort wie ' +
+      '„Marktanalyse" oder „Testplan".\n' +
+      '- beschreibung: ein Satz, was unter diesem Etikett geliefert wird (höchstens 200 Zeichen).\n' +
+      `- felder: höchstens ${felderMax}, flach (keine Verschachtelung). Nur Felder, die der ` +
+      'nächste Block wirklich braucht — Fazit, Erledigt, Offen und Anmerkung hat jede Meldung ' +
+      'ohnehin, lege sie NICHT als Felder an. Lieber wenige klare Felder als viele.\n' +
+      '- bezeichnung: Klartext für den Menschen (höchstens 60 Zeichen), z.B. „Zielgruppe".\n' +
+      '- art: genau eine von ' +
+      arten.map((a) => `"${a.schluessel}" (${a.name})`).join(', ') +
+      '. "text" für einen Satz, "langtext" für mehrere Absätze, "liste" für Stichpunkte, ' +
+      '"auswahl" für eine Einstufung mit festen Werten.\n' +
+      '- werte: nur bei "auswahl" — 2 bis 12 kurze Werte (je höchstens 40 Zeichen), sonst [].\n' +
+      '- pflicht: true, wenn der nächste Block ohne dieses Feld nicht arbeiten kann; sonst false.\n' +
+      '- hinweis: ein Satz für den Agenten, was genau in das Feld gehört (höchstens 200 Zeichen); ' +
+      'er wird die Feldbeschreibung im Werkzeug.'
+  },
+  // Lieferschein-Texte für eigene Etiketten mit Feldern (BAUPLAN 48) — eigene
+  // Gruppe neben texte.lieferschein, damit kein Etikett-Name einen festen
+  // Schlüssel dort trifft (ein Etikett „Eigen" träfe sonst werkzeuge.eigen).
+  lieferscheinEtiketten: {
+    werkzeugEigen: (name, klartext) =>
+      `Meldet deine Lieferung „${name}" an FlowForge — Pflicht zum Abschluss deines Blocks. ` +
+      klartext +
+      ' Pflichtfelder müssen gefüllt sein; Auswahlfelder nehmen nur die genannten Werte.',
+    auswahlBeschreibung: (werte) => `Auswahl: ${werte.join(', ')}.`,
+    pflichtZusatz: ' Pflichtfeld.',
+    auswahlUngueltig: (feld, werte) =>
+      `Das Feld ${feld} nimmt nur diese Werte: ${werte.join(', ')}. Wähle genau einen davon.`,
+    etikettOhneForm: (etikett) =>
+      `Für „${etikett}" gibt es in FlowForge gerade keine Form mit Feldern — melde über melde_ergebnis.`
   }
 }

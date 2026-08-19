@@ -18,7 +18,12 @@ import {
   schaubildReihenfolge,
   vorfahrenSortiert
 } from '../../shared/kettenRegeln.js'
-import { beanstandungZeile, fundZeile, zuschnitteAusMeldung } from '../../shared/lieferschein.js'
+import {
+  beanstandungZeile,
+  eigeneFelderZeilen,
+  fundZeile,
+  zuschnitteAusMeldung
+} from '../../shared/lieferschein.js'
 import { BlockChips } from './Blockbibliothek.jsx'
 import Bestaetigung from './Bestaetigung.jsx'
 import VerbrauchZeile from './VerbrauchZeile.jsx'
@@ -532,6 +537,13 @@ function LieferscheinAnsicht({ meldungen }) {
               <p className="bericht-zeile">{tl.keineFunde}</p>
             ))}
           {m.art === 'rahmen' && m.inhalt && <p className="bericht-zeile">{m.inhalt}</p>}
+          {/* Eigenes Etikett mit Form (BAUPLAN 48): die Meldung trägt ihre
+              Felder selbst (Bezeichnung + Wert) — so bleibt der Bericht
+              lesbar, auch wenn Georg das Etikett später umbaut. */}
+          {m.art === 'eigen' &&
+            eigeneFelderZeilen(m).map((feld, f) => (
+              <Abschnitt key={f} label={feld.bezeichnung} zeilen={feld.zeilen} />
+            ))}
           <Abschnitt label={tl.labels.getan} zeilen={m.getan} />
           <Abschnitt label={tl.labels.offen} zeilen={m.offen} />
           {m.anmerkung && (
