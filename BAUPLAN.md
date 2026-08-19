@@ -817,6 +817,79 @@ eigenes Etikett „Marktanalyse" mit drei Feldern, steckt beides in eine Kette u
 sie laufen: Sein Block meldet über den Lieferschein wie ein Katalog-Block, und eine
 unvollständige Marktanalyse wird sichtbar zurückgewiesen.
 
+## Paket 49–51: Lokale Block-Agenten — Opus an den Enden, die lokale KI in der Mitte
+
+(Planungs-Entscheidung Georg, 19.08.2026, nach Abschluss von 48. Zielbild: Paket schneiden,
+Integrator und ein Abnahme-Prüfer laufen auf Opus; Bauer und — in zweiter Stufe — der erste
+Prüfer laufen auf Georgs lokaler KI. Grundlage: Ollama spricht seit Ende 2025 die
+Anthropic-Schnittstelle nativ, und die Claude-CLI bzw. das Agent-SDK lässt sich per Umgebung
+dorthin umbiegen — `ANTHROPIC_BASE_URL=http://<ollama>:11434`, `ANTHROPIC_AUTH_TOKEN=ollama`,
+`ANTHROPIC_API_KEY=""`, Modell = Ollama-Modellname; Ollama-Doku „Claude Code", Empfehlung
+Kontext ≥ 64k. Folge für FlowForge: **kein eigener Agenten-Kreislauf** nötig — ein lokaler
+Block ist derselbe Motor mit denselben Werkzeugen, Lieferschein-Meldungen, Sperren und Hooks,
+nur mit anderer Umgebung. Die SPEC-Zeile „V2: vollwertiger lokaler Motor" schrumpft damit auf
+„zweite Motor-Instanz mit Ollama-Umgebung".)
+
+Leitgedanken: (1) Die Umgebung gilt **je Motor-Prozess** — eine Lauf-Session kann nicht je
+Unteraufgabe zwischen Anthropic und Ollama wechseln. Deshalb bekommt ein lokaler Block seine
+**eigene Motor-Instanz** (den Mechanismus gibt es seit 46 für parallele Zweige); der Haiku-
+Koordinator der Hauptsession sieht ihn nicht, FlowForge reicht danach normal weiter.
+(2) Die lokale Helfer-KI (Bauschritt 20–22, `lokal_*`-Werkzeuge) bleibt, was sie ist — ein
+lokaler Block-Agent darf sie genauso nutzen wie ein Claude-Block. (3) Was die lokale KI taugt,
+entscheiden die Metriken (Reparatur-Runden, Tor-Urteile, Teilstück-Quoten), nicht die Planung.
+
+### 49 — Modellklasse „lokal": Block-Agent über Ollama im Anthropic-Modus
+- **Zuerst die Machbarkeitsprobe** (Pflicht, vor jedem Umbau, auf Georgs Rechner gegen sein
+  Qwen-27B): das Agent-SDK mit Ollama-Umgebung starten und drei Dinge messen — (a) ruft das
+  Modell unsere MCP-Werkzeuge sauber auf (melde_*, karten, mensch_fragen; der Übersetzungsgriff
+  für „getarnte" Aufrufe aus 0.22.1 greift hier NICHT, die Schnittstelle ist eine andere),
+  (b) verträgt es das Unteraufgaben-Werkzeug (Agent), (c) wie lange braucht ein Bauer-Auftrag
+  mit Zuschnitt + Übergaben bei 64k. Ergebnis bestimmt den Zuschnitt: Geht (a) und (c), gibt 49
+  den Bauer frei; scheitert (b), laufen lokale Blöcke ohne Unteraufgaben (Einstellung
+  „Unteraufgaben" wird für sie ignoriert, Ticker sagt es); scheitert (a), endet 49 als
+  Befund im BAUPLAN — kein Umbau ins Blaue.
+- **Vierte Modellklasse „lokal"** (§2): an jeder Blockkarte wählbar, im Block-Editor als
+  Voreinstellung, im Katalog nirgends Voreinstellung. Übersetzung in den Modellnamen kommt aus
+  den Einstellungen (Ollama-Adresse und Modell gibt es seit Bauschritt 20/31; neu: Häkchen
+  „als Block-Agent erlaubt", Kontextfenster aus 0.46.3 gilt mit). Ohne eingeschaltete lokale
+  KI lehnt der Start einen lokalen Block mit Klartext ab (kein stiller Rückfall auf Claude —
+  sonst bezahlt Georg, was er lokal wollte).
+- **Eigene Motor-Instanz je lokalem Block:** Umgebung mit `ANTHROPIC_BASE_URL`/`AUTH_TOKEN`,
+  ohne Abo-Anmeldung; die Umgebungs-Bereinigung beim Motorstart (räumt heute bewusst alle
+  ANTHROPIC_*-Variablen weg) bekommt die Ausnahme. Sperren, Lieferschein, Rechte-Rückfragen,
+  Sicherungspunkte, Dateilisten-Sperre, Tor: unverändert — sie sitzen am Werkzeugaufruf und
+  im Hauptprozess, nicht im Modell. Übertrag: der lokale Motor misst seinen eigenen Faden.
+  Welle (46): ein lokaler Block zur Zeit je Ollama-Adresse (eine GPU), der Planer weiß das.
+- **Sichtbar und messbar:** Ticker und Laufbericht nennen „lokal (<Modellname>)" wie heute die
+  Klasse; Metriken (§3.4) führen „lokal" als eigene Klasse — Erstläufe, Reparatur-Runden,
+  Dauer, Tokens (Ollama liefert usage) — damit Georg sieht, ob sich die Karte rechnet.
+- Nachzuziehen: SPEC §2 (vierte Klasse, V2-Satz ersetzen), §5 (Motor-Instanz je lokalem
+  Block), §3.4 (Klasse „lokal"), §4.1 (Karte), §4.5 (Editor-Voreinstellung).
+**Alltagstest:** Georg stellt in „Feature hinzufügen" den Bauer auf „lokal", lässt den
+Workflow am Moorhuhn laufen: Paket schneiden (Opus) schneidet, der lokale Bauer baut im
+Datenvertrag, meldet über den Lieferschein, der Opus-Prüfer urteilt; im Laufbericht steht
+beim Bauer „lokal (qwen…)" und in den Metriken eine eigene Zeile dafür.
+
+### 50 — Lokaler Prüfer mit Opus-Abnahme
+- Prüfer-Block auf „lokal" freigeben — aber die Vorlagen bekommen hinter einem lokalen
+  Prüfer eine **Pflicht-Abnahme durch einen Claude-Prüfer** (Zweitaudit-Muster aus 0.46.2:
+  die Prüfung der Prüfung ersetzt die Prüfung); die Steck-Prüfung sagt es, wenn ein lokaler
+  Prüfer allein vor dem Sessionende steht (Hinweis, keine Sperre — „Rückfrage statt Sperre").
+- Das Tor ohne KI (35) ist hier der Anker: Der Prüfbefehl des lokalen Prüfers wird mechanisch
+  nachgespielt, das Urteil hängt nicht allein an seiner Urteilskraft.
+- Metrik „Urteil lokal vs. Abnahme Opus" (wie oft widerspricht die Abnahme?) — das ist die
+  Zahl, an der Georg entscheidet, ob der lokale Prüfer bleibt.
+**Alltagstest:** Kette Bauer (lokal) → Prüfer (lokal) → Prüfer (Opus) → Sessionende; der
+Laufbericht zeigt beide Urteile nebeneinander.
+
+### 51 — Lokale Blöcke in der Welle und im Alltag
+- Mehrere lokale Bauer parallel, sobald mehrere Ollama-Adressen/GPUs eingetragen sind
+  (Einstellungen: Liste statt eine Adresse); sonst nacheinander mit ehrlichem Ticker-Grund.
+- Kosten-/Kontingent-Sicht: Metriken zeigen je Lauf „davon lokal" (Tokens, Dauer) neben dem
+  Abo-Verbrauch; Empfehlung im Co-Pilot, welche Blöcke lokal gut liefen.
+**Alltagstest:** Zwei lokale Bauer in einer Welle (oder nacheinander mit Grund im Ticker),
+Metriken weisen den lokalen Anteil des Laufs aus.
+
 ## Reihenfolge-Begründung (Paket 40–48)
 Im Paket 40–48 bestimmt die Angriffsliste die Reihenfolge, nicht der Nutzen: Die
 Kanten müssen verlustfrei sein (40), bevor ein Auftrag verspricht, wohin eine
