@@ -160,7 +160,7 @@ describe('0.46.4 · Veröffentlichung', () => {
     expect(aktiv).toEqual(['github: [georgwinter89-cloud]'])
   })
 
-  it('kein Geheimnis im getrackten Repo (Schlüssel, Heimnetz-IP, Nutzerpfad)', () => {
+  it('kein Geheimnis im getrackten Repo (Schlüssel, Heimnetz-IP, Benutzerpfad, E-Mail)', () => {
     const dateien = execSync('git ls-files', { cwd: wurzel, encoding: 'utf8' })
       .split(/\r?\n/)
       .filter((d) => d && !d.endsWith('.ttf') && !d.endsWith('.png') && d !== 'package-lock.json')
@@ -168,7 +168,9 @@ describe('0.46.4 · Veröffentlichung', () => {
       const inhalt = fs.readFileSync(path.join(wurzel, datei), 'utf8')
       expect(inhalt, datei).not.toMatch(/sk-ant-[A-Za-z0-9_-]{8,}/)
       expect(inhalt, datei).not.toMatch(/192\.168\.\d+\.\d+/)
+      // Kein echter Windows-Benutzerpfad — die fiktive Testadresse C:\Users\Georg ist erlaubt.
       expect(inhalt, datei).not.toMatch(/Users[\\/]+(?!Georg[\\/])[A-Za-z0-9._-]+[\\/]+AppData/)
+      expect(inhalt, datei).not.toMatch(/[a-z0-9._-]+@(gmail|googlemail|gmx|web|outlook|hotmail)\./i)
     }
   })
 })
