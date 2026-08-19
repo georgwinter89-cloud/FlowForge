@@ -55,6 +55,14 @@ const STANDARD = {
   // Adresse des Ollama-Servers — localhost oder ein anderer Rechner im
   // Heimnetz (z.B. der Gaming-PC mit richtiger Grafikkarte).
   lokaleHelferAdresse: 'http://127.0.0.1:11434',
+  // Adress-LISTE (BAUPLAN 51): mehrere Ollama-Rechner/GPUs — je Adresse läuft
+  // ein lokaler Block zur Zeit, mit mehreren Adressen laufen sie parallel.
+  // einstellungenLaden garantiert die Liste IMMER als nicht-leeres Array
+  // bereinigter Adressen; Element 0 ist die bisherige Adresse und bleibt der
+  // Anker für Helfer-KI und lokale Vorreparatur. Das alte Einzelfeld oben
+  // wird als Spiegel adressen[0] weitergeführt — Alt-Lesestellen und Tests
+  // bleiben gültig.
+  lokaleHelferAdressen: ['http://127.0.0.1:11434'],
   // Kontext-Fenster der lokalen KI in Token (32k / 64k / 128k; Wunsch Georg
   // 18.08.2026 für ein 27B-Modell auf einer 32-GB-Karte). Die Werkzeug-Deckel
   // der lokalen KI wachsen mit (lokaleHelfer.js). Standard 64k: passt bei 27B
@@ -81,6 +89,29 @@ const STANDARD = {
 
 const KONTEXT_WAHL = [32768, 65536, 131072]
 
+// Eine Ollama-Adresse säubern: trim, End-Slashes weg, muss mit http(s)://
+// beginnen — sonst null (die Liste verwirft Ungültiges, statt still zu ersetzen).
+function adresseBereinigen(roh) {
+  const wert = String(roh ?? '')
+    .trim()
+    .replace(/\/+$/, '')
+  return /^https?:\/\/.+/.test(wert) ? wert : null
+}
+
+// Die Adress-Liste säubern (BAUPLAN 51): je Eintrag dieselbe Regel wie bisher
+// beim Einzelfeld, Ungültige verwerfen, exakte String-Duplikate entfernen —
+// und nie leer: ohne gültigen Eintrag gilt der Standard. Aliasse (localhost
+// vs. 127.0.0.1) bleiben absichtlich beide stehen — das ist nur per Hinweis-
+// text ehrlich benennbar, nicht mechanisch prüfbar (V5).
+function adressListeBereinigen(liste) {
+  const sauber = []
+  for (const roh of Array.isArray(liste) ? liste : []) {
+    const wert = adresseBereinigen(roh)
+    if (wert && !sauber.includes(wert)) sauber.push(wert)
+  }
+  return sauber.length ? sauber : [...STANDARD.lokaleHelferAdressen]
+}
+
 function dateiPfad() {
   return path.join(app.getPath('userData'), 'einstellungen.json')
 }
@@ -101,6 +132,21 @@ export function einstellungenLaden() {
   // eine ältere oder von Hand bearbeitete Datei darf keine halben Objekte
   // durchreichen.
   daten.lokalFein = lokalFeinBereinigen(daten.lokalFein)
+  // Migration Adress-Liste (BAUPLAN 51) — AUSSCHLIESSLICH hier, nach dem
+  // Merge (Muster lokalFeinBereinigen): Fehlt das Array (ältere Datei), wird
+  // der alte Einzel-String zur Ein-Element-Liste. Danach ist die Liste IMMER
+  // ein nicht-leeres Array bereinigter Adressen, und das alte Feld spiegelt
+  // Element 0 — gemockte einstellungenLaden-Ketten (lokalerPrueferLauf.test)
+  // ziehen damit gratis mit.
+  // Wichtig: in GESPEICHERT nachsehen, nicht im Merge-Ergebnis — der
+  // STANDARD-Merge liefert immer ein Array und würde die Migration des
+  // alten Strings sonst still verschlucken.
+  daten.lokaleHelferAdressen = adressListeBereinigen(
+    Array.isArray(gespeichert.lokaleHelferAdressen)
+      ? gespeichert.lokaleHelferAdressen
+      : [daten.lokaleHelferAdresse]
+  )
+  daten.lokaleHelferAdresse = daten.lokaleHelferAdressen[0]
   return {
     ok: true,
     einstellungen: daten,
@@ -165,6 +211,16 @@ export function einstellungenSpeichern(neu) {
   if (modus === 'api' && (!Number.isFinite(obergrenze) || obergrenze <= 0))
     return { ok: false, fehler: texte.einstellungen.fehlerObergrenze }
 
+  // Adress-Liste (BAUPLAN 51): je Eintrag bereinigen, Ungültige verwerfen,
+  // Duplikate raus, leer → Standard. Aufrufer ohne Array (Erststart vor der
+  // Migration, ältere Prüfungen) fallen auf das Einzelfeld zurück — sonst
+  // verlöre jedes Speichern ohne das Feld die Liste still.
+  const adressen = adressListeBereinigen(
+    Array.isArray(neu.lokaleHelferAdressen)
+      ? neu.lokaleHelferAdressen
+      : [neu.lokaleHelferAdresse]
+  )
+
   const daten = {
     motorModus: modus,
     apiSchluessel: schluessel,
@@ -182,10 +238,10 @@ export function einstellungenSpeichern(neu) {
       neu.lokaleHelferQuote == null ? STANDARD.lokaleHelferQuote : Boolean(neu.lokaleHelferQuote),
     lokaleHelferModell:
       String(neu.lokaleHelferModell ?? '').trim() || STANDARD.lokaleHelferModell,
-    lokaleHelferAdresse: (() => {
-      const roh = String(neu.lokaleHelferAdresse ?? '').trim().replace(/\/+$/, '')
-      return /^https?:\/\/.+/.test(roh) ? roh : STANDARD.lokaleHelferAdresse
-    })(),
+    // Das Einzelfeld ist seit BAUPLAN 51 der Spiegel von adressen[0] — es
+    // wird IMMER mitgeschrieben, damit Alt-Lesestellen gültig bleiben.
+    lokaleHelferAdressen: adressen,
+    lokaleHelferAdresse: adressen[0],
     // Nur die drei bekannten Fenster; alles andere (auch ein fehlendes Feld
     // älterer Aufrufer) fällt auf den Standard zurück.
     lokaleHelferKontext: KONTEXT_WAHL.includes(Number(neu.lokaleHelferKontext))

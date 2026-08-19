@@ -15,12 +15,13 @@
 //    (metrikRegeln.laufExtraktAusBericht) und nach Änderungszeit
 //    zwischengespeichert; Projekte, deren Ordner fehlt, werden mit Hinweis
 //    übersprungen. Nur Nachschlagewerk — nichts davon wandert je in einen
-//    Auftrag (SPEC §10: kein Agenten-Selbstvermessen, wohl aber das
-//    Messinstrument des Nutzers).
+//    Lauf-Auftrag (SPEC §10: kein Agenten-Selbstvermessen, wohl aber das
+//    Messinstrument des Nutzers; einzige Ausnahme ist die Lokale Bilanz des
+//    Co-Pilot, siehe lokaleBilanzLaden unten).
 import { app } from 'electron'
 import fs from 'node:fs'
 import path from 'node:path'
-import { laufExtraktAusBericht, urteilPruefen } from '../shared/metrikRegeln.js'
+import { laufExtraktAusBericht, lokaleBilanz, urteilPruefen } from '../shared/metrikRegeln.js'
 import { projekteLaden } from './projekte.js'
 
 const BERICHTE_ORDNER = 'laufberichte'
@@ -124,5 +125,25 @@ export function metrikenLaden() {
     fehlendeProjekte: projekte.filter((p) => !p.gefunden).map((p) => p.pfad),
     laeufe,
     urteile: metrikUrteileLesen()
+  }
+}
+
+// Lokale Bilanz (BAUPLAN 51): Datengrundlage für den Datenblock im Co-Pilot-
+// Systemtext — dieselben Quellen wie die Metriken-Seite (Urteile global,
+// Extrakte aller bekannten Projekte; der extraktCache fängt die IO-Kosten).
+// Der Co-Pilot ist das Sprachrohr des Nutzers, kein Lauf-Agent — seine Bilanz
+// wandert nie in einen Lauf-Auftrag (SPEC §3.4/§10, Präzisierung Bauschritt 51).
+// Metriken sind Nebensache: Ein Lesefehler darf den Chat nicht stören.
+export function lokaleBilanzLaden() {
+  try {
+    const projekte = projekteLaden().projekte
+    const laeufe = []
+    for (const projekt of projekte) {
+      if (!projekt.gefunden) continue
+      laeufe.push(...laufExtrakteEinesProjekts(projekt.pfad))
+    }
+    return lokaleBilanz(metrikUrteileLesen(), laeufe)
+  } catch {
+    return { vorhanden: false, zeilen: [], weggelassen: 0, torNachspiele: 0, torWidersprueche: 0, torQuote: null }
   }
 }

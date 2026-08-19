@@ -1,4 +1,14 @@
 // Alle Oberflächen-Texte zentral an einem Ort (Deutsch; weitere Sprachen in V2).
+
+// Dauer in Alltagssprache (BAUPLAN 51): Sekunden nur unter einer Minute —
+// gebraucht von den Metriken („davon lokal", Ø-Dauer) und dem Laufbericht.
+function dauerKurz(ms) {
+  const sekunden = Math.round(ms / 1000)
+  if (!Number.isFinite(sekunden) || sekunden < 0) return '—'
+  if (sekunden < 60) return `${sekunden} s`
+  return `${Math.round(sekunden / 60)} Min`
+}
+
 export const texte = {
   fensterTitel: 'FlowForge',
   // Kopfleiste = Titelleiste der dunklen Werkbank (Mockup-Runden 3+4).
@@ -15,7 +25,10 @@ export const texte = {
   metriken: {
     ueberschrift: 'Metriken',
     untertitel:
-      'Was die lokale KI taugt und was der Motor kostet — über alle Läufe hinweg. Nur zum Nachschlagen; kein Agent bekommt diese Zahlen zu sehen.',
+      'Was die lokale KI taugt und was der Motor kostet — über alle Läufe hinweg. Nur zum ' +
+      'Nachschlagen; kein Lauf-Agent bekommt diese Zahlen zu sehen. Einzige Ausnahme: Der ' +
+      'Co-Pilot kennt die „Lokale Bilanz" (was lokal gut lief), um dich zu beraten — in ' +
+      'einen Lauf-Auftrag wandert davon nichts.',
     aktualisieren: 'Aktualisieren',
     laedt: 'Metriken werden gelesen …',
     filterAlle: 'Alle Projekte',
@@ -47,7 +60,20 @@ export const texte = {
     gesamtZeile: (g) =>
       `${g.anzahl} ${g.anzahl === 1 ? 'Lauf' : 'Läufe'} · ${g.tokens.toLocaleString('de-DE')} Tokens` +
       (g.mitKosten > 0 ? ` · ${g.kostenUsd.toFixed(2).replace('.', ',')} $ theoretische Kosten` : '') +
-      (g.ohneKosten > 0 ? ` (${g.ohneKosten} ${g.ohneKosten === 1 ? 'Lauf' : 'Läufe'} ohne Kostenangabe)` : ''),
+      (g.ohneKosten > 0 ? ` (${g.ohneKosten} ${g.ohneKosten === 1 ? 'Lauf' : 'Läufe'} ohne Kostenangabe)` : '') +
+      // „Davon lokal" (BAUPLAN 51): lokale Tokens stehen als Beschriftung
+      // NEBEN der Gesamtsumme — nie still herausgerechnet, Altberichte
+      // widersprächen sonst. Der Abo-Anteil ist gesamt minus lokal.
+      texte.metriken.davonLokalZusatz(g),
+    davonLokalZusatz: (g) =>
+      g.lokalTokens > 0
+        ? ` · davon lokal: ${g.lokalTokens.toLocaleString('de-DE')} Tokens` +
+          (g.mitLokalDauer > 0 ? `, ${dauerKurz(g.lokalDauerMs)}` : '') +
+          (g.ohneLokalDauer > 0
+            ? ` (${g.ohneLokalDauer} ${g.ohneLokalDauer === 1 ? 'Lauf' : 'Läufe'} ohne Dauer-Angabe)`
+            : '') +
+          ` · Abo-Anteil: ${Math.max(0, g.tokens - g.lokalTokens).toLocaleString('de-DE')} Tokens`
+        : '',
     ohneKosten: 'ohne Kosten',
     ohneVerbrauch: 'ohne Verbrauch',
     ohneAngabe: (n, was) => `${n} ${was}`,
@@ -72,7 +98,18 @@ export const texte = {
     wocheZeile: (w) =>
       `${w.anzahl} ${w.anzahl === 1 ? 'Lauf' : 'Läufe'} · ${w.tokens.toLocaleString('de-DE')} Tokens` +
       (w.mitKosten > 0 ? ` · ${w.kostenUsd.toFixed(2).replace('.', ',')} $` : '') +
-      (w.ohneKosten > 0 ? ` (${w.ohneKosten} ohne Kosten)` : ''),
+      (w.ohneKosten > 0 ? ` (${w.ohneKosten} ohne Kosten)` : '') +
+      (w.lokalTokens > 0 ? ` · davon lokal: ${w.lokalTokens.toLocaleString('de-DE')}` : ''),
+    // „Davon lokal" als Spalte (Ketten-/Projekt-Tabellen) und im Laufbericht
+    // (Leinwand liest diese Texte mit — sie gehören zur Kontingent-Sicht).
+    spalteDavonLokal: 'davon lokal',
+    spalteDauerDurchschnitt: 'Ø Dauer',
+    ohneDauer: 'ohne Dauer-Angabe',
+    dauerText: (ms) => dauerKurz(ms),
+    davonLokalZeile: (lokal) =>
+      `Davon lokal (kostet kein Kontingent): ${Number(lokal.tokens ?? 0).toLocaleString('de-DE')} Tokens` +
+      (Number.isFinite(lokal.dauerMs) && lokal.dauerMs > 0 ? ` · ${dauerKurz(lokal.dauerMs)}` : ''),
+    blockDauer: (ms) => `Dauer: ${dauerKurz(ms)}`,
     sonderlaufMarke: 'Sonderlauf',
     // Harness-Kennzahlen (BAUPLAN 36): Wie gut trägt das Gerüst? Score UND
     // Kosten messen. Alles rückwirkend aus den Laufberichten gerechnet.
@@ -1546,6 +1583,54 @@ export const texte = {
     laufKontext: (text) =>
       '\nDie ursprüngliche Lauf-Session ist nicht mehr verfügbar. Hier der Laufbericht des ' +
       'Laufs, über den der Nutzer mit dir sprechen will:\n' + text,
+    // Lokale Bilanz (BAUPLAN 51): kleiner Datenblock im Systemtext — nur
+    // angehängt, wenn lokale Daten existieren (metrikRegeln.lokaleBilanz).
+    // Der Co-Pilot ist das Sprachrohr des Nutzers: Er DARF diese Zahlen sehen
+    // und daraus empfehlen, welche Blöcke lokal bleiben oder zurück zu Claude
+    // sollen — in einen Lauf-Auftrag wandern sie nie (SPEC §3.4/§10). Die
+    // Schwellen erzwingt schon die Rechenfunktion; der Text wiederholt die
+    // Ehrlichkeits-Regel, damit die KI kleine Stichproben nicht schönredet.
+    lokaleBilanzUrteile: {
+      gut: 'lief gut',
+      schlecht: 'lief schlecht',
+      offen: 'kein eindeutiges Urteil',
+      zuWenig: 'zu wenige Fälle für ein Urteil'
+    },
+    lokaleBilanzZeile: (z) => {
+      const u = texte.agentenChat.lokaleBilanzUrteile[z.urteil] ?? z.urteil
+      const quote = z.quote == null ? '' : `${Math.round(z.quote * 100)} %`
+      if (z.art === 'zuarbeit')
+        return (
+          `- Lokale Zuarbeit ${z.modell} · ${texte.metriken.bereiche[z.bereich] ?? z.bereich}: ` +
+          `${z.faelle} beurteilte Fälle, Quote ${quote || '—'}` +
+          (z.gescheitert > 0 ? `, ${z.gescheitert} gescheitert` : '') +
+          ` → ${u}`
+        )
+      if (z.art === 'block')
+        return (
+          `- Block „${z.block}" auf ${z.modell}: ${z.erstlaeufe} Erstläufe, ` +
+          `${z.wiederholungen} Wiederholungen` +
+          (z.ersteUrteile > 0 ? `, Erstbestehen ${quote} (${z.erstBestanden}/${z.ersteUrteile})` : '') +
+          ` → ${u}`
+        )
+      return (
+        `- Lokaler Prüfer ${z.lokalModell} vs. Abnahme ${z.abnahmeModell}: ` +
+        `${z.faelle} Paare, Widerspruch ${quote || '—'} → ${u}`
+      )
+    },
+    lokaleBilanz: (bilanz, stand) =>
+      '\n\nLokale Bilanz (Stand ' + stand + ', aus den Messwerten der Metriken-Seite — für ' +
+      'deine Empfehlungen an den Nutzer, welche Blöcke gut auf seiner lokalen KI laufen; ' +
+      'diese Zahlen gehören NIE in einen Lauf- oder Karten-Text):\n' +
+      bilanz.zeilen.map((z) => texte.agentenChat.lokaleBilanzZeile(z)).join('\n') +
+      (bilanz.torNachspiele > 0
+        ? `\n- Tor-Nachspiele gesamt: ${bilanz.torNachspiele}, davon drehte der Prüfbefehl ` +
+          `${bilanz.torWidersprueche} lokale „bestanden"`
+        : '') +
+      (bilanz.weggelassen > 0 ? `\n- (${bilanz.weggelassen} weitere Zeilen mit weniger Fällen weggelassen)` : '') +
+      '\nEhrlichkeits-Regel: Empfiehl „lokal lassen" oder „lokal umstellen" nur bei Zeilen ' +
+      'mit mindestens 5 Fällen und dem Urteil „lief gut"; nenne bei jeder Empfehlung die ' +
+      'Fallzahl. Bei weniger als 5 Fällen sag ehrlich: zu wenige Daten für ein Urteil.',
     berichtKopf: (workflow, zeit, zustand) =>
       `Workflow: ${workflow} · gestartet ${zeit} · Ausgang: ${zustand}`,
     berichtBlock: (name, zustand, text) => `\n### Block „${name}" (${zustand}):\n${text}`,
@@ -2514,11 +2599,21 @@ export const texte = {
       'verworfen hat (minimaler Token-Mehrverbrauch). Ticker und Laufbericht zählen mit — ' +
       'so siehst du, ob sich die lokale KI lohnt.',
     lokaleHelferModell: 'Modellname bei Ollama',
-    lokaleHelferAdresse: 'Adresse des Ollama-Rechners',
-    lokaleHelferAdresseHinweis:
-      'Leer lassen bzw. http://127.0.0.1:11434 = dieser Rechner. Es geht auch ein anderer ' +
-      'Rechner im Heimnetz, z.B. ein Gaming-PC: http://192.168.x.x:11434 — dort muss ' +
-      'Ollama laufen und für das Netzwerk freigegeben sein.',
+    // Adress-Liste (BAUPLAN 51): mehrere Ollama-Rechner/GPUs — Listeneditor
+    // statt Einzelfeld. Die erste Adresse bleibt der Anker für Helfer-KI und
+    // Vorreparatur.
+    lokaleHelferAdressen: 'Adressen der Ollama-Rechner',
+    lokaleHelferAdresseHinzufuegen: 'Adresse hinzufügen',
+    lokaleHelferAdresseEntfernen: 'Entfernen',
+    lokaleHelferAdressenHinweis:
+      'http://127.0.0.1:11434 = dieser Rechner. Es geht auch ein anderer Rechner im ' +
+      'Heimnetz, z.B. ein Gaming-PC: http://192.168.x.x:11434 — dort muss Ollama laufen ' +
+      'und für das Netzwerk freigegeben sein. Mit mehreren Adressen laufen mehrere lokale ' +
+      'Blöcke gleichzeitig (einer je Adresse). Jede Adresse braucht dasselbe Basis-Modell ' +
+      '(oben); die Helfer-KI und die Vorreparatur nutzen immer die erste Adresse. ' +
+      'Achtung: „localhost" und „http://127.0.0.1" meinen dieselbe Grafikkarte — trag ' +
+      'denselben Rechner nur einmal ein, sonst teilen sich zwei Blöcke eine Karte und ' +
+      'alles wird langsam.',
     lokaleHelferStatusBereit: (modell) => `Ollama läuft, Modell „${modell}" ist da.`,
     lokaleHelferStatusKeinModell: (modell) =>
       `Ollama läuft, aber das Modell „${modell}" ist nicht heruntergeladen.`,
@@ -2547,7 +2642,8 @@ export const texte = {
       'Rückfragen wie bei Claude, kostet kein Kontingent, nur Rechenzeit. Modell, Adresse und ' +
       'Kontextfenster sind die der lokalen Helfer-KI oben. Ohne eingeschaltete und erreichbare ' +
       'lokale KI startet ein Lauf mit einem lokalen Block nicht — FlowForge fällt nie still auf ' +
-      'Claude zurück. Je Ollama-Adresse läuft ein lokaler Block zur Zeit (eine Grafikkarte).',
+      'Claude zurück. Je Ollama-Adresse läuft ein lokaler Block zur Zeit (eine Grafikkarte) — ' +
+      'mit mehreren eingetragenen Adressen laufen entsprechend mehrere lokale Blöcke parallel.',
     lokalBlockNurMitHelfer:
       'Erst die lokale Helfer-KI oben einschalten — der Block-Agent nutzt deren Modell und Adresse.',
     lokalBlockFeinTitel: 'Feineinstellungen des lokalen Modells',
