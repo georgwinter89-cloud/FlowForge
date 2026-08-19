@@ -8,6 +8,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { texte } from '../../shared/texte.js'
 import {
+  abnahmeAuswerten,
   blockModellAuswerten,
   harnessAuswerten,
   lokaleKiAuswerten,
@@ -189,6 +190,40 @@ function BlockModellTabelle({ zeilen }) {
   )
 }
 
+// Lokaler Prüfer × Abnahme (BAUPLAN 50): je lokalem Modell und Abnahme-Modell
+// die Paare, wie oft beide einig waren, wie oft die Abnahme widersprach — die
+// Zahl, an der Georg entscheidet, ob der lokale Prüfer bleibt.
+function AbnahmeTabelle({ zeilen }) {
+  return (
+    <div className="themen-tabelle-rahmen metrik-tabelle-rahmen">
+      <table className="themen-tabelle metrik-tabelle">
+        <thead>
+          <tr>
+            <th>{t.spalteLokalModell}</th>
+            <th>{t.spalteAbnahmeModell}</th>
+            <th className="zahl">{t.spaltePaare}</th>
+            <th className="zahl">{t.spalteEinig}</th>
+            <th className="zahl">{t.spalteWidersprueche}</th>
+            <th className="zahl">{t.spalteWiderspruchQuote}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {zeilen.map((z) => (
+            <tr key={`${z.lokalModell} ${z.abnahmeModell}`}>
+              <td className="mono">{z.lokalModell}</td>
+              <td className="mono">{z.abnahmeModell}</td>
+              <td className="zahl">{z.paare}</td>
+              <td className="zahl">{z.einig}</td>
+              <td className="zahl">{z.widersprueche}</td>
+              <td className="zahl metrik-quote">{quoteText(z.quote)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 // Harness-Kennzahlen als Kacheln: eine große Zahl mit ihrer Erklärung darunter.
 function KennzahlKachel({ titel, wert, hinweis }) {
   return (
@@ -316,6 +351,9 @@ export default function Metriken({ projektPfad = null }) {
       // Extrakte, andere Schnitte; deshalb kostet auch das keinen Roundtrip.
       harness: harnessAuswerten(laeufe),
       jeModell: blockModellAuswerten(laeufe),
+      // Lokaler Prüfer × Abnahme (BAUPLAN 50): Paare und Widersprüche, Tor-
+      // Nachspiele — aus denselben Extrakten.
+      abnahme: abnahmeAuswerten(laeufe),
       laeufe: laeufe.length
     }
   }, [daten, filter])
@@ -411,6 +449,41 @@ export default function Metriken({ projektPfad = null }) {
                     auswertung.harness.gesamt.ohneZusammenfassungsAngabe
                   )}
                 />
+                {/* Lokaler Prüfer × Abnahme (BAUPLAN 50): Wie oft widerspricht
+                    der Claude-Prüfer dahinter, wie oft dreht das Tor ein
+                    lokales „bestanden"? null → „—", keine Quote erfunden. */}
+                <KennzahlKachel
+                  titel={t.abnahmeKachelWiderspruch}
+                  wert={
+                    auswertung.abnahme.gesamt.quote == null
+                      ? quoteText(null)
+                      : t.abnahmeQuoteMitZahlen(
+                          quoteText(auswertung.abnahme.gesamt.quote),
+                          auswertung.abnahme.gesamt.widersprueche,
+                          auswertung.abnahme.gesamt.paare
+                        )
+                  }
+                  hinweis={t.abnahmeKachelWiderspruchHinweis(
+                    auswertung.abnahme.gesamt.widersprueche,
+                    auswertung.abnahme.gesamt.paare
+                  )}
+                />
+                <KennzahlKachel
+                  titel={t.abnahmeKachelTor}
+                  wert={
+                    auswertung.abnahme.gesamt.torQuote == null
+                      ? quoteText(null)
+                      : t.abnahmeQuoteMitZahlen(
+                          quoteText(auswertung.abnahme.gesamt.torQuote),
+                          auswertung.abnahme.gesamt.torWidersprueche,
+                          auswertung.abnahme.gesamt.torNachspiele
+                        )
+                  }
+                  hinweis={t.abnahmeKachelTorHinweis(
+                    auswertung.abnahme.gesamt.torWidersprueche,
+                    auswertung.abnahme.gesamt.torNachspiele
+                  )}
+                />
               </div>
               <h4 className="metrik-unterabschnitt">{t.harnessJeKetteUeberschrift}</h4>
               <HarnessTabelle
@@ -433,6 +506,15 @@ export default function Metriken({ projektPfad = null }) {
               <h3 className="metrik-unterabschnitt">{t.jeModellUeberschrift}</h3>
               <p className="feld-hinweis">{t.jeModellErklaerung}</p>
               <BlockModellTabelle zeilen={auswertung.jeModell} />
+
+              {/* Lokaler Prüfer × Abnahme (BAUPLAN 50). */}
+              <h3 className="metrik-unterabschnitt">{t.abnahmeUeberschrift}</h3>
+              <p className="feld-hinweis">{t.abnahmeErklaerung}</p>
+              {auswertung.abnahme.zeilen.length === 0 ? (
+                <p className="feld-hinweis metrik-leer">{t.abnahmeLeer}</p>
+              ) : (
+                <AbnahmeTabelle zeilen={auswertung.abnahme.zeilen} />
+              )}
 
               <h3 className="metrik-unterabschnitt">{t.jeKetteUeberschrift}</h3>
               <SummenTabelle

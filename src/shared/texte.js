@@ -112,7 +112,31 @@ export const texte = {
     spalteDenktiefe: 'Denktiefe',
     denktiefeOhne: '—',
     // Compaction sichtbar (BAUPLAN 36).
-    zusammenfassungenLabel: 'Zusammenfassungen des Motors'
+    zusammenfassungenLabel: 'Zusammenfassungen des Motors',
+    // Urteil lokal vs. Abnahme (BAUPLAN 50): die Zahl, an der Georg entscheidet,
+    // ob der lokale Prüfer bleibt. Aus den Laufberichten gerechnet — nur Läufe
+    // seit Bauschritt 50 tragen die Felder; null statt 0, wo keine Paare sind.
+    abnahmeUeberschrift: 'Lokaler Prüfer × Abnahme',
+    abnahmeErklaerung:
+      'Wie oft widerspricht der Claude-Prüfer dahinter dem Urteil des lokalen Prüfers — und wie oft dreht das Tor ohne KI ein lokales „bestanden" mechanisch? Je lokalem Prüfer und Abnahme zählt nur das erste Urteil der Abnahme im Lauf (Reparatur-Runden und Urteile aus dem Vor-Tor der Abnahme zählen nicht). Gezählt seit Bauschritt 50.',
+    abnahmeLeer: 'Noch keine Paare — ein lokaler Prüfer mit Claude-Abnahme dahinter ist seit Bauschritt 50 noch nicht gelaufen.',
+    abnahmeKachelWiderspruch: 'Abnahme widerspricht dem lokalen Prüfer',
+    abnahmeKachelWiderspruchHinweis: (widersprueche, paare) =>
+      paare > 0
+        ? `${widersprueche} von ${paare} ${paare === 1 ? 'Paar' : 'Paaren'} (lokaler Prüfer → Claude-Abnahme).`
+        : 'Noch kein Paar lokaler Prüfer → Claude-Abnahme.',
+    abnahmeKachelTor: 'Tor widerspricht dem lokalen Prüfer',
+    abnahmeKachelTorHinweis: (rot, nachspiele) =>
+      nachspiele > 0
+        ? `${rot} von ${nachspiele} ${nachspiele === 1 ? 'Nachspiel' : 'Nachspielen'}: Das lokale „bestanden" hielt dem eigenen Prüfbefehl nicht stand.`
+        : 'Noch kein Nachspiel — gezählt, sobald ein lokaler Prüfer „bestanden" meldet und sein Prüfbefehl nachgespielt wird.',
+    abnahmeQuoteMitZahlen: (quote, zaehler, nenner) => `${quote} (${zaehler}/${nenner})`,
+    spalteLokalModell: 'lokales Modell',
+    spalteAbnahmeModell: 'Abnahme-Modell',
+    spaltePaare: 'Paare',
+    spalteEinig: 'einig',
+    spalteWidersprueche: 'Widersprüche',
+    spalteWiderspruchQuote: 'Quote'
   },
   projektuebersicht: {
     ueberschrift: 'Projekte',
@@ -561,7 +585,23 @@ export const texte = {
     kontingentPausieren: 'pausieren, von selbst weitermachen',
     kontingentStoppen: 'anhalten, ich starte selbst neu',
     vorlageErsetzenBestaetigung:
-      'Auf der Leinwand liegen schon Blöcke. Soll die Vorlage das vorhandene Schaubild ersetzen? Feldwerte und Verbindungen des alten Schaubilds gehen dabei verloren.'
+      'Auf der Leinwand liegen schon Blöcke. Soll die Vorlage das vorhandene Schaubild ersetzen? Feldwerte und Verbindungen des alten Schaubilds gehen dabei verloren.',
+    // Lokaler Prüfer mit Abnahme (BAUPLAN 50): Hinweis ohne Sperre — an der
+    // Karte, im Schaubild-Kopf und im Start-Ticker. Folgen, nicht Mechanik:
+    // Ein lokales Modell macht Fehler; ohne Claude-Prüfer dahinter gilt sein
+    // Urteil allein, nur das Tor ohne KI spielt seinen Prüfbefehl nach.
+    hinweisLokalerPrueferOhneAbnahme: (name) =>
+      `„${name}" prüft lokal, aber kein Claude-Prüfer nimmt sein Urteil ab. Ein lokales Modell macht Fehler — ohne Abnahme gilt sein „bestanden" allein; FlowForge spielt nur seinen Prüfbefehl mechanisch nach. Der Lauf startet trotzdem.`,
+    abnahmeEinfuegenKnopf: 'Abnahme-Prüfer einfügen',
+    abnahmeZusatzname: 'Abnahme',
+    // Bibliothek: Zusatz zur Vorlage „Feature hinzufügen · lokal".
+    vorlageErklaerungLokal:
+      'Opus an den Enden, lokale KI in der Mitte: Bauer und Prüfer laufen auf deiner lokalen KI, ein Standard-Prüfer „Abnahme" prüft das Urteil nach.',
+    // Anzeige eines Ketten-Glieds mit Klasse/Zusatz in der Bibliothek:
+    // „Prüfer · Abnahme", „Bauer (lokal)".
+    vorlageGliedName: (name, zusatz, klasseKurz) =>
+      name + (zusatz ? ` · ${zusatz}` : '') + (klasseKurz ? ` (${klasseKurz})` : ''),
+    vorlageKlasseKurzLokal: 'lokal'
   },
   entscheidung: {
     ueberschrift: 'Der Prüfer ist weiterhin nicht zufrieden',
@@ -3714,7 +3754,53 @@ export const texte = {
     // Nachlauf-Chat (BAUPLAN 27): der Chat-Verlauf als eigener Abschnitt.
     chatLabel: 'Nachlauf-Chat',
     chatRolleDu: 'Du',
-    chatRolleKi: 'Chat'
+    chatRolleKi: 'Chat',
+    // Lokaler Prüfer mit Opus-Abnahme (BAUPLAN 50): beide Urteile nebeneinander
+    // — das Tor-Nachspiel am Eintrag des lokalen Prüfers, die Abnahme am
+    // Eintrag des Claude-Prüfers, und am lokalen Eintrag der Verweis zurück.
+    // Urteile heißen wie im Lieferschein; alte Berichte tragen keines der
+    // Felder, dann steht keine Zeile da.
+    urteilNamen: { bestanden: 'bestanden', fehlgeschlagen: 'fehlgeschlagen' },
+    torBestaetigungNamen: {
+      gruen: 'grün — bestätigt das lokale „bestanden"',
+      altlasten: 'nur Altlasten, keine neuen Fehler — bestätigt das lokale „bestanden"',
+      rot: 'rot — das lokale „bestanden" wurde mechanisch auf „fehlgeschlagen" gedreht',
+      keine: 'kein Prüfbefehl hinterlegt — keine mechanische Bestätigung möglich',
+      abgebrochen: 'Nachspiel abgebrochen — das lokale Urteil bleibt unbestätigt'
+    },
+    torBestaetigungKurz: {
+      gruen: 'grün',
+      altlasten: 'Altlasten',
+      rot: 'rot',
+      keine: 'kein Prüfbefehl',
+      abgebrochen: 'abgebrochen'
+    },
+    // Am Eintrag des lokalen Prüfers: sein eigenes Urteil (vor einer Drehung)
+    // und was das Tor-Nachspiel ergab. Die Namen werden zur Laufzeit aus
+    // texte.laufberichte gelesen — das Objekt steht dann längst.
+    torBestaetigungZeile: (torBestaetigung, urteilLokal) =>
+      (urteilLokal
+        ? `Urteil des lokalen Prüfers: „${texte.laufberichte.urteilNamen[urteilLokal] ?? urteilLokal}" · `
+        : '') +
+      'Tor ohne KI (Prüfbefehl nachgespielt): ' +
+      (texte.laufberichte.torBestaetigungNamen[torBestaetigung] ?? String(torBestaetigung)),
+    // Am Eintrag des lokalen Prüfers: was die Abnahme dahinter gesagt hat.
+    abnahmeZeile: (abnahme) =>
+      `Abnahme durch „${abnahme.zusatz ? `${abnahme.block} · ${abnahme.zusatz}` : abnahme.block}": ` +
+      (abnahme.widerspruch
+        ? `widerspricht — die Abnahme urteilt „${texte.laufberichte.urteilNamen[abnahme.urteil] ?? abnahme.urteil}"`
+        : `bestätigt das Urteil („${texte.laufberichte.urteilNamen[abnahme.urteil] ?? abnahme.urteil}")`),
+    // Am Eintrag des Abnahme-Prüfers: je lokalem Partner beide Urteile.
+    abnahmeFuerZeile: (a) =>
+      `Abnahme für „${a.zusatz ? `${a.block} · ${a.zusatz}` : a.block}"` +
+      (a.modell ? ` (${a.modell})` : '') +
+      `: lokal „${texte.laufberichte.urteilNamen[a.urteilLokal] ?? a.urteilLokal}" · ` +
+      `Abnahme „${texte.laufberichte.urteilNamen[a.urteilAbnahme] ?? a.urteilAbnahme}"` +
+      (a.widerspruch ? ' — Widerspruch' : ' — einig') +
+      (a.torBestaetigung
+        ? ` · Tor: ${texte.laufberichte.torBestaetigungKurz[a.torBestaetigung] ?? a.torBestaetigung}`
+        : '') +
+      (a.durchTor ? ' · das Urteil der Abnahme kam aus ihrem eigenen Vor-Tor, nicht vom Agenten' : '')
   },
   // Etiketten-Bibliothek (SPEC §4.5, BAUPLAN 48): Etiketten werden bearbeitbar
   // wie Blöcke — Klappe in der Blockbibliothek, eigener Editor, Klartext-

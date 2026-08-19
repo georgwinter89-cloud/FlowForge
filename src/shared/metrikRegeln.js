@@ -13,7 +13,7 @@
 // Block-Tokens — solche Einträge zählen als „ohne Kosten"/„ohne Verbrauch"
 // und fallen aus den Durchschnitten heraus, statt sie zu verfälschen.
 
-import { klasseKenntDenktiefe } from './blockKatalog.js'
+import { klasseIstLokal, klasseKenntDenktiefe } from './blockKatalog.js'
 
 export const BEREICHE = ['recherche', 'entwurf', 'reparatur', 'bauen']
 export const AUSGAENGE = ['uebernommen', 'verworfen', 'gehalten', 'nicht-gehalten', 'gescheitert']
@@ -156,6 +156,32 @@ export function wirksameDenktiefe(e) {
   return klasseKenntDenktiefe(e?.klasse) ? gewaehlt : ''
 }
 
+// Abnahme-Paare am Eintrag eines Abnahme-Prüfers (BAUPLAN 50, Felder aus
+// lauf.js): je lokalem Partner beide Urteile, Tor-Nachspiel, Widerspruch und
+// ob das Abnahme-Urteil aus dem eigenen Vor-Tor kam. Nur vollständige Einträge
+// zählen — eine Zeile ohne Urteil ist kein Paar.
+const URTEILE = ['bestanden', 'fehlgeschlagen']
+function abnahmeFuerAusEintrag(e) {
+  if (!Array.isArray(e?.abnahmeFuer)) return []
+  const paare = []
+  for (const a of e.abnahmeFuer) {
+    if (!a || typeof a !== 'object') continue
+    if (!URTEILE.includes(a.urteilLokal) || !URTEILE.includes(a.urteilAbnahme)) continue
+    paare.push({
+      instanzId: String(a.instanzId ?? ''),
+      block: String(a.block ?? ''),
+      zusatz: String(a.zusatz ?? ''),
+      modell: String(a.modell ?? '').trim() || OHNE_MODELL,
+      urteilLokal: a.urteilLokal,
+      torBestaetigung: typeof a.torBestaetigung === 'string' ? a.torBestaetigung : null,
+      urteilAbnahme: a.urteilAbnahme,
+      widerspruch: a.urteilLokal !== a.urteilAbnahme,
+      durchTor: Boolean(a.durchTor)
+    })
+  }
+  return paare
+}
+
 export function laufExtraktAusBericht(bericht, projektPfad) {
   if (!bericht || typeof bericht !== 'object') return null
   const gestartetAm = String(bericht.gestartetAm ?? '')
@@ -185,7 +211,14 @@ export function laufExtraktAusBericht(bericht, projektPfad) {
       // Wahl ist keine Denktiefe) und sie nicht Modell-Standard ist. Sonst ''.
       denktiefe: wirksameDenktiefe(e),
       wiederholung: gesehen.has(schluessel),
-      erstesUrteil: istUrteil && !mitUrteil.has(schluessel)
+      erstesUrteil: istUrteil && !mitUrteil.has(schluessel),
+      // Lokaler Prüfer mit Abnahme (BAUPLAN 50): Kennung, Klasse, Tor-Nachspiel
+      // und die Abnahme-Paare dieses Anlaufs — damit abnahmeAuswerten Paare
+      // und Widersprüche zählen kann. Alte Berichte: '' / null / [].
+      instanzId: schluessel,
+      klasse: typeof e.klasse === 'string' ? e.klasse : '',
+      torBestaetigung: typeof e.torBestaetigung === 'string' ? e.torBestaetigung : null,
+      abnahmeFuer: abnahmeFuerAusEintrag(e)
     })
     gesehen.add(schluessel)
     if (istUrteil) mitUrteil.add(schluessel)
@@ -450,6 +483,65 @@ export function harnessAuswerten(extrakte) {
     jeWoche: [...jeWoche.values()]
       .map(harnessAbschluss)
       .sort((a, b) => (a.schluessel < b.schluessel ? -1 : 1))
+  }
+}
+
+// Urteil lokal vs. Abnahme (BAUPLAN 50): Wie oft widerspricht der Claude-
+// Prüfer dahinter dem lokalen Prüfer — die Zahl, an der Georg entscheidet, ob
+// der lokale Prüfer bleibt. Dazu das Tor-Nachspiel: Wie oft dreht der eigene
+// Prüfbefehl ein lokales „bestanden"?
+//
+// Zählregel: Je (Lauf, lokaler Prüfer, Abnahme-Prüfer) zählt nur das ERSTE
+// Urteil der Abnahme, das vom Agenten kam (durchTor === false). Reparatur-
+// Runden danach sind Wiederholungen desselben Paars, und ein Urteil aus dem
+// Vor-Tor der Abnahme (Prüfbefehl rot vor dem Agentenstart) ist kein Opus-
+// Widerspruch — sonst zählte jede mechanische Nachprüfung als „Abnahme
+// widerspricht". Ehrlich: null statt 0, wo es keine Paare/Nachspiele gibt.
+const TOR_NACHSPIELE = ['gruen', 'altlasten', 'rot']
+export function abnahmeAuswerten(extrakte) {
+  const gesamt = { paare: 0, widersprueche: 0, torNachspiele: 0, torWidersprueche: 0 }
+  const zellen = new Map()
+  for (const lauf of extrakte) {
+    const gezaehlt = new Set()
+    for (const b of lauf.bloecke) {
+      if (klasseIstLokal(b.klasse) && TOR_NACHSPIELE.includes(b.torBestaetigung)) {
+        gesamt.torNachspiele++
+        if (b.torBestaetigung === 'rot') gesamt.torWidersprueche++
+      }
+      for (const a of b.abnahmeFuer ?? []) {
+        if (a.durchTor) continue
+        const paarSchluessel = a.instanzId + '\u0000' + b.instanzId
+        if (gezaehlt.has(paarSchluessel)) continue
+        gezaehlt.add(paarSchluessel)
+        const schluessel = a.modell + '\u0000' + b.modell
+        let z = zellen.get(schluessel)
+        if (!z) {
+          z = { lokalModell: a.modell, abnahmeModell: b.modell, paare: 0, einig: 0, widersprueche: 0 }
+          zellen.set(schluessel, z)
+        }
+        z.paare++
+        gesamt.paare++
+        if (a.widerspruch) {
+          z.widersprueche++
+          gesamt.widersprueche++
+        } else z.einig++
+      }
+    }
+  }
+  return {
+    gesamt: {
+      ...gesamt,
+      quote: gesamt.paare > 0 ? gesamt.widersprueche / gesamt.paare : null,
+      torQuote: gesamt.torNachspiele > 0 ? gesamt.torWidersprueche / gesamt.torNachspiele : null
+    },
+    zeilen: [...zellen.values()]
+      .map((z) => ({ ...z, quote: z.paare > 0 ? z.widersprueche / z.paare : null }))
+      .sort(
+        (a, b) =>
+          b.paare - a.paare ||
+          a.lokalModell.localeCompare(b.lokalModell, 'de') ||
+          a.abnahmeModell.localeCompare(b.abnahmeModell, 'de')
+      )
   }
 }
 

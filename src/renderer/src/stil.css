@@ -1986,6 +1986,32 @@ body {
   white-space: normal;
 }
 
+/* Lokaler Prüfer ohne Abnahme (BAUPLAN 50): derselbe Platz wie der Kosten-
+   Hinweis, aber als Warnung erkennbar (Ton der Nachforderungs-Marken) — kein
+   Fehler-Rot, denn der Lauf startet trotzdem. Der Knopf fügt die Abnahme ein. */
+.schaubild-karte .karte-abnahme-hinweis {
+  color: var(--lesend);
+  display: block;
+}
+
+.schaubild-karte .karte-abnahme-knopf {
+  display: block;
+  margin-top: 4px;
+}
+
+/* Hinweis-Zeile im Schaubild-Kopf (BAUPLAN 50): Warnton wie am Kartenhinweis. */
+.schaubild-hinweis {
+  color: var(--lesend);
+}
+
+/* Laufbericht (BAUPLAN 50): Widerspruch der Abnahme bzw. Tor-Drehung am
+   Urteil des lokalen Prüfers — hervorgehoben, damit beide Urteile nebeneinander
+   nicht im Grau der Detailzeilen untergehen. */
+.block-ergebnis-text .abnahme-widerspruch {
+  color: var(--lesend);
+  font-weight: 600;
+}
+
 /* Blockbibliothek */
 
 .bibliothek-liste {

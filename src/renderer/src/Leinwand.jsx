@@ -3,6 +3,7 @@ import { texte } from '../../shared/texte.js'
 import {
   blockDefinition,
   vorlageDefinition,
+  vorlagenKette,
   blockKategorie,
   blockModellKlasse,
   blockDenktiefe,
@@ -19,8 +20,11 @@ import {
   UEBERTRAG_GRENZE_MAX
 } from '../../shared/blockKatalog.js'
 import {
+  abnahmeKarteEinfuegen,
   brauchtHerkunft,
+  lokalerPrueferOhneAbnahme,
   rueckfuehrungsZiel,
+  schaubildHinweise,
   schaubildReihenfolge,
   vorfahrenSortiert
 } from '../../shared/kettenRegeln.js'
@@ -614,6 +618,35 @@ function BlockErgebnisZeile({ eintrag }) {
               )}
             </p>
           )}
+          {/* Lokaler Prüfer mit Opus-Abnahme (BAUPLAN 50): beide Urteile
+              nebeneinander. Am lokalen Prüfer: sein eigenes Urteil und das
+              Tor-Nachspiel (torBestaetigung, null = kein Nachspiel) sowie die
+              Abnahme dahinter (nachgetragen, sobald sie geurteilt hat). Am
+              Abnahme-Prüfer: je lokalem Partner beide Urteile. Widerspruch und
+              Tor-Drehung sind als Warnung hervorgehoben; alte Berichte tragen
+              keines der Felder — dann steht keine Zeile da. */}
+          {eintrag.torBestaetigung != null && (
+            <p
+              className={
+                'feld-hinweis' + (eintrag.torBestaetigung === 'rot' ? ' abnahme-widerspruch' : '')
+              }
+            >
+              {tb.torBestaetigungZeile(eintrag.torBestaetigung, eintrag.urteilLokal ?? null)}
+            </p>
+          )}
+          {eintrag.abnahme && (
+            <p className={'feld-hinweis' + (eintrag.abnahme.widerspruch ? ' abnahme-widerspruch' : '')}>
+              {tb.abnahmeZeile(eintrag.abnahme)}
+            </p>
+          )}
+          {(eintrag.abnahmeFuer ?? []).map((a, i) => (
+            <p
+              key={(a.instanzId ?? '') + i}
+              className={'feld-hinweis' + (a.widerspruch ? ' abnahme-widerspruch' : '')}
+            >
+              {tb.abnahmeFuerZeile(a)}
+            </p>
+          ))}
           {eintrag.aufschluesselung && (
             <p className="feld-hinweis">{tb.aufschluesselungZeile(eintrag.aufschluesselung)}</p>
           )}
@@ -866,7 +899,14 @@ function SchaubildKarte({
   onEntfernen,
   onGreifen,
   onPfeilStart,
-  messen
+  messen,
+  // Lokaler Prüfer ohne Abnahme (BAUPLAN 50): aus den Schaubild-Regeln
+  // gerechnet (lokalerPrueferOhneAbnahme), Knopf fügt die Abnahme ein.
+  ohneAbnahme = false,
+  onAbnahmeEinfuegen,
+  // Standard-Rückführungsziel (BAUPLAN 50): nächster nicht-prüfender
+  // Vorfahre — dieselbe Funktion wie im Lauf (rueckfuehrungsZiel).
+  rueckfuehrungStandard = null
 }) {
   const [ergebnisOffen, setErgebnisOffen] = useState(false)
   // Prüfkarten auf den Prüfer ziehen (BAUPLAN 18): nur Prüf-Blockkarten sind
@@ -976,6 +1016,29 @@ function SchaubildKarte({
         {klasseIstLokal(modellKlasse) && (
           <span className="feld-hinweis karte-kosten-hinweis">{tk.modellLokalHinweis}</span>
         )}
+        {/* Lokaler Prüfer ohne Abnahme (BAUPLAN 50): Hinweis, keine Sperre —
+            dahinter nimmt kein Claude-Prüfer das Urteil ab. Der Knopf fügt
+            einen Standard-Prüfer „Abnahme" direkt dahinter ein (Rückführung
+            auf den Bauer); nur solange das Schaubild bearbeitbar ist. */}
+        {ohneAbnahme && (
+          <span className="feld-hinweis karte-kosten-hinweis karte-abnahme-hinweis">
+            ⚠ {tk.hinweisLokalerPrueferOhneAbnahme(blockAnzeigeName(def, eintrag))}
+            {bearbeitbar && (
+              <button
+                type="button"
+                className="knopf-klein karte-abnahme-knopf"
+                // preventDefault: Der Knopf steht im Modell-Label — ohne das
+                // würde der Klick zusätzlich das Select aktivieren.
+                onClick={(e) => {
+                  e.preventDefault()
+                  onAbnahmeEinfuegen()
+                }}
+              >
+                {tk.abnahmeEinfuegenKnopf}
+              </button>
+            )}
+          </span>
+        )}
       </label>
       {/* Denktiefe je Block (0.48.1): Zusatz zur Modellklasse — wie gründlich
           das Modell nachdenkt. „Modell-Standard" heißt: kein eigener Wert, das
@@ -1018,7 +1081,9 @@ function SchaubildKarte({
           {tk.zurueckZuLabel}
           <select
             disabled={!bearbeitbar}
-            value={eintrag.zurueckZu ?? vorfahren[vorfahren.length - 1].instanzId}
+            value={
+              rueckfuehrungStandard ?? eintrag.zurueckZu ?? vorfahren[vorfahren.length - 1].instanzId
+            }
             onChange={(e) => onZurueckZu(e.target.value)}
           >
             {vorfahren.map((d) => (
@@ -1447,19 +1512,43 @@ export default function Leinwand({
     }
   }
 
-  // Vorlage (SPEC §4.4): legt eine ganze Kette fertig verbunden ab.
+  // Vorlage (SPEC §4.4): legt eine ganze Kette fertig verbunden ab. Seit
+  // BAUPLAN 50 trägt ein Ketten-Glied optional Modellklasse, Zusatzname und
+  // Rückführungsziel (Index in der Kette → hier zur instanzId aufgelöst) —
+  // so legt „Feature hinzufügen · lokal" Bauer und Prüfer lokal ab und die
+  // Abnahme mit Rückführung zum Bauer.
   function vorlageAblegen(vorlage) {
-    const bloecke = vorlage.kette.map((blockId, i) => ({
+    const glieder = vorlagenKette(vorlage)
+    const bloecke = glieder.map((glied, i) => ({
       instanzId: crypto.randomUUID(),
-      blockId,
+      blockId: glied.blockId,
+      ...(glied.modell ? { modell: glied.modell } : {}),
+      ...(glied.zusatz ? { zusatz: glied.zusatz } : {}),
       feldWerte: {},
       zurueckZu: null,
       position: { x: 40 + (i % 2) * 300, y: 40 + i * 190 }
     }))
+    for (const [i, glied] of glieder.entries())
+      if (glied.zurueckZu != null && bloecke[glied.zurueckZu])
+        bloecke[i].zurueckZu = bloecke[glied.zurueckZu].instanzId
     const pfeile = bloecke
       .slice(1)
       .map((block, i) => ({ von: bloecke[i].instanzId, nach: block.instanzId }))
     ketteSpeichern({ ...workflow, bloecke, pfeile })
+  }
+
+  // Abnahme-Prüfer einfügen (BAUPLAN 50): hinter den lokalen Prüfer einen
+  // Standard-Prüfer „Abnahme" setzen — Pfeile umgehängt, Rückführung auf den
+  // Bauer; die Einfüge-Logik liegt in den Schaubild-Regeln (eine Stelle).
+  function abnahmeEinfuegen(vorInstanzId) {
+    const aktuell = workflowRef.current
+    const neu = abnahmeKarteEinfuegen(
+      aktuell.bloecke,
+      aktuell.pfeile,
+      vorInstanzId,
+      crypto.randomUUID()
+    )
+    ketteSpeichern({ ...aktuell, bloecke: neu.bloecke, pfeile: neu.pfeile })
   }
 
   function neuAblegen(e) {
@@ -1846,6 +1935,10 @@ export default function Leinwand({
   const nummern = new Map(
     geordnet.reihenfolge ? geordnet.reihenfolge.map((b, i) => [b.instanzId, i + 1]) : []
   )
+  // Hinweise ohne Sperre (BAUPLAN 50): einmal je Schaubild gerechnet — Kopf
+  // und Karten lesen dieselbe Liste. Nur wenn die Reihenfolge steht: Mit einem
+  // Kreis oder losen Karten wäre die Empfänger-Auswahl nicht berechenbar.
+  const hinweise = geordnet.reihenfolge ? schaubildHinweise(bloecke, pfeile) : []
 
   function karteRect(instanzId) {
     const block = bloecke.find((b) => b.instanzId === instanzId)
@@ -2004,6 +2097,16 @@ export default function Leinwand({
       {tab === 'schaubild' && andereLaeufe > 0 && (
         <p className="feld-hinweis">⚠ {t.parallelStartHinweis(andereLaeufe)}</p>
       )}
+      {/* Hinweise ohne Sperre aus den Schaubild-Regeln (BAUPLAN 50): heute
+          „lokaler Prüfer ohne Abnahme" — eine Zeile je Karte, der Lauf startet
+          trotzdem (derselbe Satz steht an der Karte und im Start-Ticker). */}
+      {tab === 'schaubild' &&
+        hinweise.map((h) => (
+          <p key={h.art + h.instanzId} className="feld-hinweis schaubild-hinweis">
+            ⚠ {h.nummer ? `${h.nummer}. ` : ''}
+            {h.text}
+          </p>
+        ))}
 
       {tab === 'schaubild' && bearbeitbar && (
         <div
@@ -2208,6 +2311,14 @@ export default function Leinwand({
                   if (el) kartenRefs.current.set(eintrag.instanzId, el)
                   else kartenRefs.current.delete(eintrag.instanzId)
                 }}
+                ohneAbnahme={
+                  Boolean(geordnet.reihenfolge) &&
+                  lokalerPrueferOhneAbnahme(bloecke, pfeile, eintrag.instanzId)
+                }
+                onAbnahmeEinfuegen={() => abnahmeEinfuegen(eintrag.instanzId)}
+                rueckfuehrungStandard={
+                  def.prueft ? rueckfuehrungsZiel(bloecke, pfeile, eintrag.instanzId) : null
+                }
               />
             )
           })}
