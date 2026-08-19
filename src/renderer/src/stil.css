@@ -1272,7 +1272,9 @@ body {
 .frage-text {
   font-size: 14px;
   white-space: pre-wrap;
-  word-break: break-all;
+  /* Umbruch an Wortgrenzen (Befund Prüfer 0.48.1): break-all trennte mitten
+     im Wort („J|e nach Abo") — lange Pfade brechen mit anywhere trotzdem um. */
+  overflow-wrap: anywhere;
 }
 
 .punkt-zeile {
@@ -1973,6 +1975,15 @@ body {
 .feld-kompakt select {
   padding: 6px 8px;
   font-size: 13px;
+}
+
+/* Hinweis-Satz unter einem Kartenfeld (0.48.1): Kosten-Wahrheit der Klasse
+   Extra und „Haiku kennt keine Denktiefe" — klein, gedämpft, umbrechend, damit
+   die Karte nicht in die Breite wächst. */
+.schaubild-karte .karte-kosten-hinweis {
+  font-size: 11px;
+  line-height: 1.35;
+  white-space: normal;
 }
 
 /* Blockbibliothek */

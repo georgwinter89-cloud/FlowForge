@@ -8,6 +8,7 @@ import crypto from 'node:crypto'
 import { texte } from '../shared/texte.js'
 import {
   blockDefinition,
+  blockDenktiefe,
   blockModellKlasse,
   zusatznameBereinigen,
   REPARATUR_RUNDEN_STANDARD,
@@ -70,6 +71,9 @@ function bereinigen(roh) {
       // gewinnt; ohne Wahl (neue Karte, Altbestand, von außen verbogene
       // Datei) gilt die Voreinstellung des Blocks.
       modell: blockModellKlasse(def, eintrag),
+      // Denktiefe je Blockkarte (0.48.1): gleiche Regel wie beim Modell —
+      // Karte gewinnt, sonst Voreinstellung des Blocks, sonst Modell-Standard.
+      denktiefe: blockDenktiefe(def, eintrag),
       // Prüfkarten am Prüf-Block (BAUPLAN 18): ids der Karten, deren
       // aufbewahrte Prüfungen dieser Prüfer zusätzlich ausführt. Gelöschte
       // Karten werden erst beim Anzeigen/Laufstart still ignoriert — die

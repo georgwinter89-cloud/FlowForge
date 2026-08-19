@@ -16,6 +16,7 @@ import {
   BEREICH_EIGENE,
   MODELL_KLASSEN,
   MODELL_KLASSE_STANDARD,
+  klasseHatKostenHinweis,
   modellKlasseGueltig
 } from '../shared/blockKatalog.js'
 import {
@@ -147,13 +148,21 @@ export function vorschlagSaeubern(roh) {
     // Bereich (BAUPLAN 30): nur bekannte Klappen-Schlüssel — alles andere
     // fällt auf „eigene" zurück; einen freien Namen tippt der Nutzer selbst.
     bereich: bereichSaeubern(roh.bereich),
-    // Modellklasse (BAUPLAN 37): nur die drei bekannten Klassen — alles
-    // andere fällt auf Standard zurück, nie auf ein stilles Billigmodell.
-    modell: modellKlasseGueltig(roh.modell) ?? MODELL_KLASSE_STANDARD,
+    // Modellklasse (BAUPLAN 37): nur die bekannten Klassen — alles andere
+    // fällt auf Standard zurück, nie auf ein stilles Billigmodell. „Extra"
+    // (0.48.1) nimmt der Assistent NIE vom Vorschlag an — ein Satz im Prompt
+    // ist keine Sperre, und Fable als Voreinstellung eines eigenen Blocks
+    // muss Georgs bewusste Wahl sein (Kosten-Wahrheit, BAUPLAN).
+    modell: modellVomVorschlag(roh.modell),
     ...Object.fromEntries(KENNZEICHEN.map(({ schluessel }) => [schluessel, angeglichen[schluessel]])),
     felder,
     begruendungen
   }
+}
+
+function modellVomVorschlag(roh) {
+  const klasse = modellKlasseGueltig(roh)
+  return !klasse || klasseHatKostenHinweis(klasse) ? MODELL_KLASSE_STANDARD : klasse
 }
 
 function bereichSaeubern(roh) {
@@ -174,9 +183,10 @@ function bereicheFuerAssistent() {
 }
 
 // Die Modellklassen mit ihrem Klartext-Namen — so kennt der Assistent die
-// Bedeutung der Schlüssel (texte.kette.modellNamen).
+// Bedeutung der Schlüssel (texte.kette.modellNamen). Klassen mit
+// Kosten-Hinweis (Extra) stehen gar nicht erst zur Wahl (0.48.1).
 function modellKlassenFuerAssistent() {
-  return MODELL_KLASSEN.map((schluessel) => ({
+  return MODELL_KLASSEN.filter((k) => !klasseHatKostenHinweis(k)).map((schluessel) => ({
     schluessel,
     name: texte.kette.modellNamen[schluessel] ?? schluessel
   }))

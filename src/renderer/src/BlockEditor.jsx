@@ -4,9 +4,14 @@ import {
   bekannteEtiketten,
   blockKategorie,
   blockModellKlasse,
+  blockDenktiefe,
+  klasseHatKostenHinweis,
   BEREICHE,
   BEREICH_EIGENE,
   MODELL_KLASSEN,
+  MODELL_KLASSE_STANDARD,
+  DENKTIEFEN,
+  DENKTIEFE_STANDARD,
   freieBereiche
 } from '../../shared/blockKatalog.js'
 import {
@@ -325,6 +330,9 @@ export default function BlockEditor({ block, onSpeichern, onAbbrechen }) {
     // Modellklasse (BAUPLAN 37): Voreinstellung des eigenen Blocks —
     // Altbestand ohne Feld läuft auf Standard.
     modell: blockModellKlasse(block),
+    // Denktiefe (0.48.1): Voreinstellung des eigenen Blocks — Altbestand ohne
+    // Feld läuft auf „Modell-Standard"; an der Karte bleibt sie änderbar.
+    denktiefe: blockDenktiefe(block),
     ...kennzeichenStart,
     // Formularfelder (BAUPLAN 48): gespeicherte Felder sind „eingefroren" —
     // ihre id bleibt, auch wenn die Bezeichnung sich ändert (Korrektur K5).
@@ -423,10 +431,15 @@ export default function BlockEditor({ block, onSpeichern, onAbbrechen }) {
     // darf kein Häkchen auf undefined setzen — die Checkbox kippte sonst von
     // „gesteuert" auf „ungesteuert". Die Begründungen wandern neben die
     // Häkchen; die KI-Felder sind neu (id läuft live mit der Bezeichnung).
+    // Modell und Denktiefe (0.48.1, K2) ebenso mit Rückfall: Der Vorschlag
+    // trägt keine Denktiefe — ohne Rückfall kippte auch dieses Select auf
+    // „ungesteuert" und speicherte undefined.
     const { begruendungen, ...vorschlag } = ergebnis.vorschlag
     setWerte({
       brauchtWozu: {},
       brauchtOptional: [],
+      modell: MODELL_KLASSE_STANDARD,
+      denktiefe: DENKTIEFE_STANDARD,
       ...Object.fromEntries(KENNZEICHEN.map(({ schluessel }) => [schluessel, false])),
       ...vorschlag,
       felder: (vorschlag.felder ?? []).map((feld) => ({ ...feld, eingefroren: false })),
@@ -675,6 +688,28 @@ export default function BlockEditor({ block, onSpeichern, onAbbrechen }) {
                     ))}
                   </select>
                   <span className="feld-hinweis">{t.modellHinweis}</span>
+                  {/* Kosten-Wahrheit der Klasse Extra (0.48.1): derselbe Satz
+                      wie an der Blockkarte, sichtbar sobald Extra gewählt ist. */}
+                  {klasseHatKostenHinweis(werte.modell) && (
+                    <span className="feld-hinweis">{t.modellExtraHinweis}</span>
+                  )}
+                </label>
+                {/* Denktiefe (0.48.1): Voreinstellung des eigenen Blocks — wie
+                    gründlich das Modell nachdenkt; an der Karte je Block
+                    änderbar. Der Hinweis nennt, dass Haiku sie ignoriert. */}
+                <label className="feld">
+                  <span>{t.denktiefeFeld}</span>
+                  <select
+                    value={werte.denktiefe}
+                    onChange={(e) => setzen('denktiefe', e.target.value)}
+                  >
+                    {DENKTIEFEN.map((stufe) => (
+                      <option key={stufe} value={stufe}>
+                        {tkette.denktiefeNamen[stufe]}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="feld-hinweis">{t.denktiefeHinweis}</span>
                 </label>
                 {/* Feinheiten (BAUPLAN 48): die übrigen Kennzeichen des
                     Katalogs, zugeklappt — offen, wenn eines gesetzt ist oder

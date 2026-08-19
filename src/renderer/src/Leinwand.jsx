@@ -5,9 +5,14 @@ import {
   vorlageDefinition,
   blockKategorie,
   blockModellKlasse,
+  blockDenktiefe,
   blockAnzeigeName,
   pruefOrdnerFuer,
+  klasseHatKostenHinweis,
+  klasseKenntDenktiefe,
   MODELL_KLASSEN,
+  DENKTIEFEN,
+  DENKTIEFE_STANDARD,
   ZUSATZNAME_MAX,
   REPARATUR_RUNDEN_MAX,
   UEBERTRAG_GRENZE_MAX
@@ -588,6 +593,20 @@ function BlockErgebnisZeile({ eintrag }) {
               ? tb.modellZeile(eintrag.modelle)
               : tb.modellUnbekannt}
           </p>
+          {/* Klasse und Denktiefe (0.48.1): was an der Karte gewählt war und was
+              der Motor als wirksame Denktiefe gemeldet hat. Alte Berichte tragen
+              keine Klasse — dann steht die Zeile nicht da (K9). Die Denktiefe
+              wird immer genannt, auch „Modell-Standard" — hier ist Platz, und
+              die gemessene Stufe steht daneben (K8). */}
+          {typeof eintrag.klasse === 'string' && (
+            <p className="feld-hinweis">
+              {tb.klasseZeile(
+                tk.modellNamen[eintrag.klasse] ?? eintrag.klasse,
+                eintrag.denktiefe ? (tk.denktiefeKurz[eintrag.denktiefe] ?? eintrag.denktiefe) : '',
+                eintrag.denktiefeGemessen
+              )}
+            </p>
+          )}
           {eintrag.aufschluesselung && (
             <p className="feld-hinweis">{tb.aufschluesselungZeile(eintrag.aufschluesselung)}</p>
           )}
@@ -834,6 +853,7 @@ function SchaubildKarte({
   onZusatz,
   onLokaleKi,
   onModell,
+  onDenktiefe,
   onEntfernen,
   onGreifen,
   onPfeilStart,
@@ -846,6 +866,10 @@ function SchaubildKarte({
   // Modellklasse (BAUPLAN 37): Wahl an der Karte, sonst Voreinstellung des
   // Blocks — dieselbe Auflösung wie im Hauptprozess.
   const modellKlasse = blockModellKlasse(def, eintrag)
+  // Denktiefe (0.48.1): Zusatz zur Modellklasse, dieselbe Auflösung wie im
+  // Hauptprozess (Karte gewinnt, sonst Voreinstellung des Blocks, sonst
+  // „Modell-Standard").
+  const denktiefe = blockDenktiefe(def, eintrag)
   return (
     <div
       className={
@@ -931,6 +955,33 @@ function SchaubildKarte({
             </option>
           ))}
         </select>
+        {/* Kosten-Wahrheit der Klasse Extra (0.48.1): Fable 5 kann je nach Abo
+            Guthaben statt Kontingent kosten — der Satz steht sichtbar unter
+            dem Feld, nicht nur im Tooltip. */}
+        {klasseHatKostenHinweis(modellKlasse) && (
+          <span className="feld-hinweis karte-kosten-hinweis">{tk.modellExtraHinweis}</span>
+        )}
+      </label>
+      {/* Denktiefe je Block (0.48.1): Zusatz zur Modellklasse — wie gründlich
+          das Modell nachdenkt. „Modell-Standard" heißt: kein eigener Wert, das
+          Modell entscheidet (laut Doku high). Bei Haiku wird die Wahl ignoriert;
+          die Karte sagt es, statt das Feld zu sperren. */}
+      <label className="feld feld-kompakt" title={tk.denktiefeHinweis}>
+        {tk.denktiefeLabel}
+        <select
+          disabled={!bearbeitbar}
+          value={denktiefe}
+          onChange={(e) => onDenktiefe(e.target.value)}
+        >
+          {DENKTIEFEN.map((stufe) => (
+            <option key={stufe} value={stufe}>
+              {tk.denktiefeNamen[stufe]}
+            </option>
+          ))}
+        </select>
+        {!klasseKenntDenktiefe(modellKlasse) && denktiefe !== DENKTIEFE_STANDARD && (
+          <span className="feld-hinweis karte-kosten-hinweis">{tk.denktiefeHaikuHinweis}</span>
+        )}
       </label>
       {def.felder.map((feld) => (
         <label key={feld.id} className="feld feld-kompakt">
@@ -1500,6 +1551,15 @@ export default function Leinwand({
     ketteSpeichern({ ...workflow, bloecke })
   }
 
+  // Denktiefe je Block (0.48.1): Wahl an der Blockkarte, gespeichert wie die
+  // Modellklasse — der Hauptprozess säubert den Wert beim Laden (workflow.js).
+  function denktiefeSetzen(instanzId, denktiefe) {
+    const bloecke = workflow.bloecke.map((b) =>
+      b.instanzId === instanzId ? { ...b, denktiefe } : b
+    )
+    ketteSpeichern({ ...workflow, bloecke })
+  }
+
   function entfernen(instanzId) {
     ketteSpeichern({
       ...workflow,
@@ -1682,6 +1742,22 @@ export default function Leinwand({
       .filter((k) => k.sorte !== 'status')
       .map((k) => k.id)
     const antwort = await window.flowforge.laufStarten(pfad, kartenIds)
+    // Kosten-Rückfrage der Klasse Extra (0.48.1): Der Hauptprozess startet
+    // nicht, sondern fragt einmal — Fable 5 kann im Abo Guthaben statt
+    // Kontingent kosten. „Trotzdem starten" merkt sich die Antwort
+    // (Einstellung extraKostenBestaetigt) und startet erneut; Abbrechen merkt
+    // nichts, beim nächsten Start kommt die Frage wieder. Die Prüfung steht
+    // VOR dem Fehler-Return, sonst landete die Frage als roter Text (K10).
+    if (antwort.rueckfrage === 'extra-kosten') {
+      return setBestaetigung({
+        frage: antwort.fehler,
+        knopf: t.extraRueckfrageKnopf,
+        aktion: async () => {
+          await window.flowforge.extraKostenBestaetigen()
+          starten()
+        }
+      })
+    }
     if (!antwort.ok) return setFehler(antwort.fehler)
     // Projekt belegt oder alle Plätze vergeben: der Start wartet sichtbar.
     if (antwort.wartet) {
@@ -2107,6 +2183,7 @@ export default function Leinwand({
                 onZusatz={(wert) => zusatzSetzen(eintrag.instanzId, wert)}
                 onLokaleKi={(erlaubt) => lokaleKiSetzen(eintrag.instanzId, erlaubt)}
                 onModell={(klasse) => modellSetzen(eintrag.instanzId, klasse)}
+                onDenktiefe={(stufe) => denktiefeSetzen(eintrag.instanzId, stufe)}
                 onEntfernen={() => entfernen(eintrag.instanzId)}
                 onGreifen={(e) => karteGreifen(e, eintrag)}
                 onPfeilStart={(e) => pfeilBeginnen(e, eintrag)}

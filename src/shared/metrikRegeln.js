@@ -13,6 +13,8 @@
 // Block-Tokens — solche Einträge zählen als „ohne Kosten"/„ohne Verbrauch"
 // und fallen aus den Durchschnitten heraus, statt sie zu verfälschen.
 
+import { klasseKenntDenktiefe } from './blockKatalog.js'
+
 export const BEREICHE = ['recherche', 'entwurf', 'reparatur', 'bauen']
 export const AUSGAENGE = ['uebernommen', 'verworfen', 'gehalten', 'nicht-gehalten', 'gescheitert']
 
@@ -146,6 +148,14 @@ function laengeOderNull(wert) {
   return Array.isArray(wert) ? wert.length : null
 }
 
+export function wirksameDenktiefe(e) {
+  const gemessen = typeof e?.denktiefeGemessen === 'string' ? e.denktiefeGemessen.trim() : ''
+  if (gemessen) return gemessen
+  const gewaehlt = typeof e?.denktiefe === 'string' ? e.denktiefe.trim() : ''
+  if (!gewaehlt || gewaehlt === 'standard') return ''
+  return klasseKenntDenktiefe(e?.klasse) ? gewaehlt : ''
+}
+
 export function laufExtraktAusBericht(bericht, projektPfad) {
   if (!bericht || typeof bericht !== 'object') return null
   const gestartetAm = String(bericht.gestartetAm ?? '')
@@ -169,6 +179,11 @@ export function laufExtraktAusBericht(bericht, projektPfad) {
       tokens: Number.isFinite(e.tokens) ? e.tokens : null,
       kostenUsd: Number.isFinite(e.kostenUsd) ? e.kostenUsd : null,
       modell: modellVonEintrag(e),
+      // Denktiefe (0.48.1): die WIRKSAME Stufe — gemessen (effort.level aus dem
+      // Hook) schlägt die Wahl; ohne Messung zählt die Wahl nur, wenn die
+      // Klasse Denktiefe überhaupt kennt (Haiku ignoriert sie — eine ignorierte
+      // Wahl ist keine Denktiefe) und sie nicht Modell-Standard ist. Sonst ''.
+      denktiefe: wirksameDenktiefe(e),
       wiederholung: gesehen.has(schluessel),
       erstesUrteil: istUrteil && !mitUrteil.has(schluessel)
     })
@@ -297,12 +312,17 @@ export function blockModellAuswerten(extrakte) {
       // NUL-Byte in der Quelldatei macht sie für git und die Projektsuche zur
       // Binärdatei — der Diff zeigt dann nur „Bin …", und kein Grep findet die
       // Stelle mehr. Zur Laufzeit ist es dasselbe Zeichen.
-      const schluessel = b.block + '\u0000' + b.modell
+      // Seit 0.48.1 teilt die Denktiefe die Zeilen (Reparatur-Runden je
+      // Denktiefe — die Zahl, an der Georg sie einstellt); alte Extrakte ohne
+      // Feld zählen als ''.
+      const denktiefe = typeof b.denktiefe === 'string' ? b.denktiefe : ''
+      const schluessel = b.block + '\u0000' + b.modell + '\u0000' + denktiefe
       let z = zellen.get(schluessel)
       if (!z) {
         z = {
           block: b.block,
           modell: b.modell,
+          denktiefe,
           erstlauf: eimer(),
           wiederholung: eimer(),
           ersteUrteile: 0,
@@ -320,6 +340,7 @@ export function blockModellAuswerten(extrakte) {
     .map((z) => ({
       block: z.block,
       modell: z.modell,
+      denktiefe: z.denktiefe,
       erstlauf: mitDurchschnitt(z.erstlauf),
       wiederholung: mitDurchschnitt(z.wiederholung),
       ersteUrteile: z.ersteUrteile,
@@ -331,7 +352,8 @@ export function blockModellAuswerten(extrakte) {
       (a, b) =>
         b.erstlauf.anzahl - a.erstlauf.anzahl ||
         a.block.localeCompare(b.block, 'de') ||
-        a.modell.localeCompare(b.modell, 'de')
+        a.modell.localeCompare(b.modell, 'de') ||
+        a.denktiefe.localeCompare(b.denktiefe, 'de')
     )
 }
 

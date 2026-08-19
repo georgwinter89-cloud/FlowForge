@@ -9,14 +9,18 @@
 // Regel teurer bzw. flacher liefe als gewollt: Zuarbeit darf nie teurer
 // werden als ihr Block, und die drei Audit-Blickwinkel sind der Kern des
 // Blocks, keine Zuarbeit.
+// Seit 0.48.1 gibt es die vierte Klasse „extra" (Fable 5) — teurer als
+// Standard, im Katalog nirgends vorbelegt; die Fälle dazu stehen mit dabei.
 import { describe, it, expect } from 'vitest'
 import {
   BLOCK_KATALOG,
   MODELL_KLASSEN,
   MODELL_KLASSE_STANDARD,
+  MODELL_KLASSE_EXTRA,
   KOORDINATOR_MODELL,
   blockDefinition,
   blockModellKlasse,
+  klasseHatKostenHinweis,
   modellKlasseGueltig,
   sdkModell,
   unterModellFuer
@@ -45,14 +49,23 @@ describe('Welche Modellklasse gilt für eine Blockkarte', () => {
     expect(blockModellKlasse(null, null)).toBe(MODELL_KLASSE_STANDARD)
   })
 
-  it('lässt nur die drei bekannten Klassen durch', () => {
+  it('lässt nur die vier bekannten Klassen durch', () => {
     expect(modellKlasseGueltig('sehr-sparsam')).toBe('sehr-sparsam')
+    expect(modellKlasseGueltig('extra')).toBe('extra')
     expect(modellKlasseGueltig('opus')).toBe(null)
+    expect(modellKlasseGueltig('fable')).toBe(null)
+  })
+
+  it('kennt seit 0.48.1 genau vier Klassen — Extra ganz vorn als teuerste', () => {
+    expect(MODELL_KLASSEN).toEqual(['extra', 'standard', 'sparsam', 'sehr-sparsam'])
+    expect(MODELL_KLASSE_EXTRA).toBe('extra')
+    expect(blockModellKlasse(blockDefinition('bauer'), { modell: 'extra' })).toBe('extra')
   })
 })
 
 describe('Übersetzung in die Modelle des Motors', () => {
   it('gibt je Klasse einen SDK-Alias', () => {
+    expect(sdkModell('extra')).toBe('fable')
     expect(sdkModell('standard')).toBe('opus')
     expect(sdkModell('sparsam')).toBe('sonnet')
     expect(sdkModell('sehr-sparsam')).toBe('haiku')
@@ -86,6 +99,12 @@ describe('Modell der Unteraufgaben', () => {
     expect(unterModellFuer(bauer, 'sparsam', 'sparsam')).toBe('sonnet')
   })
 
+  it('stuft Zuarbeit eines Extra-Blocks auf sparsam herab — „wie Block" gibt ihr Fable (bewusst)', () => {
+    expect(unterModellFuer(bauer, 'extra', 'sparsam')).toBe('sonnet')
+    expect(unterModellFuer(bauer, 'extra', 'wieBlock')).toBe('fable')
+    expect(unterModellFuer(blockDefinition('audit'), 'extra', 'sparsam')).toBe('fable')
+  })
+
   it('lässt die Audit-Blickwinkel immer der Klasse ihres Blocks folgen', () => {
     const audit = blockDefinition('audit')
     expect(audit.unteraufgabenWieBlock).toBe(true)
@@ -117,6 +136,14 @@ describe('Voreinstellungen im Katalog', () => {
     for (const klasse of MODELL_KLASSEN)
       expect(texte.kette.modellNamen[klasse]).toBeTruthy()
   })
+
+  it('belegt Extra nirgends vor — Fable ist immer Georgs bewusste Wahl', () => {
+    for (const def of BLOCK_KATALOG) expect(blockModellKlasse(def)).not.toBe('extra')
+  })
+
+  it('nur Extra trägt den Kosten-Hinweis', () => {
+    expect(MODELL_KLASSEN.filter(klasseHatKostenHinweis)).toEqual(['extra'])
+  })
 })
 
 describe('Eigene Blöcke wählen ihre Klasse mit', () => {
@@ -134,5 +161,9 @@ describe('Eigene Blöcke wählen ihre Klasse mit', () => {
 
   it('weist Unsinn auf Standard zurück', () => {
     expect(pruefeEigenenBlock({ ...grund, modell: 'billig' }).block.modell).toBe('standard')
+  })
+
+  it('übernimmt Extra, wenn Georg es im Editor gewählt hat', () => {
+    expect(pruefeEigenenBlock({ ...grund, modell: 'extra' }).block.modell).toBe('extra')
   })
 })

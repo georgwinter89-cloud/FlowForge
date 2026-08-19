@@ -16,8 +16,10 @@ import { texte } from './texte.js'
 import {
   BEREICHE,
   BEREICH_EIGENE,
+  DENKTIEFE_STANDARD,
   MODELL_KLASSE_STANDARD,
   PRUEFBELEG_ETIKETT,
+  denktiefeGueltig,
   modellKlasseGueltig
 } from './blockKatalog.js'
 import { ARBEITSPAKET_ETIKETT } from './kettenRegeln.js'
@@ -335,6 +337,9 @@ export function pruefeEigenenBlock(roh) {
     // fehlendes Feld (Altbestand) fällt auf Standard zurück, nie auf ein
     // stilles Billigmodell.
     modell: modellKlasseGueltig(roh?.modell) ?? MODELL_KLASSE_STANDARD,
+    // Denktiefe (0.48.1): Voreinstellung des eigenen Blocks, an der Karte
+    // überschreibbar. Unsinn oder fehlendes Feld (Altbestand) → Modell-Standard.
+    denktiefe: denktiefeGueltig(roh?.denktiefe) ?? DENKTIEFE_STANDARD,
     ...kennzeichen,
     // Kein eigenes Häkchen (siehe KENNZEICHEN): Wer Aufgaben-Karten anlegen
     // soll, braucht das Werkzeug — auch bei „nur lesen" (Muster Audit).

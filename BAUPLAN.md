@@ -871,11 +871,15 @@ Cloud-Modellen einstellen können". Recherche-Stand 19.08.2026, Claude-Code-Doku
   helfen, neigt zum Überdenken — vorher testen". An der Karte als Zusatz zur Modellklasse
   (ein Auswahlfeld „Denktiefe"), im Editor als Voreinstellung, Ticker/Laufbericht/Metriken
   nennen sie (Reparatur-Runden je Denktiefe — das ist die Zahl, an der Georg sie einstellt).
-- **Ehrlich offen, in der Session zu prüfen:** ob der Hook für Unteraufgaben (`subagent_type`)
-  die `effort`-Definition wirklich an den Block-Agenten durchreicht (Messung: PreToolUse-Hook
-  liefert laut `sdk.d.ts` `effort.level` des laufenden Zuges — damit ist es im Ticker
-  nachweisbar); `CLAUDE_CODE_EFFORT_LEVEL` in der Umgebung würde alles übersteuern — der
-  Motor räumt die Variable beim Start weg.
+- **In der Session gemessen (19.08.2026, SDK 0.3.224 / CLI 2.1.224):** Der Hook für
+  Unteraufgaben (`subagent_type`) reicht die `effort`-Definition wirklich durch — eine
+  SDK-Probe mit zwei programmatischen Agenten (`effort: 'low'` / `'xhigh'`, Modell Sonnet)
+  lieferte im PreToolUse-Hook `agent_type: 'probe-low'` mit `effort.level: 'low'` bzw.
+  `'xhigh'`; der Haiku-Hauptfaden meldet kein `effort` (kennt keine Denktiefe). Damit ist
+  die wirksame Denktiefe im Ticker nachweisbar. `CLAUDE_CODE_EFFORT_LEVEL` in der Umgebung
+  würde alles übersteuern — der Motor räumt alle CLAUDE*-Variablen beim Start ohnehin weg.
+  Nicht gemessen (bewusst, kostet Guthaben): ein echter Fable-Lauf — der Fehlertext
+  „Fable 5 requires usage credits" stammt aus `sdk.d.ts` (USAGE_LIMIT_ERROR_PREFIXES).
 - Nachzuziehen: SPEC §2 (Klasse Extra mit Kosten-Wahrheit, Denktiefe), §4.1 (Karte), §4.5
   (Editor), §3.4 (Metriken), §6 (Ticker), §9 (Erststart/Einstellungen-Text).
 **Alltagstest:** Georg stellt den Integrator auf „Extra (Fable 5)" und den Prüfer auf

@@ -149,6 +149,9 @@ function BlockModellTabelle({ zeilen }) {
           <tr>
             <th>{t.spalteBlock}</th>
             <th>{t.spalteModell}</th>
+            {/* Denktiefe (0.48.1): die wirksame Stufe je Block — leer bei
+                Modell-Standard ohne Messung, dann steht „—" in der Zelle. */}
+            <th>{t.spalteDenktiefe}</th>
             <th className="zahl">{t.spalteErstlaeufe}</th>
             <th className="zahl">{t.spalteTokensDurchschnitt}</th>
             <th className="zahl">{t.spalteKostenDurchschnitt}</th>
@@ -157,10 +160,14 @@ function BlockModellTabelle({ zeilen }) {
           </tr>
         </thead>
         <tbody>
+          {/* Schlüssel mit Denktiefe (K1): seit 0.48.1 teilt die Denktiefe die
+              Zeilen — „Prüfer / opus / xhigh" und „Prüfer / opus / —" dürfen
+              nicht denselben React-Key tragen, sonst verschluckt React Zeilen. */}
           {zeilen.map((z) => (
-            <tr key={`${z.block} ${z.modell}`}>
+            <tr key={`${z.block} ${z.modell} ${z.denktiefe ?? ''}`}>
               <td>{z.block}</td>
               <td className="mono">{z.modell}</td>
+              <td className="mono">{z.denktiefe || t.denktiefeOhne}</td>
               <td className="zahl">{z.erstlauf.anzahl}</td>
               <td className="zahl">
                 {durchschnittZelle(z.erstlauf.tokensDurchschnitt, z.erstlauf.ohneTokens, t.ohneVerbrauch, tokensText)}

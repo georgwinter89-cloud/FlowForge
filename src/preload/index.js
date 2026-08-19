@@ -19,6 +19,7 @@ contextBridge.exposeInMainWorld('flowforge', {
 
   einstellungenLaden: () => ipcRenderer.invoke('einstellungen-laden'),
   einstellungenSpeichern: (neu) => ipcRenderer.invoke('einstellungen-speichern', neu),
+  extraKostenBestaetigen: () => ipcRenderer.invoke('extra-kosten-bestaetigen'),
   lokaleHelferStatus: (modell, adresse) =>
     ipcRenderer.invoke('lokale-helfer-status', { modell, adresse }),
 

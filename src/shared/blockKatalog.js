@@ -67,8 +67,13 @@ export const BEREICH_EIGENE = 'eigene'
 // Feld `modell`; die Blockkarte im Schaubild darf sie überschreiben, eigene
 // Blöcke wählen sie im Block-Editor. Reihenfolge = teuer nach sparsam; daran
 // hängt die Regel „Unteraufgaben nur herabstufen, nie verteuern".
-export const MODELL_KLASSEN = ['standard', 'sparsam', 'sehr-sparsam']
+// Seit 0.48.1 steht „extra" (Fable 5) ganz vorn: teurer als Standard, im
+// Katalog nirgends vorbelegt, und je nach Abo kann es Guthaben statt Kontingent
+// kosten — deshalb trägt die Klasse einen Kosten-Hinweis (klasseHatKostenHinweis)
+// und der erste Lauf mit einem Extra-Block fragt einmal nach (lauf.js).
+export const MODELL_KLASSEN = ['extra', 'standard', 'sparsam', 'sehr-sparsam']
 export const MODELL_KLASSE_STANDARD = 'standard'
+export const MODELL_KLASSE_EXTRA = 'extra'
 
 // Übersetzung in die Modell-Aliase des Motors (SDK: sonnet/opus/haiku/fable).
 // „Standard" ist bewusst fest auf Opus genagelt statt „was die CLI gerade als
@@ -76,7 +81,51 @@ export const MODELL_KLASSE_STANDARD = 'standard'
 // nicht gesetztes Modell an die Block-Agenten vererbt — dann bekäme jeder
 // Bauer still das Billigmodell. Ein gesetzter Wert ist die einzige sichere
 // Variante, und er macht Läufe über Monate hinweg vergleichbar.
-const SDK_MODELL = { standard: 'opus', sparsam: 'sonnet', 'sehr-sparsam': 'haiku' }
+const SDK_MODELL = { extra: 'fable', standard: 'opus', sparsam: 'sonnet', 'sehr-sparsam': 'haiku' }
+
+// Denktiefe je Block (0.48.1, Georgs „Effort bei den Cloud-Modellen einstellen").
+// Das SDK kennt effort low…max je Agent-Definition; FlowForge definiert den
+// Block-Agenten deshalb je Stufe einmal (block, block-low … block-max) und wählt
+// im Hook den Typ nach der Karte — der Koordinator bleibt unberührt.
+// 'standard' = „Modell-Standard": KEIN effort-Feld, die CLI entscheidet (laut
+// Doku high). Haiku kennt keine Denktiefe — dort wird die Wahl ignoriert
+// (klasseKenntDenktiefe), Editor und Ticker sagen es.
+export const DENKTIEFEN = ['standard', 'low', 'medium', 'high', 'xhigh', 'max']
+export const DENKTIEFE_STANDARD = 'standard'
+
+export function denktiefeGueltig(roh) {
+  return DENKTIEFEN.includes(roh) ? roh : null
+}
+
+// Welche Denktiefe gilt für diesen Block? Wie bei der Modellklasse: die Wahl an
+// der Blockkarte gewinnt, sonst die Voreinstellung des Eigen-Blocks, sonst
+// Modell-Standard. Katalog-Blöcke tragen kein denktiefe-Feld.
+export function blockDenktiefe(def, eintrag = null) {
+  return (
+    denktiefeGueltig(eintrag?.denktiefe) ??
+    denktiefeGueltig(def?.denktiefe) ??
+    DENKTIEFE_STANDARD
+  )
+}
+
+// Name des Block-Agenten in der Motor-Definition: 'block' für Modell-Standard
+// (und für Unsinn), sonst 'block-' + Stufe.
+export function blockAgentTyp(denktiefe) {
+  const stufe = denktiefeGueltig(denktiefe) ?? DENKTIEFE_STANDARD
+  return stufe === DENKTIEFE_STANDARD ? 'block' : 'block-' + stufe
+}
+
+export const BLOCK_AGENT_TYPEN = DENKTIEFEN.map(blockAgentTyp)
+
+// Haiku („sehr sparsam") kennt keine Denktiefe — alle anderen Klassen schon.
+export function klasseKenntDenktiefe(klasse) {
+  return klasse !== 'sehr-sparsam'
+}
+
+// Nur „extra" kann Guthaben statt Kontingent kosten (BAUPLAN 0.48.1).
+export function klasseHatKostenHinweis(klasse) {
+  return klasse === MODELL_KLASSE_EXTRA
+}
 
 // Nebenrollen billigst (BAUPLAN 37): Der Koordinator der Lauf-Session schreibt
 // nur AUFTRAG und OK — er braucht kein großes Modell. Die Einmal-Frage des

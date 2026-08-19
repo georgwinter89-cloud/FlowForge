@@ -58,7 +58,14 @@ const STANDARD = {
   // 18.08.2026 für ein 27B-Modell auf einer 32-GB-Karte). Die Werkzeug-Deckel
   // der lokalen KI wachsen mit (lokaleHelfer.js). Standard 64k: passt bei 27B
   // samt Gewichten in 32 GB; 128k nur, wenn die Karte es wirklich hergibt.
-  lokaleHelferKontext: 65536
+  lokaleHelferKontext: 65536,
+  // Kosten-Rückfrage „Extra (Fable 5)" (0.48.1): Beim ersten Lauf mit einem
+  // Extra-Block fragt FlowForge einmal, ob der Lauf trotz möglicher
+  // Guthaben-Abrechnung starten darf. true = Georg hat „trotzdem starten"
+  // gewählt, die Frage kommt nicht wieder. Einziger Schreiber auf true ist
+  // extraKostenBestaetigen() — der Einstellungen-Dialog kann den Wert weder
+  // setzen noch zurücksetzen (einstellungenSpeichern liest ihn aus der Datei).
+  extraKostenBestaetigt: false
 }
 
 const KONTEXT_WAHL = [32768, 65536, 131072]
@@ -106,6 +113,32 @@ export function motorBereit(einstellungen) {
   return { ok: true }
 }
 
+// Gemerkte Antworten, die kein Dialog mitschickt (und keiner zurücksetzen
+// darf): werden beim Speichern aus der Datei übernommen, nie aus `neu` —
+// sonst vergäße jeder Einstellungen- oder Erststart-Dialog die Antwort (der
+// Erststart schickt den kompletten geladenen Satz, also auch ein `false`).
+function gemerkteAntworten() {
+  const { einstellungen } = einstellungenLaden()
+  return { extraKostenBestaetigt: einstellungen.extraKostenBestaetigt === true }
+}
+
+// Kosten-Rückfrage Extra (0.48.1): Georg hat „trotzdem starten" gewählt —
+// merken, damit die Frage nicht bei jedem Lauf wiederkommt.
+export function extraKostenBestaetigen() {
+  const { einstellungen } = einstellungenLaden()
+  const daten = { ...einstellungen, extraKostenBestaetigt: true }
+  // Standardwerte, die noch nie gespeichert wurden, landen hier mit in der
+  // Datei — harmlos, einstellungenLaden mischt ohnehin STANDARD darunter.
+  dateiSchreiben(daten)
+  return { ok: true }
+}
+
+function dateiSchreiben(daten) {
+  const tmp = dateiPfad() + '.tmp'
+  fs.writeFileSync(tmp, JSON.stringify(daten, null, 2), 'utf8')
+  fs.renameSync(tmp, dateiPfad())
+}
+
 export function einstellungenSpeichern(neu) {
   const modus = MOTOR_MODI.includes(neu.motorModus) ? neu.motorModus : ''
   const schluessel = String(neu.apiSchluessel ?? '').trim()
@@ -142,10 +175,10 @@ export function einstellungenSpeichern(neu) {
     // älterer Aufrufer) fällt auf den Standard zurück.
     lokaleHelferKontext: KONTEXT_WAHL.includes(Number(neu.lokaleHelferKontext))
       ? Number(neu.lokaleHelferKontext)
-      : STANDARD.lokaleHelferKontext
+      : STANDARD.lokaleHelferKontext,
+    // NIE aus `neu` (siehe gemerkteAntworten).
+    ...gemerkteAntworten()
   }
-  const tmp = dateiPfad() + '.tmp'
-  fs.writeFileSync(tmp, JSON.stringify(daten, null, 2), 'utf8')
-  fs.renameSync(tmp, dateiPfad())
+  dateiSchreiben(daten)
   return { ok: true, einstellungen: daten, aboErlaubt: ABO_MODUS_ERLAUBT, motorGewaehlt: true }
 }

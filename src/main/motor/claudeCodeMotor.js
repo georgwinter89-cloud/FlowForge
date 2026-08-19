@@ -10,6 +10,10 @@ import {
   KOORDINATOR_MODELL,
   EINMAL_FRAGE_MODELL,
   MODELL_KLASSE_STANDARD,
+  DENKTIEFEN,
+  DENKTIEFE_STANDARD,
+  blockAgentTyp,
+  klasseKenntDenktiefe,
   sdkModell
 } from '../../shared/blockKatalog.js'
 import {
@@ -866,9 +870,46 @@ function tickerZeilen(nachricht, projektPfad, blockTaskIds, mitHauptfaden = fals
   return !hauptfaden && !vomBlockAgenten ? zeilen.map((z) => t.unteraufgabeZeile(z)) : zeilen
 }
 
+// „Extra (Fable 5)" ist für dieses Konto nicht verfügbar (0.48.1): die CLI
+// meldet es mit diesen Formulierungen (sdk.d.ts USAGE_LIMIT_ERROR_PREFIXES:
+// „Fable 5 requires usage credits", „You're out of usage credits", „Your seat
+// type doesn't include usage credits"). Kein stiller Rückfall auf ein anderes
+// Modell — der Block bleibt stehen, FlowForge sagt es (BAUPLAN). Die Regex
+// wird NUR gezielt angewandt (Block-Agent-Text, Motor-Ergebnis), nie der
+// ganze Agent-Text durch fehlerAusErgebnis geschickt — sonst würde ein
+// „rate limit" im Bericht des Agenten zur Kontingent-Pause.
+const EXTRA_NICHT_VERFUEGBAR_REGEX = /requires usage credits|out of usage credits|seat type doesn't include usage/i
+export function extraNichtVerfuegbarFehler(text) {
+  if (typeof text !== 'string' || !EXTRA_NICHT_VERFUEGBAR_REGEX.test(text)) return null
+  return { fehlertext: texte.lauf.extraNichtVerfuegbar, fehlerArt: 'extra-nicht-verfuegbar' }
+}
+
+// Die Block-Agenten der Lauf-Session (BAUPLAN 19, 0.48.1): ein Agententyp je
+// Denktiefe, alle sonst identisch. Die Denktiefe ist ein Feld der
+// Agent-Definition (SDK `effort`), kein Session-Schalter — so bleibt der
+// Koordinator unberührt, und ein Lauf kann Blöcke mit verschiedenen Stufen
+// mischen. 'standard' bekommt KEIN effort-Feld: die CLI entscheidet. (Die
+// Umgebungsvariable CLAUDE_CODE_EFFORT_LEVEL würde alles übersteuern — die
+// Umgebungsbereinigung des Motors entfernt ohnehin alle CLAUDE*-Variablen.)
+export function blockAgentDefinitionen(systemText) {
+  const definitionen = {}
+  for (const stufe of DENKTIEFEN)
+    definitionen[blockAgentTyp(stufe)] = {
+      description: 'Führt genau einen Block-Arbeitsauftrag von FlowForge aus.',
+      // Zweite Leitplanke gegen das Erben des Koordinator-Modells
+      // (BAUPLAN 37): Sollte der Hook einmal nicht greifen, läuft ein
+      // Block-Agent auf der Standardklasse — nie still auf Haiku.
+      model: sdkModell(MODELL_KLASSE_STANDARD),
+      prompt: systemText,
+      maxTurns: 300,
+      ...(stufe === DENKTIEFE_STANDARD ? {} : { effort: stufe })
+    }
+  return definitionen
+}
+
 // Fehlermeldung des Motors in Klartext übersetzen und einstufen — an der
 // fehlerArt entscheidet die Lauf-Verwaltung z.B. über die Kontingent-Pause.
-function fehlerAusErgebnis(ergebnis, stderrRest) {
+export function fehlerAusErgebnis(ergebnis, stderrRest) {
   const teile = []
   // Bei is_error steckt die eigentliche Meldung im result-Text.
   if (ergebnis?.is_error && typeof ergebnis.result === 'string' && ergebnis.result)
@@ -881,6 +922,11 @@ function fehlerAusErgebnis(ergebnis, stderrRest) {
   // Server-Überlastung (529) — vorübergehend; die Lauf-Verwaltung pausiert dann.
   if (/overloaded|\b529\b/i.test(text))
     return { fehlertext: texte.lauf.serverUeberlastet, fehlerArt: 'ueberlastet' }
+  // Fable nicht verfügbar (0.48.1) — VOR der Kontingent-Regel: „out of usage
+  // credits" soll nicht als erschöpftes Kontingent pausieren, sondern als
+  // Klartext am Block stehen bleiben.
+  const extra = extraNichtVerfuegbarFehler(text)
+  if (extra) return extra
   // Abo-Kontingent erschöpft (SPEC §5) — die typischen Formulierungen der CLI.
   if (/usage limit|limit reached|rate.?limit|quota|out of extra usage/i.test(text))
     return { fehlertext: texte.lauf.kontingentErschoepft, fehlerArt: 'kontingent' }
@@ -1183,6 +1229,10 @@ export function starteLaufMotor(optionen) {
       verbrauch,
       sessionKennung,
       meldungen: b.meldungen,
+      // Denktiefe, die der Block-Agent laut CLI wirklich gefahren ist (0.48.1,
+      // effort.level aus seinem ersten Hook-Aufruf); null, wenn die CLI keine
+      // meldete — bei JEDEM Ausgang dabei, damit der Bericht nie undefined trägt.
+      denktiefeGemessen: b.denktiefeGemessen ?? null,
       ...extra
     })
   }
@@ -1213,20 +1263,25 @@ export function starteLaufMotor(optionen) {
         block.blockTaskIds.add(hookDaten.tool_use_id)
         aufEreignis({
           art: 'ticker',
-          text: texte.ticker.blockAgentGestartet(block.blockName, block.modellName)
+          text: texte.ticker.blockAgentGestartet(
+            block.blockName,
+            block.modellName,
+            block.denktiefeName
+          )
         })
         // Der echte Arbeitsauftrag wird hier eingesetzt — der Koordinator
         // hat nur das Wort AUFTRAG geschrieben und bleibt schlank. Die
         // Modellklasse des Blocks kommt hier ebenfalls hinein (BAUPLAN 37):
         // Der Koordinator läuft auf dem Billigmodell, und ohne diese Angabe
-        // würde der Block-Agent es erben.
+        // würde der Block-Agent es erben. Die Denktiefe (0.48.1) wählt den
+        // Agententyp: je Stufe gibt es eine eigene Definition (s. agents).
         return {
           hookSpecificOutput: {
             hookEventName: 'PreToolUse',
             permissionDecision: 'allow',
             updatedInput: {
               description: block.blockName,
-              subagent_type: 'block',
+              subagent_type: block.agentTyp,
               run_in_background: false,
               model: block.modell,
               prompt: block.auftrag
@@ -1235,6 +1290,19 @@ export function starteLaufMotor(optionen) {
         }
       }
       return nein(texte.agentenLaufSession.koordinatorGesperrt, texte.ticker.koordinatorGestoppt)
+    }
+    // Denktiefe messen (0.48.1): Der erste Werkzeugaufruf des Block-Agenten
+    // trägt laut SDK das effort-Level, das die CLI für diesen Zug wirklich
+    // fährt (nach stillem Herabstufen für das Modell). So steht im Ticker und
+    // im Bericht nicht die Wahl, sondern die Wahrheit — und Haiku sagt ehrlich
+    // „wird ignoriert". Je Anlauf/Übertrag frisch, weil block frisch ist.
+    if (block && hookDaten.agent_type === block.agentTyp && !block.denktiefeGemeldet) {
+      block.denktiefeGemeldet = true
+      const stufe = typeof hookDaten.effort?.level === 'string' ? hookDaten.effort.level : null
+      block.denktiefeGemessen = stufe
+      if (stufe) aufEreignis({ art: 'ticker', text: texte.ticker.denktiefeGemessen(stufe) })
+      else if (block.denktiefe !== DENKTIEFE_STANDARD)
+        aufEreignis({ art: 'ticker', text: texte.ticker.denktiefeNichtUnterstuetzt(block.modellName) })
     }
     // Aufruf aus dem Block-Agenten oder seinen Helfern: Es gelten die Sperren
     // des gerade laufenden Blocks (ohne laufenden Block: strengste Auslegung).
@@ -1468,23 +1536,16 @@ export function starteLaufMotor(optionen) {
         // Sein Systemtext trägt die Projekt-Grundregeln (Windows-Pfade,
         // Karten-Werkzeuge) — den Arbeitsauftrag setzt der Hook ein. Steht
         // die lokale Helfer-KI bereit, wird sie dort angeboten (Experiment).
-        agents: {
-          block: {
-            description: 'Führt genau einen Block-Arbeitsauftrag von FlowForge aus.',
-            // Zweite Leitplanke gegen das Erben des Koordinator-Modells
-            // (BAUPLAN 37): Sollte der Hook einmal nicht greifen, läuft ein
-            // Block-Agent auf der Standardklasse — nie still auf Haiku.
-            model: sdkModell(MODELL_KLASSE_STANDARD),
-            prompt:
-              texte.agentenLaufSession.blockAgentSystem(projektPfad, TITEL_MAX, TEXT_MAX) +
-              (helferServer
-                ? '\n' +
-                  texte.agentenLokaleHelfer.systemZusatz +
-                  (lokaleHelfer.bewerten ? texte.agentenLokaleHelfer.bewertenSystemZusatz : '')
-                : ''),
-            maxTurns: 300
-          }
-        },
+        // Seit 0.48.1 gibt es den Typ je Denktiefe einmal (block, block-low …
+        // block-max) — der Hook wählt nach der Karte (blockAgentDefinitionen).
+        agents: blockAgentDefinitionen(
+          texte.agentenLaufSession.blockAgentSystem(projektPfad, TITEL_MAX, TEXT_MAX) +
+            (helferServer
+              ? '\n' +
+                texte.agentenLokaleHelfer.systemZusatz +
+                (lokaleHelfer.bewerten ? texte.agentenLokaleHelfer.bewertenSystemZusatz : '')
+              : '')
+        ),
         // Eine Session für den ganzen Lauf: Die Koordinator-Runden aller
         // Blöcke zählen zusammen — die echte Grenze ist das Kontextfenster.
         maxTurns: 1000,
@@ -1564,6 +1625,17 @@ export function starteLaufMotor(optionen) {
       // Achtung: subtype 'success' heißt nur „sauber durchgelaufen" — Fehler
       // wie eine fehlende Anmeldung kommen trotzdem mit is_error zurück.
       if (nachricht.subtype === 'success' && !nachricht.is_error) {
+        // Fable nicht verfügbar (0.48.1): Der Fehler kommt als Ergebnis des
+        // Block-Agenten — als is_error (agentFehler) oder als scheinbar
+        // normaler Abschlusstext (fazit) ohne Lieferschein-Meldung. Beides
+        // ehrlich einstufen, statt 'erfolgreich' zu melden und lauf.js in eine
+        // Nachforderung laufen zu lassen. Nur diese eine Regex — nicht das
+        // ganze fehlerAusErgebnis (ein „rate limit" im Text des Agenten ist
+        // kein erschöpftes Kontingent).
+        const extra = extraNichtVerfuegbarFehler(
+          block.agentFehler ?? (block.meldungen.length === 0 ? block.fazit : null)
+        )
+        if (extra) return blockAufloesen('fehlgeschlagen', extra)
         // Das Ergebnis des Blocks ist das Fazit des Block-Agenten — nicht der
         // Koordinator-Text, der z.B. die Prüfer-Urteils-Marke verlieren könnte.
         if (block.fazit) return blockAufloesen('erfolgreich', { ergebnisText: block.fazit })
@@ -1636,6 +1708,21 @@ export function starteLaufMotor(optionen) {
             automatisch: daten.trigger !== 'manual',
             vorher: Number.isFinite(daten.pre_tokens) ? daten.pre_tokens : null,
             nachher: Number.isFinite(daten.post_tokens) ? daten.post_tokens : null
+          })
+        }
+
+        // Inhaltsfilter-Rückfall (0.48.1): Lehnt ein Modell (Fable 5 bei
+        // Cyber/Biologie) eine Antwort ab, wiederholt die CLI sie von selbst auf
+        // einem Rückfall-Modell und meldet das als model_refusal_fallback. Kein
+        // stiller Wechsel — der Ticker nennt ihn.
+        if (nachricht.type === 'system' && nachricht.subtype === 'model_refusal_fallback') {
+          aufEreignis({
+            art: 'ticker',
+            text: texte.ticker.modellRueckfall(
+              String(nachricht.original_model ?? '?'),
+              String(nachricht.fallback_model ?? '?'),
+              nachricht.api_refusal_category ?? null
+            )
           })
         }
 
@@ -1890,7 +1977,13 @@ export function starteLaufMotor(optionen) {
     // Seit BAUPLAN 46 mit `holeGeschuetzt: () => string[]` (frisch je Aufruf).
     // inWelle (BAUPLAN 46): Funktion → true, solange neben diesem Block ein
     // anderer Schreiber läuft; null heißt „nie in einer Welle" (wie vor 46).
-    blockAusfuehren({ auftrag, blockName, instanzId = null, nurLesen = false, darfPruefen = false, pruefOrdner = '', lokaleKi = true, darfKartenAnlegen = false, darfVorschlagen = false, darfLaufVorschlag = false, darfZuteilen = false, liefert = [], lieferscheinFrei = [], ziele = null, dateiListe = null, sicherung = null, inWelle = null, modell = null, unterModell = null, modellName = '', uebertrag }) {
+    // denktiefe/denktiefeName/klasse (0.48.1): die gewählte Denktiefe (Schlüssel
+    // aus DENKTIEFEN), ihr Kurzname für den Ticker ('' bei Modell-Standard)
+    // und die Modellklasse. Der Agententyp folgt der Denktiefe — außer bei
+    // einer Klasse ohne Denktiefe (Haiku): dort läuft der Block als 'block',
+    // damit nie eine effort-Definition an ein Modell geht, das sie nicht kennt;
+    // der Ticker sagt dann ehrlich „wird ignoriert".
+    blockAusfuehren({ auftrag, blockName, instanzId = null, nurLesen = false, darfPruefen = false, pruefOrdner = '', lokaleKi = true, darfKartenAnlegen = false, darfVorschlagen = false, darfLaufVorschlag = false, darfZuteilen = false, liefert = [], lieferscheinFrei = [], ziele = null, dateiListe = null, sicherung = null, inWelle = null, modell = null, unterModell = null, modellName = '', uebertrag, denktiefe = DENKTIEFE_STANDARD, denktiefeName = '', klasse = MODELL_KLASSE_STANDARD }) {
       if (tot)
         return Promise.resolve({
           zustand: 'fehlgeschlagen',
@@ -1899,7 +1992,8 @@ export function starteLaufMotor(optionen) {
           ergebnisText: '',
           verbrauch: null,
           sessionKennung,
-          meldungen: []
+          meldungen: [],
+          denktiefeGemessen: null
         })
       return new Promise((aufloesen) => {
         block = {
@@ -1934,6 +2028,12 @@ export function starteLaufMotor(optionen) {
           modell: modell ?? sdkModell(MODELL_KLASSE_STANDARD),
           unterModell,
           modellName,
+          // Denktiefe (0.48.1): Wahl, Kurzname, Agententyp und Messung.
+          denktiefe,
+          denktiefeName,
+          agentTyp: klasseKenntDenktiefe(klasse) ? blockAgentTyp(denktiefe) : blockAgentTyp(DENKTIEFE_STANDARD),
+          denktiefeGemeldet: false,
+          denktiefeGemessen: null,
           uebertrag: uebertrag ?? { aktiv: false, testModus: false, anweisung: '' },
           aufloesen,
           blockTaskIds: new Set(),

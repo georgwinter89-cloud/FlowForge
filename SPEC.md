@@ -1,6 +1,6 @@
 # FlowForge — Produkt-Spezifikation V1
 
-Stand: 19.08.2026 (Bauschritt 48) · Ursprung: Grilling-Session vom 07.08.2026 (von Georg freigegeben) ·
+Stand: 19.08.2026 (Zwischenschritt 0.48.1) · Ursprung: Grilling-Session vom 07.08.2026 (von Georg freigegeben) ·
 fortlaufend gepflegt — dieses Dokument beschreibt die Gegenwart, Verhaltensänderungen
 werden hier nachgezogen (Historie liefert git).
 
@@ -65,8 +65,9 @@ Sitzungen hinweg Software entsteht — ohne dass dem Agenten der Kontext überl�
   - **Modellklasse je Block** (seit Bauschritt 37, Entscheidung Georg: frei je Block
     wählbar — auch Bauer und Prüfer, gegen die Empfehlung „nur Nebenrollen fest"; die
     Folge einer zu sparsamen Wahl sind mehr Reparatur-Runden, und genau die zeigen die
-    Kennzahlen aus §3.4). Drei Klassen: **Standard (Opus)** · **sparsam (Sonnet)** ·
-    **sehr sparsam (Haiku)**. Jeder Katalog-Block trägt eine Voreinstellung — Standard
+    Kennzahlen aus §3.4). Vier Klassen (bis 0.48.1 drei): **Extra (Fable 5)** ·
+    **Standard (Opus)** · **sparsam (Sonnet)** · **sehr sparsam (Haiku)**. Jeder
+    Katalog-Block trägt eine Voreinstellung — Standard
     für Bauer, Prüfer, Gesamtprüfung, Diagnose, Paket schneiden, Angreifer und Audit;
     sparsam für Sessionende, Frage an den Menschen, Karten-Prüfer (inkl. Sortiermodus)
     und Kontext laden. An jeder **Blockkarte im Schaubild** ist sie umstellbar (wie das
@@ -84,6 +85,39 @@ Sitzungen hinweg Software entsteht — ohne dass dem Agenten der Kontext überl�
     die drei Blickwinkel des Audits folgen immer der Klasse ihres Blocks (Georgs
     „bewusst teuer" betraf die Lesetiefe, §4.3). Ehrliche Grenze: Im Abo-Modus zählt
     Kontingent, keine Dollar — Sonnet und Haiku entlasten es trotzdem.
+    **Klasse „Extra (Fable 5)" mit Kosten-Wahrheit** (seit 0.48.1, Wunsch Georg
+    „Fable 5 für Extrapower freigeben"): das stärkste Modell, im Katalog nirgends
+    vorbelegt, an jeder Blockkarte und als Voreinstellung eigener Blöcke wählbar; der
+    KI-Assistent des Block-Editors schlägt sie nie von sich aus vor. Laut Claude-Code-Doku
+    kann Fable 5 je nach Abo **Guthaben statt Kontingent** kosten, und über das Agent SDK
+    gibt es dafür keinen Einwilligungs-Dialog — die Anfrage wird ohne Nachfrage abgerechnet.
+    Deshalb: Karte und Editor tragen den Kosten-Hinweis, der Abo-Satz in Erststart und
+    Einstellungen nennt die Ausnahme, und vor dem **ersten Lauf mit einem Extra-Block im
+    Abo-Modus** stellt FlowForge einmal die Folgen-Frage („kann Guthaben statt Kontingent
+    kosten — trotzdem starten?", Empfehlung dabei); „Trotzdem starten" wird gemerkt
+    (Einstellung), Abbrechen nicht. Im API-Modus entfällt die Frage (dort zahlt ohnehin
+    jeder Block pro Verbrauch). **Kein stiller Rückfall:** Ist Fable 5 für das Konto nicht
+    verfügbar (CLI-Fehlertext „requires usage credits"), bleibt der Block mit Klartext
+    stehen — nie still billiger oder teurer. Lehnt Fable eine Antwort über den
+    Inhaltsfilter ab (Cyber/Biologie), wiederholt die CLI sie von selbst auf einem
+    Rückfall-Modell; der Ticker nennt den Wechsel. „Unteraufgaben nie verteuern" gilt
+    weiter: Ein Extra-Block mit Unteraufgaben „wie der Block" gibt Fable bewusst auch
+    seinen Helfern, mit „sparsam" bekommen sie Sonnet.
+  - **Denktiefe je Block** (seit 0.48.1, Wunsch Georg „den Effort bei den Cloud-Modellen
+    einstellen können"): Zusatz zur Modellklasse an jeder Blockkarte (Auswahlfeld) und als
+    Voreinstellung eigener Blöcke — **Modell-Standard** (= high) · low · medium · high ·
+    xhigh · max, mit Folgen-Texten aus der Claude-Code-Doku (low „kurz, klar umrissen",
+    medium „spart Tokens, etwas weniger klug", xhigh „tiefer, teurer", max „für harte
+    Aufgaben, neigt zum Überdenken — vorher testen"). Technisch ist sie ein Feld der
+    Agent-Definition: FlowForge definiert seinen Block-Agenten je Denktiefe einmal
+    (`block`, `block-low` … `block-max`) und wählt beim Start des Blocks den Typ nach
+    der Karte — der Koordinator bleibt unberührt. Sehr sparsam (Haiku) kennt keine
+    Denktiefe: Dort wird die Wahl ignoriert, Editor und Ticker sagen es. **Nachweisbar,
+    nicht nur gewünscht:** Beim ersten Werkzeugaufruf des Block-Agenten meldet die CLI die
+    wirksame Stufe (Hook-Feld `effort.level`, in der Bausession gemessen) — der Ticker
+    nennt sie („Denktiefe wirksam: xhigh"), Laufbericht und Metriken führen Wahl und
+    Messwert. Eine Umgebungsvariable `CLAUDE_CODE_EFFORT_LEVEL` könnte alles übersteuern;
+    der Motor räumt beim Start ohnehin alle CLAUDE*-Variablen weg.
   - **V2-Motoren:** eigene Agenten-Kreisläufe gegen beliebige Anbieter-APIs sowie ein
     vollwertiger lokaler Motor (z.B. über Ollama). Die restliche App merkt nicht,
     welcher Motor dranhängt.
@@ -202,7 +236,9 @@ Der Verbrauch steht je Block und für den ganzen Lauf im Bericht — seit 13.08.
 Bauschritt 31 das **Modell** der lokalen KI. Seit Bauschritt 36 steht **je Block das
 Modell des Motors**, das diesen Anlauf gearbeitet hat (bei Mischung mit Anteilen);
 Anläufe ohne Motor (Tor ohne KI, §4.1) und Läufe von vor Bauschritt 36 stehen ehrlich
-als „Modell: nicht vermerkt". Ebenfalls seit Bauschritt 36 führt der Bericht die
+als „Modell: nicht vermerkt". Seit 0.48.1 steht darunter je Block die **gewählte
+Klasse und Denktiefe** („Klasse: Extra (Fable 5) · Denktiefe: xhigh (wirksam: xhigh)") —
+die Wahl an der Karte neben dem, was der Motor gemeldet hat. Ebenfalls seit Bauschritt 36 führt der Bericht die
 **Zusammenfassungen des Motors** als eigenen Abschnitt (der Motor dampft ein volles
 Arbeitsgedächtnis selbst ein — das erklärt später, warum ein Agent Details vergessen
 hat). Seit Bauschritt 27 vermerkt der Bericht
@@ -408,6 +444,10 @@ Seite aufs Projekt vorgefiltert zeigt (eigener Baustein, nicht Teil der Leinwand
   Modelle — den Koordinator (Haiku), den Block-Agenten (seine Klasse) und seine
   Unteraufgaben. Gezählt wird das Modell mit dem größten Token-Anteil, also praktisch
   immer das des Block-Agenten; die vollen Anteile stehen im Laufbericht (§3.2).
+  Seit 0.48.1 trennt die Tabelle zusätzlich nach **Denktiefe** (§2): eigene Spalte, die
+  Zeilen teilen sich je wirksamer Stufe (gemessen, sonst die Wahl — bei Haiku, das keine
+  kennt, bleibt sie leer) — die Reparatur-Runden je Denktiefe sind die Zahl, an der Georg
+  sie einstellt. „Extra (Fable 5)" erscheint damit von selbst als eigene Modell-Zeile.
 - **Zusatznamen zerfasern die Metriken nicht** (seit Bauschritt 41): Der Laufbericht
   führt Katalognamen und **Zusatzname** (§4.1) getrennt. Gezählt wird ausschließlich
   der Katalogname — „Bauer · Datenbank" und „Bauer · Oberfläche" sind derselbe
@@ -433,6 +473,11 @@ Seite aufs Projekt vorgefiltert zeigt (eigener Baustein, nicht Teil der Leinwand
   gespeicherten Laufstand ungültig (die Wiederaufnahme bietet ihn nicht mehr an —
   Übergaben und Zuteilungen des unterbrochenen Laufs zeigten sonst auf Namen, die
   es nicht mehr gibt).
+- **Modellklasse und Denktiefe an der Karte** (§2): zwei Auswahlfelder je Blockkarte
+  (seit Bauschritt 37 bzw. 0.48.1), gespeichert je Karte in workflow.json wie das Häkchen
+  „lokale KI erlaubt" (§4.3); ohne Wahl gilt die Voreinstellung des Blocks. Bei „Extra
+  (Fable 5)" steht der Kosten-Hinweis sichtbar unter dem Feld, bei „sehr sparsam (Haiku)"
+  mit gewählter Denktiefe der Hinweis, dass sie dort ignoriert wird.
 - **Parallele Zweige** (seit Bauschritt 13): Von einer Karte dürfen mehrere Pfeile
   ausgehen und mehrere an einer ankommen; Kreise sind verboten. Ein Block startet,
   sobald alle seine Vorgänger fertig sind — ein Block mit mehreren eingehenden Pfeilen
@@ -587,8 +632,8 @@ Name · Symbol · **Arbeitsauftrag** (Anweisung an den Agenten) · **braucht / l
 (z.B. „braucht: Angriffsliste, liefert: geprüften Code") · je braucht-Etikett ein
 **„wozu"** (ein Satz aus der Sicht dieses Blocks, gelesen wird er vom Lieferanten —
 §4.3 Auftrags-Vorspann) · optionale **Sperren**
-(„darf nur lesen", „Pflichtfeld leer = Lauf hält an") · **Modellklasse** (§2) ·
-Kennzeichen **„führt zusammen"** (§4.3 „Integrator", seit Bauschritt 47) und die weiteren
+(„darf nur lesen", „Pflichtfeld leer = Lauf hält an") · **Modellklasse** und
+**Denktiefe** (§2) · Kennzeichen **„führt zusammen"** (§4.3 „Integrator", seit Bauschritt 47) und die weiteren
 Katalog-Kennzeichen (§4.5, seit Bauschritt 48 auch für eigene Blöcke) · optionale
 **braucht-Etiketten** („falls da") · **Formularfelder** an der Blockkarte.
 Ein **Etikett** ist seit Bauschritt 48 ein Eintrag der Etiketten-Bibliothek (§4.5) mit
@@ -1320,8 +1365,10 @@ Angreifer durch die Diagnose.
   vier festen, „Eigene" oder eine frei benannte, höchstens 30 Zeichen — global gespeichert
   wie der Block selbst; Altbestand ohne Kategorie liegt unter „Eigene") und seit
   Bauschritt 37 seine **Modellklasse** als Voreinstellung (§2; Altbestand ohne Feld
-  läuft auf Standard, auf der Leinwand bleibt sie je Karte änderbar); Stepper und
-  KI-Assistent kennen beide Felder.
+  läuft auf Standard, auf der Leinwand bleibt sie je Karte änderbar) und seit 0.48.1
+  seine **Denktiefe** (Altbestand: Modell-Standard); Stepper und KI-Assistent kennen
+  die Felder — der Assistent schlägt „Extra" nie vor, und bei „Extra" zeigt der Editor
+  denselben Kosten-Hinweis wie die Karte.
 - Seit Bauschritt 43 trägt jedes **braucht**-Etikett ein eigenes Freitext-Feld „Wozu braucht
   dein Block das?" (ein Satz, höchstens 200 Zeichen, im Schritt „Was braucht/liefert er?"):
   Er steht später im Auftrag des Blocks, der das Etikett liefert (§4.3). Bleibt er leer,
@@ -1417,7 +1464,8 @@ Angreifer durch die Diagnose.
   ausschließlich delegieren. Seit Bauschritt 37 läuft er außerdem auf dem
   **kleinsten Modell** (er schreibt nur „AUFTRAG" und „OK"); jeder Block-Agent
   bekommt beim Aufruf seine Modellklasse (§2) ausdrücklich mit, damit er das
-  Billigmodell nicht erbt. Weil der Übertrag den Koordinator-Faden misst, zählt für
+  Billigmodell nicht erbt — und seit 0.48.1 seinen Agententyp nach der Denktiefe
+  (`block` … `block-max`, §2). Weil der Übertrag den Koordinator-Faden misst, zählt für
   die Schwelle auch nur **sein** Kontextfenster — das Fenster des Block-Agenten steht
   getrennt daneben. Reparatur-Runden laufen als neuer Agent mit der
   Prüferkritik im Auftrag; ihr **Budget zählt je Rückführungs-Ziel** (seit
@@ -1595,6 +1643,9 @@ Angreifer durch die Diagnose.
 
 - **Klartext-Liveticker** + hervorgehobene laufende Blöcke auf der Leinwand (bei
   parallelen Zweigen mehrere gleichzeitig; Ticker-Zeilen tragen dann den Blocknamen).
+  Beim Start jedes Block-Agenten nennt er Modellklasse und gewählte Denktiefe, beim
+  ersten Werkzeugaufruf die vom Motor gemeldete wirksame Denktiefe (oder dass das Modell
+  keine kennt), und bei einem Inhaltsfilter-Rückfall den Modellwechsel (§2, seit 0.48.1).
 - **Denk-Bereich** einklappbar (seit Bauschritt 24, ersetzt das frühere
   Rohprotokoll aus JSON-Zeilen — Diagnose-Verlust bewusst akzeptiert): zeigt
   live die Denk-Texte der gerade arbeitenden KI, je Absatz mit Absender
@@ -1964,7 +2015,8 @@ Block-Agenten als Hinweis daneben (§6).
 - **Erststart-Dialog** (seit 0.46.4): Solange der Motor-Modus nicht gewählt ist (§2),
   liegt beim Start ein Dialog über der Projektübersicht — „Willkommen bei FlowForge",
   kurze Einleitung, die zwei Wahlzeilen aus den Einstellungen (Abo mit Abrechnungs-
-  Hinweis und Voraussetzung „einmal mit „claude" angemeldet", API mit Schlüssel und
+  Hinweis — seit 0.48.1 samt der Ausnahme „Extra (Fable 5) kann Guthaben kosten" — und
+  Voraussetzung „einmal mit „claude" angemeldet", API mit Schlüssel und
   Obergrenze), ein Knopf „Los geht’s", kein Abbrechen. Wer die Wahl stattdessen in den
   Einstellungen trifft, sieht ihn nicht mehr.
 - **Projektübersicht** beim Start: Läuft gerade ein Lauf, liegt er als große

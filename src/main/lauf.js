@@ -21,12 +21,15 @@ import { BrowserWindow, Notification } from 'electron'
 import { texte } from '../shared/texte.js'
 import {
   blockDefinition,
+  blockDenktiefe,
   blockModellKlasse,
   blockAnzeigeName,
+  klasseHatKostenHinweis,
   pruefOrdnerFuer,
   zusatznameBereinigen,
   sdkModell,
   unterModellFuer,
+  DENKTIEFE_STANDARD,
   UEBERTRAG_GRENZE_STANDARD,
   PRUEFBELEG_ETIKETT
 } from '../shared/blockKatalog.js'
@@ -1148,6 +1151,23 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
   const { einstellungen } = einstellungenLaden()
   const bereit = motorBereit(einstellungen)
   if (!bereit.ok) return { ok: false, fehler: bereit.fehler }
+
+  // Kosten-Rückfrage „Extra (Fable 5)" (0.48.1): Im Abo-Modus kann Fable je
+  // nach Abo Guthaben statt Kontingent kosten — über den Motor ohne
+  // Einwilligungs-Dialog. Deshalb fragt FlowForge beim ersten Start mit einem
+  // Extra-Block selbst einmal nach (Folgen-Frage, Antwort merkbar). Nur beim
+  // Start von Hand: Wiederaufnahme, Warteschlange und Sonderläufe sind
+  // entweder schon bestätigt oder tragen keine Karten-Wahl. Im API-Modus
+  // entfällt sie — dort zahlt ohnehin jeder Block pro Verbrauch.
+  if (
+    !fortsetzung &&
+    !ausWarteschlange &&
+    !sonderlauf &&
+    einstellungen.motorModus === 'abo' &&
+    !einstellungen.extraKostenBestaetigt &&
+    kette.some((e) => klasseHatKostenHinweis(blockModellKlasse(defVon(e.blockId), e)))
+  )
+    return { ok: false, rueckfrage: 'extra-kosten', fehler: texte.lauf.extraRueckfrage }
 
   // Parallelität (SPEC §5, BAUPLAN 12): Ist das Projekt belegt oder sind alle
   // 3 Plätze vergeben, wartet der Start in der Warteschlange und läuft von
@@ -2842,14 +2862,25 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
             einstellungen.unteraufgabenModell
           ),
           modellName: texte.kette.modellNamen[blockModellKlasse(k.def, k.eintrag)] ?? '',
-          uebertrag
+          uebertrag,
+          // Denktiefe (0.48.1): die Wahl an der Karte (sonst Voreinstellung des
+          // Blocks), ihr Kurzname für den Ticker — nur genannt, was Georg
+          // gewählt hat, Modell-Standard bleibt stumm — und die Klasse, damit
+          // der Motor bei Haiku keine effort-Definition wählt.
+          denktiefe: blockDenktiefe(k.def, k.eintrag),
+          denktiefeName:
+            blockDenktiefe(k.def, k.eintrag) === DENKTIEFE_STANDARD
+              ? ''
+              : (texte.kette.denktiefeKurz[blockDenktiefe(k.def, k.eintrag)] ?? ''),
+          klasse: blockModellKlasse(k.def, k.eintrag)
         })
         .catch((fehler) => ({
           zustand: 'fehlgeschlagen',
           fehlertext: String(fehler?.message ?? fehler),
           fehlerArt: null,
           ergebnisText: '',
-          verbrauch: null
+          verbrauch: null,
+          denktiefeGemessen: null
         }))
         .finally(() => {
           lauf.motoren.delete(instanzId)
@@ -2926,6 +2957,10 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       // Modell je Block (BAUPLAN 36): über alle Anläufe dieses Block-Anlaufs
       // hinweg (Übertrag, Kontingent-Pausen) — Modellkennung → Tokens.
       const blockModellTokens = new Map()
+      // Denktiefe gemessen (0.48.1): die vom Motor gemeldete wirksame Stufe —
+      // der letzte gemessene Wert über alle Anläufe/Überträge dieses Blocks;
+      // null, solange keine CLI eine gemeldet hat (Haiku, Tor ohne KI).
+      let blockDenktiefeGemessen = null
       // Diff der Reparatur-Runden (BAUPLAN 34): Beim ERSTEN Start eines
       // schreibenden Blocks halten wir fest, auf welchem Sicherungspunkt der
       // Projektordner steht — daraus rechnet FlowForge später „das hast du in
@@ -2977,7 +3012,8 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
               ? [...blockModellTokens]
                   .map(([modell, tokens]) => ({ modell, tokens, anteil: tokens / summe }))
                   .sort((a, b) => b.tokens - a.tokens)
-              : null
+              : null,
+          blockDenktiefeGemessen
         }
       }
       while (true) {
@@ -3144,6 +3180,9 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         const uebertragErlaubt =
           workflow.uebertragGrenze == null || uebertraege < workflow.uebertragGrenze
         const ergebnis = await blockAusfuehren(k, auftrag, uebertragErlaubt)
+        // Denktiefe gemessen (0.48.1): der jüngste Messwert gewinnt.
+        if (typeof ergebnis.denktiefeGemessen === 'string' && ergebnis.denktiefeGemessen)
+          blockDenktiefeGemessen = ergebnis.denktiefeGemessen
         // Lieferschein (BAUPLAN 42): Die Meldungen dieses Anlaufs übernehmen —
         // je Etikett ersetzt die jüngste die ältere. Genau das ist die Regel
         // „nach einem Übertrag ersetzt die Meldung des Nachfolgers die des
@@ -3405,7 +3444,9 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         blockAufschluesselung: null,
         // Kein Modell hat gearbeitet — ehrlich „ohne Modell", nicht „0 Tokens
         // auf Opus" (BAUPLAN 36).
-        blockModelle: null
+        blockModelle: null,
+        // … und damit auch keine Denktiefe gemessen (0.48.1).
+        blockDenktiefeGemessen: null
       }
     }
 
@@ -3973,7 +4014,12 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           tokens: ergebnis.blockTokens ?? null,
           aufschluesselung: ergebnis.blockAufschluesselung ?? null,
           kostenUsd: ergebnis.blockKosten ?? null,
-          modelle: ergebnis.blockModelle ?? null
+          modelle: ergebnis.blockModelle ?? null,
+          // Klasse und Denktiefe (0.48.1): die Wahl an der Karte und die vom
+          // Motor gemessene wirksame Stufe (null = keine Meldung).
+          klasse: blockModellKlasse(k.def, k.eintrag),
+          denktiefe: blockDenktiefe(k.def, k.eintrag),
+          denktiefeGemessen: ergebnis.blockDenktiefeGemessen ?? null
         })
         zuschnittNachgefordert.add(id)
         // Der Nachtrag hängt am KNOTEN, nicht im Auftragstext — der wird bei
@@ -4074,7 +4120,12 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           tokens: ergebnis.blockTokens ?? null,
           aufschluesselung: ergebnis.blockAufschluesselung ?? null,
           kostenUsd: ergebnis.blockKosten ?? null,
-          modelle: ergebnis.blockModelle ?? null
+          modelle: ergebnis.blockModelle ?? null,
+          // Klasse und Denktiefe (0.48.1): die Wahl an der Karte und die vom
+          // Motor gemessene wirksame Stufe (null = keine Meldung).
+          klasse: blockModellKlasse(k.def, k.eintrag),
+          denktiefe: blockDenktiefe(k.def, k.eintrag),
+          denktiefeGemessen: ergebnis.blockDenktiefeGemessen ?? null
         })
         if (!endZustand) {
           endZustand = 'fehlgeschlagen'
@@ -4102,7 +4153,12 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           tokens: ergebnis.blockTokens ?? null,
           aufschluesselung: ergebnis.blockAufschluesselung ?? null,
           kostenUsd: ergebnis.blockKosten ?? null,
-          modelle: ergebnis.blockModelle ?? null
+          modelle: ergebnis.blockModelle ?? null,
+          // Klasse und Denktiefe (0.48.1): die Wahl an der Karte und die vom
+          // Motor gemessene wirksame Stufe (null = keine Meldung).
+          klasse: blockModellKlasse(k.def, k.eintrag),
+          denktiefe: blockDenktiefe(k.def, k.eintrag),
+          denktiefeGemessen: ergebnis.blockDenktiefeGemessen ?? null
         })
         k.status = 'offen'
         if (!meldungNachgefordert.has(id) && !lauf.sanft && !lauf.hart && !endZustand) {
@@ -4203,7 +4259,14 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         kostenUsd: ergebnis.blockKosten ?? null,
         // Modell je Block (BAUPLAN 36): welches Modell diesen Anlauf gearbeitet
         // hat (bei Mischung mit Anteilen) — Grundlage der Metrik Blocktyp × Modell.
-        modelle: ergebnis.blockModelle ?? null
+        modelle: ergebnis.blockModelle ?? null,
+        // Klasse und Denktiefe (0.48.1): die Wahl an der Karte (Schlüssel aus
+        // MODELL_KLASSEN/DENKTIEFEN) und die vom Motor gemessene wirksame Stufe
+        // (null = keine Meldung) — Grundlage der Metrik-Spalte Denktiefe und
+        // der Klasse-Zeile im Laufbericht.
+        klasse: blockModellKlasse(k.def, k.eintrag),
+        denktiefe: blockDenktiefe(k.def, k.eintrag),
+        denktiefeGemessen: ergebnis.blockDenktiefeGemessen ?? null
       }
       bericht.blockErgebnisse.push(blockErgebnis)
 

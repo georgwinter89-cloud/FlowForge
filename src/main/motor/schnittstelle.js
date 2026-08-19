@@ -41,7 +41,8 @@
 //   Rückgabe = {
 //     blockAusfuehren({ auftrag, blockName, nurLesen, darfPruefen, pruefOrdner,
 //                       lokaleKi, liefert, lieferscheinFrei,
-//                       modell, unterModell, modellName, uebertrag })
+//                       modell, unterModell, modellName, uebertrag,
+//                       denktiefe, denktiefeName, klasse })
 //           Führt genau einen Block als frischen Agenten in der Lauf-Session
 //           aus. Der Arbeitsauftrag wird beim Agent-Aufruf von FlowForge
 //           selbst eingesetzt; die Sperren (nurLesen, Prüfmappen-Besitz,
@@ -57,12 +58,23 @@
 //           testModus, anweisung }: Läuft die Lauf-Session über die Schwelle,
 //           wird unterbrochen; der ergebnisText ist dann die Übergabe an den
 //           nächsten Anlauf, und die Session ist danach verbraucht (tot).
+//           denktiefe/denktiefeName/klasse (0.48.1): die gewählte Denktiefe
+//           (Schlüssel aus DENKTIEFEN, 'standard' = kein effort-Feld), ihr
+//           Kurzname für den Ticker ('' bei Modell-Standard) und die
+//           Modellklasse — bei einer Klasse ohne Denktiefe (Haiku) läuft der
+//           Block ohne effort-Definition, die Wahl wird ignoriert und gesagt.
 //           Promise<{ zustand, fehlertext, fehlerArt, ergebnisText, meldungen,
-//                     verbrauch, sessionKennung }>
+//                     verbrauch, sessionKennung, denktiefeGemessen }>
 //           zustand: 'erfolgreich' | 'fehlgeschlagen' | 'sanft-gestoppt'
 //                  | 'hart-abgebrochen' | 'uebertrag' | 'fortsetzung-gescheitert'
 //           fehlerArt (nur bei 'fehlgeschlagen'): 'kontingent' | 'obergrenze'
-//                  | 'anmeldung' | 'ueberlastet' | null
+//                  | 'anmeldung' | 'ueberlastet' | 'extra-nicht-verfuegbar' | null
+//                  ('extra-nicht-verfuegbar', 0.48.1: Fable 5 gibt es für
+//                  dieses Konto nicht — kein Pausieren, kein Rückfall; der
+//                  Block bleibt als normaler Fehlschlag mit Klartext stehen)
+//           denktiefeGemessen (0.48.1): effort.level, das die CLI beim ersten
+//                  Werkzeugaufruf des Block-Agenten gemeldet hat — string oder
+//                  null (keine Meldung, z.B. Haiku oder Frühausstieg).
 //           meldungen: die geprüften Lieferschein-Meldungen dieses Anlaufs
 //                  (BAUPLAN 42) — Urteil, Beanstandungen, Prüfkarte und
 //                  Übergaben liest FlowForge ausschließlich daraus.

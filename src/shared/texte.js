@@ -107,6 +107,10 @@ export const texte = {
     jeModellErklaerung:
       'Welches Modell hat den Block wirklich gearbeitet — und schafft es die Arbeit? Wiederholungen und Erstbestehen sind das „schafft es"-Signal. Läufe vor Bauschritt 36 (und Prüf-Runden, die FlowForge ohne Motor entschieden hat) stehen ehrlich als „ohne Modell".',
     keinModellHinweis: 'ohne Modell',
+    // Denktiefe je Block (0.48.1): eigene Spalte in Blocktyp × Modell — die
+    // Reparatur-Runden je Denktiefe sind die Zahl, an der Georg sie einstellt.
+    spalteDenktiefe: 'Denktiefe',
+    denktiefeOhne: '—',
     // Compaction sichtbar (BAUPLAN 36).
     zusammenfassungenLabel: 'Zusammenfassungen des Motors'
   },
@@ -339,7 +343,15 @@ export const texte = {
     // auf der Leinwand bleibt sie je Karte änderbar.
     modellFeld: 'Modell (Voreinstellung dieses Blocks)',
     modellHinweis:
-      'Womit dieser Block normalerweise arbeitet. „Standard" ist das große Modell — nimm es für alles, wo wirklich gedacht, gebaut oder geprüft wird. Sparsamere Modelle kosten viel weniger und reichen für Zusammenfassen, Nachfragen und Aufräumen. Auf der Leinwand kannst du die Wahl je Blockkarte noch ändern.',
+      'Womit dieser Block normalerweise arbeitet. „Standard" ist das große Modell — nimm es für alles, wo wirklich gedacht, gebaut oder geprüft wird. Sparsamere Modelle kosten viel weniger und reichen für Zusammenfassen, Nachfragen und Aufräumen. „Extra" ist noch stärker, kann aber Guthaben statt Kontingent kosten. Auf der Leinwand kannst du die Wahl je Blockkarte noch ändern.',
+    // Klasse Extra (0.48.1): Kosten-Wahrheit auch im Editor — derselbe Satz
+    // wie an der Blockkarte (texte.kette.modellExtraHinweis).
+    modellExtraHinweis:
+      'Extra (Fable 5) kann je nach Abo Guthaben statt Kontingent kosten — FlowForge fragt beim ersten Lauf mit einem Extra-Block einmal nach. Gibt es Fable 5 für dein Konto nicht, bleibt der Block stehen, und FlowForge sagt es.',
+    // Denktiefe (0.48.1): Voreinstellung des eigenen Blocks, an der Karte änderbar.
+    denktiefeFeld: 'Denktiefe (Voreinstellung dieses Blocks)',
+    denktiefeHinweis:
+      'Wie gründlich das Modell vor jeder Antwort nachdenkt. „Modell-Standard" ist high und passt fast immer. Niedriger spart Zeit und Tokens bei kurzen, klar umrissenen Aufgaben; höher hilft bei harten Aufgaben, kostet aber mehr. „Sehr sparsam (Haiku)" kennt keine Denktiefe — dort wird die Wahl ignoriert.',
     vorschauHinweis:
       'So liegt der Block in der Bibliothek — und genau diesen Arbeitsauftrag bekommt der Agent. Passt alles? Dann speichern.',
     vorschauAuftrag: 'Arbeitsauftrag an den Agenten',
@@ -483,12 +495,46 @@ export const texte = {
     // Modellklasse je Block (BAUPLAN 37): frei wählbar an jeder Blockkarte.
     modellLabel: 'Modell',
     modellNamen: {
+      // Klasse Extra (0.48.1): Fable 5 — die stärkste Klasse, im Katalog
+      // nirgends vorbelegt, mit Kosten-Hinweis (kann Guthaben kosten).
+      extra: 'Extra (Fable 5)',
       standard: 'Standard (Opus)',
       sparsam: 'sparsam (Sonnet)',
       'sehr-sparsam': 'sehr sparsam (Haiku)'
     },
     modellHinweis:
-      'Womit dieser Block arbeitet. „Standard" ist das große Modell — richtig überall, wo wirklich gedacht wird (Bauen, Prüfen, Zuschneiden). Sparsamere Modelle kosten deutlich weniger, machen aber mehr Fehler: Zu sparsam gewählt, siehst du es an mehr Reparatur-Runden in den Metriken.',
+      'Womit dieser Block arbeitet. „Standard" ist das große Modell — richtig überall, wo wirklich gedacht wird (Bauen, Prüfen, Zuschneiden). Sparsamere Modelle kosten deutlich weniger, machen aber mehr Fehler: Zu sparsam gewählt, siehst du es an mehr Reparatur-Runden in den Metriken. „Extra (Fable 5)" ist noch stärker, kann aber je nach Abo Guthaben statt Kontingent kosten.',
+    // Kosten-Wahrheit der Klasse Extra (0.48.1, Claude-Code-Doku „Model
+    // configuration": über das Agent SDK gibt es keinen Einwilligungs-Dialog —
+    // eine Fable-Anfrage, die Guthaben kostet, wird ohne Nachfrage abgerechnet).
+    // Deshalb steht der Satz an der Karte, und FlowForge fragt beim ersten
+    // Lauf selbst (texte.lauf.extraRueckfrage).
+    modellExtraHinweis:
+      'Extra (Fable 5) kann je nach Abo Guthaben statt Kontingent kosten — FlowForge fragt beim ersten Lauf mit einem Extra-Block einmal nach. Gibt es Fable 5 für dein Konto nicht, bleibt der Block stehen, und FlowForge sagt es.',
+    // Denktiefe je Block (0.48.1): Zusatz zur Modellklasse, an jeder Karte
+    // wählbar. Folgen-Texte aus der Claude-Code-Doku; „Modell-Standard" ist high.
+    denktiefeLabel: 'Denktiefe',
+    denktiefeNamen: {
+      standard: 'Modell-Standard (high)',
+      low: 'low — kurz, klar umrissen',
+      medium: 'medium — spart Tokens, etwas weniger klug',
+      high: 'high — Standard',
+      xhigh: 'xhigh — tiefer, teurer',
+      max: 'max — für harte Aufgaben, neigt zum Überdenken'
+    },
+    // Kurzform für Ticker, Laufbericht und Metriken.
+    denktiefeKurz: {
+      standard: 'Modell-Standard',
+      low: 'low',
+      medium: 'medium',
+      high: 'high',
+      xhigh: 'xhigh',
+      max: 'max'
+    },
+    denktiefeHinweis:
+      'Wie gründlich das Modell vor jeder Antwort nachdenkt. „Modell-Standard" ist high und passt fast immer. Niedriger spart Zeit und Tokens bei kurzen, klar umrissenen Aufgaben; höher hilft bei harten Aufgaben, kostet aber mehr — „max" vorher an einem kleinen Auftrag testen. Die Reparatur-Runden je Denktiefe stehen in den Metriken.',
+    denktiefeHaikuHinweis:
+      '„sehr sparsam (Haiku)" kennt keine Denktiefe — die Wahl wird dort ignoriert.',
     uebertragGrenzeLabel: 'Überträge höchstens',
     uebertragGrenzeHinweis:
       'Läuft der Kontext eines Blocks voll (~85 %), übergibt der Agent an eine frische Session und arbeitet nahtlos weiter. So oft darf das pro Lauf passieren — Feld leer lassen heißt: unbegrenzt.',
@@ -1834,7 +1880,8 @@ export const texte = {
       klassen.map((k) => `"${k.schluessel}" (${k.name})`).join(', ') +
       '. Nimm "standard" für alles, wo wirklich gedacht, gebaut oder geprüft wird; ' +
       '"sparsam" für Zusammenfassen, Nachfragen, Aufräumen und andere Zuarbeit; ' +
-      '"sehr-sparsam" nur für ganz mechanische Aufgaben. Im Zweifel "standard".'
+      '"sehr-sparsam" nur für ganz mechanische Aufgaben. Im Zweifel "standard". ' +
+      '"extra" schlägst du nie von dir aus vor — es kann den Nutzer Guthaben kosten; er wählt es selbst.'
   },
   // Startanleitung & „App starten"-Knopf (SPEC §8, BAUPLAN 10).
   // App-Tab (BAUPLAN 32, SPEC §8): Ausgabe der laufenden App in FlowForge,
@@ -2354,7 +2401,9 @@ export const texte = {
     modusAboHinweis:
       'Nutzt dein bestehendes Claude-Login (Claude Code CLI). Läuft über dein Abo-Kontingent. ' +
       'Anthropic hat angekündigt, Agent-SDK-Nutzung künftig getrennt abzurechnen, und will ' +
-      'vorher Bescheid geben — dann ist der API-Schlüssel der Weg.',
+      'vorher Bescheid geben — dann ist der API-Schlüssel der Weg. Ausnahme schon heute: ' +
+      'Blöcke der Klasse „Extra (Fable 5)" können je nach Abo Guthaben statt Kontingent kosten ' +
+      '— FlowForge fragt beim ersten Lauf mit einem Extra-Block einmal nach.',
     modusApi: 'Mit API-Schlüssel',
     modusApiHinweis: 'Abrechnung pro Verbrauch über dein Anthropic-Konto.',
     apiSchluesselFeld: 'API-Schlüssel',
@@ -2537,7 +2586,18 @@ export const texte = {
       'Der Motor ist nicht angemeldet. Bitte melde dich einmal in der Claude-App bzw. mit „claude" an — oder hinterlege einen API-Schlüssel in den Einstellungen.',
     obergrenzeErreicht: 'Die Ausgaben-Obergrenze für diesen Lauf wurde erreicht.',
     kontingentErschoepft: 'Dein Abo-Kontingent ist im Moment aufgebraucht.',
-    serverUeberlastet: 'Die KI-Server sind im Moment überlastet.'
+    serverUeberlastet: 'Die KI-Server sind im Moment überlastet.',
+    // Klasse Extra (0.48.1): Folgen-Frage vor dem ersten Lauf mit einem
+    // Extra-Block im Abo-Modus — einmal, die Antwort „trotzdem starten" wird
+    // gemerkt (Einstellung extraKostenBestaetigt). Im API-Modus entfällt sie:
+    // dort zahlt ohnehin jeder Block pro Verbrauch.
+    extraRueckfrage:
+      'In diesem Workflow läuft mindestens ein Block auf „Extra (Fable 5)". Je nach Abo rechnet Anthropic Fable 5 über Guthaben statt über dein Kontingent ab — über den Motor ohne Nachfrage. Was das für dich bedeutet: Der Lauf kann echtes Geld kosten, auch wenn dein Kontingent reicht. Empfehlung: Starte nur, wenn du Guthaben hinterlegt hast oder dein Abo Fable 5 einschließt; sonst stelle die Blöcke auf „Standard (Opus)". Trotzdem starten? FlowForge merkt sich die Antwort und fragt nicht noch einmal.',
+    extraRueckfrageKnopf: 'Trotzdem starten',
+    // Fable 5 für dieses Konto nicht verfügbar (Fehlertext der CLI) — kein
+    // stiller Rückfall auf Opus: Der Block bleibt stehen.
+    extraNichtVerfuegbar:
+      'Fable 5 ist für dein Konto nicht verfügbar (kein Guthaben oder nicht im Abo enthalten). Der Block ist stehen geblieben — stelle ihn auf „Standard (Opus)" oder lade Guthaben auf, und starte neu.'
   },
   rechteFrage: {
     ueberschrift: 'Der Agent bittet um Erlaubnis',
@@ -2642,9 +2702,22 @@ export const texte = {
     laufSessionGestartet: (modell) =>
       `Motor gestartet (${modell}) — eine Lauf-Session für den ganzen Lauf; jeder Block läuft darin als eigener Agent.`,
     laufSessionFortgesetzt: 'Lauf-Session fortgesetzt statt neu gestartet.',
-    blockAgentGestartet: (name, modellName) =>
+    blockAgentGestartet: (name, modellName, denktiefeName = '') =>
       `„${name}" läuft als frischer Agent in der Lauf-Session` +
-      (modellName ? ` — Modell: ${modellName}.` : '.'),
+      (modellName
+        ? ` — Modell: ${modellName}` + (denktiefeName ? `, Denktiefe: ${denktiefeName}` : '') + '.'
+        : '.'),
+    // Denktiefe (0.48.1): beim ersten Werkzeugaufruf des Block-Agenten meldet
+    // die CLI die wirksame Stufe (Hook effort.level) — nachweisbar, nicht nur
+    // gewünscht. Kennt das Modell keine Denktiefe (Haiku), sagt der Ticker es.
+    denktiefeGemessen: (stufe) => `Denktiefe wirksam: ${stufe} (vom Motor gemeldet).`,
+    denktiefeNichtUnterstuetzt: (modellName) =>
+      `${modellName || 'Dieses Modell'} kennt keine Denktiefe — die Wahl an der Karte wird ignoriert.`,
+    // Inhaltsfilter-Rückfall (0.48.1): Lehnt das Modell eine Antwort ab
+    // (Kategorie Cyber/Biologie …), wiederholt die CLI sie auf einem
+    // Rückfall-Modell — der Wechsel wird genannt, nie still hingenommen.
+    modellRueckfall: (von, nach, kategorie) =>
+      `Inhaltsfilter: „${von}" hat eine Antwort abgelehnt${kategorie ? ` (Kategorie ${kategorie})` : ''} — der Motor hat sie auf „${nach}" wiederholt.`,
     unteraufgabenSparsam: (modellName) =>
       `Unteraufgaben der Block-Agenten (Späher, Einlese-Helfer) laufen ${modellName}.`,
     koordinatorGestoppt:
@@ -3496,6 +3569,12 @@ export const texte = {
             .join(' · ')),
     modellUnbekannt:
       'Modell: nicht vermerkt — ein Lauf vor Bauschritt 36 oder ein Anlauf ganz ohne Motor (Tor ohne KI).',
+    // Klasse und Denktiefe je Anlauf (0.48.1): was an der Karte gewählt war
+    // und was der Motor als wirksame Denktiefe gemeldet hat.
+    klasseZeile: (klasseName, denktiefeName, gemessen) =>
+      `Klasse: ${klasseName}` +
+      (denktiefeName ? ` · Denktiefe: ${denktiefeName}` : '') +
+      (gemessen ? ` (wirksam: ${gemessen})` : ''),
     // Compaction sichtbar (BAUPLAN 36): eigener Abschnitt im Bericht.
     zusammenfassungenLabel: 'Zusammenfassungen des Motors',
     erlaubt: 'erlaubt',

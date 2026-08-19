@@ -15,7 +15,7 @@ import {
   karteThemaSetzen,
   themaUmbenennen
 } from './projekte.js'
-import { einstellungenLaden, einstellungenSpeichern } from './einstellungen.js'
+import { einstellungenLaden, einstellungenSpeichern, extraKostenBestaetigen } from './einstellungen.js'
 import { lokaleHelferPruefen } from './motor/lokaleHelfer.js'
 import {
   laufStarten,
@@ -143,6 +143,8 @@ function registriereIpc() {
 
   ipcMain.handle('einstellungen-laden', () => einstellungenLaden())
   ipcMain.handle('einstellungen-speichern', (_e, neu) => einstellungenSpeichern(neu))
+  // Kosten-Rückfrage Extra (0.48.1): „trotzdem starten" merken.
+  ipcMain.handle('extra-kosten-bestaetigen', () => extraKostenBestaetigen())
   // Lokale Helfer-KI (Experiment): Statusanzeige in den Einstellungen.
   ipcMain.handle('lokale-helfer-status', (_e, { modell, adresse } = {}) =>
     lokaleHelferPruefen(String(modell ?? ''), String(adresse ?? '') || undefined)
