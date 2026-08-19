@@ -204,6 +204,11 @@ export function laufExtraktAusBericht(bericht, projektPfad) {
       zustand,
       tokens: Number.isFinite(e.tokens) ? e.tokens : null,
       kostenUsd: Number.isFinite(e.kostenUsd) ? e.kostenUsd : null,
+      // Block-Dauer (BAUPLAN 51): Summe der Wanduhrzeiten aller Anläufe des
+      // Blocks (je Anlauf Motorstart bis Ergebnis; Wartezeiten ZWISCHEN
+      // Anläufen zählen nicht). Alte Berichte haben das Feld nicht — null,
+      // fällt aus den Durchschnitten, nie 0.
+      dauerMs: Number.isFinite(e.dauerMs) ? e.dauerMs : null,
       modell: modellVonEintrag(e),
       // Denktiefe (0.48.1): die WIRKSAME Stufe — gemessen (effort.level aus dem
       // Hook) schlägt die Wahl; ohne Messung zählt die Wahl nur, wenn die
@@ -224,6 +229,29 @@ export function laufExtraktAusBericht(bericht, projektPfad) {
     if (istUrteil) mitUrteil.add(schluessel)
   }
   const verbrauch = bericht.verbrauch && typeof bericht.verbrauch === 'object' ? bericht.verbrauch : null
+  // „Davon lokal" je Lauf (BAUPLAN 51): bevorzugt bericht.verbrauch.lokal —
+  // im Hauptprozess an gesamtVerbrauch geführt, zählt also auch Anläufe, die
+  // kein blockErgebnis gepusht haben (kontingent-erschöpft). Rückfall für
+  // 0.49/0.50-Berichte (lokale Blöcke, aber kein verbrauch.lokal): Summe der
+  // Blöcke mit Klasse „lokal". Die Dauer gibt es rückwirkend nicht — dann
+  // null („ohne Angabe", fällt aus Durchschnitten, nie 0). Berichte ganz ohne
+  // lokale Blöcke haben ehrlich 0 lokal.
+  const verbrauchLokal =
+    verbrauch && verbrauch.lokal && typeof verbrauch.lokal === 'object' ? verbrauch.lokal : null
+  let lokalTokens
+  let lokalDauerMs
+  if (verbrauchLokal && Number.isFinite(verbrauchLokal.tokens)) {
+    lokalTokens = verbrauchLokal.tokens
+    lokalDauerMs = Number.isFinite(verbrauchLokal.dauerMs) ? verbrauchLokal.dauerMs : null
+  } else {
+    const lokalBloecke = bloecke.filter((b) => klasseIstLokal(b.klasse))
+    lokalTokens = 0
+    for (const b of lokalBloecke) if (b.tokens != null) lokalTokens += b.tokens
+    if (lokalBloecke.length === 0) lokalDauerMs = 0
+    else if (lokalBloecke.every((b) => b.dauerMs != null))
+      lokalDauerMs = lokalBloecke.reduce((summe, b) => summe + b.dauerMs, 0)
+    else lokalDauerMs = null
+  }
   return {
     id: String(bericht.id ?? gestartetAm),
     projektPfad: String(projektPfad ?? ''),
@@ -234,6 +262,8 @@ export function laufExtraktAusBericht(bericht, projektPfad) {
     zustand: String(bericht.zustand ?? ''),
     tokens: verbrauch && Number.isFinite(verbrauch.tokens) ? verbrauch.tokens : null,
     kostenUsd: verbrauch && Number.isFinite(verbrauch.kostenUsd) ? verbrauch.kostenUsd : null,
+    lokalTokens,
+    lokalDauerMs,
     lokaleHelfer: Boolean(bericht.lokaleHelfer),
     // Harness-Kennzahlen (BAUPLAN 36): Diese Zahlen liegen in jedem Bericht
     // schon vor — auch rückwirkend. Nur die Zusammenfassungen sind neu; ältere
@@ -256,6 +286,18 @@ function eimer(extra = {}) {
     kostenUsd: 0,
     mitKosten: 0,
     ohneKosten: 0,
+    // Block-Dauer (BAUPLAN 51): nach dem Muster mitTokens/ohneTokens — alte
+    // Einträge ohne Angabe fallen aus dem Durchschnitt, statt ihn zu drücken.
+    dauerMs: 0,
+    mitDauer: 0,
+    ohneDauer: 0,
+    // „Davon lokal" je Lauf (BAUPLAN 51): Tokens der lokalen Blöcke plus
+    // Dauer-Summe, mit ehrlicher Lücke für 0.49/0.50-Läufe ohne Dauer-Felder.
+    lokalTokens: 0,
+    lokalLaeufe: 0,
+    lokalDauerMs: 0,
+    mitLokalDauer: 0,
+    ohneLokalDauer: 0,
     ...extra
   }
 }
@@ -270,11 +312,34 @@ function einwerfen(e, tokens, kostenUsd) {
     e.mitKosten++
   } else e.ohneKosten++
 }
+// Block-Dauer in den Eimer — getrennt von einwerfen, weil die Dauer nur an
+// Block-Eimern sinnvoll ist (die Lauf-Dauer rechnet die Oberfläche aus
+// gestartetAm/beendetAm).
+function dauerEinwerfen(e, dauerMs) {
+  if (dauerMs != null) {
+    e.dauerMs += dauerMs
+    e.mitDauer++
+  } else e.ohneDauer++
+}
+// „Davon lokal" eines Laufs in den Eimer. Läufe ohne lokale Arbeit zählen
+// nicht als Dauer-Lücke — nur Läufe MIT lokalen Tokens, deren Dauer fehlt.
+function lokalEinwerfen(e, lauf) {
+  const tokens = Number.isFinite(lauf.lokalTokens) ? lauf.lokalTokens : 0
+  e.lokalTokens += tokens
+  if (tokens > 0) {
+    e.lokalLaeufe++
+    if (lauf.lokalDauerMs != null) {
+      e.lokalDauerMs += lauf.lokalDauerMs
+      e.mitLokalDauer++
+    } else e.ohneLokalDauer++
+  }
+}
 function mitDurchschnitt(e) {
   return {
     ...e,
     tokensDurchschnitt: e.mitTokens > 0 ? e.tokens / e.mitTokens : null,
-    kostenDurchschnitt: e.mitKosten > 0 ? e.kostenUsd / e.mitKosten : null
+    kostenDurchschnitt: e.mitKosten > 0 ? e.kostenUsd / e.mitKosten : null,
+    dauerDurchschnitt: e.mitDauer > 0 ? e.dauerMs / e.mitDauer : null
   }
 }
 
@@ -287,12 +352,15 @@ export function motorAuswerten(extrakte) {
   const jeBlock = new Map()
   for (const lauf of extrakte) {
     einwerfen(gesamt, lauf.tokens, lauf.kostenUsd)
+    lokalEinwerfen(gesamt, lauf)
     const kettenName = lauf.workflow
     if (!jeKette.has(kettenName)) jeKette.set(kettenName, eimer({ kette: kettenName }))
     einwerfen(jeKette.get(kettenName), lauf.tokens, lauf.kostenUsd)
+    lokalEinwerfen(jeKette.get(kettenName), lauf)
     if (!jeProjekt.has(lauf.projektPfad))
       jeProjekt.set(lauf.projektPfad, eimer({ projektPfad: lauf.projektPfad }))
     einwerfen(jeProjekt.get(lauf.projektPfad), lauf.tokens, lauf.kostenUsd)
+    lokalEinwerfen(jeProjekt.get(lauf.projektPfad), lauf)
     const woche = wocheVon(lauf.gestartetAm)
     if (woche) {
       if (!jeWoche.has(woche.schluessel))
@@ -307,11 +375,14 @@ export function motorAuswerten(extrakte) {
           })
         )
       einwerfen(jeWoche.get(woche.schluessel), lauf.tokens, lauf.kostenUsd)
+      lokalEinwerfen(jeWoche.get(woche.schluessel), lauf)
     }
     for (const b of lauf.bloecke) {
       if (!jeBlock.has(b.block))
         jeBlock.set(b.block, { block: b.block, erstlauf: eimer(), wiederholung: eimer() })
-      einwerfen(b.wiederholung ? jeBlock.get(b.block).wiederholung : jeBlock.get(b.block).erstlauf, b.tokens, b.kostenUsd)
+      const ziel = b.wiederholung ? jeBlock.get(b.block).wiederholung : jeBlock.get(b.block).erstlauf
+      einwerfen(ziel, b.tokens, b.kostenUsd)
+      dauerEinwerfen(ziel, b.dauerMs)
     }
   }
   const nachAnzahl = (a, b) => b.anzahl - a.anzahl
@@ -363,7 +434,11 @@ export function blockModellAuswerten(extrakte) {
         }
         zellen.set(schluessel, z)
       }
-      einwerfen(b.wiederholung ? z.wiederholung : z.erstlauf, b.tokens, b.kostenUsd)
+      const ziel = b.wiederholung ? z.wiederholung : z.erstlauf
+      einwerfen(ziel, b.tokens, b.kostenUsd)
+      // Ø-Dauer je Zeile (BAUPLAN 51) — löst die SPEC-Zusage §3.4 ein, dass
+      // die lokale Zeile Dauer zeigt; ältere Einträge zählen als „ohne Angabe".
+      dauerEinwerfen(ziel, b.dauerMs)
       if (b.erstesUrteil) {
         z.ersteUrteile++
         if (b.zustand === 'pruefung-bestanden') z.erstBestanden++
@@ -542,6 +617,124 @@ export function abnahmeAuswerten(extrakte) {
           a.lokalModell.localeCompare(b.lokalModell, 'de') ||
           a.abnahmeModell.localeCompare(b.abnahmeModell, 'de')
       )
+  }
+}
+
+// Lokale Bilanz (BAUPLAN 51): Welche Blöcke liefen lokal gut? Reine
+// Rechenfunktion für den Datenblock im Co-Pilot-Systemtext — per Prüfskript
+// messbar. Drei Quellen, alle vorhanden: die Urteile der lokalen Zuarbeit
+// (lokale-ki.jsonl, Modell × Bereich), die lokalen Block-Anläufe der
+// Laufberichte (Blocktyp × Modell, Erstbestehen bei Prüfern) und die
+// Abnahme-Paare aus Bauschritt 50 (lokaler Prüfer vs. Claude-Abnahme).
+//
+// Ehrlichkeits-Regeln (Bauvertrag V3): Ein Urteil „lief gut" gibt es NUR ab
+// BILANZ_MIN_FAELLE Fällen und Quote ≥ BILANZ_GUT_QUOTE (bei Prüfer-Paaren:
+// Widerspruchsquote ≤ BILANZ_WIDERSPRUCH_GUT) — sonst würde der Chat aus zwei
+// Urteilen „lief gut" machen. Zeilen „(ohne Modell)" erscheinen nie. Deckel
+// BILANZ_MAX_ZEILEN, sortiert nach Fallzahl — der Systemtext darf nicht
+// aufblähen.
+export const BILANZ_MIN_FAELLE = 5
+export const BILANZ_GUT_QUOTE = 0.7
+export const BILANZ_SCHLECHT_QUOTE = 0.3
+export const BILANZ_WIDERSPRUCH_GUT = 0.2
+export const BILANZ_WIDERSPRUCH_SCHLECHT = 0.5
+export const BILANZ_MAX_ZEILEN = 15
+
+// Urteil aus Fallzahl und Quote: 'zuWenig' unter der Mindestfallzahl, sonst
+// 'gut'/'schlecht'/'offen'. hochIstGut=false für Widerspruchsquoten.
+function bilanzUrteil(faelle, quote, hochIstGut = true) {
+  if (faelle < BILANZ_MIN_FAELLE) return 'zuWenig'
+  if (quote == null) return 'offen'
+  if (hochIstGut) {
+    if (quote >= BILANZ_GUT_QUOTE) return 'gut'
+    if (quote <= BILANZ_SCHLECHT_QUOTE) return 'schlecht'
+    return 'offen'
+  }
+  if (quote <= BILANZ_WIDERSPRUCH_GUT) return 'gut'
+  if (quote >= BILANZ_WIDERSPRUCH_SCHLECHT) return 'schlecht'
+  return 'offen'
+}
+
+export function lokaleBilanz(urteile, extrakte) {
+  const zeilen = []
+  // 1) Lokale Zuarbeit (Helfer-Kreisläufe): Modell × Bereich. Der
+  //    Gescheitert-Anteil steht neben der Quote — er zählt nicht in die
+  //    Quote, aber ein Modell mit 6 von 10 gescheiterten Kreisläufen ist
+  //    keine Empfehlung.
+  for (const z of lokaleKiAuswerten(urteile).zeilen) {
+    if (z.modell === OHNE_MODELL || z.modell === '?') continue
+    const faelle = z.positiv + z.negativ
+    zeilen.push({
+      art: 'zuarbeit',
+      modell: z.modell,
+      bereich: z.bereich,
+      faelle,
+      quote: z.quote,
+      gescheitert: z.gescheitert,
+      urteil: bilanzUrteil(faelle, z.quote)
+    })
+  }
+  // 2) Lokale Block-Anläufe: Blocktyp × Modell über die Klasse „lokal"
+  //    (seit 0.49 tragen alle lokalen Anläufe die Klasse). Qualitätssignal
+  //    ist das Erstbestehen — nur Prüf-Blöcke haben eines; Bau-/Lese-Blöcke
+  //    stehen mit Läufen und Wiederholungen als nackte Zahlen da ('offen').
+  const zellen = new Map()
+  for (const lauf of extrakte)
+    for (const b of lauf.bloecke) {
+      if (!klasseIstLokal(b.klasse) || b.modell === OHNE_MODELL) continue
+      const schluessel = b.block + '\u0000' + b.modell
+      let z = zellen.get(schluessel)
+      if (!z) {
+        z = { block: b.block, modell: b.modell, erstlaeufe: 0, wiederholungen: 0, ersteUrteile: 0, erstBestanden: 0 }
+        zellen.set(schluessel, z)
+      }
+      if (b.wiederholung) z.wiederholungen++
+      else z.erstlaeufe++
+      if (b.erstesUrteil) {
+        z.ersteUrteile++
+        if (b.zustand === 'pruefung-bestanden') z.erstBestanden++
+      }
+    }
+  for (const z of zellen.values()) {
+    const quote = z.ersteUrteile > 0 ? z.erstBestanden / z.ersteUrteile : null
+    const faelle = z.ersteUrteile > 0 ? z.ersteUrteile : z.erstlaeufe
+    zeilen.push({
+      art: 'block',
+      block: z.block,
+      modell: z.modell,
+      erstlaeufe: z.erstlaeufe,
+      wiederholungen: z.wiederholungen,
+      ersteUrteile: z.ersteUrteile,
+      erstBestanden: z.erstBestanden,
+      faelle,
+      quote,
+      urteil: quote == null ? (faelle < BILANZ_MIN_FAELLE ? 'zuWenig' : 'offen') : bilanzUrteil(faelle, quote)
+    })
+  }
+  // 3) Lokaler Prüfer × Abnahme (BAUPLAN 50): Widerspruchsquote — niedrig
+  //    ist gut. Das Tor-Nachspiel kommt als Gesamtzahl mit.
+  const abnahme = abnahmeAuswerten(extrakte)
+  for (const z of abnahme.zeilen) {
+    if (z.lokalModell === OHNE_MODELL || z.abnahmeModell === OHNE_MODELL) continue
+    zeilen.push({
+      art: 'abnahme',
+      lokalModell: z.lokalModell,
+      abnahmeModell: z.abnahmeModell,
+      faelle: z.paare,
+      widersprueche: z.widersprueche,
+      quote: z.quote,
+      urteil: bilanzUrteil(z.paare, z.quote, false)
+    })
+  }
+  zeilen.sort((a, b) => b.faelle - a.faelle)
+  const gedeckelt = zeilen.slice(0, BILANZ_MAX_ZEILEN)
+  return {
+    vorhanden: zeilen.length > 0,
+    zeilen: gedeckelt,
+    weggelassen: zeilen.length - gedeckelt.length,
+    torNachspiele: abnahme.gesamt.torNachspiele,
+    torWidersprueche: abnahme.gesamt.torWidersprueche,
+    torQuote: abnahme.gesamt.torQuote
   }
 }
 

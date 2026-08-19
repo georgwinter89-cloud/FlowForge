@@ -591,6 +591,10 @@ function BlockErgebnisZeile({ eintrag }) {
           <p className="feld-hinweis">
             {zeitText(eintrag.zeit)}
             {eintrag.tokens != null && ` · ${tb.blockTokens(eintrag.tokens)}`}
+            {/* Block-Dauer (BAUPLAN 51): Wanduhrzeit der Anläufe dieses
+                Blocks — ältere Berichte haben das Feld nicht, dann fehlt der
+                Teil. Text im metriken-Abschnitt (Kontingent-Sicht). */}
+            {Number.isFinite(eintrag.dauerMs) && ` · ${texte.metriken.blockDauer(eintrag.dauerMs)}`}
           </p>
           {/* Modell je Block (BAUPLAN 36): Wer hat diesen Anlauf gearbeitet? */}
           <p className="feld-hinweis">
@@ -757,6 +761,13 @@ function Laufbericht({ bericht, aufklappen = null }) {
               {tb.apiKosten(bericht.verbrauch.kostenUsd)}
               {bericht.modus === 'abo' ? tb.apiKostenAboZusatz : ''}
             </p>
+          )}
+          {/* „Davon lokal" (BAUPLAN 51): Tokens und Dauer der lokalen Blöcke
+              dieses Laufs — im Hauptprozess an gesamtVerbrauch geführt, zählt
+              also auch kontingent-erschöpfte Anläufe ohne Block-Eintrag.
+              Alte Berichte tragen das Feld nicht, dann fehlt die Zeile. */}
+          {bericht.verbrauch?.lokal != null && bericht.verbrauch.lokal.tokens > 0 && (
+            <p className="feld-hinweis">{texte.metriken.davonLokalZeile(bericht.verbrauch.lokal)}</p>
           )}
           {/* Lokale Helfer-KI (Wunsch Georg, 13.08.2026): ihr Anteil steht
               schwarz auf weiß im Bericht — Recherchen, Schritte, Fehlschläge. */}

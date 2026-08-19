@@ -2207,6 +2207,9 @@ export function starteChatMotor(optionen) {
     kontextFenster = KONTEXT_FENSTER_STANDARD,
     laufKontext = '',
     spec = null,
+    // Lokale Bilanz (BAUPLAN 51): fertig formatierter Datenblock aus chat.js
+    // ('' = keine lokalen Daten, dann hängt nichts am Systemtext).
+    lokaleBilanz = '',
     // Einstellung „nur-lesende Blöcke dürfen Befehle ausführen" — je
     // Werkzeugaufruf frisch gelesen (während eines Laufs gilt sie NICHT).
     holeNurLesenBefehle = () => false,
@@ -2419,7 +2422,12 @@ export function starteChatMotor(optionen) {
             textMax: TEXT_MAX,
             specPfad: spec?.vorhanden ? spec.pfad : '',
             specIndex: spec?.vorhanden ? spec.indexText : ''
-          }) + (laufKontext ? texte.agentenChat.laufKontext(laufKontext) : ''),
+          }) +
+          (laufKontext ? texte.agentenChat.laufKontext(laufKontext) : '') +
+          // Lokale Bilanz (BAUPLAN 51): der Co-Pilot ist das Sprachrohr des
+          // Nutzers — dieser Block ist die einzige Stelle, an der ein Agent
+          // Metrik-Zahlen sieht, und sie wandern nie in einen Lauf-Auftrag.
+          lokaleBilanz,
         maxTurns: 1000,
         ...(modus === 'api' && ausgabenObergrenzeUsd > 0
           ? { maxBudgetUsd: ausgabenObergrenzeUsd }

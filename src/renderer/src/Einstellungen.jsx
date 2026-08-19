@@ -54,7 +54,9 @@ export default function Einstellungen({ onSchliessen }) {
   const [lokaleHelferAktiv, setLokaleHelferAktiv] = useState(false)
   const [lokaleHelferQuote, setLokaleHelferQuote] = useState(true)
   const [lokaleHelferModell, setLokaleHelferModell] = useState('')
-  const [lokaleHelferAdresse, setLokaleHelferAdresse] = useState('')
+  // Adress-Liste (BAUPLAN 51): mehrere Ollama-Rechner/GPUs, Zeile je Adresse.
+  // Die erste Adresse ist der Anker für Helfer-KI und Vorreparatur.
+  const [lokaleHelferAdressen, setLokaleHelferAdressen] = useState([''])
   const [lokaleHelferKontext, setLokaleHelferKontext] = useState(65536)
   // Lokale KI als Block-Agent (BAUPLAN 49): Häkchen + Feineinstellungen (als
   // Text je Feld, damit sich halb getippte Zahlen nicht sofort wegrunden).
@@ -62,7 +64,9 @@ export default function Einstellungen({ onSchliessen }) {
   const [lokalFeinText, setLokalFeinText] = useState(() =>
     feinAlsText(LOKAL_FEIN_VORLAGEN['ollama-standard'])
   )
-  const [helferStatus, setHelferStatus] = useState(null)
+  // Live-Status je Adresse (Schlüssel: getrimmte Adresse) über das bestehende
+  // IPC lokaleHelferStatus — der Renderer fragt je Zeile einzeln, parallel.
+  const [helferStatusJeAdresse, setHelferStatusJeAdresse] = useState({})
   const [aboErlaubt, setAboErlaubt] = useState(true)
   const [fehler, setFehler] = useState('')
   const [geladen, setGeladen] = useState(false)
@@ -82,7 +86,14 @@ export default function Einstellungen({ onSchliessen }) {
       setLokaleHelferAktiv(Boolean(e.einstellungen.lokaleHelferAktiv))
       setLokaleHelferQuote(e.einstellungen.lokaleHelferQuote !== false)
       setLokaleHelferModell(e.einstellungen.lokaleHelferModell ?? '')
-      setLokaleHelferAdresse(e.einstellungen.lokaleHelferAdresse ?? '')
+      // einstellungenLaden garantiert die Liste seit BAUPLAN 51 — der
+      // Rückfall aufs Einzelfeld ist nur ein Gurt für kaputte Antworten.
+      setLokaleHelferAdressen(
+        Array.isArray(e.einstellungen.lokaleHelferAdressen) &&
+          e.einstellungen.lokaleHelferAdressen.length > 0
+          ? e.einstellungen.lokaleHelferAdressen
+          : [e.einstellungen.lokaleHelferAdresse ?? '']
+      )
       setLokaleHelferKontext(Number(e.einstellungen.lokaleHelferKontext) || 65536)
       setLokalBlockAgent(Boolean(e.einstellungen.lokalBlockAgent))
       setLokalFeinText(feinAlsText(lokalFeinBereinigen(e.einstellungen.lokalFein)))
@@ -92,19 +103,21 @@ export default function Einstellungen({ onSchliessen }) {
   }, [])
 
   // Status der lokalen KI live anzeigen, sobald der Schalter an ist —
-  // Georg sieht sofort, ob Ollama läuft und das Modell da ist.
+  // Georg sieht je Adress-Zeile sofort, ob Ollama läuft und das Modell da ist.
   useEffect(() => {
-    if (!lokaleHelferAktiv || !lokaleHelferModell.trim()) return setHelferStatus(null)
+    if (!lokaleHelferAktiv || !lokaleHelferModell.trim()) return setHelferStatusJeAdresse({})
     let aktuell = true
-    window.flowforge
-      .lokaleHelferStatus(lokaleHelferModell.trim(), lokaleHelferAdresse.trim())
-      .then((s) => {
-        if (aktuell) setHelferStatus(s)
+    const modell = lokaleHelferModell.trim()
+    for (const roh of lokaleHelferAdressen) {
+      const adresse = roh.trim()
+      window.flowforge.lokaleHelferStatus(modell, adresse).then((s) => {
+        if (aktuell) setHelferStatusJeAdresse((alt) => ({ ...alt, [adresse]: s }))
       })
+    }
     return () => {
       aktuell = false
     }
-  }, [lokaleHelferAktiv, lokaleHelferModell, lokaleHelferAdresse])
+  }, [lokaleHelferAktiv, lokaleHelferModell, lokaleHelferAdressen])
 
   // Aktive Vorlage (Markierung der Knöpfe) und der Wert, der gespeichert
   // wird — beides aus denselben Feldern gerechnet.
@@ -138,7 +151,10 @@ export default function Einstellungen({ onSchliessen }) {
       lokaleHelferAktiv,
       lokaleHelferQuote,
       lokaleHelferModell,
-      lokaleHelferAdresse,
+      // Der Hauptprozess bereinigt die Liste (Ungültige raus, Duplikate raus,
+      // leer → Standard) und schreibt das Einzelfeld als Spiegel der ersten
+      // Adresse selbst.
+      lokaleHelferAdressen,
       lokaleHelferKontext,
       lokalBlockAgent,
       lokalFein: lokalFeinBereinigt
@@ -300,16 +316,64 @@ export default function Einstellungen({ onSchliessen }) {
                   <span className="feld-hinweis"> — {t.lokaleHelferQuoteHinweis}</span>
                 </span>
               </label>
-              <label className="feld">
-                <span>{t.lokaleHelferAdresse}</span>
-                <input
-                  type="text"
-                  placeholder="http://127.0.0.1:11434"
-                  value={lokaleHelferAdresse}
-                  onChange={(e) => setLokaleHelferAdresse(e.target.value)}
-                />
-                <span className="feld-hinweis">{t.lokaleHelferAdresseHinweis}</span>
-              </label>
+              {/* Adress-Liste (BAUPLAN 51): Zeile je Ollama-Adresse mit
+                  Entfernen-Knopf und Live-Status; die letzte Zeile bleibt —
+                  der Adress-Pool ist nie leer (einstellungenLaden garantiert
+                  das auch beim Speichern). */}
+              <div className="feld">
+                <span>{t.lokaleHelferAdressen}</span>
+                {lokaleHelferAdressen.map((adresse, i) => {
+                  const status = helferStatusJeAdresse[adresse.trim()]
+                  return (
+                    <div key={i}>
+                      <div className="filter-zeile">
+                        <input
+                          type="text"
+                          placeholder="http://127.0.0.1:11434"
+                          value={adresse}
+                          onChange={(e) =>
+                            setLokaleHelferAdressen((alt) =>
+                              alt.map((a, j) => (j === i ? e.target.value : a))
+                            )
+                          }
+                        />
+                        <button
+                          type="button"
+                          className="knopf-sekundaer knopf-klein"
+                          disabled={lokaleHelferAdressen.length === 1}
+                          onClick={() =>
+                            setLokaleHelferAdressen((alt) => alt.filter((_, j) => j !== i))
+                          }
+                        >
+                          {t.lokaleHelferAdresseEntfernen}
+                        </button>
+                      </div>
+                      {status && adresse.trim() !== '' && (
+                        <span className="feld-hinweis">
+                          {status.erreichbar && status.modellDa
+                            ? t.lokaleHelferStatusBereit(lokaleHelferModell.trim())
+                            : status.erreichbar
+                              ? t.lokaleHelferStatusKeinModell(lokaleHelferModell.trim()) +
+                                (status.modelle?.length
+                                  ? ' ' + t.lokaleHelferStatusVorhandene(status.modelle)
+                                  : '')
+                              : t.lokaleHelferStatusAus}
+                        </span>
+                      )}
+                    </div>
+                  )
+                })}
+                <div className="filter-zeile">
+                  <button
+                    type="button"
+                    className="knopf-sekundaer knopf-klein"
+                    onClick={() => setLokaleHelferAdressen((alt) => [...alt, ''])}
+                  >
+                    {t.lokaleHelferAdresseHinzufuegen}
+                  </button>
+                </div>
+                <span className="feld-hinweis">{t.lokaleHelferAdressenHinweis}</span>
+              </div>
               <label className="feld">
                 <span>{t.lokaleHelferModell}</span>
                 <input
@@ -317,18 +381,6 @@ export default function Einstellungen({ onSchliessen }) {
                   value={lokaleHelferModell}
                   onChange={(e) => setLokaleHelferModell(e.target.value)}
                 />
-                {helferStatus && (
-                  <span className="feld-hinweis">
-                    {helferStatus.erreichbar && helferStatus.modellDa
-                      ? t.lokaleHelferStatusBereit(lokaleHelferModell.trim())
-                      : helferStatus.erreichbar
-                        ? t.lokaleHelferStatusKeinModell(lokaleHelferModell.trim()) +
-                          (helferStatus.modelle?.length
-                            ? ' ' + t.lokaleHelferStatusVorhandene(helferStatus.modelle)
-                            : '')
-                        : t.lokaleHelferStatusAus}
-                  </span>
-                )}
               </label>
               {/* Kontext-Fenster (seit 0.46.3): 32k / 64k / 128k — die
                   Werkzeug-Deckel der lokalen KI wachsen mit. */}

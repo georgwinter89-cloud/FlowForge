@@ -28,6 +28,10 @@ function kostenText(usd) {
 function quoteText(q) {
   return q == null ? t.keineQuote : Math.round(q * 100) + ' %'
 }
+// Block-Dauer (BAUPLAN 51): „—" für ältere Einträge ohne Angabe.
+function dauerZelleText(ms) {
+  return ms == null ? '—' : t.dauerText(ms)
+}
 // Kennzahlen mit einer Nachkommastelle — „0,7 Reparatur-Runden je Lauf".
 function zahlText(n) {
   return n == null ? '—' : n.toFixed(1).replace('.', ',')
@@ -156,6 +160,10 @@ function BlockModellTabelle({ zeilen }) {
             <th className="zahl">{t.spalteErstlaeufe}</th>
             <th className="zahl">{t.spalteTokensDurchschnitt}</th>
             <th className="zahl">{t.spalteKostenDurchschnitt}</th>
+            {/* Ø-Dauer (BAUPLAN 51): löst die SPEC-Zusage ein, dass die
+                lokale Zeile ihre Dauer zeigt — Tokens und Zeit statt Dollar.
+                Ältere Anläufe ohne dauerMs zählen ehrlich als Lücke. */}
+            <th className="zahl">{t.spalteDauerDurchschnitt}</th>
             <th className="zahl">{t.spalteWiederholungen}</th>
             <th className="zahl">{t.spalteErstbestehen}</th>
           </tr>
@@ -175,6 +183,9 @@ function BlockModellTabelle({ zeilen }) {
               </td>
               <td className="zahl">
                 {durchschnittZelle(z.erstlauf.kostenDurchschnitt, z.erstlauf.ohneKosten, t.ohneKosten, kostenText)}
+              </td>
+              <td className="zahl">
+                {durchschnittZelle(z.erstlauf.dauerDurchschnitt, z.erstlauf.ohneDauer, t.ohneDauer, dauerZelleText)}
               </td>
               <td className="zahl">{z.wiederholung.anzahl || '—'}</td>
               <td className="zahl metrik-quote">
@@ -281,6 +292,9 @@ function SummenTabelle({ zeilen, ersteSpalte, beschriftung }) {
             <th className="zahl">{t.spalteKostenDurchschnitt}</th>
             <th className="zahl">{t.spalteTokensGesamt}</th>
             <th className="zahl">{t.spalteKostenGesamt}</th>
+            {/* „Davon lokal" (BAUPLAN 51): Tokens der lokalen Blöcke — als
+                eigene Spalte NEBEN der Gesamtsumme, nie herausgerechnet. */}
+            <th className="zahl">{t.spalteDavonLokal}</th>
           </tr>
         </thead>
         <tbody>
@@ -292,6 +306,7 @@ function SummenTabelle({ zeilen, ersteSpalte, beschriftung }) {
               <td className="zahl">{durchschnittZelle(z.kostenDurchschnitt, z.ohneKosten, t.ohneKosten, kostenText)}</td>
               <td className="zahl">{tokensText(z.tokens)}</td>
               <td className="zahl">{z.mitKosten > 0 ? kostenText(z.kostenUsd) : '—'}</td>
+              <td className="zahl">{z.lokalTokens > 0 ? tokensText(z.lokalTokens) : '—'}</td>
             </tr>
           ))}
         </tbody>

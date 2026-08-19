@@ -452,8 +452,11 @@ des erzeugenden Laufs.
 ### 3.4 Metriken (seit Bauschritt 31)
 
 Das Messinstrument des Nutzers — nur Nachschlagewerk, **nichts davon wandert je in einen
-Auftrag** (das Verbot der Prozess-Selbstvermessung in §10 meint den Agentenprozess, nicht
-dieses Instrument). Zugang: Knopf **„Metriken" in der Titelleiste** → globale Seite über alle
+Lauf-Auftrag** (das Verbot der Prozess-Selbstvermessung in §10 meint den Agentenprozess, nicht
+dieses Instrument). Einzige Ausnahme seit Bauschritt 51: Der **Co-Pilot** bekommt als
+Sprachrohr des Nutzers den kleinen Datenblock „Lokale Bilanz" in seinen Systemtext (§6) —
+für Empfehlungen an den Nutzer, welche Blöcke lokal gut laufen; Lauf-Agenten und
+Lauf-Aufträge sehen weiterhin keine Metrik-Zahl. Zugang: Knopf **„Metriken" in der Titelleiste** → globale Seite über alle
 bekannten Projekte (Filter nach Projekt); im Projekt ein **Tab „Metriken"**, der dieselbe
 Seite aufs Projekt vorgefiltert zeigt (eigener Baustein, nicht Teil der Leinwand).
 
@@ -482,6 +485,19 @@ Seite aufs Projekt vorgefiltert zeigt (eigener Baustein, nicht Teil der Leinwand
   Berichte ohne Kostenangabe und Block-Einträge ohne Verbrauch (ältere Läufe) werden als
   „ohne Kosten"/„ohne Verbrauch" gezählt und fallen aus den Durchschnitten heraus, statt
   sie zu verfälschen. Im Abo-Modus sind es theoretische Kosten wie überall.
+  **„Davon lokal"** (seit Bauschritt 51): Je Lauf stehen die Tokens (und, wo bekannt, die
+  Dauer) der lokalen Blöcke **neben** dem Gesamtverbrauch — in der Gesamtzeile, den
+  Ketten-/Projekt-Tabellen, der Wochenzeile und im Laufbericht-Kopf. Der **Abo-Anteil ist
+  nur eine Beschriftung** (gesamt minus lokal); lokale Tokens werden nie still aus der
+  Gesamtsumme herausgerechnet, sonst widersprächen alte Berichte den neuen. Quelle ist
+  `verbrauch.lokal` des Laufberichts (im Hauptprozess geführt — zählt auch Anläufe, die
+  wegen erschöpften Kontingents keinen Block-Eintrag hinterließen); für 0.49/0.50-Berichte
+  ohne dieses Feld gilt der Rückfall über die Block-Klasse „lokal", deren Dauer es
+  rückwirkend nicht gibt („ohne Angabe", nie 0). **Dauer-Definition:** Die Block-Dauer ist
+  die Summe der Wanduhrzeiten aller Anläufe des Blocks (je Anlauf Motorstart bis Ergebnis);
+  Rechte-Rückfragen MITTEN in einem Anlauf zählen mit, Wartezeiten ZWISCHEN Anläufen
+  (Warteschlange, Kontingent-Pause, Folgen-Frage) zählen nicht — im Vergleich „lokal
+  langsam vs. Claude schnell" gewinnt Claude also nicht allein durch deine Antwortzeit.
 - **Abschnitt 3 — Wie gut trägt das Gerüst** (Harness-Kennzahlen, seit Bauschritt 36):
   Nicht nur Kosten messen, sondern auch, was das Gerüst taugt. Als Kacheln: Anteil der
   Läufe, in denen **jede Prüfung ihr erstes Urteil bestanden** hat · Ø **Reparatur-Runden**
@@ -509,7 +525,9 @@ Seite aufs Projekt vorgefiltert zeigt (eigener Baustein, nicht Teil der Leinwand
   Ollama-Modellnamen (das abgeleitete `flowforge-<basis>`), die Zeile zeigt Erstläufe,
   Reparatur-Runden, Dauer und die von Ollama gemeldeten Tokens — bei **Kosten 0**
   (die erfundenen CLI-Kosten verwirft der Motor), Denktiefe leer. So sieht Georg, ob
-  sich die Karte rechnet: Tokens und Zeit statt Dollar.
+  sich die Karte rechnet: Tokens und Zeit statt Dollar. Die **Ø-Dauer-Spalte** gibt es
+  seit Bauschritt 51 für alle Zeilen (Dauer-Definition oben); Anläufe aus Berichten vor
+  0.51 haben keine Dauer und zählen als „ohne Angabe", nicht als 0.
 - **Lokaler Prüfer × Abnahme** (seit Bauschritt 50): zwei Kacheln in der Harness-Reihe —
   **„Abnahme widerspricht dem lokalen Prüfer"** (Paare lokaler Prüfer → Claude-Abnahme,
   davon Widersprüche, Quote) und **„Tor widerspricht dem lokalen Prüfer"** (Nachspiele des
@@ -1838,7 +1856,19 @@ umstellbar wie jede Karte.
   **lesbare Datei** bereitgestellt, nicht als Systemtext; sein Systemtext trägt
   Kurzregeln und einen **Abschnitts-Index mit Zeilenbereichen** (beim Start des
   Chats aus der gebündelten Datei erzeugt), damit er gezielt liest — kein zweites
-  Bedien-Dokument (Doku-Regel); (b) **das Projekt** (s.o.).
+  Bedien-Dokument (Doku-Regel); (b) **das Projekt** (s.o.); (c) die **„Lokale Bilanz"**
+  (seit Bauschritt 51): ein kleiner Datenblock im Systemtext — welche Blocktypen, lokale
+  Zuarbeit und lokalen Prüfer auf der lokalen KI gut liefen (Quellen: Urteils-Datei,
+  Laufbericht-Extrakte, Abnahme-Paare; gerechnet von einer reinen Regel-Funktion mit
+  Prüfskript). Nur angehängt, wenn lokale Daten existieren; höchstens ~15 Zeilen,
+  sortiert nach Fallzahl. Ehrlichkeit ist mechanisch erzwungen: „lief gut" gibt es erst
+  ab 5 Fällen und Quote ≥ 70 % (bei Prüfern: Abnahme-Widerspruch ≤ 20 %), Zeilen
+  „(ohne Modell)" erscheinen nie, der Gescheitert-Anteil steht neben der Quote, und der
+  Block trägt die Anweisung, Fallzahlen zu nennen und kleine Stichproben ehrlich zu
+  benennen. Das ist die einzige Stelle, an der ein Agent Metrik-Zahlen sieht — der
+  Co-Pilot ist das Sprachrohr des Nutzers, und seine Bilanz wandert nie in einen
+  Lauf-Auftrag (§3.4, §10). Gilt im Projekt- wie im Übersichts-Chat (die Bilanz ist
+  global — „welche Blöcke stelle ich lokal?" ist eine Bedienfrage).
   **Modell:** Der Chat läuft unverändert auf dem Standard-Modell des Motors — die
   Modellklassen (§2) gelten für Blöcke, nicht für das Gespräch mit dir.
   **Was er darf — zwei Betriebsarten**, Schalter sichtbar über dem Eingabefeld, je
@@ -2148,7 +2178,16 @@ Block-Agenten als Hinweis daneben (§6).
 - **Einstellungen-Dialog** (Knopf in der Titelleiste; scrollt, seit Bauschritt 49):
   Abschnitte **KI-Motor** (Abo/API, Schlüssel, Obergrenze, §2) · **Rechte-Rückfragen**
   (§7) · **Modell der Unteraufgaben** (§2) · **Lokale Helfer-KI** (Schalter, Trefferquote,
-  Adresse, Modell mit Live-Status, Kontextfenster, §4.3) · **Lokale KI als Block-Agent**
+  **Adress-Liste** statt Einzelfeld seit Bauschritt 51 — Zeile je Ollama-Adresse mit
+  Live-Status und Entfernen-Knopf, „Adresse hinzufügen"; die letzte Zeile ist nicht
+  entfernbar, die Liste ist nie leer. Die erste Adresse bleibt der Anker für Helfer-KI und
+  Vorreparatur; jede Adresse braucht dasselbe Basis-Modell, und der Hinweistext benennt
+  ehrlich, dass Alias-Adressen wie „localhost" und „127.0.0.1" dieselbe Grafikkarte
+  meinen — mechanisch geprüft wird das nicht. Beim Speichern wird jede Adresse bereinigt,
+  Ungültige verworfen, exakte Duplikate entfernt, eine leere Liste durch den Standard
+  ersetzt; ältere Dateien mit dem Einzelfeld werden beim Laden zur Ein-Element-Liste
+  migriert, und das alte Feld bleibt als Spiegel der ersten Adresse erhalten. Modell mit
+  Live-Status, Kontextfenster, §4.3) · **Lokale KI als Block-Agent**
   (seit Bauschritt 49, §2): Häkchen „Lokale KI darf ganze Blöcke übernehmen" — nur
   bedienbar, wenn die Helfer-KI an ist (Modell, Adresse, Kontext sind dieselben); darunter
   der Name des abgeleiteten Modells `flowforge-<basis>`, die **Feineinstellungen** als
@@ -2190,4 +2229,8 @@ Block-Agenten als Hinweis daneben (§6).
 - Umbau eines Workflows, während er läuft
 - Jede Form von Prozess-Selbstvermessung **im Agentenprozess** (Bestandslisten,
   Nachweis-Register o.ä. — das Life-OS-Übel). Nicht gemeint ist das Messinstrument des
-  Nutzers: die Metriken-Seite (§3.4) ist Nachschlagewerk, das kein Agent je sieht.
+  Nutzers: die Metriken-Seite (§3.4) ist Nachschlagewerk, das **kein Lauf-Agent** je
+  sieht und das nie in einen Lauf-Auftrag fließt. Präzisiert in Bauschritt 51: Der
+  Co-Pilot (§6) ist kein Lauf-Agent, sondern das Sprachrohr des Nutzers — er bekommt die
+  „Lokale Bilanz" (§3.4) für Empfehlungen an den Nutzer; auch aus dem Chat wandert keine
+  Metrik-Zahl in einen Lauf-Auftrag.

@@ -30,6 +30,7 @@ import {
 import { sicherungspunktAnlegen } from './sicherungspunkte.js'
 import { prozessgruppeAbraeumen } from './prozesse.js'
 import { specWissen } from './specWissen.js'
+import { lokaleBilanzLaden } from './metriken.js'
 
 const BERICHTE_ORDNER = 'laufberichte'
 // Verlaufsdatei je Projekt — Verwaltungsdatei (Sperrliste des Motors,
@@ -394,6 +395,19 @@ function chatBesorgen(projektPfad) {
   return chat
 }
 
+// Lokale Bilanz (BAUPLAN 51): kleiner Datenblock im Chat-Systemtext — nur
+// angehängt, wenn lokale Daten existieren (sonst lädt ein leerer Abschnitt
+// die KI zum Erfinden ein). Gilt für Projekt- UND Übersichts-Chat: Die Bilanz
+// ist global, und „welche Blöcke stelle ich lokal?" ist eine Bedienfrage.
+// Stand = Motorstart; der Chat-Motor stirbt bei jedem Laufstart und
+// Berichtwechsel, danach ist der Block von selbst frisch.
+function lokaleBilanzText() {
+  const bilanz = lokaleBilanzLaden()
+  if (!bilanz.vorhanden) return ''
+  const stand = new Date().toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })
+  return texte.agentenChat.lokaleBilanz(bilanz, stand)
+}
+
 function motorBesorgen(chat) {
   if (chat.motor && !chat.motor.istTot()) return chat.motor
   motorVerabschieden(chat)
@@ -418,6 +432,8 @@ function motorBesorgen(chat) {
     fortsetzen: kandidat?.kennung ?? null,
     laufKontext: kandidat || !chat.bericht ? '' : laufberichtKontext(chat.bericht),
     spec: specWissen(),
+    // Lokale Bilanz (BAUPLAN 51): fertig formatierter Datenblock oder ''.
+    lokaleBilanz: lokaleBilanzText(),
     // Während ein Lauf läuft oder wartet: nur lesend — die Einstellung „nur-
     // lesende Blöcke dürfen Befehle ausführen" gilt dann NICHT, Reparieren ist
     // gesperrt (der Chat schreibt nicht, solange ein Lauf läuft). Je
