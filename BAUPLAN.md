@@ -838,6 +838,51 @@ Koordinator der Hauptsession sieht ihn nicht, FlowForge reicht danach normal wei
 lokaler Block-Agent darf sie genauso nutzen wie ein Claude-Block. (3) Was die lokale KI taugt,
 entscheiden die Metriken (Reparatur-Runden, Tor-Urteile, Teilstück-Quoten), nicht die Planung.
 
+### Zwischenschritt 0.48.1 — Modellklasse „Extra (Fable 5)" und Denktiefe je Block
+(Wunsch Georg, 19.08.2026: „Fable 5 für Extrapower freigeben" und „den Effort bei den
+Cloud-Modellen einstellen können". Recherche-Stand 19.08.2026, Claude-Code-Doku
+„Model configuration" und Agent-SDK 0.3.224 `sdk.d.ts`:)
+- **Fable 5 ist im SDK da:** Alias `fable` / ID `claude-fable-5`, auch als `model` einer
+  programmatisch definierten Unteraufgabe (`AgentDefinition.model`) — genau der Weg, auf dem
+  FlowForge heute die Klasse je Block setzt (Hook → `model`). Braucht Claude Code ≥ 2.1.170
+  (unser SDK bündelt eine neuere CLI). **Kosten-Wahrheit, die in die Oberfläche MUSS:** Laut
+  Doku kann Fable 5 je nach Abo „to usage credits instead of drawing on your plan's included
+  limits" abrechnen — und „through the Agent SDK, Claude Code never shows the consent prompt.
+  When a Fable 5 request there would bill to usage credits, Claude Code bills it without
+  asking." Also: Die Klasse „Extra" trägt an Karte und Editor einen Kosten-Hinweis, der
+  Erststart/Einstellungen-Text zum Abo nennt es, und beim ersten Lauf mit einem Extra-Block
+  fragt FlowForge einmal nach (Folgen-Frage: „kann Guthaben statt Kontingent kosten — trotzdem
+  starten?", Antwort merkbar). Kein stiller Billig- oder Teuer-Rückfall: Ist Fable für das
+  Konto nicht verfügbar (Ticker-/Fehlertext der CLI), bleibt der Block stehen und FlowForge
+  sagt es; Fable-Inhaltsfilter (Cyber/Biologie) fallen laut Doku von selbst auf Opus zurück —
+  der Ticker nennt den Wechsel, wenn die CLI ihn meldet.
+- **Vierte Cloud-Klasse „Extra (Fable 5)"** neben Standard/sparsam/sehr sparsam: an der
+  Blockkarte, im Block-Editor als Voreinstellung, im Katalog nirgends vorbelegt. Regel
+  „Unteraufgaben nie verteuern" bleibt (Extra-Block mit Unteraufgaben „wie der Block" → Fable
+  auch für seine Helfer, bewusst). Metriken führen „Extra" als eigene Klasse.
+- **Denktiefe (Effort) je Block:** Das SDK kennt `effort: low | medium | high | xhigh | max`
+  (auch als Zahl) **je AgentDefinition** — FlowForge definiert seinen Block-Agenten deshalb
+  je Denktiefe einmal (`block`, `block-low` … `block-max`) und wählt im Hook den Typ nach der
+  Karte; so bleibt der Koordinator unberührt. Unterstützt von Fable 5, Opus 5, Sonnet 5
+  (+ Opus 4.8/4.7); Haiku 4.5 kennt keine Denktiefe — die Wahl wird dort ignoriert, der
+  Editor sagt es. Standard = „Modell-Standard" (laut Doku `high`). Folgen-Texte aus der Doku:
+  low „kurz, klar umrissen, nicht intelligenz-kritisch", medium „spart Tokens, etwas
+  weniger Klugheit", high „Standard", xhigh „tiefer, teurer", max „kann bei harten Aufgaben
+  helfen, neigt zum Überdenken — vorher testen". An der Karte als Zusatz zur Modellklasse
+  (ein Auswahlfeld „Denktiefe"), im Editor als Voreinstellung, Ticker/Laufbericht/Metriken
+  nennen sie (Reparatur-Runden je Denktiefe — das ist die Zahl, an der Georg sie einstellt).
+- **Ehrlich offen, in der Session zu prüfen:** ob der Hook für Unteraufgaben (`subagent_type`)
+  die `effort`-Definition wirklich an den Block-Agenten durchreicht (Messung: PreToolUse-Hook
+  liefert laut `sdk.d.ts` `effort.level` des laufenden Zuges — damit ist es im Ticker
+  nachweisbar); `CLAUDE_CODE_EFFORT_LEVEL` in der Umgebung würde alles übersteuern — der
+  Motor räumt die Variable beim Start weg.
+- Nachzuziehen: SPEC §2 (Klasse Extra mit Kosten-Wahrheit, Denktiefe), §4.1 (Karte), §4.5
+  (Editor), §3.4 (Metriken), §6 (Ticker), §9 (Erststart/Einstellungen-Text).
+**Alltagstest:** Georg stellt den Integrator auf „Extra (Fable 5)" und den Prüfer auf
+Denktiefe „xhigh", startet — FlowForge fragt einmal wegen des Guthabens, der Ticker nennt
+beim Integrator „Extra (Fable 5)" und beim Prüfer „Denktiefe xhigh", der Laufbericht und die
+Metriken zeigen beides getrennt.
+
 ### 49 — Modellklasse „lokal": Block-Agent über Ollama im Anthropic-Modus
 - **Zuerst die Machbarkeitsprobe** (Pflicht, vor jedem Umbau, auf Georgs Rechner gegen sein
   Qwen-27B): das Agent-SDK mit Ollama-Umgebung starten und drei Dinge messen — (a) ruft das
@@ -863,8 +908,34 @@ entscheiden die Metriken (Reparatur-Runden, Tor-Urteile, Teilstück-Quoten), nic
 - **Sichtbar und messbar:** Ticker und Laufbericht nennen „lokal (<Modellname>)" wie heute die
   Klasse; Metriken (§3.4) führen „lokal" als eigene Klasse — Erstläufe, Reparatur-Runden,
   Dauer, Tokens (Ollama liefert usage) — damit Georg sieht, ob sich die Karte rechnet.
-- Nachzuziehen: SPEC §2 (vierte Klasse, V2-Satz ersetzen), §5 (Motor-Instanz je lokalem
-  Block), §3.4 (Klasse „lokal"), §4.1 (Karte), §4.5 (Editor-Voreinstellung).
+- **Feineinstellungen der lokalen KI** (Wunsch Georg, 19.08.2026; Recherche-Stand s.u.):
+  Die Claude-CLI setzt selbst keine Temperatur und keine Ollama-Optionen — über den
+  Anthropic-Modus kommen nur `max_tokens`, `thinking`, `tools` an (Ollama-Doku „Anthropic
+  compatibility": unterstützt model/max_tokens/messages/system/stream/temperature/top_p/
+  top_k/stop_sequences/tools/thinking; `budget_tokens` angenommen, nicht durchgesetzt; kein
+  tool_choice). Der **wirksame Hebel sind die Standardwerte am Modell**: FlowForge legt aus
+  Georgs Einstellungen ein **abgeleitetes Ollama-Modell** an (`ollama create flowforge-<basis>`
+  mit Modelfile `FROM <basis>` + PARAMETER) und nutzt dieses als Block-Agent-Modell. Einstellbar
+  in den Einstellungen (Abschnitt „Lokale KI als Block-Agent", mit Folgen-Erklärung und
+  Empfehlung je Feld): **Kontextfenster** (`num_ctx`, besteht seit 0.46.3), **Temperatur**
+  (`temperature`), **Top-p / Top-k / Min-p**, **Wiederholungsstrafe** (`repeat_penalty`),
+  **Antwortlänge** (`num_predict`), **Entwurfs-Tokens/MTP** (`draft_num_predict`, spekulatives
+  Dekodieren — wirkt nur bei Modellen mit eingebautem Entwurfskopf, z.B. Qwen3.6/Gemma 4; auf
+  Apple-Silicon seit Ollama 0.23.1 eingebaut, andere Runner „in Validierung" (Mai 2026) —
+  FlowForge misst Tokens/s vor/nach und sagt, ob es wirkt), und **Denken** (Ollama `think`:
+  aus / an / Stufe low·medium·high·max — die Stufen kennen nur manche Modelle, z.B. gpt-oss;
+  Qwen3: an/aus). Vorlagen-Knöpfe mit den Herstellerempfehlungen (Qwen3.x per Unsloth-Doku:
+  Denken + Coding `temperature 0.6, top_p 0.95, top_k 20, min_p 0`; ohne Denken
+  `temperature 0.7, top_p 0.8, top_k 20, presence_penalty 1.5`) und „Ollama-Standard".
+  Ehrliche Grenzen, in der Machbarkeitsprobe zu klären: (a) wie Ollama das `thinking:
+  adaptive` der Claude-CLI abbildet (vermutlich „an") und ob ein `think`-Standard am
+  abgeleiteten Modell greift, sonst Schalter nur über Systemprompt (`/no_think` bei Qwen3);
+  (b) `ollama create` braucht Schreibzugriff auf den Ollama-Rechner — bei Georgs Gaming-PC
+  über die API (`/api/create`), nicht über die Kommandozeile; (c) ein neues abgeleitetes
+  Modell lädt neu in den VRAM — nur beim Ändern der Werte, nicht je Lauf.
+- Nachzuziehen: SPEC §2 (vierte Klasse, V2-Satz ersetzen, Feineinstellungen), §5
+  (Motor-Instanz je lokalem Block), §3.4 (Klasse „lokal"), §4.1 (Karte), §4.5
+  (Editor-Voreinstellung), §9 (Einstellungen).
 **Alltagstest:** Georg stellt in „Feature hinzufügen" den Bauer auf „lokal", lässt den
 Workflow am Moorhuhn laufen: Paket schneiden (Opus) schneidet, der lokale Bauer baut im
 Datenvertrag, meldet über den Lieferschein, der Opus-Prüfer urteilt; im Laufbericht steht
