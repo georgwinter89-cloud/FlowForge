@@ -712,7 +712,9 @@ sagt der Anbieter selbst, dass es läuft und bis auf Weiteres so bleibt. Gebaut 
   Grenze der Bausession 19.08.: Auf dem Rechner gibt es kein `gh` und keinen
   GitHub-Zugang für Claude — das private Repo legt Georg an (drei Befehle stehen in
   der Sessionanleitung), ebenso das Sponsors-/Ko-fi-Konto (FUNDING.yml enthält bis
-  dahin nur die vorbereiteten, auskommentierten Zeilen).
+  dahin nur die vorbereiteten, auskommentierten Zeilen). Nachtrag 19.08.: Repo
+  `georgwinter89-cloud/FlowForge` privat angelegt und gepusht, Sponsors-Profil
+  freigeschaltet und in FUNDING.yml eingetragen.
 - Nachzuziehen: SPEC §2 (Abo-Regel neu, Erststart-Wahl), §9 (Erststart-Dialog),
   README.md, LICENSE, .github/FUNDING.yml, package.json.
 **Alltagstest:** Georg installiert die frisch gebaute Version auf einem sauberen

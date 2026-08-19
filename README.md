@@ -72,5 +72,5 @@ bleibt, sind die Entscheidungen, die Prüfungen und die Person dahinter.
 ## Unterstützen
 
 Wenn dir FlowForge etwas bringt: Kaffeegeld über den „Sponsor"-Knopf oben auf der
-Repo-Seite (sobald eingerichtet). Ehrliche Erwartung: keine Einnahmequelle — ein
+Repo-Seite oder direkt über [github.com/sponsors/georgwinter89-cloud](https://github.com/sponsors/georgwinter89-cloud). Ehrliche Erwartung: keine Einnahmequelle — ein
 Signal, dass hier ein Mensch dahintersteht.

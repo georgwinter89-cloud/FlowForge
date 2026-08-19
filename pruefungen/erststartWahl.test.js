@@ -153,12 +153,11 @@ describe('0.46.4 · Veröffentlichung', () => {
     expect(readme).toMatch(/Ein-Personen-Projekt/)
   })
 
-  it('FUNDING.yml liegt vor und enthält keinen erfundenen Kontonamen', () => {
+  it('FUNDING.yml zeigt auf Georgs Sponsors-Profil — und auf kein fremdes', () => {
     const funding = lesen('.github/FUNDING.yml')
-    // Solange Georg das Konto nicht angelegt hat, sind alle Zeilen auskommentiert —
-    // ein falscher Name würde den Sponsor-Knopf auf ein fremdes Profil lenken.
-    for (const zeile of funding.split(/\r?\n/).filter((z) => z.trim()))
-      expect(zeile.trim().startsWith('#'), zeile).toBe(true)
+    // Ein falscher Name würde den Sponsor-Knopf auf ein fremdes Profil lenken.
+    const aktiv = funding.split(/\r?\n/).filter((z) => z.trim() && !z.trim().startsWith('#'))
+    expect(aktiv).toEqual(['github: [georgwinter89-cloud]'])
   })
 
   it('kein Geheimnis im getrackten Repo (Schlüssel, Heimnetz-IP, Nutzerpfad)', () => {
