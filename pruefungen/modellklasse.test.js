@@ -11,6 +11,8 @@
 // Blocks, keine Zuarbeit.
 // Seit 0.48.1 gibt es die vierte Klasse „extra" (Fable 5) — teurer als
 // Standard, im Katalog nirgends vorbelegt; die Fälle dazu stehen mit dabei.
+// Seit Bauschritt 49 steht „lokal" (Ollama) ganz hinten als fünfte Klasse —
+// die Einzelheiten prüft pruefungen/modellklasseLokal.test.js.
 import { describe, it, expect } from 'vitest'
 import {
   BLOCK_KATALOG,
@@ -49,15 +51,17 @@ describe('Welche Modellklasse gilt für eine Blockkarte', () => {
     expect(blockModellKlasse(null, null)).toBe(MODELL_KLASSE_STANDARD)
   })
 
-  it('lässt nur die vier bekannten Klassen durch', () => {
+  it('lässt nur die fünf bekannten Klassen durch', () => {
     expect(modellKlasseGueltig('sehr-sparsam')).toBe('sehr-sparsam')
     expect(modellKlasseGueltig('extra')).toBe('extra')
+    expect(modellKlasseGueltig('lokal')).toBe('lokal')
+    expect(modellKlasseGueltig('ollama')).toBe(null)
     expect(modellKlasseGueltig('opus')).toBe(null)
     expect(modellKlasseGueltig('fable')).toBe(null)
   })
 
-  it('kennt seit 0.48.1 genau vier Klassen — Extra ganz vorn als teuerste', () => {
-    expect(MODELL_KLASSEN).toEqual(['extra', 'standard', 'sparsam', 'sehr-sparsam'])
+  it('kennt seit Bauschritt 49 genau fünf Klassen — Extra ganz vorn als teuerste, lokal ganz hinten', () => {
+    expect(MODELL_KLASSEN).toEqual(['extra', 'standard', 'sparsam', 'sehr-sparsam', 'lokal'])
     expect(MODELL_KLASSE_EXTRA).toBe('extra')
     expect(blockModellKlasse(blockDefinition('bauer'), { modell: 'extra' })).toBe('extra')
   })
@@ -69,6 +73,8 @@ describe('Übersetzung in die Modelle des Motors', () => {
     expect(sdkModell('standard')).toBe('opus')
     expect(sdkModell('sparsam')).toBe('sonnet')
     expect(sdkModell('sehr-sparsam')).toBe('haiku')
+    // lokal ist ein Platzhalter-Alias: der lokale Motor setzt den Ollama-Namen ein.
+    expect(sdkModell('lokal')).toBe('lokal')
   })
 
   it('gibt bei Unsinn das Standard-Modell statt undefined', () => {

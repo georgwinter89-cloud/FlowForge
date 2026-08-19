@@ -11,6 +11,7 @@
 // mit klarer Meldung abgewiesen. Die Status-Karte fällt still heraus (sie ist
 // ohnehin immer dabei).
 import { z } from 'zod'
+import { liste } from './werkzeugSchema.js'
 import { texte } from '../../shared/texte.js'
 import { zielFuerAdresse } from '../../shared/kettenRegeln.js'
 
@@ -119,8 +120,7 @@ export async function kartenZuteilungWerkzeugServer({ aufKartenZuteilung, aufPak
     'paket_melden',
     tp.werkzeugBeschreibung,
     {
-      aufgabenIds: z
-        .array(z.string())
+      aufgabenIds: liste(z.string())
         .describe(
           'ids der offenen Aufgaben-Karten aus der Kartenauswahl, die dieses Paket bearbeitet — ' +
             'leer, wenn der Auftrag allein aus dem Wunsch-/Fehlerbild-Feld kam'
@@ -141,8 +141,7 @@ export async function kartenZuteilungWerkzeugServer({ aufKartenZuteilung, aufPak
     'karten_zuteilen',
     tz.werkzeugBeschreibung,
     {
-      zuteilung: z
-        .array(
+      zuteilung: liste(
           z.object({
             block: z
               .string()
@@ -150,8 +149,7 @@ export async function kartenZuteilungWerkzeugServer({ aufKartenZuteilung, aufPak
                 'Die Blocknummer des nachfolgenden Blocks im Schaubild (z.B. „3") — dein ' +
                   'Auftrag listet sie; zwei Blöcke können gleich heißen, die Nummer ist eindeutig'
               ),
-            kartenIds: z
-              .array(z.string())
+            kartenIds: liste(z.string())
               .describe(
                 'ids der Karten aus der Kartenauswahl, die dieser Block bekommen soll — leer heißt „nur die Status-Karte"'
               )

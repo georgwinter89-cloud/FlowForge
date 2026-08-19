@@ -25,6 +25,7 @@ import {
   blockModellKlasse,
   blockAnzeigeName,
   klasseHatKostenHinweis,
+  klasseIstLokal,
   pruefOrdnerFuer,
   zusatznameBereinigen,
   sdkModell,
@@ -97,6 +98,7 @@ import {
   pruefungenArchivieren
 } from './pruefkarten.js'
 import { starteLaufMotor } from './motor/claudeCodeMotor.js'
+import { lokalesModellBereitstellen } from './motor/lokalesModell.js'
 import {
   lokaleHelferPruefen,
   lokaleHelferKontextSetzen,
@@ -1152,6 +1154,26 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
   const bereit = motorBereit(einstellungen)
   if (!bereit.ok) return { ok: false, fehler: bereit.fehler }
 
+  // Lokale Klasse (BAUPLAN 49): Trägt die Kette einen Block der Klasse
+  // „lokal", startet der Lauf NUR, wenn die lokale KI eingeschaltet, als
+  // Block-Agent erlaubt UND erreichbar ist (mit dem Basis-Modell). Kein
+  // stiller Rückfall auf Claude — sonst bezahlt Georg, was er lokal wollte.
+  // Geprüft hier, beim Start: Georg sieht den Klartext sofort statt nach
+  // einem halben Lauf. Im Lauf selbst wird das abgeleitete Modell angelegt
+  // (lokalBereitstellen unten) — auch das endet bei Fehler als Fehlschlag.
+  if (kette.some((e) => klasseIstLokal(blockModellKlasse(defVon(e.blockId), e)))) {
+    if (!einstellungen.lokaleHelferAktiv || !einstellungen.lokalBlockAgent)
+      return { ok: false, fehler: texte.lauf.lokalNichtErlaubt }
+    const status = await lokaleHelferPruefen(
+      einstellungen.lokaleHelferModell,
+      einstellungen.lokaleHelferAdresse
+    )
+    if (!status.erreichbar)
+      return { ok: false, fehler: texte.lauf.lokalNichtErreichbar(einstellungen.lokaleHelferAdresse) }
+    if (!status.modellDa)
+      return { ok: false, fehler: texte.lauf.lokalModellFehlt(einstellungen.lokaleHelferModell) }
+  }
+
   // Kosten-Rückfrage „Extra (Fable 5)" (0.48.1): Im Abo-Modus kann Fable je
   // nach Abo Guthaben statt Kontingent kosten — über den Motor ohne
   // Einwilligungs-Dialog. Deshalb fragt FlowForge beim ersten Start mit einem
@@ -1716,6 +1738,42 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       lokaleHelferHinweis = texte.ticker.lokaleHelferNichtErreichbar
     }
   }
+  // Lokaler Block-Agent (BAUPLAN 49): Trägt die Kette einen Block der Klasse
+  // „lokal", legt FlowForge jetzt das abgeleitete Ollama-Modell an (Kontext-
+  // fenster + Feineinstellungen als Standardwerte am Modell; unverändert =
+  // kein Neuladen). Erlaubnis und Erreichbarkeit hat der Start schon geprüft;
+  // scheitert hier etwas, endet der Lauf als Fehlschlag mit Klartext — nie
+  // stiller Rückfall auf Claude. `lokal` ist das, was jeder lokale Block an
+  // seinen eigenen Motor gibt (blockAusfuehren).
+  let lokal = null
+  let lokalFehler = null
+  if (kette.some((e) => klasseIstLokal(blockModellKlasse(defVon(e.blockId), e)))) {
+    const kontext = Number(einstellungen.lokaleHelferKontext) > 0
+      ? Number(einstellungen.lokaleHelferKontext)
+      : KONTEXT_FENSTER_STANDARD
+    const status = await lokaleHelferPruefen(
+      einstellungen.lokaleHelferModell,
+      einstellungen.lokaleHelferAdresse
+    )
+    if (!status.erreichbar) lokalFehler = texte.lauf.lokalNichtErreichbar(einstellungen.lokaleHelferAdresse)
+    else if (!status.modellDa) lokalFehler = texte.lauf.lokalModellFehlt(einstellungen.lokaleHelferModell)
+    else {
+      const bereit = await lokalesModellBereitstellen({
+        adresse: einstellungen.lokaleHelferAdresse,
+        basis: einstellungen.lokaleHelferModell,
+        kontext,
+        fein: einstellungen.lokalFein
+      })
+      if (bereit.ok)
+        lokal = {
+          adresse: einstellungen.lokaleHelferAdresse,
+          modell: bereit.modell,
+          kontext,
+          basis: einstellungen.lokaleHelferModell
+        }
+      else lokalFehler = bereit.fehler
+    }
+  }
   // Die Lokale-Helfer-Zeile des Berichts — seit BAUPLAN 31 mit dem Modell,
   // damit die Zahlen einem Modell zuzuordnen sind.
   function helferZaehler() {
@@ -1750,9 +1808,18 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
   if (einstellungen.nurLesenBefehle) tickern(texte.ticker.nurLesenBefehleAktiv)
   // Unteraufgaben-Modell (BAUPLAN 37): Stuft FlowForge die Zuarbeit herab,
   // steht das sichtbar am Laufstart — im Ticker und damit im Laufbericht.
+  // Lokale Blöcke (BAUPLAN 49) haben in ihrer Instanz kein Sonnet — ihre
+  // Unteraufgaben laufen auf dem Ollama-Modell; der Zusatz sagt es ehrlich.
   if (einstellungen.unteraufgabenModell !== 'wieBlock')
-    tickern(texte.ticker.unteraufgabenSparsam(texte.kette.modellNamen.sparsam))
+    tickern(
+      texte.ticker.unteraufgabenSparsam(texte.kette.modellNamen.sparsam) +
+        (lokal ? ' ' + texte.ticker.unteraufgabenLokalZusatz : '')
+    )
   if (lokaleHelferHinweis) tickern(lokaleHelferHinweis)
+  // Lokaler Block-Agent (BAUPLAN 49): bereit — oder der Grund, warum nicht
+  // (der Lauf endet dann gleich als Fehlschlag, s. Planer).
+  if (lokal) tickern(texte.ticker.lokalBereit(lokal.modell, lokal.kontext))
+  else if (lokalFehler) tickern(lokalFehler)
   if (pruefmappeGeleert) tickern(texte.ticker.pruefmappeGeleert)
   if (pruefkartenEingelegt > 0) tickern(texte.ticker.pruefkartenEingelegt(pruefkartenEingelegt))
   // Baseline (BAUPLAN 35): schon vor dem ersten Block gemessen, hier erst
@@ -2565,7 +2632,10 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     // oder einen eigenen Motor für einen parallelen Zweig. Die Ereignis-
     // Zuordnung (welcher Block, welche Karte) liefern die Hol-Funktionen —
     // beim Lauf-Motor wechseln sie mit jedem Block.
-    function motorBauen(fortsetzen, holeInstanz, holeName) {
+    // lokalOption (BAUPLAN 49): { adresse, modell, kontext } — dann läuft
+    // dieser Motor gegen Georgs lokale KI (Ollama) statt gegen Claude; nur für
+    // Blöcke der Klasse „lokal", immer als eigene Instanz, nie die Lauf-Session.
+    function motorBauen(fortsetzen, holeInstanz, holeName, lokalOption = null) {
       return starteLaufMotor({
         projektPfad,
         modus: einstellungen.motorModus,
@@ -2573,6 +2643,9 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         ausgabenObergrenzeUsd: einstellungen.ausgabenObergrenzeUsd,
         fortsetzen,
         lokaleHelfer,
+        ...(lokalOption
+          ? { lokal: { adresse: lokalOption.adresse, modell: lokalOption.modell, kontext: lokalOption.kontext } }
+          : {}),
         nurLesenBefehle: Boolean(einstellungen.nurLesenBefehle),
         // Lieferschein (BAUPLAN 42): Beim Laufstart steht das Schaubild fest —
         // registriert werden genau die Melde-Werkzeuge dieser Kette.
@@ -2763,9 +2836,24 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         testModus: Boolean(einstellungen.uebertragTest),
         anweisung: texte.agentenLaufSession.uebertragAnweisung
       }
+      const klasse = blockModellKlasse(k.def, k.eintrag)
+      const istLokal = klasseIstLokal(klasse)
       let motor
       let haupt = false
-      if (!laufMotorBelegt) {
+      if (istLokal) {
+        // Lokale Klasse (BAUPLAN 49): IMMER eine eigene Motor-Instanz mit
+        // Ollama-Umgebung — nie die Lauf-Session (die läuft gegen Claude und
+        // ihr Koordinator auf Haiku), nie `haupt`. Nach dem Block wird sie
+        // geschlossen wie ein Zweig-Motor. Ohne `lokal` kommt kein lokaler
+        // Block bis hierher (Start-Prüfung und lokalBereitstellen oben).
+        tickern(texte.ticker.lokalEigeneSession(k.name, lokal.modell))
+        motor = motorBauen(
+          null,
+          () => instanzId,
+          () => k.name,
+          lokal
+        )
+      } else if (!laufMotorBelegt) {
         motor = laufMotorBesorgen()
         haupt = true
         laufMotorBelegt = true
@@ -2855,13 +2943,15 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           // sonst die Voreinstellung des Blocks. Der Motor trägt sie beim
           // Agent-Aufruf ein; das Modell der Unteraufgaben hängt zusätzlich
           // an der Einstellung „Unteraufgaben der Block-Agenten".
-          modell: sdkModell(blockModellKlasse(k.def, k.eintrag)),
-          unterModell: unterModellFuer(
-            k.def,
-            blockModellKlasse(k.def, k.eintrag),
-            einstellungen.unteraufgabenModell
-          ),
-          modellName: texte.kette.modellNamen[blockModellKlasse(k.def, k.eintrag)] ?? '',
+          // Lokal (BAUPLAN 49): Platzhalter 'lokal' — der lokale Motor setzt
+          // den Ollama-Namen selbst ein; der Klartext nennt ihn schon hier.
+          modell: istLokal ? 'lokal' : sdkModell(klasse),
+          unterModell: istLokal
+            ? 'lokal'
+            : unterModellFuer(k.def, klasse, einstellungen.unteraufgabenModell),
+          modellName: istLokal
+            ? texte.kette.lokalModellName(lokal.modell)
+            : (texte.kette.modellNamen[klasse] ?? ''),
           uebertrag,
           // Denktiefe (0.48.1): die Wahl an der Karte (sonst Voreinstellung des
           // Blocks), ihr Kurzname für den Ticker — nur genannt, was Georg
@@ -2872,7 +2962,7 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
             blockDenktiefe(k.def, k.eintrag) === DENKTIEFE_STANDARD
               ? ''
               : (texte.kette.denktiefeKurz[blockDenktiefe(k.def, k.eintrag)] ?? ''),
-          klasse: blockModellKlasse(k.def, k.eintrag)
+          klasse
         })
         .catch((fehler) => ({
           zustand: 'fehlgeschlagen',
@@ -3836,6 +3926,8 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       else if (grund === 'umsetzerWartet')
         tickern(texte.ticker.umsetzerWartetAufPruefer(k.name, anderer))
       else if (grund === 'frageOffen') tickern(texte.ticker.warteAufFolgenFrage(k.name, anderer))
+      // Lokale Klasse (BAUPLAN 49): eine GPU je Ollama-Adresse.
+      else if (grund === 'lokalBelegt') tickern(texte.ticker.warteGrundLokal(k.name, anderer))
       else tickern(texte.ticker.warteAufZweig(k.name, worauf))
     }
 
@@ -3873,6 +3965,23 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
                 .map((id) => knoten.get(id).name)
             )
           continue
+        }
+        // Lokale Klasse (BAUPLAN 49): eine GPU je Ollama-Adresse — es läuft
+        // höchstens ein lokaler Block zur Zeit. Läuft schon einer, wartet
+        // der Kandidat mit ehrlichem Grund im Ticker.
+        if (klasseIstLokal(blockModellKlasse(k.def, k.eintrag))) {
+          const andererLokaler = laufendeBloecke()
+            .map((id) => knoten.get(id))
+            .find(
+              (nk) =>
+                nk !== k &&
+                nk.status === 'laeuft' &&
+                klasseIstLokal(blockModellKlasse(nk.def, nk.eintrag))
+            )
+          if (andererLokaler) {
+            warteGrundMelden(k, 'lokalBelegt', [andererLokaler.name])
+            continue
+          }
         }
         if (!k.def.nurLesen) {
           // Der Kandidat mit seiner FRISCHEN Dateiliste (eine Lieferung kann
@@ -4974,6 +5083,14 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     }
 
     standSpeichern()
+    // Lokaler Block-Agent (BAUPLAN 49): Konnte das abgeleitete Ollama-Modell
+    // nicht bereitgestellt werden, startet kein einziger Block — der Lauf
+    // endet als Fehlschlag mit dem Klartext aus dem Ticker. Kein stiller
+    // Rückfall auf Claude.
+    if (lokalFehler) {
+      endZustand = 'fehlgeschlagen'
+      fehlertext = lokalFehler
+    }
     // Die Planer-Schleife: Bereites starten, auf den nächsten fertigen Block
     // (oder die nächste beantwortete Folgen-Frage) warten, Ergebnis
     // verarbeiten, ausstehende Nachläufe abarbeiten — bis nichts mehr läuft.

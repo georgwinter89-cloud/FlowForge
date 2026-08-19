@@ -9,6 +9,7 @@ import {
   blockAnzeigeName,
   pruefOrdnerFuer,
   klasseHatKostenHinweis,
+  klasseIstLokal,
   klasseKenntDenktiefe,
   MODELL_KLASSEN,
   DENKTIEFEN,
@@ -602,8 +603,14 @@ function BlockErgebnisZeile({ eintrag }) {
             <p className="feld-hinweis">
               {tb.klasseZeile(
                 tk.modellNamen[eintrag.klasse] ?? eintrag.klasse,
-                eintrag.denktiefe ? (tk.denktiefeKurz[eintrag.denktiefe] ?? eintrag.denktiefe) : '',
-                eintrag.denktiefeGemessen
+                // Klassen ohne Denktiefe (Haiku, lokal): Die Wahl gilt dort nicht —
+                // das steht so in der Zeile statt einer scheinbar wirksamen Stufe.
+                !klasseKenntDenktiefe(eintrag.klasse)
+                  ? tb.denktiefeGiltNicht
+                  : eintrag.denktiefe
+                    ? (tk.denktiefeKurz[eintrag.denktiefe] ?? eintrag.denktiefe)
+                    : '',
+                klasseKenntDenktiefe(eintrag.klasse) ? eintrag.denktiefeGemessen : null
               )}
             </p>
           )}
@@ -611,7 +618,9 @@ function BlockErgebnisZeile({ eintrag }) {
             <p className="feld-hinweis">{tb.aufschluesselungZeile(eintrag.aufschluesselung)}</p>
           )}
           {eintrag.kostenUsd != null && (
-            <p className="feld-hinweis">{tb.apiKosten(eintrag.kostenUsd)}</p>
+            <p className="feld-hinweis">
+              {klasseIstLokal(eintrag.klasse) ? tb.lokalKeineKosten : tb.apiKosten(eintrag.kostenUsd)}
+            </p>
           )}
           {/* Rauchtest ehrlich (0.46.2): grün, rot mit Grund oder übersprungen
               mit Grund — die Ausgabe des Startversuchs klappt auf Wunsch auf. */}
@@ -961,6 +970,12 @@ function SchaubildKarte({
         {klasseHatKostenHinweis(modellKlasse) && (
           <span className="feld-hinweis karte-kosten-hinweis">{tk.modellExtraHinweis}</span>
         )}
+        {/* Klasse lokal (BAUPLAN 49): läuft auf Georgs lokaler KI — kostet
+            kein Kontingent, braucht aber die eingeschaltete und erreichbare
+            lokale KI, sonst startet der Lauf nicht (nie stiller Rückfall). */}
+        {klasseIstLokal(modellKlasse) && (
+          <span className="feld-hinweis karte-kosten-hinweis">{tk.modellLokalHinweis}</span>
+        )}
       </label>
       {/* Denktiefe je Block (0.48.1): Zusatz zur Modellklasse — wie gründlich
           das Modell nachdenkt. „Modell-Standard" heißt: kein eigener Wert, das
@@ -980,7 +995,9 @@ function SchaubildKarte({
           ))}
         </select>
         {!klasseKenntDenktiefe(modellKlasse) && denktiefe !== DENKTIEFE_STANDARD && (
-          <span className="feld-hinweis karte-kosten-hinweis">{tk.denktiefeHaikuHinweis}</span>
+          <span className="feld-hinweis karte-kosten-hinweis">
+            {klasseIstLokal(modellKlasse) ? tk.denktiefeLokalHinweis : tk.denktiefeHaikuHinweis}
+          </span>
         )}
       </label>
       {def.felder.map((feld) => (

@@ -4,6 +4,7 @@
 // als Werkzeug-Ergebnis zurück. Trägt Einzelfragen genauso wie das mehrrundige
 // Spec-Interview.
 import { z } from 'zod'
+import { liste } from './werkzeugSchema.js'
 import { texte } from '../../shared/texte.js'
 
 // Baut den In-Prozess-Werkzeugkasten „mensch" für einen Motor-Lauf.
@@ -21,8 +22,7 @@ export async function menschWerkzeugServer({ aufMenschFrage }) {
       frage: z
         .string()
         .describe('Die Frage an den Nutzer — Alltagssprache, Folgen statt Technik'),
-      optionen: z
-        .array(z.string())
+      optionen: liste(z.string())
         .max(4)
         .optional()
         .describe(

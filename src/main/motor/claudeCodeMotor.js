@@ -1028,6 +1028,15 @@ export function starteLaufMotor(optionen) {
     // Lokale Helfer-KI (Experiment): { modell } — nur gesetzt, wenn der
     // Schalter an ist UND Ollama beim Laufstart erreichbar war.
     lokaleHelfer = null,
+    // Lokaler Block-Agent (BAUPLAN 49): { adresse, modell, kontext } — dann
+    // läuft DIESE Motor-Instanz komplett gegen Ollama im Anthropic-Modus
+    // (Koordinator UND Block-Agent auf dem abgeleiteten Ollama-Modell; es gibt
+    // dort kein Haiku). Umgebung mit BASE_URL/AUTH_TOKEN statt Abo-Anmeldung,
+    // kein maxBudgetUsd (die CLI erfindet für unbekannte Modelle Kosten — eine
+    // Obergrenze bräche lokale Läufe ab), Fenster fest aus den Einstellungen
+    // (die CLI meldet 200000), Kosten verworfen (0). Sperren, Lieferschein,
+    // Hooks, Rechte-Rückfragen, Übertrag, Sicherungspunkte: unverändert.
+    lokal = null,
     // Einstellung „Befehle trotz nur-lesen" (Entscheidung Georg, 14.08.2026).
     nurLesenBefehle = false,
     aufEreignis,
@@ -1109,7 +1118,16 @@ export function starteLaufMotor(optionen) {
   // Aufschlüsselungs-Deltas), damit kein Block die Historie der ganzen
   // Session mitzählt.
   let hauptTokens = 0
-  let bekanntesFenster = kontextFenster > 0 ? kontextFenster : KONTEXT_FENSTER_STANDARD
+  // Lokal (BAUPLAN 49): Das Fenster ist das Kontextfenster aus den
+  // Einstellungen — fest. Die CLI kennt das Ollama-Modell nicht und meldete
+  // 200000; das darf weder hier noch im Motor-Wissen landen.
+  let bekanntesFenster = lokal
+    ? lokal.kontext > 0
+      ? lokal.kontext
+      : KONTEXT_FENSTER_STANDARD
+    : kontextFenster > 0
+      ? kontextFenster
+      : KONTEXT_FENSTER_STANDARD
   let kostenStand = null
   const aufschlStand = { eingabe: 0, ausgabe: 0, cacheLesen: 0, cacheSchreiben: 0 }
   // Modell je Block (BAUPLAN 36): Die CLI meldet modelUsage als kumulierte
@@ -1123,7 +1141,9 @@ export function starteLaufMotor(optionen) {
   // Modell bekommen, meldet der Motor mehrere Modelle mit verschiedenen
   // Fenstergrößen. Der Übertrag misst aber den Koordinator — also muss sein
   // Fenster vom Block-Fenster getrennt bleiben. Kommt aus der Startmeldung.
-  let koordinatorModell = ''
+  // Lokal: von Anfang an das Ollama-Modell — Koordinator und Block laufen dort
+  // auf demselben Modell.
+  let koordinatorModell = lokal ? lokal.modell : ''
 
   // Der gerade laufende Block-Dispatch — es läuft höchstens einer zugleich.
   // Parallele Zweige bekommen eigene Motoren (lauf.js).
@@ -1263,11 +1283,9 @@ export function starteLaufMotor(optionen) {
         block.blockTaskIds.add(hookDaten.tool_use_id)
         aufEreignis({
           art: 'ticker',
-          text: texte.ticker.blockAgentGestartet(
-            block.blockName,
-            block.modellName,
-            block.denktiefeName
-          )
+          text: lokal
+            ? texte.ticker.blockAgentGestartetLokal(block.blockName, block.modellName)
+            : texte.ticker.blockAgentGestartet(block.blockName, block.modellName, block.denktiefeName)
         })
         // Der echte Arbeitsauftrag wird hier eingesetzt — der Koordinator
         // hat nur das Wort AUFTRAG geschrieben und bleibt schlank. Die
@@ -1275,6 +1293,10 @@ export function starteLaufMotor(optionen) {
         // Der Koordinator läuft auf dem Billigmodell, und ohne diese Angabe
         // würde der Block-Agent es erben. Die Denktiefe (0.48.1) wählt den
         // Agententyp: je Stufe gibt es eine eigene Definition (s. agents).
+        // Lokal (BAUPLAN 49): KEIN model-Feld — das Agent-Werkzeug nimmt nur
+        // die Claude-Aliase (sonnet/opus/haiku/fable; Schema-Fehler gemessen
+        // 19.08.2026), der Block-Agent erbt dann das Modell seiner Definition,
+        // und das ist in dieser Instanz das Ollama-Modell (agents unten).
         return {
           hookSpecificOutput: {
             hookEventName: 'PreToolUse',
@@ -1283,7 +1305,7 @@ export function starteLaufMotor(optionen) {
               description: block.blockName,
               subagent_type: block.agentTyp,
               run_in_background: false,
-              model: block.modell,
+              ...(lokal ? {} : { model: block.modell }),
               prompt: block.auftrag
             }
           }
@@ -1298,7 +1320,12 @@ export function starteLaufMotor(optionen) {
     // „wird ignoriert". Je Anlauf/Übertrag frisch, weil block frisch ist.
     if (block && hookDaten.agent_type === block.agentTyp && !block.denktiefeGemeldet) {
       block.denktiefeGemeldet = true
-      const stufe = typeof hookDaten.effort?.level === 'string' ? hookDaten.effort.level : null
+      // Lokal (BAUPLAN 49): Die CLI meldet hier ihr eigenes Standard-effort
+      // (gemessen „high"), das Ollama nie erreicht — keine Messung, nur die
+      // ehrliche Ansage, dass die Denktiefe bei der lokalen KI nicht gilt.
+      const stufe = lokal
+        ? null
+        : typeof hookDaten.effort?.level === 'string' ? hookDaten.effort.level : null
       block.denktiefeGemessen = stufe
       if (stufe) aufEreignis({ art: 'ticker', text: texte.ticker.denktiefeGemessen(stufe) })
       else if (block.denktiefe !== DENKTIEFE_STANDARD)
@@ -1332,6 +1359,20 @@ export function starteLaufMotor(optionen) {
       // dessen Modell ein — je nach Einstellung sparsam oder die Klasse des
       // Blocks. Immer ausdrücklich: Ohne Angabe hängt es an der Agent-Art,
       // welches Modell greift, und das Hauptmodell ist das des Koordinators.
+      // Lokal (BAUPLAN 49): Unteraufgaben laufen ebenfalls auf dem
+      // Ollama-Modell — es gibt in dieser Instanz kein anderes. Das Feld
+      // model nimmt nur Claude-Aliase; ohne Angabe erben sie das
+      // Hauptmodell der Instanz, und das ist hier das Ollama-Modell.
+      if ((name === 'Agent' || name === 'Task') && lokal) {
+        const { model: _weg, ...ohneModell } = eingabeDaten
+        return {
+          hookSpecificOutput: {
+            hookEventName: 'PreToolUse',
+            permissionDecision: 'allow',
+            updatedInput: ohneModell
+          }
+        }
+      }
       if ((name === 'Agent' || name === 'Task') && block?.unterModell)
         return {
           hookSpecificOutput: {
@@ -1492,7 +1533,42 @@ export function starteLaufMotor(optionen) {
         continue
       umgebung[name] = wert
     }
-    if (modus === 'api') umgebung.ANTHROPIC_API_KEY = apiSchluessel
+    if (lokal) {
+      // Lokaler Block-Agent (BAUPLAN 49, Machbarkeitsprobe 19.08.2026): NACH
+      // der Bereinigung die Ollama-Umgebung setzen — Basis-Adresse, ein
+      // Platzhalter-Token (Ollama prüft ihn nicht), KEIN API-Schlüssel (auch
+      // nicht der aus dem API-Modus — der gehört zu Anthropic, nicht zu Ollama).
+      // Jeder Modell-Alias der CLI (haiku/sonnet/opus/small-fast) zeigt auf
+      // das Ollama-Modell, damit nichts still in die Cloud geht; Telemetrie
+      // und Update-Checks bleiben aus; das Kontextfenster sagt FlowForge der
+      // CLI ausdrücklich (sie kennt das Modell nicht und nähme 200000).
+      umgebung.ANTHROPIC_BASE_URL = lokal.adresse
+      umgebung.ANTHROPIC_AUTH_TOKEN = 'ollama'
+      umgebung.ANTHROPIC_API_KEY = ''
+      umgebung.ANTHROPIC_DEFAULT_HAIKU_MODEL = lokal.modell
+      umgebung.ANTHROPIC_DEFAULT_SONNET_MODEL = lokal.modell
+      umgebung.ANTHROPIC_DEFAULT_OPUS_MODEL = lokal.modell
+      umgebung.ANTHROPIC_SMALL_FAST_MODEL = lokal.modell
+      umgebung.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = '1'
+      umgebung.CLAUDE_CODE_MAX_CONTEXT_TOKENS = String(bekanntesFenster)
+    } else if (modus === 'api') umgebung.ANTHROPIC_API_KEY = apiSchluessel
+
+    // Block-Agenten-Definitionen: je Denktiefe eine (0.48.1). Lokal (BAUPLAN
+    // 49): alle auf dem Ollama-Modell und OHNE effort — die Denktiefe ist ein
+    // Claude-Feld, beim Ollama-Modell bleibt das Denken ohnehin an (gemessen).
+    const agentDefinitionen = blockAgentDefinitionen(
+      texte.agentenLaufSession.blockAgentSystem(projektPfad, TITEL_MAX, TEXT_MAX) +
+        (helferServer
+          ? '\n' +
+            texte.agentenLokaleHelfer.systemZusatz +
+            (lokaleHelfer.bewerten ? texte.agentenLokaleHelfer.bewertenSystemZusatz : '')
+          : '')
+    )
+    if (lokal)
+      for (const def of Object.values(agentDefinitionen)) {
+        def.model = lokal.modell
+        delete def.effort
+      }
 
     abfrage = query({
       prompt: eingabe(),
@@ -1512,7 +1588,9 @@ export function starteLaufMotor(optionen) {
         // dem kleinsten Modell. ACHTUNG: Damit ist das Hauptmodell der
         // Session das Billigmodell; jeder Agent-Aufruf MUSS sein Modell
         // ausdrücklich mitbekommen (Hook oben), sonst erbt er es.
-        model: KOORDINATOR_MODELL,
+        // Lokal (BAUPLAN 49): Der Koordinator läuft ebenfalls auf dem
+        // Ollama-Modell — in dieser Instanz gibt es kein Haiku.
+        model: lokal ? lokal.modell : KOORDINATOR_MODELL,
         // Denk-Ansicht (BAUPLAN 24): Ohne diese Option kämen von den
         // Block-Agenten nur Werkzeug-Blöcke an — ihr Denken bliebe unsichtbar.
         // Die Option leitet nur weiter, was ohnehin entsteht: kein Denk-Budget,
@@ -1538,18 +1616,14 @@ export function starteLaufMotor(optionen) {
         // die lokale Helfer-KI bereit, wird sie dort angeboten (Experiment).
         // Seit 0.48.1 gibt es den Typ je Denktiefe einmal (block, block-low …
         // block-max) — der Hook wählt nach der Karte (blockAgentDefinitionen).
-        agents: blockAgentDefinitionen(
-          texte.agentenLaufSession.blockAgentSystem(projektPfad, TITEL_MAX, TEXT_MAX) +
-            (helferServer
-              ? '\n' +
-                texte.agentenLokaleHelfer.systemZusatz +
-                (lokaleHelfer.bewerten ? texte.agentenLokaleHelfer.bewertenSystemZusatz : '')
-              : '')
-        ),
+        agents: agentDefinitionen,
         // Eine Session für den ganzen Lauf: Die Koordinator-Runden aller
         // Blöcke zählen zusammen — die echte Grenze ist das Kontextfenster.
         maxTurns: 1000,
-        ...(modus === 'api' && ausgabenObergrenzeUsd > 0
+        // Ausgaben-Obergrenze nur im API-Modus — und NIE lokal (BAUPLAN 49):
+        // die CLI erfindet für das unbekannte Ollama-Modell Dollarbeträge,
+        // eine Obergrenze bräche den lokalen Lauf grundlos ab.
+        ...(!lokal && modus === 'api' && ausgabenObergrenzeUsd > 0
           ? { maxBudgetUsd: ausgabenObergrenzeUsd }
           : {}),
         stderr: (text) => {
@@ -1736,7 +1810,9 @@ export function starteLaufMotor(optionen) {
               art: 'ticker',
               text: fortsetzen
                 ? texte.ticker.laufSessionFortgesetzt
-                : texte.ticker.laufSessionGestartet(nachricht.model ?? 'Claude')
+                : lokal
+                  ? texte.ticker.lokalSessionGestartet(lokal.modell, bekanntesFenster)
+                  : texte.ticker.laufSessionGestartet(nachricht.model ?? 'Claude')
             })
           }
           // Das Modell des Hauptfadens ist das des Koordinators (BAUPLAN 37) —
@@ -1747,7 +1823,8 @@ export function starteLaufMotor(optionen) {
           // Kontextfenster ab der Startmeldung (Befund Georg, 13.08.2026):
           // das Motor-Wissen liefert die gemerkte bzw. an der Modellkennung
           // erkennbare Größe. Vorwissen aus früheren Sessions geht vor.
-          if (kontextFenster === KONTEXT_FENSTER_STANDARD) {
+          // Lokal: Fenster bleibt fest (Einstellungen), kein Motor-Wissen.
+          if (!lokal && kontextFenster === KONTEXT_FENSTER_STANDARD) {
             const bekannt = kontextFensterFuerModell(nachricht.model)
             if (bekannt > 0) {
               bekanntesFenster = bekannt
@@ -1836,7 +1913,12 @@ export function starteLaufMotor(optionen) {
         if (nachricht.type === 'result') {
           // Kosten und Aufschlüsselung meldet die CLI als kumulierte Stände
           // des Prozesses — gezählt wird der Zuwachs dieses Blocks.
-          if (typeof nachricht.total_cost_usd === 'number') {
+          // Lokal (BAUPLAN 49): Die CLI erfindet für das Ollama-Modell
+          // Dollarbeträge (gemessen ~0,6 $ je Probe) — verworfen. Lokal kostet
+          // kein Kontingent und kein Geld: block.kosten ist ehrlich 0, nicht
+          // „unbekannt" (null) — Laufbericht und Metriken zeigen „keine Kosten".
+          if (lokal && block) block.kosten = 0
+          if (!lokal && typeof nachricht.total_cost_usd === 'number') {
             const delta =
               kostenStand === null
                 ? nachricht.total_cost_usd
@@ -1848,7 +1930,9 @@ export function starteLaufMotor(optionen) {
           let hatModelUsage = false
           for (const [modell, m] of Object.entries(nachricht.modelUsage ?? {})) {
             hatModelUsage = true
-            if (m.contextWindow > 0) {
+            // Lokal: das gemeldete Fenster (200000 für unbekannte Modelle) ist
+            // falsch — weder merken noch übernehmen, das Fenster bleibt fest.
+            if (!lokal && m.contextWindow > 0) {
               kontextFensterMerken(modell, m.contextWindow)
               // Nur das Fenster des Koordinators steuert die Übertrags-
               // Schwelle (BAUPLAN 37): Vorher gewann hier das zuletzt

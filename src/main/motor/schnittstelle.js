@@ -21,6 +21,15 @@
 //     kontextFenster         optional: bekannte Fenstergröße aus früheren Sessions
 //                            (der Motor meldet die echte Größe erst am Turn-Ende —
 //                            so stimmt die Übertrags-Schwelle von Anfang an)
+//     lokal                  optional (BAUPLAN 49): { adresse, modell, kontext } —
+//                            dann läuft DIESE Motor-Instanz gegen Georgs lokale KI
+//                            (Ollama im Anthropic-Modus) statt gegen Claude:
+//                            Koordinator und Block-Agent auf dem abgeleiteten
+//                            Ollama-Modell, Fenster fest = kontext, keine
+//                            Ausgaben-Obergrenze, Kosten 0. Die Lauf-Verwaltung
+//                            startet je lokalem Block eine eigene Instanz (nie
+//                            die Lauf-Session); Sperren, Lieferschein, Hooks und
+//                            Rechte-Rückfragen bleiben unverändert.
 //     aufEreignis(e)         e = { art: 'ticker', text }
 //                              | { art: 'denken', absender, text }
 //                              | { art: 'verbrauch', verbrauch }

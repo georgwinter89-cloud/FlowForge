@@ -61,13 +61,14 @@ Sitzungen hinweg Software entsteht — ohne dass dem Agenten der Kontext überl�
     zusammenhängende Teilaufträge und Neues mit klarer Beschreibung — an eine lokale KI
     über Ollama abgeben (§4.3 „Lokale Helfer-KI") — eigene kleine Helfer-Kreisläufe von
     FlowForge, kein Motor; die Abnahme durch den Block-Agenten bleibt der Schiedsrichter.
-    Der Motor selbst bleibt die Claude-CLI.
+    Der Motor selbst bleibt die Claude-CLI — seit Bauschritt 49 kann die lokale KI
+    darüber hinaus **ganze Blöcke übernehmen** (Modellklasse „lokal", unten).
   - **Modellklasse je Block** (seit Bauschritt 37, Entscheidung Georg: frei je Block
     wählbar — auch Bauer und Prüfer, gegen die Empfehlung „nur Nebenrollen fest"; die
     Folge einer zu sparsamen Wahl sind mehr Reparatur-Runden, und genau die zeigen die
-    Kennzahlen aus §3.4). Vier Klassen (bis 0.48.1 drei): **Extra (Fable 5)** ·
-    **Standard (Opus)** · **sparsam (Sonnet)** · **sehr sparsam (Haiku)**. Jeder
-    Katalog-Block trägt eine Voreinstellung — Standard
+    Kennzahlen aus §3.4). Fünf Klassen (bis 0.48.1 drei, bis Bauschritt 49 vier):
+    **Extra (Fable 5)** · **Standard (Opus)** · **sparsam (Sonnet)** · **sehr sparsam
+    (Haiku)** · **lokal (Ollama)**. Jeder Katalog-Block trägt eine Voreinstellung — Standard
     für Bauer, Prüfer, Gesamtprüfung, Diagnose, Paket schneiden, Angreifer und Audit;
     sparsam für Sessionende, Frage an den Menschen, Karten-Prüfer (inkl. Sortiermodus)
     und Kontext laden. An jeder **Blockkarte im Schaubild** ist sie umstellbar (wie das
@@ -111,15 +112,55 @@ Sitzungen hinweg Software entsteht — ohne dass dem Agenten der Kontext überl�
     Aufgaben, neigt zum Überdenken — vorher testen"). Technisch ist sie ein Feld der
     Agent-Definition: FlowForge definiert seinen Block-Agenten je Denktiefe einmal
     (`block`, `block-low` … `block-max`) und wählt beim Start des Blocks den Typ nach
-    der Karte — der Koordinator bleibt unberührt. Sehr sparsam (Haiku) kennt keine
-    Denktiefe: Dort wird die Wahl ignoriert, Editor und Ticker sagen es. **Nachweisbar,
+    der Karte — der Koordinator bleibt unberührt. Sehr sparsam (Haiku) und lokal (Ollama)
+    kennen keine Denktiefe: Dort wird die Wahl ignoriert, Editor und Ticker sagen es, und der
+    Laufbericht schreibt „Denktiefe: gilt hier nicht" statt einer Messung. **Nachweisbar,
     nicht nur gewünscht:** Beim ersten Werkzeugaufruf des Block-Agenten meldet die CLI die
     wirksame Stufe (Hook-Feld `effort.level`, in der Bausession gemessen) — der Ticker
     nennt sie („Denktiefe wirksam: xhigh"), Laufbericht und Metriken führen Wahl und
     Messwert. Eine Umgebungsvariable `CLAUDE_CODE_EFFORT_LEVEL` könnte alles übersteuern;
     der Motor räumt beim Start ohnehin alle CLAUDE*-Variablen weg.
-  - **V2-Motoren:** eigene Agenten-Kreisläufe gegen beliebige Anbieter-APIs sowie ein
-    vollwertiger lokaler Motor (z.B. über Ollama). Die restliche App merkt nicht,
+  - **Klasse „lokal (Ollama)"** (seit Bauschritt 49; Machbarkeitsprobe 19.08.2026 auf
+    Georgs Gaming-PC mit qwen3.8:27b bestanden): ein Block läuft **komplett auf der
+    lokalen KI** — dieselbe Claude-CLI, gestartet als **zweite Motor-Instanz mit
+    Ollama-Umgebung** (`ANTHROPIC_BASE_URL` auf den Ollama-Rechner, Platzhalter-Token,
+    kein API-Schlüssel, alle Modell-Aliase auf das lokale Modell), gegen Ollamas
+    Anthropic-Schnittstelle. Werkzeuge, Hooks, Sperren, Lieferschein, Rechte-Rückfragen,
+    Sicherungspunkte und Unteraufgaben arbeiten unverändert (gemessen: echte
+    tool_use-Aufrufe, Agent-Werkzeug mit `subagent_type`, Bauer-Auftrag mit Zuschnitt und
+    Übergabe korrekt). Zwei Eigenheiten der Schnittstelle fängt FlowForge ab: Listen-Argumente
+    der Melde-Werkzeuge, die Ollama als JSON-Text statt als Liste liefert (gemessen, sobald ein
+    Eintrag typografische Anführungszeichen trägt), nimmt FlowForge an — der Agent sieht
+    weiter ein Listen-Schema; und weil das Agent-Werkzeug nur Claude-Aliase als Modell kennt,
+    bekommen Unteraufgaben lokaler Blöcke kein Modell genannt und laufen damit auf dem lokalen
+    Modell (die Startzeile des Tickers sagt es). Im Katalog nirgends vorbelegt, an jeder
+    Blockkarte und als Voreinstellung eigener Blöcke wählbar; der KI-Assistent des Editors
+    schlägt sie nie vor.
+    **Voraussetzung und kein stiller Rückfall:** Die lokale Helfer-KI (§4.3) muss
+    eingeschaltet und das Häkchen „Lokale KI als Block-Agent" (§9) gesetzt sein; Modell,
+    Adresse und Kontextfenster sind dieselben. Fehlt eines, ist Ollama nicht erreichbar
+    oder das Modell nicht da, **startet der Lauf nicht** — mit Klartext, nie still auf
+    Claude (sonst bezahlt Georg, was er lokal wollte). **Kosten-Wahrheit:** Die CLI
+    meldet für das fremde Modell ein erfundenes Kontextfenster (200k) und erfundene
+    Dollar; der lokale Motor nimmt das Fenster aus den Einstellungen, setzt die Kosten auf
+    0, merkt sich kein Fenster und setzt keine Ausgaben-Obergrenze (sie bräche lokale
+    Läufe ab). Es gibt keinen Prompt-Cache: Jeder Turn verarbeitet den vollen Kontext neu
+    — lokale Blöcke sind langsamer, nicht teurer. **Abgeleitetes Modell:** Weil die CLI
+    keine Sampling-Optionen mitschickt, legt FlowForge vor dem Lauf per Ollama-API ein
+    Modell `flowforge-<basis>` an (Kontextfenster + Feineinstellungen als
+    Modell-Standardwerte: Temperatur, Top-p, Top-k, Min-p, Wiederholungsstrafe,
+    Antwortlänge, Entwurfs-Tokens/MTP; Vorlagen „Qwen3.8 Denken", „Qwen3.8 Coding",
+    „Ollama-Standard") — ohne das lädt Ollama das Modell mit seinem Maximalkontext und
+    spillt aus dem Grafikspeicher; gleiche Werte laden nicht neu. **Denken bleibt an**
+    (gemessen 19.08.2026: über diesen Weg nicht abschaltbar) — deshalb kein Schalter,
+    und die Denktiefe gilt für lokale Blöcke nicht. Ein lokaler Block läuft **immer in
+    einer eigenen Motor-Instanz** (nie in der Lauf-Session), und je Ollama-Adresse läuft
+    **ein lokaler Block zur Zeit** (§5). Der Ticker nennt „lokal (<Ollama-Modell>)";
+    Laufbericht und Metriken führen die Klasse „lokal (Ollama)" und das Ollama-Modell als
+    eigene Modellzeile, mit „Denktiefe: gilt hier nicht" und „Kosten: keine" (§3, §3.4).
+  - **V2-Motoren:** eigene Agenten-Kreisläufe gegen beliebige Anbieter-APIs. Der
+    lokale Weg ist keine V2-Arbeit mehr, sondern die zweite Motor-Instanz mit
+    Ollama-Umgebung (seit Bauschritt 49 gebaut). Die restliche App merkt nicht,
     welcher Motor dranhängt.
 
 ## 3. Projekte
@@ -238,7 +279,9 @@ Modell des Motors**, das diesen Anlauf gearbeitet hat (bei Mischung mit Anteilen
 Anläufe ohne Motor (Tor ohne KI, §4.1) und Läufe von vor Bauschritt 36 stehen ehrlich
 als „Modell: nicht vermerkt". Seit 0.48.1 steht darunter je Block die **gewählte
 Klasse und Denktiefe** („Klasse: Extra (Fable 5) · Denktiefe: xhigh (wirksam: xhigh)") —
-die Wahl an der Karte neben dem, was der Motor gemeldet hat. Ebenfalls seit Bauschritt 36 führt der Bericht die
+die Wahl an der Karte neben dem, was der Motor gemeldet hat; bei Klassen ohne Denktiefe
+(Haiku, lokal) steht „Denktiefe: gilt hier nicht". Bei einem lokalen Block (Bauschritt 49)
+ersetzt „Kosten: keine — lief auf deiner lokalen KI" die theoretischen API-Kosten. Ebenfalls seit Bauschritt 36 führt der Bericht die
 **Zusammenfassungen des Motors** als eigenen Abschnitt (der Motor dampft ein volles
 Arbeitsgedächtnis selbst ein — das erklärt später, warum ein Agent Details vergessen
 hat). Seit Bauschritt 27 vermerkt der Bericht
@@ -448,6 +491,11 @@ Seite aufs Projekt vorgefiltert zeigt (eigener Baustein, nicht Teil der Leinwand
   Zeilen teilen sich je wirksamer Stufe (gemessen, sonst die Wahl — bei Haiku, das keine
   kennt, bleibt sie leer) — die Reparatur-Runden je Denktiefe sind die Zahl, an der Georg
   sie einstellt. „Extra (Fable 5)" erscheint damit von selbst als eigene Modell-Zeile.
+  Seit Bauschritt 49 ebenso die Klasse **„lokal"**: Ihre Modell-Anteile tragen den
+  Ollama-Modellnamen (das abgeleitete `flowforge-<basis>`), die Zeile zeigt Erstläufe,
+  Reparatur-Runden, Dauer und die von Ollama gemeldeten Tokens — bei **Kosten 0**
+  (die erfundenen CLI-Kosten verwirft der Motor), Denktiefe leer. So sieht Georg, ob
+  sich die Karte rechnet: Tokens und Zeit statt Dollar.
 - **Zusatznamen zerfasern die Metriken nicht** (seit Bauschritt 41): Der Laufbericht
   führt Katalognamen und **Zusatzname** (§4.1) getrennt. Gezählt wird ausschließlich
   der Katalogname — „Bauer · Datenbank" und „Bauer · Oberfläche" sind derselbe
@@ -477,7 +525,10 @@ Seite aufs Projekt vorgefiltert zeigt (eigener Baustein, nicht Teil der Leinwand
   (seit Bauschritt 37 bzw. 0.48.1), gespeichert je Karte in workflow.json wie das Häkchen
   „lokale KI erlaubt" (§4.3); ohne Wahl gilt die Voreinstellung des Blocks. Bei „Extra
   (Fable 5)" steht der Kosten-Hinweis sichtbar unter dem Feld, bei „sehr sparsam (Haiku)"
-  mit gewählter Denktiefe der Hinweis, dass sie dort ignoriert wird.
+  mit gewählter Denktiefe der Hinweis, dass sie dort ignoriert wird. Bei „lokal (Ollama)"
+  (seit Bauschritt 49) steht der Hinweis, dass der Block auf der lokalen KI läuft, kein
+  Kontingent kostet, die Denktiefe nicht gilt und der Lauf ohne eingeschaltete und
+  erreichbare lokale KI nicht startet (§2).
 - **Parallele Zweige** (seit Bauschritt 13): Von einer Karte dürfen mehrere Pfeile
   ausgehen und mehrere an einer ankommen; Kreise sind verboten. Ein Block startet,
   sobald alle seine Vorgänger fertig sind — ein Block mit mehreren eingehenden Pfeilen
@@ -1169,7 +1220,7 @@ existiert für sie nicht — Festlegungen aus Entscheidungs-Karten würden sonst
 übergangen. Kostet kein Kontingent, nur lokale Tokens; bewusst KEIN direkter
 Blick in karten.json (Verwaltungsdatei-Tabu, Halluzinationsgefahr kleiner
 Modelle). V1-Experiment auf Georgs Wunsch —
-der vollwertige lokale Motor bleibt V2 (§2).
+ganze Blöcke übernimmt die lokale KI seit Bauschritt 49 über die Modellklasse „lokal" (§2).
 
 **Trefferquote der lokalen KI** (seit Bauschritt 23): Im Lokale-KI-Abschnitt der
 Einstellungen sitzt der Schalter **„Trefferquote der lokalen KI erfassen"** (Standard:
@@ -1367,8 +1418,9 @@ Angreifer durch die Diagnose.
   Bauschritt 37 seine **Modellklasse** als Voreinstellung (§2; Altbestand ohne Feld
   läuft auf Standard, auf der Leinwand bleibt sie je Karte änderbar) und seit 0.48.1
   seine **Denktiefe** (Altbestand: Modell-Standard); Stepper und KI-Assistent kennen
-  die Felder — der Assistent schlägt „Extra" nie vor, und bei „Extra" zeigt der Editor
-  denselben Kosten-Hinweis wie die Karte.
+  die Felder — der Assistent schlägt „Extra" und „lokal" nie vor, und bei „Extra" zeigt
+  der Editor denselben Kosten-Hinweis wie die Karte, bei „lokal" (seit Bauschritt 49)
+  denselben Lokal-Hinweis samt „Denktiefe gilt hier nicht".
 - Seit Bauschritt 43 trägt jedes **braucht**-Etikett ein eigenes Freitext-Feld „Wozu braucht
   dein Block das?" (ein Satz, höchstens 200 Zeichen, im Schritt „Was braucht/liefert er?"):
   Er steht später im Auftrag des Blocks, der das Etikett liefert (§4.3). Bleibt er leer,
@@ -1471,7 +1523,16 @@ Angreifer durch die Diagnose.
   Prüferkritik im Auftrag; ihr **Budget zählt je Rückführungs-Ziel** (seit
   Bauschritt 41, §4.1). **Parallele Zweige** — und seit Bauschritt 46 die weiteren
   Schreiber einer Welle (unten) — laufen als eigene Sessions, weil die Lauf-Session einen
-  Block nach dem anderen verarbeitet — ehrlich im Ticker vermerkt.
+  Block nach dem anderen verarbeitet — ehrlich im Ticker vermerkt. **Lokale Blöcke**
+  (Klasse „lokal", §2, seit Bauschritt 49) laufen **immer in einer eigenen
+  Motor-Instanz** mit Ollama-Umgebung — nie in der Lauf-Session, auch nicht als erster
+  Block —, weil die Lauf-Session mit Claude-Login läuft und die Umgebung einer Instanz
+  nicht wechseln kann; der Koordinator dieser Instanz ist dasselbe lokale Modell (es gibt
+  dort kein Haiku), ihr Kontextfenster ist das aus den Einstellungen, und die Instanz
+  endet mit dem Block wie ein Zweig-Motor. Der Übertrag misst ihren eigenen Faden. Je
+  Ollama-Adresse läuft **ein lokaler Block zur Zeit** (eine Grafikkarte): Ein zweiter
+  lokaler Kandidat wartet mit Ticker-Grund, auch in der Welle; Claude-Blöcke laufen daneben
+  weiter.
 - **Reparatur-Runde mit Diff und Vor-Fazit** (seit Bauschritt 34): Der frische Agent einer
   Reparatur-Runde bekommt neben der Prüferkritik zwei von FlowForge gerechnete Tatsachen —
   den **exakten Unterschied** „Das hast du in diesem Lauf bisher geändert" aus den
@@ -1599,7 +1660,9 @@ Angreifer durch die Diagnose.
   keinen Datenvertrag", „ein Prüfer urteilt nie über einen halben Stand", „solange ein
   Prüfer misst, baut keiner daneben") und meldet den Beginn jeder Welle („Welle: 3 Blöcke
   schreiben gleichzeitig (Dateilisten getrennt)"). Die weiteren Schreiber einer Welle laufen
-  wie parallele Zweige als eigene Motor-Sessions (oben), ehrlich im Ticker vermerkt.
+  wie parallele Zweige als eigene Motor-Sessions (oben), ehrlich im Ticker vermerkt. Ein
+  lokaler Block (§2) wartet zusätzlich, solange ein anderer lokaler Block läuft — eine
+  Grafikkarte je Ollama-Adresse (seit Bauschritt 49, Grund im Ticker).
   **Ein Block bleibt in der Welle, solange sein Revier belegt ist:** Auch nach dem Ende
   seines Motor-Anlaufs gilt seine Dateiliste als sein Revier, bis seine Arbeit gemeinsamer
   Stand ist (Nachlauf, unten) — ein überschneidender Nachbar wartet so lange. Für die Blöcke
@@ -2019,6 +2082,21 @@ Block-Agenten als Hinweis daneben (§6).
   Voraussetzung „einmal mit „claude" angemeldet", API mit Schlüssel und
   Obergrenze), ein Knopf „Los geht’s", kein Abbrechen. Wer die Wahl stattdessen in den
   Einstellungen trifft, sieht ihn nicht mehr.
+- **Einstellungen-Dialog** (Knopf in der Titelleiste; scrollt, seit Bauschritt 49):
+  Abschnitte **KI-Motor** (Abo/API, Schlüssel, Obergrenze, §2) · **Rechte-Rückfragen**
+  (§7) · **Modell der Unteraufgaben** (§2) · **Lokale Helfer-KI** (Schalter, Trefferquote,
+  Adresse, Modell mit Live-Status, Kontextfenster, §4.3) · **Lokale KI als Block-Agent**
+  (seit Bauschritt 49, §2): Häkchen „Lokale KI darf ganze Blöcke übernehmen" — nur
+  bedienbar, wenn die Helfer-KI an ist (Modell, Adresse, Kontext sind dieselben); darunter
+  der Name des abgeleiteten Modells `flowforge-<basis>`, die **Feineinstellungen** als
+  sieben Zahlenfelder (Temperatur, Top-p, Top-k, Min-p, Wiederholungsstrafe, Antwortlänge,
+  Entwurfs-Tokens/MTP; leer = Ollama-Standard; jedes mit Folgen-Hinweis und der Empfehlung
+  der Qwen3.8-Modellkarte), drei Vorlagen-Knöpfe („Qwen3.8 Denken" · „Qwen3.8 Coding" ·
+  „Ollama-Standard"; der passende ist markiert) und die ehrlichen Hinweise: Denken bleibt
+  an (kein Schalter), das abgeleitete Modell lädt nur beim Ändern der Werte neu, ohne
+  erreichbare lokale KI startet ein Lauf mit lokalem Block nicht. Ein Wert außerhalb der
+  Grenzen wird beim Speichern mit Klartext abgelehnt statt still geklemmt ·
+  **Sessions & Übertrag** (Test-Schalter, §5).
 - **Projektübersicht** beim Start: Läuft gerade ein Lauf, liegt er als große
   **Hero-Kachel** obenauf (Pulspunkt, Workflow, letzte Tickerzeile, Kontext-Balken,
   „Zum Lauf"); darunter die übrigen Projekte als Kacheln mit Zustands-Abzeichen (seit

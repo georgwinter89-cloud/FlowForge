@@ -500,10 +500,21 @@ export const texte = {
       extra: 'Extra (Fable 5)',
       standard: 'Standard (Opus)',
       sparsam: 'sparsam (Sonnet)',
-      'sehr-sparsam': 'sehr sparsam (Haiku)'
+      'sehr-sparsam': 'sehr sparsam (Haiku)',
+      // Klasse lokal (BAUPLAN 49): Georgs lokale KI über Ollama — im Katalog
+      // nirgends vorbelegt, kostet kein Kontingent.
+      lokal: 'lokal (Ollama)'
     },
+    // Klartext-Name der lokalen Klasse mit dem echten Ollama-Modell — für
+    // Ticker und Laufbericht, sobald der Lauf das Modell kennt.
+    lokalModellName: (modell) => `lokal (${modell})`,
     modellHinweis:
-      'Womit dieser Block arbeitet. „Standard" ist das große Modell — richtig überall, wo wirklich gedacht wird (Bauen, Prüfen, Zuschneiden). Sparsamere Modelle kosten deutlich weniger, machen aber mehr Fehler: Zu sparsam gewählt, siehst du es an mehr Reparatur-Runden in den Metriken. „Extra (Fable 5)" ist noch stärker, kann aber je nach Abo Guthaben statt Kontingent kosten.',
+      'Womit dieser Block arbeitet. „Standard" ist das große Modell — richtig überall, wo wirklich gedacht wird (Bauen, Prüfen, Zuschneiden). Sparsamere Modelle kosten deutlich weniger, machen aber mehr Fehler: Zu sparsam gewählt, siehst du es an mehr Reparatur-Runden in den Metriken. „Extra (Fable 5)" ist noch stärker, kann aber je nach Abo Guthaben statt Kontingent kosten. „lokal (Ollama)" läuft auf deiner eigenen lokalen KI und kostet kein Kontingent.',
+    // Klasse lokal (BAUPLAN 49): ehrlicher Hinweis an Karte und Editor — was
+    // sie braucht, was sie kostet (nichts), was nicht gilt, und dass FlowForge
+    // nie still auf Claude zurückfällt.
+    modellLokalHinweis:
+      'Läuft auf deiner lokalen KI (Einstellungen → Lokale KI als Block-Agent) und kostet kein Kontingent. Die Denktiefe gilt hier nicht. Ohne eingeschaltete und erreichbare lokale KI startet der Lauf nicht — FlowForge fällt nie still auf Claude zurück.',
     // Kosten-Wahrheit der Klasse Extra (0.48.1, Claude-Code-Doku „Model
     // configuration": über das Agent SDK gibt es keinen Einwilligungs-Dialog —
     // eine Fable-Anfrage, die Guthaben kostet, wird ohne Nachfrage abgerechnet).
@@ -535,6 +546,11 @@ export const texte = {
       'Wie gründlich das Modell vor jeder Antwort nachdenkt. „Modell-Standard" ist high und passt fast immer. Niedriger spart Zeit und Tokens bei kurzen, klar umrissenen Aufgaben; höher hilft bei harten Aufgaben, kostet aber mehr — „max" vorher an einem kleinen Auftrag testen. Die Reparatur-Runden je Denktiefe stehen in den Metriken.',
     denktiefeHaikuHinweis:
       '„sehr sparsam (Haiku)" kennt keine Denktiefe — die Wahl wird dort ignoriert.',
+    // Klasse lokal (BAUPLAN 49): Die Denktiefe ist ein Claude-Feld; beim
+    // Ollama-Modell bleibt das Denken an (über diesen Weg nicht abschaltbar,
+    // gemessen 19.08.2026).
+    denktiefeLokalHinweis:
+      '„lokal (Ollama)" kennt keine Denktiefe — die Wahl wird dort ignoriert; das Denken des lokalen Modells bleibt an.',
     uebertragGrenzeLabel: 'Überträge höchstens',
     uebertragGrenzeHinweis:
       'Läuft der Kontext eines Blocks voll (~85 %), übergibt der Agent an eine frische Session und arbeitet nahtlos weiter. So oft darf das pro Lauf passieren — Feld leer lassen heißt: unbegrenzt.',
@@ -2453,6 +2469,86 @@ export const texte = {
       'einem 27B-Modell — 64k ≈ 16 GB, 128k ≈ 32 GB. Passt es nicht mehr in die Karte, ' +
       'lagert Ollama still in den Arbeitsspeicher aus und alles wird sehr langsam. Empfehlung: ' +
       '64k; 128k nur, wenn Ollama beim Laufen (ollama ps) noch „100 % GPU" zeigt.',
+    // Lokale KI als Block-Agent (BAUPLAN 49): Georgs lokale KI darf ganze
+    // Blöcke übernehmen (Modellklasse „lokal" an der Karte). Läuft über
+    // Ollamas Anthropic-Schnittstelle in einer eigenen Motor-Instanz. Die
+    // Feineinstellungen werden zu einem abgeleiteten Ollama-Modell
+    // flowforge-<basis>; Empfehlungen aus der Qwen3.8-Modellkarte (08/2026).
+    lokalBlockUeberschrift: 'Lokale KI als Block-Agent',
+    lokalBlockAgent: 'Lokale KI darf ganze Blöcke übernehmen (Modellklasse „lokal")',
+    lokalBlockAgentHinweis:
+      'An jeder Blockkarte und im Block-Editor gibt es dann die Modellklasse „lokal (Ollama)": ' +
+      'Der Block läuft komplett auf deiner lokalen KI — mit denselben Werkzeugen, Sperren und ' +
+      'Rückfragen wie bei Claude, kostet kein Kontingent, nur Rechenzeit. Modell, Adresse und ' +
+      'Kontextfenster sind die der lokalen Helfer-KI oben. Ohne eingeschaltete und erreichbare ' +
+      'lokale KI startet ein Lauf mit einem lokalen Block nicht — FlowForge fällt nie still auf ' +
+      'Claude zurück. Je Ollama-Adresse läuft ein lokaler Block zur Zeit (eine Grafikkarte).',
+    lokalBlockNurMitHelfer:
+      'Erst die lokale Helfer-KI oben einschalten — der Block-Agent nutzt deren Modell und Adresse.',
+    lokalBlockFeinTitel: 'Feineinstellungen des lokalen Modells',
+    lokalBlockFeinHinweis:
+      'Die Claude-Werkzeuge schicken keine Temperatur und keine Ollama-Optionen mit — wirksam ' +
+      'sind die Standardwerte am Modell. Deshalb legt FlowForge aus diesen Werten und dem ' +
+      'Kontextfenster ein abgeleitetes Ollama-Modell an (Name: flowforge-<dein Modell>, auf ' +
+      'dem Ollama-Rechner) und lässt lokale Blöcke darauf laufen. Es lädt nur neu in den ' +
+      'Grafikspeicher, wenn du hier Werte änderst — nicht je Lauf. Leer = Ollama nimmt seinen ' +
+      'Standardwert.',
+    lokalBlockAbgeleitet: (name) => `Abgeleitetes Modell bei Ollama: ${name}`,
+    lokalBlockAbgeleitetOhneBasis: 'Trag oben zuerst den Modellnamen bei Ollama ein.',
+    lokalBlockVorlagen: 'Vorlagen',
+    lokalBlockVorlagenHinweis:
+      'Setzen alle Felder auf einmal. „Qwen3.8 Denken" sind die Herstellerwerte der ' +
+      'Qwen3.8-Modellkarte für Aufgaben mit Nachdenken, „Qwen3.8 Coding" dieselben mit ' +
+      'niedrigerer Temperatur fürs Programmieren — Empfehlung für den Bauer. ' +
+      '„Ollama-Standard" leert alle Felder.',
+    lokalBlockVorlageNamen: {
+      'qwen-denken': 'Qwen3.8 Denken',
+      'qwen-coding': 'Qwen3.8 Coding',
+      'ollama-standard': 'Ollama-Standard'
+    },
+    lokalBlockFeinLeer: 'leer = Ollama-Standard',
+    lokalBlockFeinFelder: {
+      temperatur: 'Temperatur',
+      topP: 'Top-p',
+      topK: 'Top-k',
+      minP: 'Min-p',
+      wiederholungsstrafe: 'Wiederholungsstrafe',
+      antwortlaenge: 'Antwortlänge (Token)',
+      entwurfsTokens: 'Entwurfs-Tokens (MTP)'
+    },
+    lokalBlockFeinHinweise: {
+      temperatur:
+        'Wie viel Zufall in jeder Antwort steckt (0–2). Niedrig = vorhersagbarer, neigt aber zu ' +
+        'Wiederholungen; hoch = kreativer, aber fahriger. Qwen3.8 empfiehlt 1.0 fürs Denken, ' +
+        'fürs Programmieren eher 0.6.',
+      topP:
+        'Aus wie viel Wahrscheinlichkeitsmasse das nächste Wort gezogen wird (0–1). Kleiner = ' +
+        'enger, sicherer; größer = mehr Auswahl. Qwen3.8-Empfehlung: 0.95.',
+      topK:
+        'Höchstens so viele Kandidaten je Wort (ganze Zahl, 0 = aus). Kleiner schneidet ' +
+        'Unsinn ab, zu klein macht die Antwort eintönig. Qwen3.8-Empfehlung: 20.',
+      minP:
+        'Mindest-Wahrscheinlichkeit eines Kandidaten im Verhältnis zum besten (0–1). 0 = ' +
+        'aus. Qwen3.8-Empfehlung: 0.',
+      wiederholungsstrafe:
+        'Bestraft Wörter, die schon dastehen (0.5–2; 1.0 = keine Strafe). Höher hilft gegen ' +
+        'Schleifen, verdirbt aber Code, der sich wiederholen MUSS (Klammern, Namen). ' +
+        'Qwen3.8-Empfehlung: 1.0.',
+      antwortlaenge:
+        'Höchstens so viele Token je Antwort (ganze Zahl). Leer = unbegrenzt — für einen ' +
+        'Block-Agenten die Empfehlung: abgeschnittene Antworten brechen Werkzeugaufrufe.',
+      entwurfsTokens:
+        'Spekulatives Dekodieren: So viele Token entwirft der eingebaute Entwurfskopf auf ' +
+        'einmal (0–64, 0 = aus). Wirkt nur bei Modellen mit Entwurfskopf, z.B. den ' +
+        'MTP-Fassungen von Qwen3.8 (bis ~2× schneller); bei anderen ändert sich nichts. Ob es ' +
+        'wirkt, siehst du im Ticker und Laufbericht an Dauer und Tokens je Block.'
+    },
+    lokalBlockDenkenHinweis:
+      'Denken bleibt an: Über diesen Weg lässt sich das Nachdenken des lokalen Modells nicht ' +
+      'abschalten (gemessen 19.08.2026) — deshalb gibt es hier keinen Schalter, und die ' +
+      'Denktiefe der Blockkarte gilt für lokale Blöcke nicht. Die Antwort enthält den Denkteil ' +
+      'nicht, er kostet nur Zeit und Tokens.',
+    fehlerLokalFein: (feld) => `Feineinstellung „${feld}" liegt außerhalb des erlaubten Bereichs.`,
     // Unteraufgaben-Modell (BAUPLAN 37): der Motor-Zwilling der lokalen
     // Helfer-KI — Zuarbeit muss nicht auf dem großen Modell laufen.
     unteraufgabenUeberschrift: 'Modell der Unteraufgaben',
@@ -2597,7 +2693,20 @@ export const texte = {
     // Fable 5 für dieses Konto nicht verfügbar (Fehlertext der CLI) — kein
     // stiller Rückfall auf Opus: Der Block bleibt stehen.
     extraNichtVerfuegbar:
-      'Fable 5 ist für dein Konto nicht verfügbar (kein Guthaben oder nicht im Abo enthalten). Der Block ist stehen geblieben — stelle ihn auf „Standard (Opus)" oder lade Guthaben auf, und starte neu.'
+      'Fable 5 ist für dein Konto nicht verfügbar (kein Guthaben oder nicht im Abo enthalten). Der Block ist stehen geblieben — stelle ihn auf „Standard (Opus)" oder lade Guthaben auf, und starte neu.',
+    // Klasse lokal (BAUPLAN 49): Klartext statt stillem Rückfall. Ohne
+    // eingeschaltete, erlaubte und erreichbare lokale KI startet kein Lauf
+    // mit einem lokalen Block — sonst bezahlte Georg, was er lokal wollte.
+    lokalNichtErlaubt:
+      'In diesem Workflow läuft mindestens ein Block auf „lokal (Ollama)", aber die lokale KI ist nicht als Block-Agent freigegeben. Schalte in den Einstellungen die lokale KI ein und setze das Häkchen „als Block-Agent erlaubt" — oder stelle den Block auf eine Claude-Klasse. FlowForge fällt nie still auf Claude zurück.',
+    lokalNichtErreichbar: (adresse) =>
+      `Die lokale KI unter ${adresse} ist nicht erreichbar. Starte Ollama (oder prüfe die Adresse in den Einstellungen) und starte den Lauf neu — FlowForge fällt nie still auf Claude zurück.`,
+    lokalModellFehlt: (modell) =>
+      `Das Modell „${modell}" ist bei deiner lokalen KI nicht vorhanden. Lade es in Ollama (ollama pull ${modell}) oder trage in den Einstellungen ein vorhandenes Modell ein — FlowForge fällt nie still auf Claude zurück.`,
+    lokalModellFehler: (text) =>
+      `Das abgeleitete Ollama-Modell für FlowForge konnte nicht angelegt werden: ${text}. Prüfe die Feineinstellungen der lokalen KI und die Ollama-Version — FlowForge fällt nie still auf Claude zurück.`,
+    // Ollama hat das Anlegen weder bestätigt noch einen Fehler genannt.
+    lokalModellKeinErfolg: 'Ollama hat das Anlegen nicht bestätigt (keine Erfolgsmeldung)'
   },
   rechteFrage: {
     ueberschrift: 'Der Agent bittet um Erlaubnis',
@@ -2702,6 +2811,9 @@ export const texte = {
     laufSessionGestartet: (modell) =>
       `Motor gestartet (${modell}) — eine Lauf-Session für den ganzen Lauf; jeder Block läuft darin als eigener Agent.`,
     laufSessionFortgesetzt: 'Lauf-Session fortgesetzt statt neu gestartet.',
+    // Lokal (BAUPLAN 49): eigene Instanz gegen Ollama, Denktiefe gilt nicht.
+    blockAgentGestartetLokal: (name, modellName) =>
+      `„${name}" läuft als frischer Agent in seiner eigenen lokalen Session — Modell: ${modellName}.`,
     blockAgentGestartet: (name, modellName, denktiefeName = '') =>
       `„${name}" läuft als frischer Agent in der Lauf-Session` +
       (modellName
@@ -2720,10 +2832,25 @@ export const texte = {
       `Inhaltsfilter: „${von}" hat eine Antwort abgelehnt${kategorie ? ` (Kategorie ${kategorie})` : ''} — der Motor hat sie auf „${nach}" wiederholt.`,
     unteraufgabenSparsam: (modellName) =>
       `Unteraufgaben der Block-Agenten (Späher, Einlese-Helfer) laufen ${modellName}.`,
+    // Zusatz, wenn ein lokaler Block mitläuft (BAUPLAN 49): in dessen Instanz
+    // gibt es kein Sonnet — seine Unteraufgaben erben das Ollama-Modell.
+    unteraufgabenLokalZusatz:
+      'Lokale Blöcke: ihre Unteraufgaben laufen auf dem lokalen Modell.',
     koordinatorGestoppt:
       'Werkzeug-Versuch des Koordinators gestoppt — Arbeit erledigen nur die Block-Agenten.',
     parallelEigeneSession: (name) =>
       `„${name}" läuft parallel in einer eigenen Session — die Lauf-Session ist gerade beschäftigt.`,
+    // Klasse lokal (BAUPLAN 49): Block-Agent auf Georgs lokaler KI (Ollama im
+    // Anthropic-Modus) — immer in einer eigenen Motor-Instanz, Kosten 0.
+    lokalBereit: (modell, kontext = null) =>
+      `Lokale KI als Block-Agent bereit (${modell}${kontext ? ', Kontext ' + Math.round(kontext / 1024) + 'k' : ''}) — Blöcke der Klasse „lokal" kosten kein Kontingent.`,
+    lokalSessionGestartet: (modell, kontext = null) =>
+      `Motor gestartet gegen deine lokale KI (${modell}${kontext ? ', Kontext ' + Math.round(kontext / 1024) + 'k' : ''}) — kostet kein Kontingent; Kosten und Fenster meldet hier FlowForge, nicht die CLI.`,
+    lokalEigeneSession: (blockName, modell) =>
+      `„${blockName}" läuft lokal (${modell}) in einer eigenen Session — nie in der Claude-Lauf-Session.`,
+    // Eine GPU je Ollama-Adresse: höchstens ein lokaler Block zur Zeit.
+    warteGrundLokal: (name, anderer = '') =>
+      `„${name}" wartet, bis ${anderer ? `„${anderer}"` : 'der andere lokale Block'} fertig ist — die lokale KI bearbeitet einen Block zur Zeit (eine Grafikkarte).`,
     // Lokale Helfer-KI (Experiment): sichtbar, wenn die lokale KI recherchiert.
     lokaleHelferBereit: (modell, kontext = null) =>
       `Lokale Helfer-KI bereit (${modell}${kontext ? ', Kontext ' + Math.round(kontext / 1024) + 'k' : ''}) — Recherche-Aufträge kosten kein Kontingent.`,
@@ -3571,6 +3698,9 @@ export const texte = {
       'Modell: nicht vermerkt — ein Lauf vor Bauschritt 36 oder ein Anlauf ganz ohne Motor (Tor ohne KI).',
     // Klasse und Denktiefe je Anlauf (0.48.1): was an der Karte gewählt war
     // und was der Motor als wirksame Denktiefe gemeldet hat.
+    // Klassen ohne Denktiefe (Haiku, lokal) und lokale Kosten (BAUPLAN 49).
+    denktiefeGiltNicht: 'gilt hier nicht',
+    lokalKeineKosten: 'Kosten: keine — lief auf deiner lokalen KI, kein Kontingent, keine Dollar.',
     klasseZeile: (klasseName, denktiefeName, gemessen) =>
       `Klasse: ${klasseName}` +
       (denktiefeName ? ` · Denktiefe: ${denktiefeName}` : '') +

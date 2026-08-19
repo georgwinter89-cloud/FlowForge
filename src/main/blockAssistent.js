@@ -17,6 +17,7 @@ import {
   MODELL_KLASSEN,
   MODELL_KLASSE_STANDARD,
   klasseHatKostenHinweis,
+  klasseIstLokal,
   modellKlasseGueltig
 } from '../shared/blockKatalog.js'
 import {
@@ -160,9 +161,14 @@ export function vorschlagSaeubern(roh) {
   }
 }
 
+// Extra (Kosten-Hinweis) und lokal (BAUPLAN 49: hängt an Georgs eingeschalteter
+// lokaler KI) sind bewusste Entscheidungen Georgs — der Assistent schlägt sie
+// nie von sich aus vor.
 function modellVomVorschlag(roh) {
   const klasse = modellKlasseGueltig(roh)
-  return !klasse || klasseHatKostenHinweis(klasse) ? MODELL_KLASSE_STANDARD : klasse
+  return !klasse || klasseHatKostenHinweis(klasse) || klasseIstLokal(klasse)
+    ? MODELL_KLASSE_STANDARD
+    : klasse
 }
 
 function bereichSaeubern(roh) {
@@ -184,9 +190,10 @@ function bereicheFuerAssistent() {
 
 // Die Modellklassen mit ihrem Klartext-Namen — so kennt der Assistent die
 // Bedeutung der Schlüssel (texte.kette.modellNamen). Klassen mit
-// Kosten-Hinweis (Extra) stehen gar nicht erst zur Wahl (0.48.1).
+// Kosten-Hinweis (Extra) stehen gar nicht erst zur Wahl (0.48.1), die lokale
+// Klasse ebenso wenig (BAUPLAN 49).
 function modellKlassenFuerAssistent() {
-  return MODELL_KLASSEN.filter((k) => !klasseHatKostenHinweis(k)).map((schluessel) => ({
+  return MODELL_KLASSEN.filter((k) => !klasseHatKostenHinweis(k) && !klasseIstLokal(k)).map((schluessel) => ({
     schluessel,
     name: texte.kette.modellNamen[schluessel] ?? schluessel
   }))

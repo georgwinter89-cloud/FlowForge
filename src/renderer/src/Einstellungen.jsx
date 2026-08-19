@@ -1,7 +1,45 @@
 import { useEffect, useState } from 'react'
 import { texte } from '../../shared/texte.js'
+import {
+  LOKAL_FEIN_FELDER,
+  LOKAL_FEIN_VORLAGEN,
+  lokalFeinBereinigen,
+  lokalFeinVorlageErkennen,
+  lokalesModellName
+} from '../../shared/lokalRegeln.js'
 
 const t = texte.einstellungen
+
+// Feineinstellungen der lokalen KI (BAUPLAN 49): Eingabegrenzen je Feld für
+// die Zahlenfelder — dieselben Grenzen wie lokalFeinBereinigen im Hauptprozess
+// (src/shared/lokalRegeln.js); leer = Ollama-Standard.
+const LOKAL_FEIN_GRENZEN = {
+  temperatur: { min: 0, max: 2, step: 0.05 },
+  topP: { min: 0, max: 1, step: 0.01 },
+  topK: { min: 0, max: 500, step: 1 },
+  minP: { min: 0, max: 1, step: 0.01 },
+  wiederholungsstrafe: { min: 0.5, max: 2, step: 0.05 },
+  antwortlaenge: { min: 1, step: 1 },
+  entwurfsTokens: { min: 0, max: 64, step: 1 }
+}
+const VORLAGEN_REIHENFOLGE = ['qwen-denken', 'qwen-coding', 'ollama-standard']
+
+// Zahlen ↔ Text der Eingabefelder: null wird zum leeren Feld und zurück.
+function feinAlsText(fein) {
+  return Object.fromEntries(
+    LOKAL_FEIN_FELDER.map((feld) => [feld, fein?.[feld] == null ? '' : String(fein[feld])])
+  )
+}
+function feinAusText(felder) {
+  return Object.fromEntries(
+    LOKAL_FEIN_FELDER.map((feld) => {
+      const roh = String(felder[feld] ?? '')
+        .trim()
+        .replace(',', '.')
+      return [feld, roh === '' ? null : Number(roh)]
+    })
+  )
+}
 
 // Globale Einstellungen: Motor-Modus (Abo/API), API-Schlüssel, Ausgaben-Obergrenze.
 export default function Einstellungen({ onSchliessen }) {
@@ -18,6 +56,12 @@ export default function Einstellungen({ onSchliessen }) {
   const [lokaleHelferModell, setLokaleHelferModell] = useState('')
   const [lokaleHelferAdresse, setLokaleHelferAdresse] = useState('')
   const [lokaleHelferKontext, setLokaleHelferKontext] = useState(65536)
+  // Lokale KI als Block-Agent (BAUPLAN 49): Häkchen + Feineinstellungen (als
+  // Text je Feld, damit sich halb getippte Zahlen nicht sofort wegrunden).
+  const [lokalBlockAgent, setLokalBlockAgent] = useState(false)
+  const [lokalFeinText, setLokalFeinText] = useState(() =>
+    feinAlsText(LOKAL_FEIN_VORLAGEN['ollama-standard'])
+  )
   const [helferStatus, setHelferStatus] = useState(null)
   const [aboErlaubt, setAboErlaubt] = useState(true)
   const [fehler, setFehler] = useState('')
@@ -40,6 +84,8 @@ export default function Einstellungen({ onSchliessen }) {
       setLokaleHelferModell(e.einstellungen.lokaleHelferModell ?? '')
       setLokaleHelferAdresse(e.einstellungen.lokaleHelferAdresse ?? '')
       setLokaleHelferKontext(Number(e.einstellungen.lokaleHelferKontext) || 65536)
+      setLokalBlockAgent(Boolean(e.einstellungen.lokalBlockAgent))
+      setLokalFeinText(feinAlsText(lokalFeinBereinigen(e.einstellungen.lokalFein)))
       setAboErlaubt(e.aboErlaubt)
       setGeladen(true)
     })
@@ -60,7 +106,27 @@ export default function Einstellungen({ onSchliessen }) {
     }
   }, [lokaleHelferAktiv, lokaleHelferModell, lokaleHelferAdresse])
 
+  // Aktive Vorlage (Markierung der Knöpfe) und der Wert, der gespeichert
+  // wird — beides aus denselben Feldern gerechnet.
+  const lokalFein = feinAusText(lokalFeinText)
+  const lokalFeinBereinigt = lokalFeinBereinigen(lokalFein)
+  const aktiveVorlage = lokalFeinVorlageErkennen(lokalFeinBereinigt)
+
+  function vorlageSetzen(schluessel) {
+    setLokalFeinText(feinAlsText(LOKAL_FEIN_VORLAGEN[schluessel]))
+  }
+
+  function feinFeldSetzen(feld, wert) {
+    setLokalFeinText((alt) => ({ ...alt, [feld]: wert }))
+  }
+
   async function speichern() {
+    // Ein Wert außerhalb der Grenzen würde im Hauptprozess still zu
+    // „Ollama-Standard" — hier sagt FlowForge es lieber, bevor es speichert.
+    for (const feld of LOKAL_FEIN_FELDER) {
+      if (lokalFein[feld] != null && lokalFeinBereinigt[feld] == null)
+        return setFehler(t.fehlerLokalFein(t.lokalBlockFeinFelder[feld]))
+    }
     const ergebnis = await window.flowforge.einstellungenSpeichern({
       motorModus: modus,
       apiSchluessel,
@@ -73,7 +139,9 @@ export default function Einstellungen({ onSchliessen }) {
       lokaleHelferQuote,
       lokaleHelferModell,
       lokaleHelferAdresse,
-      lokaleHelferKontext
+      lokaleHelferKontext,
+      lokalBlockAgent,
+      lokalFein: lokalFeinBereinigt
     })
     if (!ergebnis.ok) return setFehler(ergebnis.fehler)
     onSchliessen()
@@ -83,7 +151,7 @@ export default function Einstellungen({ onSchliessen }) {
 
   return (
     <div className="dialog-schleier">
-      <div className="dialog">
+      <div className="dialog dialog-einstellungen">
         <h2>{t.ueberschrift}</h2>
         <p className="bericht-abschnitt">{t.motorUeberschrift}</p>
         <div className="feld">
@@ -278,6 +346,76 @@ export default function Einstellungen({ onSchliessen }) {
                 </select>
                 <span className="feld-hinweis">{t.lokaleHelferKontextHinweis}</span>
               </label>
+            </>
+          )}
+        </div>
+        {/* Lokale KI als Block-Agent (BAUPLAN 49): Häkchen nur bedienbar,
+            wenn die Helfer-KI oben an ist — Modell, Adresse und Kontextfenster
+            sind dieselben. Die Feineinstellungen werden zum abgeleiteten
+            Ollama-Modell flowforge-<basis>; leer = Ollama-Standard. */}
+        <p className="bericht-abschnitt">{t.lokalBlockUeberschrift}</p>
+        <div className="feld">
+          <label className="wahl-zeile">
+            <input
+              type="checkbox"
+              disabled={!lokaleHelferAktiv}
+              checked={lokalBlockAgent}
+              onChange={(e) => setLokalBlockAgent(e.target.checked)}
+            />
+            <span>
+              {t.lokalBlockAgent}
+              <span className="feld-hinweis"> — {t.lokalBlockAgentHinweis}</span>
+            </span>
+          </label>
+          {!lokaleHelferAktiv && <span className="feld-hinweis">{t.lokalBlockNurMitHelfer}</span>}
+          {lokaleHelferAktiv && lokalBlockAgent && (
+            <>
+              <span className="feld-hinweis">
+                {lokaleHelferModell.trim()
+                  ? t.lokalBlockAbgeleitet(lokalesModellName(lokaleHelferModell.trim()))
+                  : t.lokalBlockAbgeleitetOhneBasis}
+              </span>
+              <div className="feld">
+                <span>{t.lokalBlockFeinTitel}</span>
+                <span className="feld-hinweis">{t.lokalBlockFeinHinweis}</span>
+              </div>
+              <div className="feld">
+                <span>{t.lokalBlockVorlagen}</span>
+                <div className="filter-zeile">
+                  {VORLAGEN_REIHENFOLGE.map((schluessel) => (
+                    <button
+                      key={schluessel}
+                      type="button"
+                      className={
+                        'filter-chip' + (aktiveVorlage === schluessel ? ' filter-aktiv' : '')
+                      }
+                      onClick={() => vorlageSetzen(schluessel)}
+                    >
+                      {t.lokalBlockVorlageNamen[schluessel]}
+                    </button>
+                  ))}
+                </div>
+                <span className="feld-hinweis">{t.lokalBlockVorlagenHinweis}</span>
+              </div>
+              <div className="lokal-fein-raster">
+                {LOKAL_FEIN_FELDER.map((feld) => (
+                  <label key={feld} className="feld">
+                    <span>{t.lokalBlockFeinFelder[feld]}</span>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      min={LOKAL_FEIN_GRENZEN[feld].min}
+                      max={LOKAL_FEIN_GRENZEN[feld].max}
+                      step={LOKAL_FEIN_GRENZEN[feld].step}
+                      value={lokalFeinText[feld]}
+                      placeholder={t.lokalBlockFeinLeer}
+                      onChange={(e) => feinFeldSetzen(feld, e.target.value)}
+                    />
+                    <span className="feld-hinweis">{t.lokalBlockFeinHinweise[feld]}</span>
+                  </label>
+                ))}
+              </div>
+              <span className="feld-hinweis">{t.lokalBlockDenkenHinweis}</span>
             </>
           )}
         </div>

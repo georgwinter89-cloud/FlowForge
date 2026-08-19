@@ -3432,3 +3432,19 @@ body {
 .etikett-kopie-hinweis {
   line-height: 1.45;
 }
+
+/* Einstellungen (BAUPLAN 49): der Dialog ist mit dem Abschnitt „Lokale KI als
+   Block-Agent" länger als ein Bildschirm — er scrollt, statt oben abzuschneiden. */
+.dialog-einstellungen {
+  width: 560px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+/* Feineinstellungen des lokalen Modells: sieben Zahlenfelder, je mit
+   Folgen-Hinweis, zwei nebeneinander. */
+.lokal-fein-raster {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}

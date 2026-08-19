@@ -6,6 +6,7 @@ import {
   blockModellKlasse,
   blockDenktiefe,
   klasseHatKostenHinweis,
+  klasseIstLokal,
   BEREICHE,
   BEREICH_EIGENE,
   MODELL_KLASSEN,
@@ -693,6 +694,12 @@ export default function BlockEditor({ block, onSpeichern, onAbbrechen }) {
                   {klasseHatKostenHinweis(werte.modell) && (
                     <span className="feld-hinweis">{t.modellExtraHinweis}</span>
                   )}
+                  {/* Klasse lokal (BAUPLAN 49): derselbe Satz wie an der
+                      Blockkarte — läuft auf der lokalen KI, ohne sie startet
+                      der Lauf nicht, Denktiefe gilt dort nicht. */}
+                  {klasseIstLokal(werte.modell) && (
+                    <span className="feld-hinweis">{tkette.modellLokalHinweis}</span>
+                  )}
                 </label>
                 {/* Denktiefe (0.48.1): Voreinstellung des eigenen Blocks — wie
                     gründlich das Modell nachdenkt; an der Karte je Block
@@ -710,6 +717,9 @@ export default function BlockEditor({ block, onSpeichern, onAbbrechen }) {
                     ))}
                   </select>
                   <span className="feld-hinweis">{t.denktiefeHinweis}</span>
+                  {klasseIstLokal(werte.modell) && (
+                    <span className="feld-hinweis">{tkette.denktiefeLokalHinweis}</span>
+                  )}
                 </label>
                 {/* Feinheiten (BAUPLAN 48): die übrigen Kennzeichen des
                     Katalogs, zugeklappt — offen, wenn eines gesetzt ist oder

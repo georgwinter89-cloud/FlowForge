@@ -3,6 +3,7 @@ import { app } from 'electron'
 import fs from 'node:fs'
 import path from 'node:path'
 import { texte } from '../shared/texte.js'
+import { LOKAL_FEIN_VORLAGEN, lokalFeinBereinigen } from '../shared/lokalRegeln.js'
 
 // Abo-Regel (SPEC §2, neu seit 0.46.4 — Entscheidung Georg, 19.08.2026): Der
 // Abo-Modus bleibt auch in veröffentlichten Versionen an. Anthropic sagt seit
@@ -59,6 +60,16 @@ const STANDARD = {
   // der lokalen KI wachsen mit (lokaleHelfer.js). Standard 64k: passt bei 27B
   // samt Gewichten in 32 GB; 128k nur, wenn die Karte es wirklich hergibt.
   lokaleHelferKontext: 65536,
+  // Lokale KI als Block-Agent (BAUPLAN 49): Häkchen „als Block-Agent erlaubt".
+  // Nur wirksam, wenn lokaleHelferAktiv an ist. Ohne dieses Häkchen lehnt der
+  // Start einen Block der Klasse „lokal" mit Klartext ab — kein stiller
+  // Rückfall auf Claude (sonst bezahlt Georg, was er lokal wollte).
+  lokalBlockAgent: false,
+  // Feineinstellungen der lokalen KI (Temperatur, Top-p/k, Min-p,
+  // Wiederholungsstrafe, Antwortlänge, Entwurfs-Tokens): daraus legt FlowForge
+  // ein abgeleitetes Ollama-Modell an (lokalRegeln.js). null = Ollama-Standard.
+  // Basis-Modell, Adresse und Kontext sind die lokaleHelfer*-Felder oben.
+  lokalFein: LOKAL_FEIN_VORLAGEN['ollama-standard'],
   // Kosten-Rückfrage „Extra (Fable 5)" (0.48.1): Beim ersten Lauf mit einem
   // Extra-Block fragt FlowForge einmal, ob der Lauf trotz möglicher
   // Guthaben-Abrechnung starten darf. true = Georg hat „trotzdem starten"
@@ -86,6 +97,10 @@ export function einstellungenLaden() {
   // Wert fällt auf „nicht gewählt" zurück und löst die Erststart-Wahl aus.
   if (!MOTOR_MODI.includes(daten.motorModus)) daten.motorModus = ''
   if (!ABO_MODUS_ERLAUBT && daten.motorModus === 'abo') daten.motorModus = ''
+  // Feineinstellungen der lokalen KI (BAUPLAN 49) immer in der vollen Form —
+  // eine ältere oder von Hand bearbeitete Datei darf keine halben Objekte
+  // durchreichen.
+  daten.lokalFein = lokalFeinBereinigen(daten.lokalFein)
   return {
     ok: true,
     einstellungen: daten,
@@ -176,6 +191,10 @@ export function einstellungenSpeichern(neu) {
     lokaleHelferKontext: KONTEXT_WAHL.includes(Number(neu.lokaleHelferKontext))
       ? Number(neu.lokaleHelferKontext)
       : STANDARD.lokaleHelferKontext,
+    // Lokale KI als Block-Agent (BAUPLAN 49): Häkchen und Feineinstellungen.
+    // Fehlt lokalFein (ältere Aufrufer), bleibt alles Ollama-Standard.
+    lokalBlockAgent: Boolean(neu.lokalBlockAgent),
+    lokalFein: lokalFeinBereinigen(neu.lokalFein),
     // NIE aus `neu` (siehe gemerkteAntworten).
     ...gemerkteAntworten()
   }

@@ -15,6 +15,7 @@
 // mit Feldern sein Werkzeug — Name und Form kommen aus der Registry
 // (blockKatalog.eigenesEtikett), der Aufbau ist derselbe wie bei den festen.
 import { z } from 'zod'
+import { liste } from './werkzeugSchema.js'
 import { texte } from '../../shared/texte.js'
 import {
   RAHMEN_WERKZEUG,
@@ -36,8 +37,8 @@ function rahmenFelder() {
   const p = texte.lieferschein.param
   return {
     fazit: z.string().describe(p.fazit),
-    getan: z.array(z.string()).optional().describe(p.getan),
-    offen: z.array(z.string()).optional().describe(p.offen),
+    getan: liste(z.string()).optional().describe(p.getan),
+    offen: liste(z.string()).optional().describe(p.offen),
     anmerkung: z.string().optional().describe(p.anmerkung)
   }
 }
@@ -51,19 +52,18 @@ function teilFelder(art) {
   // in der Meldung.
   if (art === 'arbeitspaket')
     return {
-      pakete: z
-        .array(
+      pakete: liste(
           z.object({
             zielBlock: z.string().optional().describe(p.zielBlock),
             ziel: z.string().describe(p.ziel),
-            fertigKriterien: z.array(z.string()).describe(p.fertigKriterien),
-            schritte: z.array(z.string()).optional().describe(p.schritte),
-            fundstellen: z.array(z.string()).optional().describe(p.fundstellen),
-            nichtDabei: z.array(z.string()).optional().describe(p.nichtDabei),
-            aufgabenIds: z.array(z.string()).optional().describe(p.paketAufgabenIds),
-            erlaubteDateien: z.array(z.string()).optional().describe(p.erlaubteDateien),
-            bausteine: z.array(z.string()).optional().describe(p.bausteine),
-            schnittstellen: z.array(z.string()).optional().describe(p.schnittstellen)
+            fertigKriterien: liste(z.string()).describe(p.fertigKriterien),
+            schritte: liste(z.string()).optional().describe(p.schritte),
+            fundstellen: liste(z.string()).optional().describe(p.fundstellen),
+            nichtDabei: liste(z.string()).optional().describe(p.nichtDabei),
+            aufgabenIds: liste(z.string()).optional().describe(p.paketAufgabenIds),
+            erlaubteDateien: liste(z.string()).optional().describe(p.erlaubteDateien),
+            bausteine: liste(z.string()).optional().describe(p.bausteine),
+            schnittstellen: liste(z.string()).optional().describe(p.schnittstellen)
           })
         )
         .describe(p.pakete)
@@ -71,8 +71,7 @@ function teilFelder(art) {
   if (art === 'pruefbeleg')
     return {
       urteil: z.enum(URTEILE).describe(p.urteil),
-      beanstandungen: z
-        .array(
+      beanstandungen: liste(
           z.object({
             text: z.string().describe(p.beanstandungText),
             einstufung: z.enum(EINSTUFUNGEN).describe(p.beanstandungEinstufung),
@@ -82,14 +81,13 @@ function teilFelder(art) {
         .optional()
         .describe(p.beanstandungen),
       rotVorGruen: z.string().optional().describe(p.rotVorGruen),
-      geprueft: z.array(z.string()).optional().describe(p.geprueft),
+      geprueft: liste(z.string()).optional().describe(p.geprueft),
       pruefkarteTitel: z.string().optional().describe(p.pruefkarteTitel),
       pruefkarteText: z.string().optional().describe(p.pruefkarteText)
     }
   if (art === 'umsetzungsbericht')
     return {
-      kriterien: z
-        .array(
+      kriterien: liste(
           z.object({
             kriterium: z.string().describe(p.kriterium),
             wieUmgesetzt: z.string().describe(p.wieUmgesetzt)
@@ -97,8 +95,7 @@ function teilFelder(art) {
         )
         .optional()
         .describe(p.kriterien),
-      dateien: z
-        .array(
+      dateien: liste(
           z.object({
             pfad: z.string().describe(p.dateiPfad),
             art: z.enum(DATEI_ARTEN).describe(p.dateiArt)
@@ -106,8 +103,7 @@ function teilFelder(art) {
         )
         .optional()
         .describe(p.dateien),
-      angriffsliste: z
-        .array(
+      angriffsliste: liste(
           z.object({
             fund: z.string().describe(p.fund),
             umgang: z.string().describe(p.umgang)
@@ -118,8 +114,7 @@ function teilFelder(art) {
     }
   if (art === 'funde')
     return {
-      funde: z
-        .array(
+      funde: liste(
           z.object({
             text: z.string().describe(p.fundText),
             schwere: z.enum(SCHWEREN).describe(p.schwere),
@@ -148,7 +143,7 @@ function eigeneFelder(etikett) {
   const te = texte.lieferscheinEtiketten
   const felder = {}
   for (const feld of etikett?.felder ?? []) {
-    let schema = feld.art === 'liste' ? z.array(z.string()) : z.string()
+    let schema = feld.art === 'liste' ? liste(z.string()) : z.string()
     if (!feld.pflicht) schema = schema.optional()
     // Bezeichnung voran, dann der Hinweis als Satz (Satzende ergänzen, sonst
     // klebt „Pflicht" an einen halben Satz) — der Agent sieht nur diesen Text.

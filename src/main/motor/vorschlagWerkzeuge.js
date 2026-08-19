@@ -16,6 +16,7 @@
 // statt 60 pausierender Einzeldialoge. Thema setzen ist kein Umformulieren:
 // auch Entscheidungs-Karten dürfen ein Thema vorgeschlagen bekommen.
 import { z } from 'zod'
+import { liste } from './werkzeugSchema.js'
 import { texte } from '../../shared/texte.js'
 import {
   TITEL_MAX,
@@ -161,8 +162,7 @@ export async function vorschlagWerkzeugServer({ projektPfad, aufKartenVorschlag 
         .describe(
           `Thema der neuen Karte (anlegen, Pflicht): kurzes Schlagwort, höchstens ${THEMA_MAX} Zeichen — bevorzugt ein vorhandenes`
         ),
-      themen: z
-        .array(
+      themen: liste(
           z.object({
             kartenId: z.string().describe('id der Karte aus karten_uebersicht'),
             thema: z.string().describe(`Vorgeschlagenes Thema, höchstens ${THEMA_MAX} Zeichen`)

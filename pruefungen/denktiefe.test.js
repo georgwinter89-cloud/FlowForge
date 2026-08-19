@@ -100,8 +100,8 @@ describe('0.48.1 · Denktiefe je Block (blockKatalog)', () => {
     ])
   })
 
-  it('nur Haiku kennt keine Denktiefe', () => {
-    expect(MODELL_KLASSEN.filter((k) => !klasseKenntDenktiefe(k))).toEqual(['sehr-sparsam'])
+  it('nur Haiku und lokal kennen keine Denktiefe', () => {
+    expect(MODELL_KLASSEN.filter((k) => !klasseKenntDenktiefe(k))).toEqual(['sehr-sparsam', 'lokal'])
     expect(klasseKenntDenktiefe('extra')).toBe(true)
     expect(klasseKenntDenktiefe('standard')).toBe(true)
   })

@@ -888,61 +888,95 @@ beim Integrator „Extra (Fable 5)" und beim Prüfer „Denktiefe xhigh", der La
 Metriken zeigen beides getrennt.
 
 ### 49 — Modellklasse „lokal": Block-Agent über Ollama im Anthropic-Modus
-- **Zuerst die Machbarkeitsprobe** (Pflicht, vor jedem Umbau, auf Georgs Rechner gegen sein
-  Qwen-27B): das Agent-SDK mit Ollama-Umgebung starten und drei Dinge messen — (a) ruft das
-  Modell unsere MCP-Werkzeuge sauber auf (melde_*, karten, mensch_fragen; der Übersetzungsgriff
-  für „getarnte" Aufrufe aus 0.22.1 greift hier NICHT, die Schnittstelle ist eine andere),
-  (b) verträgt es das Unteraufgaben-Werkzeug (Agent), (c) wie lange braucht ein Bauer-Auftrag
-  mit Zuschnitt + Übergaben bei 64k. Ergebnis bestimmt den Zuschnitt: Geht (a) und (c), gibt 49
-  den Bauer frei; scheitert (b), laufen lokale Blöcke ohne Unteraufgaben (Einstellung
-  „Unteraufgaben" wird für sie ignoriert, Ticker sagt es); scheitert (a), endet 49 als
-  Befund im BAUPLAN — kein Umbau ins Blaue.
-- **Vierte Modellklasse „lokal"** (§2): an jeder Blockkarte wählbar, im Block-Editor als
-  Voreinstellung, im Katalog nirgends Voreinstellung. Übersetzung in den Modellnamen kommt aus
-  den Einstellungen (Ollama-Adresse und Modell gibt es seit Bauschritt 20/31; neu: Häkchen
-  „als Block-Agent erlaubt", Kontextfenster aus 0.46.3 gilt mit). Ohne eingeschaltete lokale
-  KI lehnt der Start einen lokalen Block mit Klartext ab (kein stiller Rückfall auf Claude —
-  sonst bezahlt Georg, was er lokal wollte).
-- **Eigene Motor-Instanz je lokalem Block:** Umgebung mit `ANTHROPIC_BASE_URL`/`AUTH_TOKEN`,
-  ohne Abo-Anmeldung; die Umgebungs-Bereinigung beim Motorstart (räumt heute bewusst alle
-  ANTHROPIC_*-Variablen weg) bekommt die Ausnahme. Sperren, Lieferschein, Rechte-Rückfragen,
-  Sicherungspunkte, Dateilisten-Sperre, Tor: unverändert — sie sitzen am Werkzeugaufruf und
-  im Hauptprozess, nicht im Modell. Übertrag: der lokale Motor misst seinen eigenen Faden.
-  Welle (46): ein lokaler Block zur Zeit je Ollama-Adresse (eine GPU), der Planer weiß das.
+- **Machbarkeitsprobe — Befund (19.08.2026, gemessen auf Georgs Gaming-PC im Heimnetz,
+  Ollama 0.32.14, qwen3.8:27b-mtp-q4_K_M):**
+  - Start: Agent-SDK gegen Ollama mit `ANTHROPIC_BASE_URL=<adresse>`, `ANTHROPIC_AUTH_TOKEN=ollama`,
+    `ANTHROPIC_API_KEY=""`, Modell = Ollama-Modellname; dazu `ANTHROPIC_DEFAULT_HAIKU/SONNET/OPUS_MODEL`
+    und `ANTHROPIC_SMALL_FAST_MODEL` = Modellname (jeder Alias landet lokal),
+    `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1`, `CLAUDE_CODE_MAX_CONTEXT_TOKENS=<kontext>`.
+  - (a) **bestanden:** MCP-Werkzeuge (createSdkMcpServer) kommen als ECHTE tool_use an
+    (karten_lesen, mensch_fragen, melde_urteil), ebenso Read/Edit/Bash; der PreToolUse-Hook
+    sieht alles. 7 Turns = 99 s.
+  - (b) **bestanden:** Agent-Werkzeug mit `subagent_type` funktioniert, Hook sieht `agent_type`. 124 s.
+  - (c) **bestanden:** Bauer-Auftrag mit Zuschnitt + Übergabe + Tests: 8 Turns, 109 s, Ergebnis
+    korrekt, melde_urteil aufgerufen.
+  - Die CLI meldet für das fremde Modell `contextWindow: 200000` und erfundene `costUSD` (~0,6 $ je
+    Probe) → der Motor nimmt für lokale Instanzen das Fenster aus den Einstellungen, füttert das
+    Motor-Wissen nicht mit 200000, setzt Kosten auf 0 und setzt `maxBudgetUsd` NICHT (sonst bricht
+    die API-Obergrenze lokale Läufe ab).
+  - Ohne abgeleitetes Modell lädt Ollama das Modell mit Maximalkontext (262k) → spillt aus dem
+    VRAM. Abgeleitetes Modell per `POST /api/create {model, from, parameters:{num_ctx,…}}`
+    (NDJSON-Stream, letzte Zeile `{"status":"success"}`) — 64k → 19,9 GB voll im VRAM. Erneutes
+    Anlegen mit gleichen Parametern lädt NICHT neu. Kein Prompt-Cache (cache_read 0) — jeder
+    Turn verarbeitet den vollen Kontext neu.
+  - **Denken-Schalter entfällt (gemessen, nicht steuerbar über die CLI):** `thinking:{type:'disabled'}`
+    am Endpunkt wirkt, aber die CLI sendet das nie (MAX_THINKING_TOKENS=0, maxThinkingTokens:0,
+    CLAUDE_CODE_DISABLE_ADAPTIVE_THINKING — alle ohne Wirkung); `/no_think` und Modelfile-`think`
+    wirken bei Qwen3.8 nicht. Einstellungen sagen ehrlich „Denken bleibt an".
+  - Modelfile-Parameter, die es gibt: num_ctx, temperature, top_p, top_k, min_p, repeat_penalty,
+    num_predict, draft_num_predict. `presence_penalty` gibt es NICHT.
+  - **Zuschnitt:** (a), (b), (c) bestanden → 49 gibt den Bauer frei, Unteraufgaben erlaubt.
+- **Fünfte Modellklasse „lokal"** (§2): an jeder Blockkarte wählbar, im Block-Editor als
+  Voreinstellung, im Katalog nirgends Voreinstellung; der KI-Assistent schlägt sie nie vor.
+  Übersetzung in den Modellnamen kommt aus den Einstellungen (Ollama-Adresse und Modell gibt es
+  seit Bauschritt 20/31; neu: Häkchen „als Block-Agent erlaubt", Kontextfenster aus 0.46.3 gilt
+  mit). Ohne eingeschaltete und erreichbare lokale KI lehnt der Start einen lokalen Block mit
+  Klartext ab (kein stiller Rückfall auf Claude — sonst bezahlt Georg, was er lokal wollte).
+- **Eigene Motor-Instanz je lokalem Block:** Umgebung aus der Probe (oben), ohne Abo-Anmeldung;
+  die Umgebungs-Bereinigung beim Motorstart bekommt die Ausnahme. Koordinator dieser Instanz =
+  das lokale Modell (kein Haiku). Sperren, Lieferschein, Rechte-Rückfragen, Sicherungspunkte,
+  Dateilisten-Sperre, Tor: unverändert — sie sitzen am Werkzeugaufruf und im Hauptprozess,
+  nicht im Modell. Übertrag: der lokale Motor misst seinen eigenen Faden. Welle (46): ein
+  lokaler Block zur Zeit je Ollama-Adresse (eine GPU), der Planer weiß das (Warte-Grund im
+  Ticker).
 - **Sichtbar und messbar:** Ticker und Laufbericht nennen „lokal (<Modellname>)" wie heute die
   Klasse; Metriken (§3.4) führen „lokal" als eigene Klasse — Erstläufe, Reparatur-Runden,
-  Dauer, Tokens (Ollama liefert usage) — damit Georg sieht, ob sich die Karte rechnet.
-- **Feineinstellungen der lokalen KI** (Wunsch Georg, 19.08.2026; Recherche-Stand s.u.):
-  Die Claude-CLI setzt selbst keine Temperatur und keine Ollama-Optionen — über den
-  Anthropic-Modus kommen nur `max_tokens`, `thinking`, `tools` an (Ollama-Doku „Anthropic
-  compatibility": unterstützt model/max_tokens/messages/system/stream/temperature/top_p/
-  top_k/stop_sequences/tools/thinking; `budget_tokens` angenommen, nicht durchgesetzt; kein
-  tool_choice). Der **wirksame Hebel sind die Standardwerte am Modell**: FlowForge legt aus
-  Georgs Einstellungen ein **abgeleitetes Ollama-Modell** an (`ollama create flowforge-<basis>`
-  mit Modelfile `FROM <basis>` + PARAMETER) und nutzt dieses als Block-Agent-Modell. Einstellbar
-  in den Einstellungen (Abschnitt „Lokale KI als Block-Agent", mit Folgen-Erklärung und
-  Empfehlung je Feld): **Kontextfenster** (`num_ctx`, besteht seit 0.46.3), **Temperatur**
-  (`temperature`), **Top-p / Top-k / Min-p**, **Wiederholungsstrafe** (`repeat_penalty`),
-  **Antwortlänge** (`num_predict`), **Entwurfs-Tokens/MTP** (`draft_num_predict`, spekulatives
-  Dekodieren — wirkt nur bei Modellen mit eingebautem Entwurfskopf, z.B. Qwen3.8 (Georgs 27B,
-  MTP-GGUF-Fassungen: ~2,0× Durchsatz, 78 % Entwurfs-Annahme laut Hugging Face) oder Gemma 4; auf
-  Apple-Silicon seit Ollama 0.23.1 eingebaut, andere Runner „in Validierung" (Mai 2026) —
-  FlowForge misst Tokens/s vor/nach und sagt, ob es wirkt), und **Denken** (Ollama `think`:
-  aus / an / Stufe low·medium·high·max — die Stufen kennen nur manche Modelle, z.B. gpt-oss;
-  Qwen3: an/aus). Vorlagen-Knöpfe mit den Herstellerempfehlungen (Qwen3.8-Modellkarte, Stand
-  August 2026: Denken `temperature 1.0, top_p 0.95, top_k 20, min_p 0, presence_penalty 0`;
-  Coding mit Denken laut Unsloth eher `temperature 0.6`; ohne Denken `temperature 0.7, top_p 0.8,
-  top_k 20, presence_penalty 1.5`; Wiederholungsstrafe 1.0) und „Ollama-Standard" — die
-  Probe misst, welche Vorlage bei Georgs Qwen3.8 die wenigsten Reparatur-Runden bringt.
-  Ehrliche Grenzen, in der Machbarkeitsprobe zu klären: (a) wie Ollama das `thinking:
-  adaptive` der Claude-CLI abbildet (vermutlich „an") und ob ein `think`-Standard am
-  abgeleiteten Modell greift, sonst Schalter nur über Systemprompt (`/no_think` bei Qwen3);
-  (b) `ollama create` braucht Schreibzugriff auf den Ollama-Rechner — bei Georgs Gaming-PC
-  über die API (`/api/create`), nicht über die Kommandozeile; (c) ein neues abgeleitetes
-  Modell lädt neu in den VRAM — nur beim Ändern der Werte, nicht je Lauf.
-- Nachzuziehen: SPEC §2 (vierte Klasse, V2-Satz ersetzen, Feineinstellungen), §5
-  (Motor-Instanz je lokalem Block), §3.4 (Klasse „lokal"), §4.1 (Karte), §4.5
-  (Editor-Voreinstellung), §9 (Einstellungen).
+  Dauer, Tokens (Ollama liefert usage), Kosten 0 — damit Georg sieht, ob sich die Karte rechnet.
+- **Feineinstellungen der lokalen KI** (Wunsch Georg, 19.08.2026): Die Claude-CLI schickt über
+  den Anthropic-Modus keine Temperatur und keine Ollama-Optionen mit (nur `max_tokens`,
+  `thinking`, `tools`). Der **wirksame Hebel sind die Standardwerte am Modell**: FlowForge legt
+  aus Georgs Einstellungen ein **abgeleitetes Ollama-Modell** an (`flowforge-<basis>` über
+  `POST /api/create`, Regeln in src/shared/lokalRegeln.js) und nutzt es als Block-Agent-Modell.
+  Einstellbar im Abschnitt „Lokale KI als Block-Agent" (Folgen-Erklärung und Empfehlung je
+  Feld): **Kontextfenster** (`num_ctx`, besteht seit 0.46.3), **Temperatur**, **Top-p / Top-k /
+  Min-p**, **Wiederholungsstrafe** (`repeat_penalty`), **Antwortlänge** (`num_predict`),
+  **Entwurfs-Tokens/MTP** (`draft_num_predict`, spekulatives Dekodieren — wirkt nur bei Modellen
+  mit eingebautem Entwurfskopf, z.B. Qwen3.8-MTP-Fassungen: ~2,0× Durchsatz laut Hugging Face;
+  ob es wirkt, zeigen Dauer und Tokens im Ticker/Laufbericht). Vorlagen-Knöpfe mit den
+  Herstellerempfehlungen (Qwen3.8-Modellkarte, Stand August 2026: Denken `temperature 1.0,
+  top_p 0.95, top_k 20, min_p 0`; Coding laut Unsloth eher `temperature 0.6`; Wiederholungsstrafe
+  1.0) und „Ollama-Standard" (alle Felder leer). Denken: kein Schalter (Befund oben).
+  `ollama create` läuft über die API des Ollama-Rechners; ein geändertes abgeleitetes Modell
+  lädt neu in den VRAM — nur beim Ändern der Werte, nicht je Lauf (gemessen).
+- Nachgezogen: SPEC §2 (fünfte Klasse, V2-Satz ersetzt, Feineinstellungen, Denken bleibt an),
+  §5 (Motor-Instanz je lokalem Block, ein lokaler Block je Adresse), §3.4 (Klasse „lokal"),
+  §4.1 (Karte), §4.5 (Editor-Voreinstellung), §9 (Einstellungen).
+- **Messwerte der Bausession (19.08.2026, zwei Prüfer, gebaute App, eigener Datenordner):**
+  - Ende-zu-Ende: Paket schneiden (Sonnet) → Bauer **lokal** (qwen3.8:27b, 64k) → Prüfer
+    (Sonnet): Bauer erfolgreich in 291 s, Prüfer bestanden, Lauf erfolgreich; Kosten des
+    lokalen Blocks 0, Ticker/Bericht „lokal (flowforge-…)".
+  - Welle mit zwei lokalen Bauern (getrennte Dateilisten): 1523 s gesamt, beide erfolgreich;
+    der zweite wartete mit Ticker-Grund „die lokale KI bearbeitet einen Block zur Zeit", keine
+    Überschneidungs-Zeile; je Bauer eigene Motor-Instanz mit Ollama-Umgebung, kein Dollar,
+    keine Ausgaben-Obergrenze im Lauf.
+  - Befund: Listen-Argumente der Melde-Werkzeuge kommen über Ollama als JSON-TEXT an, sobald ein
+    Eintrag typografische Anführungszeichen „ " trägt (reproduziert gegen /v1/messages; Schema
+    lehnte ab, 3–4 Anläufe je Meldung, ~150–350 s verloren). Lösung:
+    src/main/motor/werkzeugSchema.js — Listen-Felder nehmen zusätzlich JSON-Text an
+    (lieferschein-/kartenZuteilungs-/vorschlag-/menschWerkzeuge; Test werkzeugSchema.test.js).
+  - Befund: Das Agent-Werkzeug nimmt im Feld `model` nur die Claude-Aliase (Schema-Fehler bei
+    einem Ollama-Namen) → lokale Instanzen setzen beim Block-Start und bei Unteraufgaben KEIN
+    model-Feld; der Agent erbt das Ollama-Modell seiner Definition.
+  - Denktiefe bei lokal nicht gemessen (die CLI meldete ihr eigenes „high", das Ollama nie
+    erreicht): `denktiefeGemessen` null, Bericht „Denktiefe: gilt hier nicht", Kosten-Zeile
+    „Kosten: keine — lief auf deiner lokalen KI".
+  - Negativstarts ohne Motorstart (1–14 ms): Helfer-KI aus / Häkchen aus → lokalNichtErlaubt;
+    Adresse tot → nicht erreichbar (Schwarzes Loch: 3 s); Basis-Modell fehlt → Klartext.
+  - lokalesModellBereitstellen: gültig 55 ms, erneutes Anlegen mit gleichen Werten lädt nicht
+    neu (VRAM/expires_at unverändert); Netzfehler < 11 s, unter der 60-s-Grenze.
+  - Offen (kosmetisch, bewusst gelassen): Qwen schreibt Zwischenmeldungen teils englisch;
+    Kartenüberlappung im Vorlagen-Layout bei hohen Karten (vorbestehend); Fehlerzeile des
+    Einstellungs-Dialogs markiert das betroffene Feld nicht.
 **Alltagstest:** Georg stellt in „Feature hinzufügen" den Bauer auf „lokal", lässt den
 Workflow am Moorhuhn laufen: Paket schneiden (Opus) schneidet, der lokale Bauer baut im
 Datenvertrag, meldet über den Lieferschein, der Opus-Prüfer urteilt; im Laufbericht steht

@@ -71,9 +71,16 @@ export const BEREICH_EIGENE = 'eigene'
 // Katalog nirgends vorbelegt, und je nach Abo kann es Guthaben statt Kontingent
 // kosten — deshalb trägt die Klasse einen Kosten-Hinweis (klasseHatKostenHinweis)
 // und der erste Lauf mit einem Extra-Block fragt einmal nach (lauf.js).
-export const MODELL_KLASSEN = ['extra', 'standard', 'sparsam', 'sehr-sparsam']
+// Seit BAUPLAN 49 steht „lokal" ganz hinten: Georgs lokale KI über Ollama im
+// Anthropic-Modus — die „billigste" Klasse (kostet kein Kontingent), im Katalog
+// nirgends vorbelegt, an jeder Karte und im Block-Editor wählbar. Weil sie die
+// letzte ist, gibt unterModellFuer für lokal automatisch „eigen" zurück (kein
+// Herabstufen unter lokal). Ohne eingeschaltete und erreichbare lokale KI
+// startet der Lauf nicht (lauf.js) — nie stiller Rückfall auf Claude.
+export const MODELL_KLASSEN = ['extra', 'standard', 'sparsam', 'sehr-sparsam', 'lokal']
 export const MODELL_KLASSE_STANDARD = 'standard'
 export const MODELL_KLASSE_EXTRA = 'extra'
+export const MODELL_KLASSE_LOKAL = 'lokal'
 
 // Übersetzung in die Modell-Aliase des Motors (SDK: sonnet/opus/haiku/fable).
 // „Standard" ist bewusst fest auf Opus genagelt statt „was die CLI gerade als
@@ -81,7 +88,9 @@ export const MODELL_KLASSE_EXTRA = 'extra'
 // nicht gesetztes Modell an die Block-Agenten vererbt — dann bekäme jeder
 // Bauer still das Billigmodell. Ein gesetzter Wert ist die einzige sichere
 // Variante, und er macht Läufe über Monate hinweg vergleichbar.
-const SDK_MODELL = { extra: 'fable', standard: 'opus', sparsam: 'sonnet', 'sehr-sparsam': 'haiku' }
+// 'lokal' ist ein Platzhalter-Alias (BAUPLAN 49): der lokale Motor ersetzt ihn
+// beim Start durch den Ollama-Modellnamen (abgeleitetes Modell flowforge-<basis>).
+const SDK_MODELL = { extra: 'fable', standard: 'opus', sparsam: 'sonnet', 'sehr-sparsam': 'haiku', lokal: 'lokal' }
 
 // Denktiefe je Block (0.48.1, Georgs „Effort bei den Cloud-Modellen einstellen").
 // Das SDK kennt effort low…max je Agent-Definition; FlowForge definiert den
@@ -117,14 +126,24 @@ export function blockAgentTyp(denktiefe) {
 
 export const BLOCK_AGENT_TYPEN = DENKTIEFEN.map(blockAgentTyp)
 
-// Haiku („sehr sparsam") kennt keine Denktiefe — alle anderen Klassen schon.
+// Haiku („sehr sparsam") kennt keine Denktiefe — und lokal auch nicht (BAUPLAN
+// 49: die Denktiefe ist ein Claude-Feld; beim Ollama-Modell bleibt das Denken
+// an, gemessen 19.08.2026). Bei beiden wird die Wahl ignoriert, Editor und
+// Ticker sagen es.
 export function klasseKenntDenktiefe(klasse) {
-  return klasse !== 'sehr-sparsam'
+  return klasse !== 'sehr-sparsam' && !klasseIstLokal(klasse)
 }
 
-// Nur „extra" kann Guthaben statt Kontingent kosten (BAUPLAN 0.48.1).
+// Nur „extra" kann Guthaben statt Kontingent kosten (BAUPLAN 0.48.1). Lokal
+// kostet gar kein Kontingent — kein Kosten-Hinweis.
 export function klasseHatKostenHinweis(klasse) {
   return klasse === MODELL_KLASSE_EXTRA
+}
+
+// Läuft diese Klasse auf Georgs lokaler KI (BAUPLAN 49)? Solche Blöcke laufen
+// immer in einer eigenen Motor-Instanz mit Ollama-Umgebung (lauf.js).
+export function klasseIstLokal(klasse) {
+  return klasse === MODELL_KLASSE_LOKAL
 }
 
 // Nebenrollen billigst (BAUPLAN 37): Der Koordinator der Lauf-Session schreibt
