@@ -648,6 +648,60 @@ Vorspann des ersten Prüfers nennt das Zweitaudit als Empfänger seines Prüfbel
 Zweitaudit bekommt beide Prüfbelege nummeriert, und das Sessionende bekommt nur den des
 Zweitaudits — mit Ticker-Zeile, warum.
 
+### Zwischenschritt 0.46.4 — Veröffentlichung auf GitHub: Abo-Regel, README, Lizenz
+(Entscheidung Georg, 19.08.2026, nach Recherche der Anthropic-Regeln. Befund: Die
+Regel aus SPEC §2 vom 07.08. — „in jeder weitergegebenen Version ist der Abo-Modus
+deaktiviert" — ist von der Lage überholt. Chronologie: Jan/Feb 2026 sperrt Anthropic
+Abo-Token, die außerhalb der Claude-CLI direkt gegen die API laufen; 04.04.2026 wirft
+es Drittanbieter-Harnesses wie OpenClaw aus dem Abo; im Mai kündigt es ein separates
+SDK-Guthaben an, ausdrücklich auch für „third-party apps that authenticate with your
+Claude subscription through the Agent SDK"; am 15.06.2026 pausiert es das mit dem Satz
+„For now, nothing has changed: Claude Agent SDK, `claude -p`, and third-party app usage
+still draw from your subscription's usage limits. […] When we have an update, we'll
+share it before anything takes effect." [Anthropic-Hilfeartikel „Use the Claude Agent
+SDK with your Claude plan"]. FlowForge startet die offizielle CLI über das Agent SDK —
+genau dieser Weg. Der ältere Satz der Legal-Doku [„does not permit third-party
+developers to offer claude.ai login … including agents built on the Claude Agent SDK",
+code.claude.com/docs/en/legal-and-compliance und agent-sdk/overview] steht noch, ist
+aber durch die schriftliche Duldung vom 15.06. faktisch überholt. Restrisiko ist ein
+Abrechnungs-, kein Verbotsrisiko: Anthropic will den SDK-Weg irgendwann getrennt
+abrechnen [angekündigt: 200 $/Monat bei Max 20x] — mit Vorankündigung; der API-Modus
+bleibt der Rückfall. Ehrlicher Zusatz: „Läuft" ist nicht „ist erlaubt" — aber hier
+sagt der Anbieter selbst, dass es läuft und bis auf Weiteres so bleibt. **Nächste
+Session: zuerst diesen Zwischenschritt, dann 47.**)
+- **Abo-Regel neu (SPEC §2):** Beide Modi bleiben; die Konstante `ABO_MODUS_ERLAUBT`
+  bleibt `true`, auch in veröffentlichten Versionen. Statt der Deaktivierung: Beim
+  ersten Start wählt der Nutzer den Motor-Modus (Abo-Login oder API-Schlüssel) — kein
+  stiller Standard —, und beim Abo steht der ehrliche Satz dabei: „Läuft über dein
+  Abo-Kontingent. Anthropic hat angekündigt, Agent-SDK-Nutzung künftig getrennt
+  abzurechnen, und will vorher Bescheid geben — dann ist der API-Schlüssel der Weg."
+  Die Einstellungen zeigen denselben Satz. Kein Verstecken, kein Schalter-Theater
+  (Georg: „Jemand Cleveres würde einem Coding-Agenten sagen, er soll es im Code auf
+  true setzen" — ein `false` wäre ein Schild, kein Schloss).
+- **README.md (Deutsch, kurz):** Was FlowForge ist und für wen (Nicht-Programmierer
+  bauen Workflows aus Blöcken, die ein KI-Agent mit harten Sperren ausführt), was es
+  nicht ist (Ein-Personen-Projekt, Windows, kein Support, keine Beiträge erwartet),
+  wie man startet (Installer aus Releases; Motor = Claude Code CLI, gebündelt), der
+  Abschnitt „Abo oder API-Schlüssel" mit der Chronologie oben und den zwei Zitaten
+  (Legal-Doku und 15.-Juni-Update, mit Links), Verweis auf SPEC.md als Produktbeschreibung
+  und BAUPLAN.md als Bauweg. Kein zweites Bedien-Dokument (Doku-Regel) — das README
+  verweist, es erklärt nicht.
+- **Lizenz:** MIT (Entscheidung Georg: Verbreitung wichtiger als Kontrolle; ehrlich
+  benannt: unter MIT einmal Veröffentlichtes ist nicht rückholbar). `package.json`:
+  `license` auf `MIT`, `private` bleibt `true` (kein npm-Paket). LICENSE-Datei.
+- **Repo:** zuerst privat auf GitHub anlegen (Backup sofort, kein Risiko), `main`
+  pushen; öffentlich stellen entscheidet Georg danach von Hand. Vorher prüfen: keine
+  Schlüssel, IPs, Datenordner-Pfade oder Laufberichte im Repo (Stand 18.08.: sauber —
+  `arbeitsablage/`, `dist/`, `out/` sind ignoriert; die persönlichen Bezüge in SPEC/
+  BAUPLAN bleiben bewusst — sie zeigen, wie das Projekt entstanden ist).
+- Nachzuziehen: SPEC §2 (Abo-Regel neu, Erststart-Wahl), §9 (Erststart-Dialog),
+  README.md, LICENSE, package.json.
+**Alltagstest:** Georg installiert die frisch gebaute Version auf einem sauberen
+Benutzerprofil (oder löscht einmal die Einstellungsdatei): Beim ersten Start fragt
+FlowForge nach dem Motor-Modus, beim Abo steht der Abrechnungs-Hinweis dabei; das
+README auf GitHub erklärt in zwei Minuten, was das Projekt ist und wie es mit dem Abo
+steht; das Repo ist privat sichtbar und enthält keine Geheimnisse.
+
 ### 47 — Integrator: die Nähte zwischen parallel gebauten Teilen
 (Entscheidung Georg: eigene **Blockart**, nicht ein fester Block — eine geteilte
 Recherche zusammenzuführen ist etwas anderes als Code.)
