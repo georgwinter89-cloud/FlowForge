@@ -1,7 +1,8 @@
 // Harte Regeln für eigene Blöcke (SPEC §4.5, BAUPLAN 14) — dieselbe Idee wie
 // kartenRegeln.js: Die Oberfläche zeigt Zeichenzähler, durchgesetzt wird im
 // Hauptprozess. Ein eigener Block folgt der Block-Anatomie (SPEC §4.2):
-// Name · Symbol · Arbeitsauftrag · braucht/liefert · Sperre „darf nur lesen".
+// Name · Symbol · Arbeitsauftrag · braucht/liefert · Sperre „darf nur lesen" ·
+// Kennzeichen „führt zusammen" (BAUPLAN 47).
 import { texte } from './texte.js'
 import {
   BEREICHE,
@@ -101,6 +102,12 @@ export function pruefeEigenenBlock(roh) {
     return { fehler: texte.blockRegeln.auftragZuLang(BLOCK_AUFTRAG_MAX) }
   const braucht = pruefeEtiketten(roh?.braucht, texte.kette.brauchtLabel)
   if (braucht.fehler) return { fehler: braucht.fehler }
+  // Führt zusammen (BAUPLAN 47, „Kein Kennzeichen ohne Editor-Feld"): Das
+  // Häkchen ohne ein einziges Pflicht-Etikett liefe ins Leere — es gäbe nichts,
+  // was mehrfach ankommen könnte, und die Steck-Prüfung hätte nichts zu zählen.
+  const fuehrtZusammen = Boolean(roh?.fuehrtZusammen)
+  if (fuehrtZusammen && braucht.etiketten.length === 0)
+    return { fehler: texte.blockRegeln.fuehrtZusammenOhneBraucht }
   const liefert = pruefeEtiketten(roh?.liefert, texte.kette.liefertLabel)
   if (liefert.fehler) return { fehler: liefert.fehler }
   // Bereich (BAUPLAN 30): Altbestand ohne Feld landet unter „Eigene".
@@ -125,6 +132,9 @@ export function pruefeEigenenBlock(roh) {
       // stilles Billigmodell.
       modell: modellKlasseGueltig(roh?.modell) ?? MODELL_KLASSE_STANDARD,
       nurLesen: Boolean(roh?.nurLesen),
+      // Führt zusammen (BAUPLAN 47): Altbestand ohne Feld ist false — der
+      // Block bekommt dann wie bisher nur die nächstgelegene Lieferung.
+      fuehrtZusammen,
       // Fest verdrahtet: kein Prüfer, keine Übung, keine Formularfelder —
       // viele Stellen (Leinwand, Regeln, Lauf) verlassen sich darauf.
       prueft: false,

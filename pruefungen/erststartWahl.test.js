@@ -126,11 +126,16 @@ describe('0.46.4 · Abo-Regel neu', () => {
 })
 
 describe('0.46.4 · Veröffentlichung', () => {
-  it('package.json: MIT, private, Version 0.46.4', () => {
+  it('package.json: MIT, private, Version ab 0.46.4 (Bauschritt N → 0.N.x)', () => {
     const paket = JSON.parse(lesen('package.json'))
     expect(paket.license).toBe('MIT')
     expect(paket.private).toBe(true)
-    expect(paket.version).toBe('0.46.4')
+    // Die Version wandert mit jedem Bauschritt (CLAUDE.md: Bauschritt N → 0.N.0)
+    // — geprüft wird die Form und dass sie nicht hinter die Veröffentlichung
+    // zurückfällt, nicht eine feste Zahl.
+    const [haupt, neben] = String(paket.version).split('.').map(Number)
+    expect(paket.version).toMatch(/^\d+\.\d+\.\d+$/)
+    expect(haupt * 1000 + neben).toBeGreaterThanOrEqual(46)
   })
 
   it('LICENSE ist die MIT-Lizenz auf Georg Winter', () => {

@@ -1942,6 +1942,13 @@ body {
   color: var(--signal-text);
 }
 
+/* Marke „führt zusammen" (BAUPLAN 47) — neben Sperre und Prüfer-Marke; die
+   Eigen-Farbe, weil sie in der Chip-Zeile noch frei ist. */
+.chip-zusammen {
+  border-color: var(--eigen);
+  color: var(--eigen);
+}
+
 .feld-kompakt {
   font-size: 12px;
 }

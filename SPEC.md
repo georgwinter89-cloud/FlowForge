@@ -1,6 +1,6 @@
 # FlowForge — Produkt-Spezifikation V1
 
-Stand: 19.08.2026 (Zwischenschritt 0.46.4) · Ursprung: Grilling-Session vom 07.08.2026 (von Georg freigegeben) ·
+Stand: 19.08.2026 (Bauschritt 47) · Ursprung: Grilling-Session vom 07.08.2026 (von Georg freigegeben) ·
 fortlaufend gepflegt — dieses Dokument beschreibt die Gegenwart, Verhaltensänderungen
 werden hier nachgezogen (Historie liefert git).
 
@@ -449,9 +449,13 @@ Seite aufs Projekt vorgefiltert zeigt (eigener Baustein, nicht Teil der Leinwand
   „ein Prüfer urteilt nie über einen halben Stand") — je Block und Grund genau einmal, und
   nur dort, wo es etwas erklärt: an Zusammenführungen, deren einer Zweig schon fertig
   ist, und wenn die Wellen-Regel bremst. braucht/liefert
-  gilt entlang der Pfeile: Was ein Block braucht, muss einer seiner Vorfahren liefern.
+  gilt entlang der Pfeile: Was ein Block braucht, muss einer seiner Vorfahren liefern
+  — ein Block mit dem Kennzeichen „führt zusammen" (§4.3 „Integrator", seit
+  Bauschritt 47) braucht je Pflicht-Etikett **mindestens zwei** liefernde Vorfahren
+  (streng beim Start; beim Zeichnen ist einer ein erlaubter Zwischenstand).
   Seit Bauschritt 36 steht das **an den braucht-Chips der Blockkarte**: „← Paket
-  schneiden" (bei mehreren gleich nahen Lieferanten alle), „← fehlt" bzw. bei
+  schneiden" (bei mehreren gleich nahen Lieferanten alle; bei „führt zusammen" alle
+  Lieferanten, bei genau einem „← nur Bauer · A — zwei nötig"), „← fehlt" bzw. bei
   optionalen Etiketten „← liefert keiner".
   **Zustellung adressierter Arbeitspakete** (seit Bauschritt 44): Trägt eine
   Lieferung mehrere Zuschnitte mit je eigener Zieladresse (§4.3 „Zuschnitt je
@@ -516,6 +520,28 @@ Seite aufs Projekt vorgefiltert zeigt (eigener Baustein, nicht Teil der Leinwand
   Bauschritt 34 ist damit überflüssig geworden.
   Sind alle Beanstandungen mechanisch, versucht zuerst die lokale Vorreparatur (§4.3) —
   ohne reguläre Runden zu verbrauchen.
+  **Gebündelte Rückführung** (seit Bauschritt 47, reine Mechanik, 0 Tokens): Schicken
+  zwei Prüfer denselben Block zurück — der zweite fällt durch, während die Rückmeldung
+  des ersten beim Ziel noch **unverbraucht** liegt (das Ziel ist seit dem ersten Urteil
+  nicht wieder angelaufen; bei Prüfer∥Prüfer hinter einem Bauer ist das der Regelfall,
+  denn ein Bauer startet nie neben einem Prüfer, §5) —, sammelt FlowForge die
+  Beanstandungen und schickt ihn **einmal** mit allen zurück: **eine** Reparatur-Runde
+  statt zwei, keine lokale Vorreparatur für den zweiten Prüfer (der erste hat den Weg
+  schon festgelegt), und der Ticker sagt es („‚Prüfer · B' schickt ‚Bauer' ebenfalls
+  zurück — gebündelt in dieselbe Reparatur-Runde (3 Beanstandungen dazu), keine zweite
+  Runde."). In der Rückmeldung steht jede Kritik unter ihrem Absender („Von ‚Prüfer ·
+  A': …"), auch wenn es nur einer ist; ein rotes Tor-Protokoll des zweiten Prüfers wird
+  angehängt, nicht überschrieben. Beide Prüfer prüfen in der gemeinsamen Reparatur-Runde
+  je ihre eigenen Beanstandungen nach. **Nachgeholte Rückführung:** Ist das Ziel nach
+  dem ersten Urteil schon wieder angelaufen (ein nur-lesendes oder prüfendes Ziel
+  startet sofort neben Prüfern), nimmt der zweite Prüfer seine eigene Runde — die erste
+  Rückmeldung ist verbraucht —, und seine Kritik geht nicht verloren: Das Ziel läuft
+  nach dem laufenden Anlauf gleich noch einmal, mit ihr (Ticker: „‚Angreifer' lief
+  schon, als diese Rückmeldung kam — der Block läuft mit ihr gleich noch einmal.");
+  fällt derweil ein dritter Prüfer durch, hängt er sich an diese wartende Rückmeldung.
+  Ehrliche Grenzen: Ist der erste Prüfer gerade in einer lokalen Vorreparatur, liegt
+  beim Ziel keine Rückmeldung, der zweite geht seinen eigenen Weg. Ist das
+  Runden-Budget leer, stellt jeder Prüfer seine eigene Folgen-Frage (je Zweig, unten).
   **Tor ohne KI vor dem Prüfer-Agenten** (seit Bauschritt 35): Vor jeder Nachprüfung — der
   Reparatur-Runde des Prüfers wie der Nachprüfung einer lokalen Vorreparatur — spielt
   FlowForge den **Prüfbefehl** des Prüfers (§4.3) selbst ab, ohne Motor und ohne Tokens.
@@ -561,7 +587,8 @@ Name · Symbol · **Arbeitsauftrag** (Anweisung an den Agenten) · **braucht / l
 (z.B. „braucht: Angriffsliste, liefert: geprüften Code") · je braucht-Etikett ein
 **„wozu"** (ein Satz aus der Sicht dieses Blocks, gelesen wird er vom Lieferanten —
 §4.3 Auftrags-Vorspann) · optionale **Sperren**
-(„darf nur lesen", „Pflichtfeld leer = Lauf hält an") · **Modellklasse** (§2).
+(„darf nur lesen", „Pflichtfeld leer = Lauf hält an") · **Modellklasse** (§2) ·
+Kennzeichen **„führt zusammen"** (§4.3 „Integrator", seit Bauschritt 47).
 Der **Zusatzname** (§4.1) gehört nicht zum Block, sondern zu seiner Karte im
 Schaubild — derselbe Block darf mehrfach mit verschiedenen Zusatznamen liegen.
 
@@ -572,9 +599,10 @@ blockieren den Weiterlauf, Regeln stehen nicht nur als Text im Prompt.
 
 **Arbeitsblöcke** (echte Arbeitsaufträge, seit Bauschritt 8/9): Kontext laden ·
 Spec-Interview · Paket schneiden · Angreifer (nur lesend) · Diagnose (nur
-lesend) · Bauer · Prüfer · Gesamtprüfung · Audit (nur lesend, legt Karten an) ·
-Karten-Prüfer (nur lesend, macht Vorschläge) · Frage an den Menschen (nur
-lesend) · Sessionende (bringt die Karten auf Stand und schlägt die
+lesend) · Bauer · Integrator (Code) (führt zusammen) · Integrator (Recherche)
+(nur lesend, führt zusammen) · Prüfer · Gesamtprüfung · Audit (nur lesend, legt
+Karten an) · Karten-Prüfer (nur lesend, macht Vorschläge) · Frage an den
+Menschen (nur lesend) · Sessionende (bringt die Karten auf Stand und schlägt die
 Kartenauswahl fürs nächste Paket vor, §5).
 Auftragsquelle von Paket schneiden und Diagnose (Entscheidung Georg,
 07.08.2026): das Wunsch- bzw. Fehlerbild-Feld am Block **oder**, wenn es leer
@@ -692,6 +720,53 @@ und Empfehlung über das Gespräch (§6) und liefert die Antwort an die Folgebl�
 („Antwort des Menschen" ist optionaler Bedarf von Paket schneiden, Diagnose und
 Bauer — wie die „Befundliste" des Audits).
 
+**Integrator — die Nähte zwischen parallel gebauten Teilen** (seit Bauschritt 47;
+Entscheidung Georg: eigene **Blockart**, nicht ein fester Block — eine geteilte
+Recherche zusammenzuführen ist etwas anderes als Code). Die Blockart ist das
+Kennzeichen **„führt zusammen"** (`fuehrtZusammen`): Der Block erwartet **mehrere**
+Lieferungen desselben Etiketts und macht eine daraus. Das Kennzeichen ändert
+drei Dinge: (1) Die Distanz-Regel der Übergaben gilt nicht — **alle** Lieferungen
+seiner braucht-Etiketten kommen nummeriert an (unten, „Übergaben"), (2) sie kommen
+vollständig an (kein Übergabe-Deckel, seit 0.46.1), und (3) die **Steck-Prüfung
+verlangt je Pflicht-braucht-Etikett mindestens zwei liefernde Vorfahren** —
+sonst „führt er zusammen", was nie geteilt war. Streng gilt das beim **Start**;
+beim Zeichnen und Speichern des Schaubilds ist **genau ein** Lieferant ein
+erlaubter Zwischenstand (sonst ließe sich „zwei Bauer → Integrator" in keiner
+Reihenfolge stecken — jeder einzelne Pfeil wäre „nur einer"), und der
+braucht-Chip sagt dann „← nur Bauer · A — zwei nötig" statt grün „kommt von";
+ohne jeden Lieferanten lehnt schon das Schaubild ab. Die Fehlermeldung nennt die
+Zahl und den Weg (Lieferanten davorlegen oder einen Block ohne das Kennzeichen
+nehmen). Gezählt werden verschiedene Vorfahren-Blöcke (drei Bauer-Karten sind
+drei); transitive Vorfahren zählen mit. Drei Folgen der Zustellung: Ein
+„führt zusammen"-Block ist **kein benanntes Ziel** des Zuschnitts (§oben) — er
+bekommt kein eigenes Paket, sondern die adressierten Zuschnitte **aller**
+Umsetzer-Vorfahren, auch bei ungleicher Entfernung (die Distanz-Verengung der
+Zustellregel, §4.1, ist für ihn ausgesetzt); ihre Dateilisten zusammen sind sein
+Arbeitsbereich. Ein Block **hinter** ihm, dessen nächster zusammenführender
+Vorfahre nicht weiter entfernt ist als sein nächster adressierter, **erbt dessen
+Zuschnitte** — ein Prüfer hinter dem Integrator misst den Gesamt-Bericht an
+denselben Paketen, die der Integrator hatte, nicht an einem davon. Und als
+schreibender Block bekommt er wie ein Bauer alle Baselines „vorher schon rot"
+(Altlasten benennt er, behebt sie nicht).
+Der Katalog liefert zwei Blöcke, beide im Bereich „Bauen": **Integrator (Code)**
+(schreibend, Standard-Modell; braucht Umsetzungsbericht, nimmt optional die
+Arbeitspakete mit ihren Datenverträgen) prüft jede Naht zwischen den gelieferten
+Teilen gegen die Datenverträge (Schnittstellen, Bausteine, Dateilisten) und
+repariert, was nicht zusammenpasst — Namen, Signaturen, Importe, Aufrufe, Formate.
+Er baut **keine Features nach**: Was ein liefernder Block schuldig blieb, steht
+als Beanstandung im Feld `offen` seines Umsetzungsberichts (Block, Fundort, was
+fehlt) — FlowForge stellt diese Beanstandungen nicht selbst zu, sie stehen im
+Laufbericht und in seiner Übergabe; die Rückführung bleibt Sache eines
+Prüf-Blocks dahinter. Und er wirft **keine Festlegungen um**: Der Vertrag steht —
+passt ein Teil nicht zum Vertrag, wird der Teil angepasst, nicht der Vertrag.
+Sein Umsetzungsbericht trägt die Dateien **aller** gelieferten Teile plus seine
+Anpassungen, denn hinter ihm zählt nur noch sein Bericht (Verdrängung durch
+Weiterverarbeitung, „Übergaben"). **Integrator (Recherche)** (nur lesend,
+sparsames Modell; braucht und liefert Projekt-Überblick) führt mehrere
+Projekt-Überblicke einer geteilten Recherche zu einem zusammen — nichts
+erfinden, nichts verlieren, Widersprüche benennen statt glätten, Fundorte
+behalten. Eigene „führt zusammen"-Blöcke baut der Nutzer im Block-Editor (§4.5).
+
 **Auftrags-Vorspann — Empfänger, Kette, Position** (seit Bauschritt 43): Vor
 jedem Blockauftrag stehen Angaben, die FlowForge **aus dem Schaubild rechnet** —
 aus Blöcken und Pfeilen, nicht aus dem Koordinator und nicht aus dem Laufstatus
@@ -799,8 +874,9 @@ nicht in den Auftrag.") — je Block und Etikett einmal. Vorher verschwand sie
 wortlos, egal in welcher Reihenfolge die Zweige fertig wurden. Gemeldet wird nur,
 was der Block überhaupt braucht. Ausgenommen von der Distanz-Regel sind Blöcke mit
 dem Kennzeichen **„führt zusammen"**: Sie bekommen **alle** Vorfahren mit passendem
-Etikett nummeriert, denn Zusammenführen ist ihre Aufgabe (Blöcke dafür gibt es mit
-Bauschritt 47). **Verdrängung durch Weiterverarbeitung** (seit 0.46.2): Liegen bei
+Etikett nummeriert, denn Zusammenführen ist ihre Aufgabe (seit Bauschritt 47 die
+beiden Integratoren des Katalogs und jeder eigene Block mit dem Häkchen, §oben
+„Integrator"). **Verdrängung durch Weiterverarbeitung** (seit 0.46.2): Liegen bei
 einem Empfänger mehrere Lieferungen desselben Etiketts vor, und hat Lieferant B die
 Lieferung von Lieferant A als Eingang genommen (A ist Vorfahr von B, und B braucht
 dieses Etikett — Pflicht oder optional), zählt am gemeinsamen Empfänger nur B: Die
@@ -1240,8 +1316,15 @@ Angreifer durch die Diagnose.
   dein Block das?" (ein Satz, höchstens 200 Zeichen, im Schritt „Was braucht/liefert er?"):
   Er steht später im Auftrag des Blocks, der das Etikett liefert (§4.3). Bleibt er leer,
   greift dort der Rückfall-Satz — der KI-Assistent füllt ihn bewusst nicht.
+- Seit Bauschritt 47 kann ein eigener Block das Kennzeichen **„Führt zusammen"** tragen
+  (Häkchen unter der Sperre „darf nur lesen", §4.3 „Integrator"): Er bekommt dann alle
+  Lieferungen seiner braucht-Etiketten statt nur der nächstgelegenen, und der Start
+  verlangt mindestens zwei Lieferanten je Pflicht-Etikett. Ohne ein einziges
+  braucht-Etikett lehnt der Editor das Häkchen mit Begründung ab — es gäbe nichts, was
+  mehrfach ankommen könnte. Der KI-Assistent kennt das Feld und schlägt es nur vor,
+  wenn der Block mehrere gleichartige Lieferungen zu einer machen soll.
 - **Erstellungsassistent in 4 Schritten:** Was soll der Block tun? → Was braucht/liefert er? →
-  Sperren („darf nur lesen") und Modellklasse → Probelauf-Vorschau (der exakte
+  Sperren („darf nur lesen", „führt zusammen") und Modellklasse → Probelauf-Vorschau (der exakte
   Arbeitsauftrag, den der Agent bekäme). Eine **Stepper-Leiste** zeigt die Schritte
   (erledigte sind anklickbar), und die Blockkarte liegt auf allen Schritten als
   **Live-Vorschau** rechts daneben — so, wie sie in der Bibliothek läge. Bearbeiten

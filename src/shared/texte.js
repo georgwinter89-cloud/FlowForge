@@ -224,6 +224,12 @@ export const texte = {
     nurLesenFeld: 'Sperre „darf nur lesen"',
     nurLesenHinweis:
       'Der Block darf dann nichts verändern: kein Schreiben, keine verändernden Befehle (rein lesende laufen durch), kein Internet — nur lesen. Die sichere Wahl für alles, was nur ansehen und berichten soll. Nur-lesende Blöcke dürfen außerdem parallel zu einem schreibenden laufen.',
+    // Führt zusammen (BAUPLAN 47, „Kein Kennzeichen ohne Editor-Feld"): Der
+    // Block nimmt ALLE Lieferungen seiner braucht-Etiketten statt nur der
+    // nächsten — und das Schaubild verlangt dafür mindestens zwei Lieferanten.
+    fuehrtZusammenFeld: 'Führt zusammen',
+    fuehrtZusammenHinweis:
+      'Für einen Block, der mehrere gleichartige Lieferungen zu einer macht (z.B. die Berichte von drei Bauern). Er bekommt dann ALLE Lieferungen seiner „braucht"-Etiketten statt nur der nächstgelegenen — und das Schaubild verlangt, dass mindestens zwei Blöcke vor ihm das Etikett liefern; sonst gäbe es nichts zusammenzuführen.',
     // Modellklasse eigener Blöcke (BAUPLAN 37): Voreinstellung des Blocks —
     // auf der Leinwand bleibt sie je Karte änderbar.
     modellFeld: 'Modell (Voreinstellung dieses Blocks)',
@@ -267,7 +273,11 @@ export const texte = {
     bereichZuLang: (max) => `Der Kategorie-Name ist zu lang (höchstens ${max} Zeichen).`,
     // Empfänger im Auftrag (BAUPLAN 43): das „wozu" je braucht-Etikett.
     brauchtWozuZuLang: (etikett, max) =>
-      `Der „Wozu"-Satz zu „${etikett}" ist zu lang (höchstens ${max} Zeichen) — ein Satz genügt.`
+      `Der „Wozu"-Satz zu „${etikett}" ist zu lang (höchstens ${max} Zeichen) — ein Satz genügt.`,
+    // Führt zusammen (BAUPLAN 47): ohne Pflicht-Etikett gäbe es nichts, was
+    // mehrfach ankommen könnte — das Häkchen liefe ins Leere.
+    fuehrtZusammenOhneBraucht:
+      'Ein Block, der zusammenführt, braucht mindestens ein „braucht"-Etikett — sonst gibt es nichts, was mehrfach bei ihm ankommen könnte. Trag eines ein oder nimm das Häkchen wieder heraus.'
   },
   kette: {
     starten: 'Workflow starten',
@@ -294,10 +304,16 @@ export const texte = {
     liefertLabel: 'liefert',
     nurLesenMarke: 'darf nur lesen',
     prueftMarke: 'Prüfer',
+    // Führt zusammen (BAUPLAN 47): Marke in Bibliothek und Schaubild.
+    fuehrtZusammenMarke: 'führt zusammen',
     fallsDaZusatz: 'falls da',
     // Sicht-Hilfen am Schaubild (BAUPLAN 36): Woher kommt, was der Block
     // braucht — und was fehlt.
     kommtVon: (namen) => `← ${namen.join(' + ')}`,
+    // Führt zusammen (BAUPLAN 47): Bei genau einem Lieferanten sagt der Chip
+    // dasselbe wie die Steck-Prüfung — sonst stünde am Chip grün „kommt von
+    // Bauer · A", während das Schaubild abgelehnt wird.
+    kommtVonZuWenig: (namen) => `← nur ${namen.join(' + ')} — zwei nötig`,
     fehltMarke: '← fehlt',
     kommtNichtAn: '← liefert keiner',
     rueckpfeilLabel: (runden) =>
@@ -305,6 +321,14 @@ export const texte = {
     rueckpfeilOhneRunden: 'bei Fehlschlag: keine Runde — es folgt sofort die Folgen-Frage',
     fehlerBraucht: (blockName, bedarf) =>
       `„${blockName}" braucht „${bedarf}" — aber keiner seiner Vorgänger entlang der Pfeile liefert das.`,
+    // Führt zusammen (BAUPLAN 47): Ein Block, der zusammenführt, braucht
+    // mindestens zwei Lieferanten je Pflicht-Etikett — sonst „führt er
+    // zusammen", was nie geteilt war.
+    fehlerFuehrtZusammen: (blockName, bedarf, anzahl) =>
+      `„${blockName}" führt „${bedarf}" zusammen — dafür müssen mindestens zwei Blöcke vor ihm das liefern. ` +
+      (anzahl === 1
+        ? 'Bisher liefert es nur einer: Leg einen zweiten Lieferanten davor, oder nimm einen Block ohne „führt zusammen".'
+        : 'Bisher liefert es keiner seiner Vorgänger entlang der Pfeile: Leg zwei Lieferanten davor, oder nimm einen Block ohne „führt zusammen".'),
     fehlerLeereKette: 'Die Kette ist noch leer. Zieh zuerst Blöcke aus der Bibliothek auf die Leinwand.',
     fehlerPflichtfeld: (blockName, feld) =>
       `Beim Block „${blockName}" ist das Pflichtfeld „${feld}" leer. Bitte ausfüllen — sonst startet der Lauf nicht.`,
@@ -932,6 +956,10 @@ export const texte = {
     // aus dem Schaubild — hier steht nur noch die Sache.
     prueferRueckmeldung: (kritik) =>
       '\n\nRückmeldung aus der Prüfung der letzten Runde (bitte beheben):\n' + kritik,
+    // Gebündelte Rückführung (BAUPLAN 47): Schicken mehrere Prüfer denselben
+    // Block zurück, steht jede Kritik unter ihrem Absender — der Bauer sieht,
+    // wessen Beanstandung er gerade behebt; mehrere Teile stehen untereinander.
+    prueferRueckmeldungTeil: (prueferName, kritik) => `Von „${prueferName}":\n${kritik}`,
     // Reparatur-Runde beim Prüfer (Entscheidung Georg, 12.08.2026): nur die
     // Beanstandungen der letzten Runde nachprüfen, keine erneute Vollprüfung.
     prueferNachpruefung: (kritik) =>
@@ -1597,7 +1625,7 @@ export const texte = {
       'Antworte AUSSCHLIESSLICH mit einem JSON-Objekt, ohne Erklärtext und ohne ' +
       'Markdown-Zäune, mit genau diesen Feldern:\n' +
       '{"name": "...", "symbol": "...", "beschreibung": "...", "auftrag": "...", ' +
-      '"braucht": ["..."], "liefert": ["..."], "nurLesen": true}\n\n' +
+      '"braucht": ["..."], "liefert": ["..."], "nurLesen": true, "fuehrtZusammen": false}\n\n' +
       'Regeln:\n' +
       '- name: kurzer deutscher Name (höchstens 40 Zeichen).\n' +
       '- symbol: genau ein passendes Emoji.\n' +
@@ -1621,7 +1649,11 @@ export const texte = {
       etiketten.join(', ') +
       '.\n' +
       '- nurLesen: true, wenn der Block nichts am Projekt verändern muss (ansehen, ' +
-      'prüfen, berichten) — im Zweifel die sichere Wahl.',
+      'prüfen, berichten) — im Zweifel die sichere Wahl.\n' +
+      '- fuehrtZusammen: true NUR, wenn der Block mehrere gleichartige Lieferungen ' +
+      'desselben braucht-Etiketts zu einer machen soll (z.B. die Berichte mehrerer ' +
+      'paralleler Blöcke); er bekommt dann alle statt nur der nächsten, und vor ihm ' +
+      'müssen mindestens zwei Blöcke das Etikett liefern. Sonst false.',
     // Kategorie-Zusatz (BAUPLAN 30): wird an den Auftrag angehängt; die KI
     // wählt eine der vorhandenen Bibliotheks-Klappen, Standard „eigene".
     bereichZusatz: (bereiche) =>
@@ -2925,6 +2957,19 @@ export const texte = {
       'Der Prüfer hat keinen Prüfbeleg gemeldet — das gilt als nicht bestanden.',
     rueckfuehrung: (name, runde, gesamt) =>
       `Zurück zu „${name}" — Reparatur-Runde ${runde} von ${gesamt}.`,
+    // Gebündelte Rückführung (BAUPLAN 47): Ein zweiter Prüfer, der denselben
+    // Block zurückschickt, bevor der wieder gestartet ist, hängt seine
+    // Beanstandungen an — eine Reparatur-Runde statt zwei, 0 Tokens.
+    rueckfuehrungGebuendelt: (prueferName, zielName, anzahl) =>
+      `„${prueferName}" schickt „${zielName}" ebenfalls zurück — gebündelt in dieselbe ` +
+      `Reparatur-Runde (${anzahl} ${anzahl === 1 ? 'Beanstandung' : 'Beanstandungen'} dazu), ` +
+      'keine zweite Runde.',
+    // Nachgeholte Rückführung (BAUPLAN 47): Kam die Kritik eines Prüfers an,
+    // während das Ziel gerade lief (ein nur-lesendes oder prüfendes Ziel startet
+    // neben Prüfern sofort), läuft es nach dem Anlauf gleich noch einmal — sonst
+    // wäre die Runde genommen und die Kritik trotzdem verloren.
+    rueckfuehrungNachgeholt: (name) =>
+      `„${name}" lief schon, als diese Rückmeldung kam — der Block läuft mit ihr gleich noch einmal.`,
     // Lieferschein (BAUPLAN 42): Was ein Block gemeldet hat, steht im Ticker —
     // und damit im Laufbericht.
     meldungAngekommen: (name, fazit) => `„${name}" meldet: ${fazit}`,

@@ -12,7 +12,7 @@ Block-Fähigkeit ist ein Kennzeichen, kein Sonderfall — und wird im selben Bau
 im Block-Editor wählbar gemacht. Prüfstein: Kann Georg den Block nachbauen? Kann ein
 Katalog-Block etwas, das ein selbstgebauter nicht kann, ist es ein Sonderfall und
 gehört repariert (Rückstand aus 14: heute darf ein eigener Block von 12 Kennzeichen
-nur `nurLesen` setzen — aufgeholt in Schritt 48).
+nur `nurLesen` setzen, seit 47 auch `fuehrtZusammen` — der Rest wird in Schritt 48 aufgeholt).
 
 Bauschritte 1–32 sind abgeschlossen und stehen im [BAUPLAN-ARCHIV.md](BAUPLAN-ARCHIV.md)
 — Verweise wie „BAUPLAN 19" zeigen dorthin.
@@ -734,15 +734,36 @@ Recherche zusammenzuführen ist etwas anderes als Code.)
   was nie geteilt war).
 - Der Inhalt steckt im Auftragstext wie bei jedem Block: Der Katalog liefert
   „Integrator (Code)" — prüft jede Naht gegen die Datenverträge und repariert, was
-  nicht zusammenpasst — und „Integrator (Recherche)". Eigene baut Georg selbst
-  (Schritt 48).
-- Er baut **keine Features nach** (was ein Bauer schuldig blieb, geht als
-  Beanstandung zurück) und wirft **keine Festlegungen um** (der Vertrag steht).
+  nicht zusammenpasst — und „Integrator (Recherche)". Eigene baut Georg im
+  Block-Editor (Häkchen „Führt zusammen", Regel „Kein Kennzeichen ohne Editor-Feld" —
+  gebaut in 47, nicht erst in 48; der Editor lehnt das Häkchen ohne braucht-Etikett ab).
+- Er baut **keine Features nach** (was ein Bauer schuldig blieb, steht als
+  Beanstandung im Feld `offen` seines Berichts — Block, Fundort, was fehlt; die
+  Rückführung bleibt Sache eines Prüf-Blocks dahinter, FlowForge stellt sie nicht
+  selbst zu) und wirft **keine Festlegungen um** (der Vertrag steht).
+- **Funde aus Angriffsliste und Prüfung, gebaut:** Ein „führt zusammen"-Block ist
+  kein benanntes Ziel des Zuschnitts (sonst hätte Paket schneiden ihm ein eigenes
+  Paket schneiden müssen), und die Zustellregel gibt ihm die Zuschnitte **aller**
+  Umsetzer-Vorfahren auch bei ungleicher Entfernung (Bauer → Prüfer → Integrator
+  neben Bauer → Integrator) — sonst träfe die Dateilisten-Sperre ihn genau an der Naht;
+  ein Prüfer hinter ihm erbt dieselben Zuschnitte (gleicher Maßstab). Als
+  schreibender Block bekommt er alle Baselines „vorher schon rot". Die Steck-Regel
+  ≥ 2 gilt streng beim Start; beim Zeichnen ist ein Lieferant ein erlaubter
+  Zwischenstand (Prüfer-Fund: sonst ließ sich „zwei Bauer → Integrator" in keiner
+  Pfeil-Reihenfolge stecken), der Chip sagt „nur einer — zwei nötig".
 - **Gebündelte Rückführung, ohne Agent:** Schicken zwei Prüfer denselben Bauer
   zurück, sammelt FlowForge ihre Beanstandungen (die seit 42 als Felder vorliegen)
   und schickt ihn **einmal** mit allen zurück — eine Reparatur-Runde statt zwei.
-  Reine Mechanik, 0 Tokens, wie das Tor aus Schritt 35.
-- Nachzuziehen: SPEC §4.3 (Integrator), §4.1 (gebündelte Rückführung).
+  Reine Mechanik, 0 Tokens, wie das Tor aus Schritt 35. Gebündelt wird, solange die
+  erste Rückmeldung beim Ziel **unverbraucht** liegt (Merkmal am Knoten, nicht der
+  Status — ein nur-lesendes Ziel startet sofort, dann nimmt der zweite Prüfer ehrlich
+  seine eigene Runde, und das Ziel läuft nach dem Anlauf mit dieser Kritik gleich noch
+  einmal: „nachgeholte Rückführung", Prüfer-Fund — vorher war die Runde genommen und
+  die Kritik trotzdem weg); jede Kritik steht unter ihrem Absender, ein rotes Tor-Protokoll
+  des zweiten Prüfers wird angehängt, und der zweite Prüfer bekommt keine lokale
+  Vorreparatur mehr (der erste hat den Weg festgelegt).
+- Nachgezogen: SPEC §4.3 (Integrator), §4.1 (Steck-Regel ≥ 2, gebündelte
+  Rückführung), §4.2 (Kennzeichen), §4.5 (Editor-Häkchen).
 **Alltagstest:** Georg lässt drei Bauer an einem Feature arbeiten und dahinter einen
 Integrator: Im Abschlussbericht steht, welche Nähte er geprüft und was er angepasst
 hat. Zwei Prüfer, die denselben Bauer beanstanden, lösen **eine** Reparatur-Runde aus.
@@ -751,7 +772,8 @@ hat. Zwei Prüfer, die denselben Bauer beanstanden, lösen **eine** Reparatur-Ru
 (Wunsch Georg, 16.08.2026: Alle neuen Mechaniken müssen auch selbstgebauten Blöcken
 offenstehen — und Etiketten sollen bearbeitbar sein wie Blöcke.)
 - **Der Rückstand:** Der Katalog kennt 12 Kennzeichen (plus `modell` aus 37,
-  `fuehrtZusammen` aus 47); ein eigener Block darf nur `nurLesen` setzen —
+  `fuehrtZusammen` aus 47 — das hat sein Editor-Häkchen schon); ein eigener Block
+  darf sonst nur `nurLesen` setzen —
   `prueft`, `uebung` und Formularfelder sind fest verdrahtet (blockRegeln.js). Die
   Vorsicht stammt aus Schritt 14 und ist überholt: Seit Schritt 19 sitzen die Sperren
   am Werkzeugaufruf und kennen den laufenden Block, ein eigener Prüfer bekäme also

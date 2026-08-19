@@ -58,7 +58,11 @@ function vorschlagSaeubern(roh) {
     // Modellklasse (BAUPLAN 37): nur die drei bekannten Klassen — alles
     // andere fällt auf Standard zurück, nie auf ein stilles Billigmodell.
     modell: modellKlasseGueltig(roh.modell) ?? MODELL_KLASSE_STANDARD,
-    nurLesen: Boolean(roh.nurLesen)
+    nurLesen: Boolean(roh.nurLesen),
+    // Führt zusammen (BAUPLAN 47): immer ein Boolean — fehlt das Feld im
+    // Vorschlag, ist es false, damit das Häkchen im Editor nie mit undefined
+    // startet.
+    fuehrtZusammen: Boolean(roh.fuehrtZusammen)
   }
 }
 

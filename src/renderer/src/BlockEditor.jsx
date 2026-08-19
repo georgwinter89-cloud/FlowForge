@@ -153,7 +153,10 @@ export default function BlockEditor({ block, onSpeichern, onAbbrechen }) {
     // Modellklasse (BAUPLAN 37): Voreinstellung des eigenen Blocks —
     // Altbestand ohne Feld läuft auf Standard.
     modell: blockModellKlasse(block),
-    nurLesen: block?.nurLesen ?? true
+    nurLesen: block?.nurLesen ?? true,
+    // Führt zusammen (BAUPLAN 47, „Kein Kennzeichen ohne Editor-Feld"):
+    // Altbestand ohne Feld startet ohne Häkchen.
+    fuehrtZusammen: block?.fuehrtZusammen ?? false
   })
   const vorschlaege = bekannteEtiketten()
   // Vorschläge fürs Kategorie-Feld: feste Klappen (Anzeigename), „Eigene" und
@@ -178,9 +181,13 @@ export default function BlockEditor({ block, onSpeichern, onAbbrechen }) {
     // Der Assistent liefert den Bereich als Schlüssel — im Feld steht der Name.
     // Das „wozu" (BAUPLAN 43) füllt der Assistent nicht: Es steht nie leer da,
     // sondern fehlt ehrlich, bis der Nutzer es tippt.
+    // fuehrtZusammen (BAUPLAN 47) mit Rückfall false: Ein Vorschlag ohne das
+    // Feld darf das Häkchen nicht auf undefined setzen — die Checkbox kippte
+    // sonst von „gesteuert" auf „ungesteuert".
     setWerte({
       brauchtWozu: {},
       ...ergebnis.vorschlag,
+      fuehrtZusammen: Boolean(ergebnis.vorschlag.fuehrtZusammen),
       bereich: bereichAnzeige(ergebnis.vorschlag.bereich)
     })
   }
@@ -347,6 +354,22 @@ export default function BlockEditor({ block, onSpeichern, onAbbrechen }) {
                   <span>
                     {t.nurLesenFeld}
                     <span className="feld-hinweis">{t.nurLesenHinweis}</span>
+                  </span>
+                </label>
+                {/* Führt zusammen (BAUPLAN 47): „Kein Kennzeichen ohne
+                    Editor-Feld" — der Block nimmt ALLE Lieferungen seiner
+                    braucht-Etiketten, und das Schaubild verlangt mindestens
+                    zwei Lieferanten. Die Verträglichkeit (braucht darf nicht
+                    leer sein) prüft pruefeEigenenBlock beim Speichern. */}
+                <label className="feld feld-schalter">
+                  <input
+                    type="checkbox"
+                    checked={werte.fuehrtZusammen}
+                    onChange={(e) => setzen('fuehrtZusammen', e.target.checked)}
+                  />
+                  <span>
+                    {t.fuehrtZusammenFeld}
+                    <span className="feld-hinweis">{t.fuehrtZusammenHinweis}</span>
                   </span>
                 </label>
                 {/* Modellklasse (BAUPLAN 37): „Kein Kennzeichen ohne

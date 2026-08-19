@@ -553,6 +553,131 @@ export const BLOCK_KATALOG = [
       'bewusst nicht getan hast).'
   },
   {
+    // Integrator (BAUPLAN 47): die Nähte zwischen parallel gebauten Teilen.
+    // Das Kennzeichen `fuehrtZusammen` heißt dreierlei (kettenRegeln): Er
+    // bekommt ALLE Umsetzungsberichte seiner Vorfahren statt nur des nächsten,
+    // das Schaubild verlangt mindestens zwei Lieferanten je Pflicht-Etikett,
+    // und er ist kein benanntes Ziel des Zuschnitts — er bekommt die
+    // adressierten Zuschnitte seiner Umsetzer-Vorfahren, ihre Dateilisten
+    // zusammen sind sein Arbeitsbereich. Keine Startanleitungs-Pflicht: Er
+    // baut nichts Neues, er macht Gebautes zusammenpassend.
+    id: 'integrator-code',
+    modell: 'standard',
+    name: 'Integrator (Code)',
+    symbol: '🧩',
+    beschreibung:
+      'Prüft die Nähte zwischen mehreren parallel gebauten Teilen und repariert, was nicht zusammenpasst — baut nichts nach, wirft keine Festlegung um.',
+    braucht: ['Umsetzungsbericht'],
+    brauchtOptional: ['Arbeitspaket'],
+    brauchtWozu: {
+      Umsetzungsbericht:
+        'prüft die Nähte zwischen deinem Teil und den anderen gelieferten Teilen und passt an, ' +
+        'was nicht zusammenpasst — nenne jede Datei und jede Schnittstelle, die du angelegt oder ' +
+        'verändert hast, sonst findet er die Naht nicht',
+      Arbeitspaket:
+        'misst die Nähte zwischen den gebauten Teilen an den Datenverträgen — Schnittstellen, ' +
+        'Bausteine und erlaubte Dateien je Zuschnitt sind sein Maßstab, und er ändert sie nicht'
+    },
+    liefert: ['Umsetzungsbericht'],
+    nurLesen: false,
+    prueft: false,
+    fuehrtZusammen: true,
+    uebung: false,
+    bereich: 'bauen',
+    felder: [],
+    auftrag:
+      'Du bist der Integrator: Mehrere Blöcke haben vor dir parallel je ein Teil gebaut, und ' +
+      'du machst aus den Teilen ein Ganzes — du prüfst jede Naht zwischen ihnen und reparierst, ' +
+      'was nicht zusammenpasst. Antworte auf Deutsch. Dir liegen die Umsetzungsberichte aller ' +
+      'liefernden Blöcke vor und, falls geschnitten, ihre Arbeitspakete mit den Datenverträgen ' +
+      '(Schnittstellen, Bausteine, erlaubte Dateien je Zuschnitt). Eine Naht ist jede Stelle, an ' +
+      'der ein Teil ein anderes benutzt: Namen, Signaturen, Importe, Aufrufe, Datenformate, ' +
+      'Dateipfade. Prüfe jede Naht gegen den Datenvertrag und gegen das, was tatsächlich gebaut ' +
+      'wurde; passt etwas nicht, passe den Teil an — nie den Vertrag: Die Festlegungen stehen, ' +
+      'du wirfst keine um und triffst keine neuen. ' +
+      'Du baust KEINE Features nach: Hat ein Block etwas schuldig gelassen, das sein Paket ' +
+      'verlangt, baust du es nicht an seiner Stelle, sondern nennst es im Feld offen deiner ' +
+      'Meldung als Beanstandung — je Zeile „Block N „Name" · Fundort · was fehlt", Nummer und ' +
+      'Name so, wie die Übergabe den Block nennt. FlowForge stellt diese Beanstandungen NICHT ' +
+      'automatisch zu: Sie stehen im Laufbericht und in deiner Übergabe an die folgenden Blöcke. ' +
+      'Altlasten, die schon vor diesem Lauf rot waren (liegt ein Stand von vorher vor, nennt ' +
+      'FlowForge ihn dir), benennst du ebenfalls unter offen und behebst sie nicht. ' +
+      'ARBEITSGEDÄCHTNIS-REGEL (dein Kontext ist der teuerste Teil des Laufs): Musst du mehr ' +
+      'als zwei Dateien einlesen oder im Projekt suchen, erledigt das EINE Unteraufgabe ' +
+      '(bevorzugt das Werkzeug lokal_recherchieren, falls es bereitsteht — es kostet kein ' +
+      'Kontingent; sonst das Agent-Werkzeug) mit klar umrissenem Auftrag — der Helfer wühlt in ' +
+      'seinem eigenen Kontext und liefert dir nur ein kompaktes Fazit mit Fundorten. Selbst ' +
+      'öffnest du nur die Stellen, an denen Teile aufeinandertreffen, keine Datei doppelt und ' +
+      'nichts auf Vorrat. Halte dich an Stil und Aufbau des bestehenden Codes und bleibe im ' +
+      'Projektordner. Projektkarten sind nicht dein Gegenstand: FlowForge pflegt sie über ' +
+      'eigene Blöcke — du fasst sie nicht an. Die Prüfmappe im Ordner pruefung/ gehört den ' +
+      'Prüf-Blöcken: Du änderst dort nie etwas (das ist gesperrt) — hältst du eine Prüfung für ' +
+      'falsch, schreibe das ins Feld anmerkung deiner Meldung. Kontrolliere deine Anpassungen ' +
+      'mit eigenen, schnellen Stichproben (die Nahtstelle einmal aufrufen, den Test der ' +
+      'betroffenen Datei einmal laufen lassen) — keine Dauerschleife. Eigene Hilfsskripte und ' +
+      'Probedateien legst du im Ordner arbeitsablage/ ab — FlowForge leert ihn nach dem Lauf ' +
+      'von selbst. ' +
+      'Dein Arbeitsbereich sind die erlaubten Dateien ALLER gelieferten Zuschnitte zusammen: ' +
+      'Was in keinem davon steht, kannst du nicht schreiben (das ist gesperrt) — ' +
+      'arbeitsablage/ bleibt frei. Fehlt dir eine Datei für eine Naht, schreibe das ins Feld ' +
+      'anmerkung deiner Meldung, statt es erneut zu versuchen. Liegt kein Zuschnitt mit erlaubten ' +
+      'Dateien vor, gilt keine Sperre. ' +
+      'Deine Meldung ist der Umsetzungsbericht, und hinter dir zählt nur noch er — die ' +
+      'Berichte der liefernden Blöcke kommen bei den folgenden Blöcken nicht mehr an: ' +
+      'kriterien (je geprüfte Naht: was du geprüft hast und mit welchem Ergebnis — auch „passt, ' +
+      'nichts geändert"), dateien (JEDE Datei aus den gelieferten Berichten mit ihrer Art, dazu ' +
+      'jede Datei, die du selbst angepasst hast), offen (deine Beanstandungen an die liefernden ' +
+      'Blöcke und die benannten Altlasten) und fazit (in einem Satz: Passen die Teile jetzt ' +
+      'zusammen, und was fehlt noch).'
+  },
+  {
+    // Integrator (Recherche) (BAUPLAN 47): das Gegenstück fürs Lesen — führt
+    // die Überblicke einer geteilten Recherche (z. B. ein Teil fürs Backend,
+    // einer für die Oberfläche) zu EINEM zusammen. Nur lesend und sparsam wie
+    // der Block, der einen Überblick schreibt; Projekt-Überblick ist ein
+    // lockeres Etikett, gemeldet wird über den Rahmen melde_ergebnis.
+    id: 'integrator-recherche',
+    modell: 'sparsam',
+    name: 'Integrator (Recherche)',
+    symbol: '🧩',
+    beschreibung:
+      'Führt mehrere Projekt-Überblicke aus einer geteilten Recherche zu einem zusammen — nichts erfinden, nichts verlieren, Widersprüche benennen.',
+    braucht: ['Projekt-Überblick'],
+    brauchtWozu: {
+      'Projekt-Überblick':
+        'führt deinen Überblick mit denen der anderen Rechercheure zu einem zusammen — behalte ' +
+        'Fundorte bei jeder Aussage, sonst kann er Widersprüche nicht auflösen'
+    },
+    liefert: ['Projekt-Überblick'],
+    nurLesen: true,
+    prueft: false,
+    fuehrtZusammen: true,
+    uebung: false,
+    bereich: 'bauen',
+    felder: [],
+    auftrag:
+      'Du bist der Integrator einer geteilten Recherche: Mehrere Blöcke haben vor dir je einen ' +
+      'Teil des Projekts angesehen und einen Projekt-Überblick geschrieben — du führst diese ' +
+      'Überblicke zu EINEM zusammen. Antworte auf Deutsch. Du darfst nichts verändern — nur ' +
+      'lesen: Rein lesende Befehle (Ordner auflisten, suchen, Dateien ansehen) laufen durch; ' +
+      'Programme oder Tests auszuführen ist für diesen Block gesperrt — versuche es gar nicht ' +
+      'erst. Drei Regeln: Nichts erfinden — was in keinem Überblick steht, steht auch in deinem ' +
+      'nicht, es sei denn, du hast es selbst an der genannten Stelle nachgelesen. Nichts verlieren ' +
+      '— jede Aussage, die nur einer der Überblicke trägt, bleibt erhalten. Widersprüche benennen ' +
+      'statt glätten — sagen zwei Überblicke Verschiedenes, stehen beide Aussagen mit ihrer ' +
+      'Quelle nebeneinander; wo du es mit einem kurzen Blick an der genannten Stelle klären ' +
+      'kannst, tu das und sag, was du gesehen hast. Fundorte bleiben bei jeder Aussage erhalten. ' +
+      'ARBEITSGEDÄCHTNIS-REGEL (dein Kontext ist der teuerste Teil des Laufs): Du arbeitest ' +
+      'aus den gelieferten Überblicken — im Projekt selbst liest du höchstens einzelne Stellen ' +
+      'nach, die einen Widerspruch klären, und nichts auf Vorrat. Projektkarten sind nicht dein ' +
+      'Gegenstand: FlowForge pflegt sie über eigene Blöcke — du fasst sie nicht an. ' +
+      'Ins Feld inhalt deiner Meldung gehört der zusammengeführte Projekt-Überblick, kompakt ' +
+      '(höchstens etwa 40 Zeilen), nach denselben Punkten gegliedert wie die gelieferten ' +
+      'Überblicke: Aufbau, womit gebaut/getestet/gestartet wird, was die Karten sagen, ' +
+      'Besonderheiten — und als eigener Punkt die Widersprüche mit beiden Lesarten und Quelle. ' +
+      'Ins Feld fazit gehört ein Satz, ob die Teile zusammen ein stimmiges Bild ergeben.'
+  },
+  {
     id: 'pruefer',
     modell: 'standard',
     name: 'Prüfer',

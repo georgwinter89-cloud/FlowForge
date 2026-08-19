@@ -22,6 +22,12 @@ export function BlockChips({ def, herkunft = null }) {
   function herkunftZusatz(bedarf, optional) {
     if (!herkunft) return null
     const namen = herkunft.get(bedarf) ?? []
+    // Führt zusammen (BAUPLAN 47): Ein Pflicht-Etikett mit genau EINEM
+    // Lieferanten ist dort ein Mangel — die Steck-Prüfung verlangt zwei. Der
+    // Chip sagt dasselbe wie die Prüfung, sonst stünde hier grün „kommt von
+    // Bauer · A", während das Schaubild abgelehnt wird.
+    if (def.fuehrtZusammen && !optional && namen.length === 1)
+      return <span className="chip-herkunft chip-fehlt"> {t.kommtVonZuWenig(namen)}</span>
     if (namen.length > 0)
       return <span className="chip-herkunft"> {t.kommtVon(namen)}</span>
     // Ein optionales Etikett, das keiner liefert, ist kein Mangel — der Block
@@ -32,6 +38,9 @@ export function BlockChips({ def, herkunft = null }) {
     <div className="chip-zeile">
       {def.nurLesen && <span className="block-chip chip-sperre">{t.nurLesenMarke}</span>}
       {def.prueft && <span className="block-chip chip-pruefer">{t.prueftMarke}</span>}
+      {def.fuehrtZusammen && (
+        <span className="block-chip chip-zusammen">{t.fuehrtZusammenMarke}</span>
+      )}
       {def.braucht.map((bedarf) => (
         <span key={bedarf} className="block-chip chip-braucht">
           {t.brauchtLabel}: {bedarf}

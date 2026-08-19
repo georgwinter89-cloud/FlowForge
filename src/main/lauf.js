@@ -1834,6 +1834,13 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           // wiederholen.
           nachforderungBeleg: '',
           rueckmeldung: '',
+          // Gebündelte Rückführung (BAUPLAN 47): true, solange eine Rückmeldung
+          // am Block liegt, die sein nächster Anlauf noch nicht gelesen hat.
+          // Fällt in dieser Zeit ein ZWEITER Prüfer mit demselben Ziel durch,
+          // hängt er seine Kritik an, statt eine zweite Runde zu nehmen. Bewusst
+          // nicht am Status festgemacht: Ein nur-lesendes oder prüfendes Ziel
+          // startet neben Prüfern sofort — dann ist die Rückmeldung verbraucht.
+          rueckmeldungOffen: false,
           // Reparatur-Runde beim Prüfer (Entscheidung Georg, 12.08.2026): seine
           // eigene Kritik der letzten Runde — er prüft dann nur diese Punkte
           // nach. Seit BAUPLAN 42 daneben die Beanstandungen als Felder: Der
@@ -2354,8 +2361,14 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           k.meldungen = liste
           k.lieferungen = lieferungenAusMeldungen(liste)
         }
+      // Eine wiederhergestellte Rückmeldung ist unverbraucht (BAUPLAN 47): Der
+      // Block startet nach der Wiederaufnahme frisch und liest sie erst dann —
+      // bis dahin darf ein weiterer Prüfer seine Kritik daran anhängen.
       for (const [id, text] of Array.isArray(fortsetzung.rueckmeldungen) ? fortsetzung.rueckmeldungen : [])
-        if (knoten.has(id) && typeof text === 'string') knoten.get(id).rueckmeldung = text
+        if (knoten.has(id) && typeof text === 'string') {
+          knoten.get(id).rueckmeldung = text
+          knoten.get(id).rueckmeldungOffen = text.length > 0
+        }
       for (const [id, text] of Array.isArray(fortsetzung.nachpruefungen) ? fortsetzung.nachpruefungen : [])
         if (knoten.has(id) && typeof text === 'string') knoten.get(id).nachpruefung = text
       for (const [id, liste] of Array.isArray(fortsetzung.nachpruefungFelder)
@@ -2875,12 +2888,17 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
 
     // Welche Baseline gehört in den Auftrag dieses Blocks? Ein Prüfer sieht
     // seine eigene (er urteilt über seinen Zweig), ein Bau-Block alle.
+    // Ein zusammenführender Block, der Code anfasst (BAUPLAN 47, Integrator
+    // (Code)), ebenfalls alle: Er prüft die Nähte zwischen gelieferten Teilen
+    // und soll Altlasten nicht als Naht-Fehler melden.
     function baselineFuer(k) {
       if (k.def.prueft) {
         const eigen = baseline.get(k.eintrag.instanzId)
         return eigen ? [eigen] : []
       }
-      return k.def.startanleitungPflicht ? [...baseline.values()] : []
+      return k.def.startanleitungPflicht || (k.def.fuehrtZusammen && !k.def.nurLesen)
+        ? [...baseline.values()]
+        : []
     }
 
     // Führt einen Block vollständig aus: Auftrag bauen, Motor laufen lassen,
@@ -3032,6 +3050,10 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
               )
               .join('')
         if (k.rueckmeldung) auftrag += texte.agentenUebergabe.prueferRueckmeldung(k.rueckmeldung)
+        // Ab hier ist die Rückmeldung gelesen (BAUPLAN 47): Ein Prüfer, der
+        // jetzt noch durchfällt, nimmt ehrlich seine eigene Runde — an diesen
+        // Anlauf kann er nichts mehr anhängen.
+        k.rueckmeldungOffen = false
         // Nachprüfung: ehrlich unterschieden, ob der Bauer oder die lokale
         // Vorreparatur (BAUPLAN 20) die Beanstandungen behoben hat.
         // Tor ohne KI (BAUPLAN 35): Lief der Prüfbefehl vorher grün durch,
@@ -4111,23 +4133,38 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       // Block ist wirklich fertig: mitgeschleppte Zusätze für den nächsten
       // Anlauf sind damit erledigt.
       k.status = 'fertig'
-      k.rueckmeldung = ''
+      // Nachgeholte Rückführung (BAUPLAN 47): Kam WÄHREND dieses Anlaufs eine
+      // Rückmeldung an (der Anlauf hatte seine beim Auftragsbau auf „gelesen"
+      // gesetzt — steht sie jetzt wieder auf offen, hat ein Prüfer den laufenden
+      // Block zurückgeschickt; ein nur-lesendes oder prüfendes Ziel startet neben
+      // Prüfern sofort), dann gehört sie dem NÄCHSTEN Anlauf: Rückmeldung,
+      // Diff-Anforderung, Vor-Fazit und Tor-Protokoll bleiben stehen, der Block
+      // läuft gleich noch einmal (nachgeholteRueckfuehrung). Bis dahin wischte
+      // das Blockende sie — die Runde war genommen, die Kritik erreichte niemanden.
+      const nachgeholt = k.rueckmeldungOffen === true
+      if (!nachgeholt) {
+        k.rueckmeldung = ''
+        k.rueckmeldungOffen = false
+      }
       k.nachpruefung = ''
       k.nachpruefungBeanstandungen = []
       k.startanleitungNachforderung = false
       k.uebergabe = ''
       k.uebergabeVerloren = false
-      // Kanten-Zusätze dieses Anlaufs (BAUPLAN 34) sind damit ebenfalls erledigt.
+      // Kanten-Zusätze dieses Anlaufs (BAUPLAN 34) sind damit ebenfalls erledigt
+      // — der Diff-Text immer (diffAnfordern rechnet ihn für den nächsten Anlauf neu).
       k.diffText = ''
-      k.diffAnfordern = false
-      k.vorFazit = ''
+      if (!nachgeholt) {
+        k.diffAnfordern = false
+        k.vorFazit = ''
+      }
       // Lieferschein-Zusätze dieses Anlaufs (BAUPLAN 42) ebenso.
       k.meldungWiederholen = false
       k.nachforderungBeleg = ''
       // Zuschnitt-Nachtrag dieses Anlaufs (BAUPLAN 44) ebenso.
       k.zuschnittNachforderung = ''
       // Tor-Zusätze dieses Anlaufs (BAUPLAN 35) ebenso.
-      k.torProtokoll = ''
+      if (!nachgeholt) k.torProtokoll = ''
       k.rauchtestRueckmeldung = ''
       k.pruefbefehlNachforderung = false
       k.torGruenBefehl = ''
@@ -4216,6 +4253,28 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         return
       }
       await verarbeiteEnde(k, id, blockErgebnis)
+      nachgeholteRueckfuehrung(k)
+    }
+    // Nachgeholte Rückführung (BAUPLAN 47): Der Block hat seinen Anlauf regulär
+    // beendet (verarbeiteEnde ist durch — Lieferungen, Punkt und Bericht dieses
+    // Anlaufs stehen), aber WÄHREND er lief, hat ein Prüfer ihn zurückgeschickt:
+    // Die Rückmeldung liegt ungelesen am Knoten. Dann geht er sofort wieder auf
+    // 'offen' und läuft mit ihr noch einmal — wie jede Rückführung eines
+    // fertigen Blocks, nur eben nachgeholt. Ein Block, der in verarbeiteEnde
+    // selbst auf 'offen' ging (Prüfer nach Rückführung, Nachforderung), ist nicht
+    // 'fertig' und bleibt hier unberührt. Das Vor-Fazit ist das des EBEN
+    // beendeten Anlaufs — die Rückführung hatte noch das ältere gemerkt.
+    // Zusammenspiel mit dem Bündel-Zweig: Fällt P2 durch, während das Ziel
+    // läuft (Rückmeldung gelesen, also nicht offen), nimmt er den Budget-Zweig
+    // und setzt die Rückmeldung wieder auf offen — genau der Fall hier. Fällt
+    // danach noch ein DRITTER Prüfer durch, solange das Ziel läuft, greift der
+    // Bündel-Zweig (offen) und hängt an: Beide Kritiken kommen im nachgeholten
+    // Anlauf an, eine Runde.
+    function nachgeholteRueckfuehrung(k) {
+      if (k.status !== 'fertig' || k.rueckmeldungOffen !== true) return
+      k.status = 'offen'
+      k.vorFazit = k.lieferung ?? ''
+      tickern(texte.ticker.rueckfuehrungNachgeholt(k.name))
     }
     // Zählt, in welcher Reihenfolge Blöcke in den Nachlauf gehen (0.46.2) —
     // wird VOR der Planer-Schleife angelegt, verarbeite läuft erst dort.
@@ -4361,6 +4420,7 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       for (const { k, id, blockErgebnis } of eintraege) {
         if (k.status === 'nachlauf') k.status = 'fertig'
         if (k.status === 'fertig') await verarbeiteEnde(k, id, blockErgebnis)
+        nachgeholteRueckfuehrung(k)
         await strangSchliessenFuer(k)
         standSpeichern()
       }
@@ -4465,6 +4525,91 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
             )
             metrikUrteil(k.lokaleReparaturBlock, 'reparatur', 'nicht-gehalten', k.lokaleReparaturSchritte)
             eskalationsKritik = k.lokaleKritik
+          }
+          // Die Kritik, die ans Ziel geht — nach einem Rollback die Original-
+          // Kritik, sonst die des Prüfbelegs. Schon HIER (BAUPLAN 47), weil der
+          // Bündel-Zweig unten sie braucht. Für den Budget-Zweig ändert sich
+          // nichts: Scheitert die lokale Vorreparatur weiter unten, ist ihre
+          // Original-Kritik genau dieser Prüfbeleg-Text.
+          const kritik = eskalationsKritik ?? belegKritik.text
+          // Zwei Schritte, die jede Rückführung tut — ob sie eine Runde nimmt
+          // (Budget-Zweig) oder sich an eine laufende hängt (Bündel-Zweig):
+          // Erneut laufen alle Blöcke auf den Wegen vom Ziel zum Prüfer —
+          // parallele Zweige außerhalb behalten ihr Ergebnis. Ein Block im
+          // Nachlauf (BAUPLAN 46) auf diesem Weg geht ebenfalls zurück auf
+          // 'offen': Sein Rauchtest wäre auf einen Stand gemessen worden, den
+          // die Reparatur-Runde gleich ersetzt.
+          const korridorOeffnen = () => {
+            for (const nochmalId of zwischenBloecke(workflow.bloecke, workflow.pfeile, zielId, id)) {
+              const nk = knoten.get(nochmalId)
+              if (nk.status === 'fertig' || nk.status === 'nachlauf') {
+                nk.status = 'offen'
+                nk.nachlaufErgebnis = null
+              }
+            }
+          }
+          // Für den Prüfer zählt ab jetzt „was sich seit meinem Urteil geändert
+          // hat" — seine Nachprüfung bekommt denselben Dienst. Vom eigenen
+          // Strang gelesen (BAUPLAN 45): Dort liegen seine Punkte; der
+          // gemeinsame Stand kennt sie erst nach der Zusammenführung. Und er
+          // prüft in der nächsten Runde nur seine Beanstandungen nach — keine
+          // erneute Vollprüfung. Die Felder wandern mit (BAUPLAN 42): Der
+          // Grün-Fall des Tors filtert daraus die grundsätzlichen heraus.
+          const nachpruefungMerken = async () => {
+            k.diffBasis = await letzterPunktId(projektPfad, k.strang ?? null)
+            k.diffAnfordern = true
+            k.nachpruefung = kritik
+            k.nachpruefungBeanstandungen = beanstandungen
+          }
+
+          // Gebündelte Rückführung (BAUPLAN 47, 0 Tokens): Liegt am Ziel schon
+          // eine Rückmeldung, die sein nächster Anlauf noch nicht gelesen hat —
+          // ein anderer Prüfer hat es in dieser Runde zurückgeschickt, und es
+          // ist noch nicht wieder gestartet —, dann nimmt dieser Prüfer KEINE
+          // zweite Runde und startet KEINE lokale Vorreparatur (der erste hat
+          // den Weg schon festgelegt): Seine Kritik wird an die des ersten
+          // ANGEHÄNGT, jede unter ihrem Absender, und der Bauer behebt beide in
+          // derselben Runde. Bis Bauschritt 47 fraßen zwei Prüfer hinter EINEM
+          // Bauer zwei Runden, und die Kritik des ersten war überschrieben.
+          // Keine Sperre nötig: Der Planer verarbeitet Ergebnisse nacheinander
+          // (Promise.race + await verarbeite in der Planer-Schleife) — zwei
+          // Urteile kommen nie gleichzeitig hier an.
+          // Ehrliche Grenzen: (a) Geht der erste Prüfer den Weg der lokalen
+          // Vorreparatur, liegt am Ziel keine Rückmeldung — der zweite geht
+          // seinen eigenen Weg wie heute (er setzt das Ziel auf 'offen', das
+          // Ziel repariert; scheitert die lokale Nachprüfung des ersten danach,
+          // rollt deren Rollback auf „vor lokaler Reparatur" — hinter die
+          // frische Runde des Ziels; die Notbremse standUeberholt fängt das).
+          // (b) Ist das Budget schon leer, stellt jeder Prüfer seine eigene
+          // Folgen-Frage wie heute. (c) In der gemeinsamen Reparatur-Runde
+          // spielen beide Prüfer ihr Tor — derselbe Projektordner, wie bei
+          // Prüfer neben Prüfer seit Bauschritt 46.
+          if (
+            zielK?.rueckmeldungOffen === true &&
+            !lauf.sanft &&
+            !lauf.hart &&
+            !endZustand
+          ) {
+            korridorOeffnen()
+            zielK.rueckmeldung +=
+              '\n\n' + texte.agentenUebergabe.prueferRueckmeldungTeil(k.name, kritik)
+            zielK.rueckmeldungOffen = true
+            // Tor-Protokoll ANHÄNGEN statt überschreiben — das des ersten
+            // Prüfers beschreibt einen anderen Prüfbefehl. NICHT nach einer
+            // gescheiterten lokalen Nachprüfung: Dort wurde eben zurückgerollt,
+            // das Protokoll beschriebe einen Stand, den es nicht mehr gibt.
+            // vorFazit und diffAnfordern bleiben, wie der erste Prüfer sie
+            // gesetzt hat — es ist dieselbe Runde.
+            if (!warLokaleNachpruefung && k.letztesTorProtokoll)
+              zielK.torProtokoll = [zielK.torProtokoll, k.letztesTorProtokoll]
+                .filter(Boolean)
+                .join('\n\n')
+            k.letztesTorProtokoll = ''
+            await nachpruefungMerken()
+            tickern(texte.ticker.rueckfuehrungGebuendelt(k.name, zielK.name, belegKritik.anzahl))
+            if (belegKritik.anzahl > 0)
+              tickern(texte.ticker.beanstandungenUebergeben(belegKritik.anzahl, zielK.name))
+            return
           }
           // Nur aktiv, wenn die lokale KI beim Laufstart bereitstand und das
           // Häkchen am Ziel-Block (dessen Reparatur-Runde ersetzt würde) an ist.
@@ -4584,7 +4729,6 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
             k.lokaleKritik = null
           }
 
-          const kritik = eskalationsKritik ?? belegKritik.text
           // Reparatur-Runden je Rückführungs-Ziel (BAUPLAN 41): Der Zähler
           // hängt am Ziel, nicht am Lauf — zwei Zweige essen sich die Runden
           // nicht mehr gegenseitig weg. Genommen wird erst, wenn der Lauf
@@ -4595,20 +4739,15 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
               : { erlaubt: false, genutzt: rundenStandard }
           if (budget.erlaubt) {
             const genutzt = budget.genutzt
-            // Erneut laufen alle Blöcke auf den Wegen vom Ziel zum Prüfer —
-            // parallele Zweige außerhalb behalten ihr Ergebnis. Ein Block im
-            // Nachlauf (BAUPLAN 46) auf diesem Weg geht ebenfalls zurück auf
-            // 'offen': Sein Rauchtest wäre auf einen Stand gemessen worden,
-            // den die Reparatur-Runde gleich ersetzt.
-            for (const nochmalId of zwischenBloecke(workflow.bloecke, workflow.pfeile, zielId, id)) {
-              const nk = knoten.get(nochmalId)
-              if (nk.status === 'fertig' || nk.status === 'nachlauf') {
-                nk.status = 'offen'
-                nk.nachlaufErgebnis = null
-              }
-            }
+            korridorOeffnen()
             const ziel = knoten.get(zielId)
-            ziel.rueckmeldung = kritik
+            // Immer mit Absender (BAUPLAN 47): Hängt gleich ein zweiter Prüfer
+            // seine Kritik an, tragen BEIDE Teile ihren Namen — der Bauer
+            // sieht, wessen Beanstandung er behebt. Der Einleitungssatz steht
+            // einmal vorn, an der Auftragsstelle. Und solange das Ziel diese
+            // Rückmeldung nicht gelesen hat, darf angehängt werden.
+            ziel.rueckmeldung = texte.agentenUebergabe.prueferRueckmeldungTeil(k.name, kritik)
+            ziel.rueckmeldungOffen = true
             // Diff + Vor-Fazit (BAUPLAN 34): Der frische Bauer bekommt neben
             // der Kritik den exakten Unterschied „das hast du in diesem Lauf
             // bisher geändert" und sein eigenes Fazit der letzten Runde als
@@ -4623,18 +4762,7 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
             // nicht mehr gibt.
             ziel.torProtokoll = warLokaleNachpruefung ? '' : k.letztesTorProtokoll
             k.letztesTorProtokoll = ''
-            // Für den Prüfer zählt ab jetzt „was sich seit meinem Urteil
-            // geändert hat" — seine Nachprüfung bekommt denselben Dienst. Vom
-            // eigenen Strang gelesen (BAUPLAN 45): Dort liegen seine Punkte;
-            // der gemeinsame Stand kennt sie erst nach der Zusammenführung.
-            k.diffBasis = await letzterPunktId(projektPfad, k.strang ?? null)
-            k.diffAnfordern = true
-            // Der Prüfer selbst prüft in der nächsten Runde nur seine
-            // Beanstandungen nach — keine erneute Vollprüfung. Die Felder
-            // wandern mit (BAUPLAN 42): Der Grün-Fall des Tors filtert daraus
-            // die grundsätzlichen heraus.
-            k.nachpruefung = kritik
-            k.nachpruefungBeanstandungen = beanstandungen
+            await nachpruefungMerken()
             tickern(texte.ticker.rueckfuehrung(ziel.name, genutzt, rundenStandard))
             if (belegKritik.anzahl > 0)
               tickern(texte.ticker.beanstandungenUebergeben(belegKritik.anzahl, ziel.name))

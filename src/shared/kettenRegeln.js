@@ -445,7 +445,12 @@ export function zielListe(bloecke, pfeile, instanzId) {
     if (gesehen.has(empfaenger.instanzId)) continue
     const eintrag = bloecke.find((b) => b.instanzId === empfaenger.instanzId)
     const def = blockDefinition(eintrag?.blockId)
-    if (!def || def.nurLesen || def.prueft) continue
+    // Ein Block, der zusammenführt (BAUPLAN 47), ist kein benanntes Ziel: Der
+    // Integrator bekommt kein eigenes Paket, sondern über zuschnittRouting die
+    // adressierten Zuschnitte seiner Umsetzer-Vorfahren — ihre Dateilisten
+    // zusammen sind sein Arbeitsbereich. Ein eigenes Paket wäre ein zweiter
+    // Maßstab neben dem, nach dem gebaut wurde.
+    if (!def || def.nurLesen || def.prueft || def.fuehrtZusammen) continue
     gesehen.add(empfaenger.instanzId)
     ziele.push({
       instanzId: empfaenger.instanzId,
@@ -519,6 +524,24 @@ export function zuschnittAuftragZusatz(ziele, kartenZuteilung) {
 // adressierten Paketen erreichte es genau die Blöcke nie, die eines haben:
 // Bauer und Prüfer verlören still, was für alle gemeint war. Meldet ein Agent
 // wie vor 44 EIN Paket ohne Adresse, ist es das einzige — Rückfall ohne Bruch.
+//
+// Ausnahme von Regel 2 für Blöcke, die zusammenführen (BAUPLAN 47): Für einen
+// Empfänger mit `fuehrtZusammen` kommen ALLE adressierten Zuschnitte an, deren
+// Ziel ein Vorfahre ist — ohne Verengung auf die nächste Distanz. Bei
+// Bauer 1 → Prüfer → Integrator und Bauer 2 → Integrator liegen die beiden
+// Bauer ungleich nah; Bauer 1s Zuschnitt fiele sonst weg, und die
+// Dateilisten-Sperre träfe den Integrator genau an der Naht, die er flicken soll.
+//
+// Erbe hinter dem Integrator (Prüfer-Befund zu 47): Der Prüfer hinter einem
+// zusammenführenden Block braucht denselben Maßstab wie der Block, den er
+// prüft. Liegt der nächste `fuehrtZusammen`-Vorfahre eines Empfängers nicht
+// weiter weg als sein nächster adressierter Vorfahre, ERBT er dessen Zuschnitte
+// (alle adressierten Vorfahren des Integrators) — zusätzlich zu adressierten
+// Vorfahren in gleicher Entfernung. Ohne das maß der End-Prüfer hinter
+// Bauer 1 → Prüfer → Integrator ← Bauer 2 den Gesamtbericht nur an Bauer 2s
+// Paket. Ein Prüfer, für den der Integrator kein Vorfahr ist (Prüfer hinter
+// Bauer 1), bleibt bei seinem Bauer; ein näherer adressierter Vorfahre schlägt
+// einen ferneren Integrator wie bisher.
 export function zuschnittRouting(bloecke, pfeile, empfaengerId, zielSchluessel) {
   const vorhanden = []
   for (const schluessel of zielSchluessel ?? [])
@@ -526,18 +549,46 @@ export function zuschnittRouting(bloecke, pfeile, empfaengerId, zielSchluessel) 
   if (vorhanden.length === 0) return []
   const adressiert = vorhanden.filter((schluessel) => schluessel)
   const ergebnis = []
+  const defVon = (id) => blockDefinition(bloecke.find((b) => b.instanzId === id)?.blockId)
   if (adressiert.includes(empfaengerId)) ergebnis.push(empfaengerId)
   else if (adressiert.length) {
     const distanz = vorfahrenDistanzen(bloecke, pfeile, empfaengerId)
-    let naechste = null
-    for (const schluessel of adressiert) {
-      if (!distanz.has(schluessel)) continue
-      const naehe = distanz.get(schluessel)
-      if (naechste === null || naehe < naechste) {
-        naechste = naehe
-        ergebnis.length = 0
-        ergebnis.push(schluessel)
-      } else if (naehe === naechste) ergebnis.push(schluessel)
+    if (defVon(empfaengerId)?.fuehrtZusammen) {
+      for (const schluessel of adressiert) if (distanz.has(schluessel)) ergebnis.push(schluessel)
+    } else {
+      // Nächste Entfernung eines adressierten Vorfahren …
+      let naechste = null
+      for (const schluessel of adressiert)
+        if (distanz.has(schluessel) && (naechste === null || distanz.get(schluessel) < naechste))
+          naechste = distanz.get(schluessel)
+      // … und die des nächsten zusammenführenden Vorfahren (mehrere gleich
+      // nahe erben alle).
+      let erbeNaehe = null
+      const erblasser = []
+      for (const [id, naehe] of distanz) {
+        if (!defVon(id)?.fuehrtZusammen) continue
+        if (erbeNaehe === null || naehe < erbeNaehe) {
+          erbeNaehe = naehe
+          erblasser.length = 0
+        }
+        if (naehe === erbeNaehe) erblasser.push(id)
+      }
+      const erbt = erbeNaehe !== null && (naechste === null || erbeNaehe <= naechste)
+      const geerbt = new Set()
+      if (erbt)
+        for (const id of erblasser) {
+          const dessenDistanz = vorfahrenDistanzen(bloecke, pfeile, id)
+          for (const schluessel of adressiert) if (dessenDistanz.has(schluessel)) geerbt.add(schluessel)
+        }
+      // Reihenfolge der Pakete bleibt die der Schlüssel — so bleibt die
+      // Übergabe bei gleichem Schaubild Wort für Wort dieselbe.
+      for (const schluessel of adressiert) {
+        const eigen =
+          distanz.has(schluessel) &&
+          distanz.get(schluessel) === naechste &&
+          (!erbt || naechste === erbeNaehe)
+        if (eigen || geerbt.has(schluessel)) ergebnis.push(schluessel)
+      }
     }
     if (ergebnis.length === 0) ergebnis.push(...adressiert)
   }
@@ -850,20 +901,49 @@ export function pruefeSchaubild(bloecke, pfeile) {
   const { vorgaenger } = nachbarn(bloecke, pfeile)
   for (const block of bloecke) {
     if (vorgaenger.get(block.instanzId).length === 0) continue
-    const fehler = brauchtFehler(bloecke, pfeile, block)
+    const fehler = brauchtFehler(bloecke, pfeile, block, { streng: false })
     if (fehler) return fehler
   }
   return null
 }
 
 // Deckt die Lieferungen der Vorfahren den Bedarf dieser Karte? null oder Fehlermeldung.
-function brauchtFehler(bloecke, pfeile, block) {
+//
+// Steck-Prüfung „mindestens zwei" (BAUPLAN 47): Ein Block mit dem Kennzeichen
+// `fuehrtZusammen` braucht je Pflicht-Etikett mindestens ZWEI Lieferanten —
+// sonst „führt er zusammen", was nie geteilt war. Gezählt werden DISTINKTE
+// Vorfahren-Instanzen (instanzId, nicht Blocksorte): Zwei Bauer-Karten sind
+// zwei Lieferanten, zwei Pfeile von derselben Karte nicht. Transitive Vorfahren
+// zählen mit — bewusst: Ein Integrator hinter einem Integrator sieht die
+// Berichte von dessen Lieferanten UND seinen eigenen (fuehrtZusammen nimmt
+// alles), also gibt es dort wirklich etwas zusammenzuführen. brauchtOptional
+// bleibt frei — ein optionales Etikett darf von einem oder keinem kommen.
+//
+// `streng` (Prüfer-Befund zu 47): Die Zwei verlangt nur der START
+// (pruefeVersorgung). Beim Zeichnen (pruefeSchaubild) genügt EIN Lieferant —
+// sonst ließe sich das Schaubild in natürlicher Reihenfolge gar nicht stecken:
+// p→A, p→B, dann A→Integrator wäre „nur einer" und der Pfeil verschwände, B→
+// Integrator danach genauso; nur ein Umweg käme durch. Genau ein Lieferant ist
+// also ein erlaubter Zwischenstand — der rote Chip „← nur Bauer · A — zwei
+// nötig" sagt, was fehlt. Null Lieferanten bleiben auch beim Zeichnen ein
+// Fehler (Gürtel und Hosenträger: der Start bleibt scharf).
+function brauchtFehler(bloecke, pfeile, block, { streng = true } = {}) {
   const def = blockDefinition(block.blockId)
-  const geliefert = new Set()
+  const lieferanten = new Map()
   for (const vorfahre of vorfahrenSortiert(bloecke, pfeile, block.instanzId))
-    for (const gabe of blockDefinition(vorfahre.blockId).liefert) geliefert.add(gabe)
-  for (const bedarf of def.braucht)
-    if (!geliefert.has(bedarf)) return texte.kette.fehlerBraucht(def.name, bedarf)
+    for (const gabe of blockDefinition(vorfahre.blockId)?.liefert ?? []) {
+      if (!lieferanten.has(gabe)) lieferanten.set(gabe, new Set())
+      lieferanten.get(gabe).add(vorfahre.instanzId)
+    }
+  const fuehrtZusammen = Boolean(def.fuehrtZusammen)
+  const mindestens = fuehrtZusammen && streng ? 2 : 1
+  for (const bedarf of def.braucht) {
+    const anzahl = lieferanten.get(bedarf)?.size ?? 0
+    if (anzahl >= mindestens) continue
+    return fuehrtZusammen
+      ? texte.kette.fehlerFuehrtZusammen(def.name, bedarf, anzahl)
+      : texte.kette.fehlerBraucht(def.name, bedarf)
+  }
   return null
 }
 
