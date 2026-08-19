@@ -1297,7 +1297,19 @@ export const texte = {
       '\n\nHinweis von FlowForge: Genau dieser Auftrag lief schon in einem früheren Anlauf, ' +
       'dessen Kontext voll wurde — eine Übergabe liegt leider nicht vor. Prüfe zuerst den ' +
       'Stand im Projektordner und an den Karten, und setze die Arbeit dann fort, ohne ' +
-      'Erledigtes zu wiederholen.'
+      'Erledigtes zu wiederholen.',
+    // Abnahme eines lokalen Prüfers (BAUPLAN 50): Der Prüfbeleg stammt von
+    // einem Prüfer der Klasse „lokal" — der Claude-Prüfer dahinter ist seine
+    // Abnahme. Derselbe Ton wie lokaleNachpruefung: streng, nichts ungeprüft.
+    // Ohne Katalog-Blocknamen (BAUPLAN 43): „Prüf-Block", nicht „Prüfer".
+    abnahmeLokalerPruefer: (name, modellName, torBestaetigungText) =>
+      `\n\nDieser Prüfbeleg stammt von „${name}" — einem Prüf-Block, der auf Georgs lokaler ` +
+      `KI läuft (Klasse ${modellName}). Du bist seine ABNAHME: Vollziehe sein Urteil nach — ` +
+      'Stichproben nachstellen, Beanstandungen und Freisprüche gegenprüfen — und übernimm ' +
+      'nichts ungeprüft. Sei streng: Ein kleines Modell übersieht Fehler und erklärt Dinge ' +
+      'für geprüft, die es nicht angefasst hat. Dein Urteil zählt; weicht es von seinem ab, ' +
+      'ist das kein Fehler, sondern genau dein Auftrag. Mechanisches Tor-Ergebnis zu seinem ' +
+      `Prüfbefehl: ${torBestaetigungText}`
   },
   // Empfänger im Auftrag (BAUPLAN 43): FlowForge stellt jedem Blockauftrag
   // drei aus dem Schaubild gerechnete Angaben voran — die Empfänger (Block,
@@ -2397,7 +2409,20 @@ export const texte = {
       const platz = Math.max(0, 400 - kopf.length)
       const rest = String(zeilen ?? '').replace(/\s+/g, ' ').trim()
       return kopf + (rest.length > platz ? rest.slice(0, Math.max(0, platz - 1)) + '…' : rest)
-    }
+    },
+    // Tor-Anker des lokalen Prüfers (BAUPLAN 50): Klartext je Ausgang — für
+    // den Auftrag der Abnahme (agentenUebergabe.abnahmeLokalerPruefer).
+    // null = kein Nachspiel (der lokale Prüfer hat „fehlgeschlagen" gemeldet,
+    // oder das Vor-Tor dieses Anlaufs war schon grün).
+    bestaetigungFuerAbnahme: (torBestaetigung) =>
+      ({
+        gruen: 'grün — sein Prüfbefehl lief ohne KI durch, das Urteil „bestanden" ist mechanisch bestätigt.',
+        altlasten:
+          'rot, aber nur mit Fehlschlägen, die schon vor dem Lauf da waren (Altlasten) — kein neuer Fehlschlag.',
+        rot: 'rot — FlowForge hat sein „bestanden" mechanisch auf „fehlgeschlagen" gedreht.',
+        keine: 'nicht möglich — er hat keinen Prüfbefehl hinterlegt; sein Urteil ist mechanisch unbestätigt.',
+        abgebrochen: 'abgebrochen — sein Urteil ist mechanisch unbestätigt.'
+      })[torBestaetigung] ?? 'kein Nachspiel — sein Urteil wurde nicht mechanisch nachgespielt.'
   },
   // App-Werkzeuge des Co-Piloten (BAUPLAN 33): Texte an den Agenten.
   agentenApp: {
@@ -3454,7 +3479,30 @@ export const texte = {
     appPortBelegt: (port) => `App nicht gestartet — Port ${port} ist belegt (siehe App-Tab).`,
     appStartFehler: (grund) => `App nicht gestartet: ${grund}`,
     datenordnerGesperrt: 'Zugriff auf den Datenordner gestoppt — er ist für den Chat gesperrt.',
-    uebersichtGesperrt: 'Werkzeug gestoppt — ohne offenes Projekt beantwortet der Chat nur Bedienfragen.'
+    uebersichtGesperrt: 'Werkzeug gestoppt — ohne offenes Projekt beantwortet der Chat nur Bedienfragen.',
+    // Lokaler Prüfer (BAUPLAN 50): Tor-Anker — meldet ein Prüfer der Klasse
+    // „lokal" „bestanden", spielt FlowForge seinen Prüfbefehl einmal ohne KI
+    // ab. Der Ticker sagt je Ausgang, was mit dem Urteil geschehen ist.
+    torBestaetigtLokal: (name) =>
+      `Tor-Anker: Prüfbefehl von „${name}" grün — das Urteil „bestanden" des lokalen Prüfers ist mechanisch bestätigt.`,
+    torAltlastenLokal: (name) =>
+      `Tor-Anker: Prüfbefehl von „${name}" rot, aber nur mit Fehlschlägen, die schon vor dem Lauf da waren — das Urteil „bestanden" des lokalen Prüfers bleibt stehen.`,
+    torDrehtLokal: (name, anzahl) =>
+      `Tor-Anker: Prüfbefehl von „${name}" rot (${anzahl} ${anzahl === 1 ? 'Fehlerzeile' : 'Fehlerzeilen'}) — das Urteil „bestanden" des lokalen Prüfers wird mechanisch auf „fehlgeschlagen" gedreht; normale Rückführung.`,
+    torKeinBefehlLokal: (name) =>
+      `Tor-Anker: „${name}" hat keinen Prüfbefehl hinterlegt — keine mechanische Bestätigung des lokalen Urteils möglich; es gilt ungeprüft.`,
+    torAbgebrochenLokal: (name) =>
+      `Tor-Anker: Prüfbefehl von „${name}" abgebrochen (Lauf gestoppt) — das lokale Urteil bleibt unbestätigt.`,
+    // Abnahme (BAUPLAN 50): Ein Claude-Prüfer hinter dem lokalen Prüfer hat
+    // geurteilt — der Ticker stellt beide Urteile nebeneinander.
+    abnahmeBestaetigt: (abnahmeName, lokalName, urteil) =>
+      `Abnahme: „${abnahmeName}" bestätigt das Urteil „${urteil}" des lokalen Prüfers „${lokalName}".`,
+    abnahmeWiderspricht: (abnahmeName, lokalName, urteilLokal, urteilAbnahme) =>
+      `Abnahme: „${abnahmeName}" widerspricht dem lokalen Prüfer „${lokalName}" — lokal „${urteilLokal}", Abnahme „${urteilAbnahme}".`,
+    // Steck-Hinweis beim Laufstart (keine Sperre): Ein lokaler Prüfer ohne
+    // Claude-Prüfer dahinter prüft ohne Abnahme — der Lauf startet trotzdem.
+    lokalerPrueferOhneAbnahme: (name) =>
+      `Hinweis: Hinter dem lokalen Prüfer „${name}" nimmt kein Claude-Prüfer ab — sein Urteil hängt nur am Tor-Anker (Prüfbefehl). Der Lauf startet trotzdem.`
   },
   sicherungen: {
     ueberschrift: 'Sicherungspunkte',

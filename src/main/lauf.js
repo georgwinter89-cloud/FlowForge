@@ -1986,6 +1986,21 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           torGruenBefehl: '',
           pruefbefehlNachforderung: '',
           rauchtestRueckmeldung: '',
+          // Lokaler Prüfer (BAUPLAN 50), nur an Prüf-Knoten der Klasse lokal:
+          // urteilLokal — das selbst gemeldete Urteil des letzten Anlaufs VOR
+          //   einer Tor-Drehung ('bestanden'|'fehlgeschlagen'|null);
+          // torBestaetigung — Ausgang des Tor-Ankers ('gruen'|'altlasten'|'rot'|
+          //   'keine'|'abgebrochen'), null = kein Nachspiel. Beides lesen die
+          //   Abnahme-Quellen (abnahmeQuelleVon) beim Auftragsbau der Abnahme.
+          // An Prüf-Knoten, die Abnahme sind: abnahmeQuellen — je Anlauf frisch
+          //   die lokalen Prüfer, deren Beleg im Auftrag ankam (Paar-Bildung
+          //   BEIM Auftragsbau, nicht am Ende — dazwischen kann der lokale
+          //   Prüfer erneut laufen und seine Meldung verlieren);
+          //   anlaufDurchTor — der letzte Anlauf endete am Vor-Tor (kein Agent).
+          urteilLokal: null,
+          torBestaetigung: null,
+          abnahmeQuellen: [],
+          anlaufDurchTor: false,
           // Vollständigkeit des Zuschnitts (BAUPLAN 44):
           // zuschnittNachforderung — der fertige Nachtrag-Text, den dieser
           //   Block im nächsten Anlauf bekommt (er nennt die nicht abgedeckten
@@ -3038,6 +3053,11 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       // und wird vom Nachfolger je Etikett überschrieben.
       if (k.meldungen.length) k.meldungenVorher = k.meldungen
       k.meldungen = []
+      // Lokaler Prüfer (BAUPLAN 50): Urteil und Tor-Anker gehören zum Anlauf —
+      // ein neuer Anlauf beginnt ohne (sonst läse die Abnahme den alten Stand,
+      // wenn dieser Anlauf schon am Vor-Tor endet).
+      k.urteilLokal = null
+      k.torBestaetigung = null
       // Verbrauch aller Sessions dieses Block-Anlaufs (auch über Überträge und
       // Pausen hinweg) — landet sichtbar am Block-Ergebnis im Laufbericht.
       let blockTokens = 0
@@ -3399,6 +3419,15 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
             continue
           }
         }
+        // Tor-Anker (BAUPLAN 50): Erst jetzt ist der Anlauf eines lokalen
+        // Prüfers wirklich zu Ende (kein Übertrag, keine Pause mehr) — sein
+        // Urteil wird mechanisch verankert, bevor es irgendwer liest.
+        if (
+          ergebnis.zustand === 'erfolgreich' &&
+          k.def.prueft &&
+          klasseIstLokal(blockModellKlasse(k.def, k.eintrag))
+        )
+          return mitBlockVerbrauch(await torAnkerLokal(k, ergebnis))
         return mitBlockVerbrauch(ergebnis)
       }
     }
@@ -3452,24 +3481,76 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     async function torAbspielen(k) {
       k.torGruenBefehl = ''
       if (lauf.sanft || lauf.hart || endZustand) return null
+      const tor = await torMessen(k)
+      // Kein Befehl: nichts zu spielen. Abgebrochen heißt: Georg hat den Lauf
+      // gestoppt, nicht „die Prüfung ist rot" — daraus wird kein Urteil gebaut.
+      if (tor.zustand === 'keinBefehl' || tor.zustand === 'abgebrochen') return null
+      if (tor.zustand === 'gruen') {
+        k.torGruenBefehl = tor.befehl
+        tickern(texte.ticker.torGruen)
+        return null
+      }
+      if (tor.zustand === 'altlasten') {
+        // Bewusst ohne torGruenBefehl: Der Befehl ist nicht grün, nur die
+        // Fehler sind alt — der Prüfer prüft normal nach (er kennt die
+        // Baseline aus seinem Auftrag), aber ohne Rückführung.
+        tickern(texte.ticker.torAltlasten(tor.altlasten))
+        return null
+      }
+      // Das volle Protokoll geht neben der Kritik an den Bauer — die
+      // Beanstandungs-Zeilen allein sagen nicht, wo es klemmt.
+      k.letztesTorProtokoll = tor.protokoll
+      tickern(tor.zeitlimit ? texte.ticker.torRotZeitlimit : texte.ticker.torRot(tor.zeilen))
+      // Ein vollwertiges Block-Ergebnis: Die Urteils-Auswertung, die
+      // Rückführung und die Reparatur-Runden-Zählung greifen unverändert —
+      // nur eben ohne einen einzigen Token.
+      return {
+        zustand: 'erfolgreich',
+        ergebnisText: lieferscheinText(tor.torMeldung),
+        meldungen: [tor.torMeldung],
+        fehlertext: '',
+        fehlerArt: null,
+        verbrauch: null,
+        blockTokens: 0,
+        blockKosten: null,
+        blockAufschluesselung: null,
+        // Kein Modell hat gearbeitet — ehrlich „ohne Modell", nicht „0 Tokens
+        // auf Opus" (BAUPLAN 36).
+        blockModelle: null,
+        // … und damit auch keine Denktiefe gemessen (0.48.1).
+        blockDenktiefeGemessen: null,
+        // Abnahme (BAUPLAN 50): Dieses Urteil fiel am Vor-Tor, kein Agent hat
+        // gelesen — ausdrücklich markiert, statt aus „kein Modell gemessen"
+        // zurückgeschlossen (ein Motor ohne Verbrauchsmeldung sähe sonst aus
+        // wie das Tor).
+        durchTor: true
+      }
+    }
+
+    // Die Messung hinter dem Tor (BAUPLAN 35, seit BAUPLAN 50 herausgelöst):
+    // spielt den Prüfbefehl DIESER Prüf-Instanz ab und stuft das Ergebnis ein —
+    // ohne ein Block-Ergebnis zu bauen, ohne k.torGruenBefehl oder das Tor-
+    // Protokoll am Knoten anzufassen. Zwei Aufrufer mit zwei Folgen: das
+    // Vor-Tor einer Nachprüfung (torAbspielen: Rot beendet den Anlauf ohne
+    // Agenten) und der Tor-Anker eines lokalen Prüfers (torAnkerLokal: Rot
+    // dreht sein „bestanden"). Liefert
+    //   { zustand: 'keinBefehl'|'abgebrochen'|'gruen'|'altlasten'|'rot',
+    //     befehl, torMeldung (nur rot), protokoll (nur rot), zeilen (rot: Zahl
+    //     der neuen Fehlerzeilen), zeitlimit, altlasten (Zahl der alten Zeilen) }.
+    async function torMessen(k) {
+      const leer = { befehl: '', torMeldung: null, protokoll: '', zeilen: 0, zeitlimit: false, altlasten: 0 }
       // Je Prüf-Instanz ihr eigener Befehl und ihre eigene Prozessgruppe
       // (BAUPLAN 41): Sonst urteilte das Tor über einen fremden Zweig, und ein
       // fertiger Testlauf erschösse den laufenden des anderen.
       const befehl = pruefbefehlLaden(projektPfad, k.eintrag.instanzId)
-      if (!befehl) return null
+      if (!befehl) return { ...leer, zustand: 'keinBefehl' }
       tickern(texte.ticker.torSpielt(k.name, befehl))
       const messung = await befehlAbspielen(projektPfad, befehl, {
         gruppe: 'tor:' + projektPfad + ':' + k.eintrag.instanzId,
         abbrechen: () => lauf.sanft || lauf.hart
       })
-      // Abgebrochen heißt: Georg hat den Lauf gestoppt, nicht „die Prüfung ist
-      // rot" — daraus wird kein Urteil gebaut.
-      if (messung.abgebrochen) return null
-      if (messung.code === 0) {
-        k.torGruenBefehl = befehl
-        tickern(texte.ticker.torGruen)
-        return null
-      }
+      if (messung.abgebrochen) return { ...leer, zustand: 'abgebrochen', befehl }
+      if (messung.code === 0) return { ...leer, zustand: 'gruen', befehl }
       // Baseline „vorher schon rot": Nur NEU Kaputtes zählt als Fehlschlag —
       // Altlasten sind schon als Aufgaben-Karte abgelegt und verbrennen keine
       // Reparatur-Runde. Ein Zeitlimit zählt dagegen immer als rot: Ein
@@ -3478,13 +3559,8 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       const zeilen = eigeneBaseline
         ? neueFehler(eigeneBaseline.zeilen.join('\n'), messung.ausgabe)
         : fehlerZeilen(messung.ausgabe).map((f) => f.zeile)
-      if (eigeneBaseline && zeilen.length === 0 && !messung.zeitlimit) {
-        // Bewusst ohne torGruenBefehl: Der Befehl ist nicht grün, nur die
-        // Fehler sind alt — der Prüfer prüft normal nach (er kennt die
-        // Baseline aus seinem Auftrag), aber ohne Rückführung.
-        tickern(texte.ticker.torAltlasten(eigeneBaseline.zeilen.length))
-        return null
-      }
+      if (eigeneBaseline && zeilen.length === 0 && !messung.zeitlimit)
+        return { ...leer, zustand: 'altlasten', befehl, altlasten: eigeneBaseline.zeilen.length }
       const genommen = zeilen.slice(0, TOR_BEANSTANDUNGEN_MAX)
       const kopf = messung.zeitlimit
         ? texte.tor.belegKopfZeitlimit(befehl)
@@ -3513,31 +3589,82 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         geprueft: [],
         pruefkarte: null
       }
-      // Das volle Protokoll geht neben der Kritik an den Bauer — die
-      // Beanstandungs-Zeilen allein sagen nicht, wo es klemmt.
-      k.letztesTorProtokoll = mitteGekuerzt(messung.ausgabe, TOR_PROTOKOLL_MAX).text
-      tickern(
-        messung.zeitlimit ? texte.ticker.torRotZeitlimit : texte.ticker.torRot(zeilen.length)
-      )
-      // Ein vollwertiges Block-Ergebnis: Die Urteils-Auswertung, die
-      // Rückführung und die Reparatur-Runden-Zählung greifen unverändert —
-      // nur eben ohne einen einzigen Token.
       return {
-        zustand: 'erfolgreich',
-        ergebnisText: lieferscheinText(torMeldung),
-        meldungen: [torMeldung],
-        fehlertext: '',
-        fehlerArt: null,
-        verbrauch: null,
-        blockTokens: 0,
-        blockKosten: null,
-        blockAufschluesselung: null,
-        // Kein Modell hat gearbeitet — ehrlich „ohne Modell", nicht „0 Tokens
-        // auf Opus" (BAUPLAN 36).
-        blockModelle: null,
-        // … und damit auch keine Denktiefe gemessen (0.48.1).
-        blockDenktiefeGemessen: null
+        zustand: 'rot',
+        befehl,
+        torMeldung,
+        // Das volle Protokoll, gekürzt — der Aufrufer legt es an den Knoten.
+        protokoll: mitteGekuerzt(messung.ausgabe, TOR_PROTOKOLL_MAX).text,
+        zeilen: zeilen.length,
+        zeitlimit: Boolean(messung.zeitlimit),
+        altlasten: 0
       }
+    }
+
+    // Tor-Anker des lokalen Prüfers (BAUPLAN 50): Ein Prüfer der Klasse
+    // „lokal" darf prüfen, aber sein „bestanden" gilt nicht ungeprüft — FlowForge
+    // spielt seinen Prüfbefehl einmal ohne KI ab. Rot → das Urteil wird
+    // mechanisch auf „fehlgeschlagen" gedreht (die Tor-Meldung ersetzt seinen
+    // Beleg: gleiches Etikett, gleiche Art), und die normale Rückführung greift
+    // — sie verbraucht ehrlich eine Reparatur-Runde. Grün/Altlasten → bestätigt.
+    // Kein Prüfbefehl → ehrlich „keine mechanische Bestätigung möglich".
+    //
+    // HIER in knotenAusfuehren, nicht in verarbeiteEnde: Dort wären Lieferung
+    // (k.lieferung/k.lieferungen), der Lieferschein im Bericht und der
+    // ergebnisText schon aus dem lokalen „bestanden" gebaut, und ein await des
+    // Prüfbefehls hielte die Planer-Schleife an. Hier sind k.meldungen und das
+    // Ergebnis noch dieselbe Quelle, und die Schleife dieses Blocks wartet ohnehin.
+    //
+    // Felder: urteilLokal = das vom lokalen Prüfer selbst gemeldete Urteil VOR
+    // einer Drehung; torBestaetigung = 'gruen'|'altlasten'|'rot'|'keine'|
+    // 'abgebrochen', null = kein Nachspiel (Urteil war nicht „bestanden").
+    // War das Vor-Tor dieses Anlaufs (Nachprüfung) schon grün, wird NICHT noch
+    // einmal gespielt — dieselbe Messung zweimal kostete nur Zeit —, aber das
+    // Urteil gilt als 'gruen' bestätigt: Der Befehl lief in diesem Anlauf ohne
+    // KI durch, das ist genau die mechanische Bestätigung. Beides geht ans
+    // Ergebnis (→ blockErgebnis im Bericht) und an den Knoten (→ Auftrag der
+    // Abnahme, abnahmeQuellen).
+    async function torAnkerLokal(k, ergebnis) {
+      const urteil = urteilAusMeldungen(k.meldungen)
+      // Ohne Prüfbeleg gibt es nichts zu verankern — die Meldungspflicht in
+      // verarbeite fordert nach.
+      if (urteil === null) return ergebnis
+      k.urteilLokal = urteil ? 'bestanden' : 'fehlgeschlagen'
+      k.torBestaetigung = null
+      if (!urteil) return { ...ergebnis, urteilLokal: k.urteilLokal, torBestaetigung: null }
+      if (k.torGruenBefehl) {
+        k.torBestaetigung = 'gruen'
+        tickern(texte.ticker.torBestaetigtLokal(k.name))
+        return { ...ergebnis, urteilLokal: k.urteilLokal, torBestaetigung: 'gruen' }
+      }
+      let zustand
+      if (lauf.sanft || lauf.hart || endZustand) zustand = 'abgebrochen'
+      else {
+        const tor = await torMessen(k)
+        zustand = tor.zustand
+        if (zustand === 'gruen') tickern(texte.ticker.torBestaetigtLokal(k.name))
+        else if (zustand === 'altlasten') tickern(texte.ticker.torAltlastenLokal(k.name))
+        else if (zustand === 'rot') {
+          // Die Tor-Meldung ersetzt den lokalen Beleg — Urteil und
+          // Beanstandungen kommen aus EINER Quelle (Meldungspflicht: eine
+          // gedrehte Meldung trägt „fehlgeschlagen" und mindestens eine
+          // Beanstandung, torMessen baut sie genau so).
+          k.meldungen = meldungenZusammenfuehren(k.meldungen, [tor.torMeldung])
+          k.letztesTorProtokoll = tor.protokoll
+          tickern(texte.ticker.torDrehtLokal(k.name, tor.zeilen))
+          ergebnis = {
+            ...ergebnis,
+            ergebnisText: lieferscheinText(tor.torMeldung),
+            meldungen: k.meldungen
+          }
+        }
+      }
+      const torBestaetigung =
+        zustand === 'keinBefehl' ? 'keine' : zustand === 'abgebrochen' ? 'abgebrochen' : zustand
+      if (zustand === 'keinBefehl') tickern(texte.ticker.torKeinBefehlLokal(k.name))
+      if (zustand === 'abgebrochen') tickern(texte.ticker.torAbgebrochenLokal(k.name))
+      k.torBestaetigung = torBestaetigung
+      return { ...ergebnis, urteilLokal: k.urteilLokal, torBestaetigung }
     }
 
     // Übergaben aus den Lieferungen der Vorfahren einsammeln — deterministisch
@@ -3583,6 +3710,28 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         instanzId,
         braucht: [...(vk.def.braucht ?? []), ...(vk.def.brauchtOptional ?? [])],
         vorfahrenIds: (vorfahrenVon.get(instanzId) ?? []).map((b) => b.instanzId)
+      }
+    }
+
+    // Abnahme-Quelle (BAUPLAN 50): Ist der Lieferant eines angekommenen
+    // Prüfbelegs ein Prüfer der Klasse „lokal", wird er zum Paar-Partner der
+    // Abnahme — mit dem Urteil des Belegs, den die Abnahme jetzt liest (nach
+    // einer Tor-Drehung ist das die Tor-Meldung; das selbst gemeldete Urteil
+    // steht am Eintrag des lokalen Prüfers als urteilLokal daneben), und dem
+    // Ausgang seines Tor-Ankers. null, wenn der Lieferant kein lokaler Prüfer
+    // ist. Die Feldnamen sind die der Bericht-Einträge (abnahmeFuer/abnahme),
+    // damit Anzeige und Metrik dieselben Namen lesen.
+    function abnahmeQuelleVon(instanzId) {
+      const vk = knoten.get(instanzId)
+      if (!vk?.def.prueft || !klasseIstLokal(blockModellKlasse(vk.def, vk.eintrag))) return null
+      return {
+        instanzId,
+        block: vk.def.name,
+        zusatz: zusatznameBereinigen(vk.eintrag.zusatz),
+        name: vk.name,
+        modell: texte.kette.lokalModellName(lokal?.modell ?? ''),
+        urteilLokal: urteilAusMeldungen(vk.meldungen) === true ? 'bestanden' : 'fehlgeschlagen',
+        torBestaetigung: vk.torBestaetigung ?? null
       }
     }
 
@@ -3830,6 +3979,12 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       // verdraengungGemeldet, denn beide Gründe können am selben Etikett
       // zusammentreffen und jede Zeile sagt etwas anderes.
       k.weiterverarbeitungGemeldet ??= new Set()
+      // Abnahme (BAUPLAN 50): Ist dieser Block ein nicht-lokaler Prüfer, sind
+      // die lokalen Prüfer, deren Prüfbeleg hier ankommt, seine Abnahme-
+      // Quellen — je Anlauf frisch festgehalten, denn genau DIESE Belege liest
+      // der Agent; was der lokale Prüfer später noch meldet, gehört nicht dazu.
+      const istAbnahme = k.def.prueft && !klasseIstLokal(blockModellKlasse(k.def, k.eintrag))
+      if (istAbnahme) k.abnahmeQuellen = []
       const eintraege = []
       for (const gruppe of gruppen) {
         gruppe.angekommen.forEach((lieferung, index) => {
@@ -3848,6 +4003,21 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
                   text
                 )
           )
+          // Der Zusatz „du bist die Abnahme" steht direkt HINTER dem Beleg des
+          // lokalen Prüfers — dort, wo der Agent ihn gerade gelesen hat.
+          if (istAbnahme && gruppe.etikett === PRUEFBELEG_ETIKETT) {
+            const quelle = abnahmeQuelleVon(lieferung.instanzId)
+            if (quelle) {
+              k.abnahmeQuellen.push(quelle)
+              eintraege.push(
+                texte.agentenUebergabe.abnahmeLokalerPruefer(
+                  quelle.name,
+                  quelle.modell,
+                  texte.tor.bestaetigungFuerAbnahme(quelle.torBestaetigung)
+                )
+              )
+            }
+          }
         })
         // Beide Meldungen einmal je Block und Etikett — uebergabenText läuft in
         // jeder Reparatur-Runde erneut und würde den Ticker sonst fluten.
@@ -4299,6 +4469,9 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       // Block ist wirklich fertig: mitgeschleppte Zusätze für den nächsten
       // Anlauf sind damit erledigt.
       k.status = 'fertig'
+      // Abnahme (BAUPLAN 50): Ob DIESER Anlauf am Vor-Tor endete (kein Agent)
+      // — liest abnahmeVermerken für durchTor.
+      k.anlaufDurchTor = ergebnis.durchTor === true
       // Nachgeholte Rückführung (BAUPLAN 47): Kam WÄHREND dieses Anlaufs eine
       // Rückmeldung an (der Anlauf hatte seine beim Auftragsbau auf „gelesen"
       // gesetzt — steht sie jetzt wieder auf offen, hat ein Prüfer den laufenden
@@ -4375,7 +4548,14 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         // der Klasse-Zeile im Laufbericht.
         klasse: blockModellKlasse(k.def, k.eintrag),
         denktiefe: blockDenktiefe(k.def, k.eintrag),
-        denktiefeGemessen: ergebnis.blockDenktiefeGemessen ?? null
+        denktiefeGemessen: ergebnis.blockDenktiefeGemessen ?? null,
+        // Lokaler Prüfer (BAUPLAN 50): Ausgang des Tor-Ankers und das selbst
+        // gemeldete Urteil VOR einer Drehung — beide null, wenn dieser Anlauf
+        // kein lokaler Prüfer war oder am Vor-Tor endete; torBestaetigung null
+        // auch bei Urteil „fehlgeschlagen" (kein Nachspiel). Alte Berichte
+        // tragen die Felder nicht; Anzeige und Metrik lesen „fehlt" wie null.
+        torBestaetigung: ergebnis.torBestaetigung ?? null,
+        urteilLokal: ergebnis.urteilLokal ?? null
       }
       bericht.blockErgebnisse.push(blockErgebnis)
 
@@ -4599,6 +4779,54 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       }
     }
 
+    // Abnahme (BAUPLAN 50): Hat dieser Prüfer den Prüfbeleg eines lokalen
+    // Prüfers bekommen (abnahmeQuellen, beim Auftragsbau festgehalten), stehen
+    // jetzt beide Urteile nebeneinander — am Eintrag der Abnahme (abnahmeFuer,
+    // je Partner) und nachgetragen am LETZTEN Bericht-Eintrag des lokalen
+    // Prüfers (abnahme). Widerspruch = die Urteile weichen ab. durchTor = das
+    // Urteil der Abnahme kam in diesem Anlauf vom eigenen Vor-Tor (torAbspielen
+    // markiert sein Ergebnis, kein Agent hat gelesen; dann ist auch modelle
+    // null), nicht vom Agenten — die Metrik zählt solche Paare nicht als
+    // „Claude widerspricht". Der Ticker sagt je Partner, ob die Abnahme
+    // bestätigt oder widerspricht.
+    function abnahmeVermerken(k, id, blockErgebnis, urteilAbnahme) {
+      const quellen = k.abnahmeQuellen ?? []
+      if (!quellen.length) return
+      const durchTor = k.anlaufDurchTor === true
+      blockErgebnis.abnahmeFuer = quellen.map((q) => ({
+        instanzId: q.instanzId,
+        block: q.block,
+        zusatz: q.zusatz,
+        modell: q.modell,
+        urteilLokal: q.urteilLokal,
+        torBestaetigung: q.torBestaetigung,
+        urteilAbnahme,
+        widerspruch: q.urteilLokal !== urteilAbnahme,
+        durchTor
+      }))
+      for (const paar of blockErgebnis.abnahmeFuer) {
+        // Rückwärts: der jüngste Eintrag des Partners ist der, dessen Beleg die
+        // Abnahme gelesen hat.
+        const eintrag = [...bericht.blockErgebnisse]
+          .reverse()
+          .find((e) => e.instanzId === paar.instanzId)
+        if (eintrag)
+          eintrag.abnahme = {
+            instanzId: id,
+            block: k.def.name,
+            zusatz: zusatznameBereinigen(k.eintrag.zusatz),
+            urteil: urteilAbnahme,
+            widerspruch: paar.widerspruch
+          }
+        const lokalName = knoten.get(paar.instanzId)?.name ?? paar.block
+        tickern(
+          paar.widerspruch
+            ? texte.ticker.abnahmeWiderspricht(k.name, lokalName, paar.urteilLokal, urteilAbnahme)
+            : texte.ticker.abnahmeBestaetigt(k.name, lokalName, urteilAbnahme)
+        )
+      }
+    }
+
     // Das Blockende hinter dem Rauchtest: Prüfbefehl-Pflicht, Prüfer-Urteil,
     // Punkt am Blockende. Eigene Stelle, weil beide Wege — sofort in verarbeite
     // und aus dem Nachlauf — hier ankommen müssen.
@@ -4633,6 +4861,7 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       if (k.def.prueft) {
         const bestanden = urteilAusMeldungen(k.meldungen)
         blockErgebnis.zustand = bestanden === true ? 'pruefung-bestanden' : 'pruefung-nicht-bestanden'
+        abnahmeVermerken(k, id, blockErgebnis, bestanden === true ? 'bestanden' : 'fehlgeschlagen')
         if (bestanden === true) {
           // Bestandene Nachprüfung einer lokalen Reparatur (BAUPLAN 20):
           // die Wette hat gehalten — keine Motor-Reparatur nötig.
