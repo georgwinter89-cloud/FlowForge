@@ -4,7 +4,15 @@
 // Arbeitsauftrag mit Feldwerten. Geprüft wird im Hauptprozess; die Oberfläche
 // nutzt dieselben Regeln für sofortige Rückmeldung beim Verbinden.
 import { texte } from './texte.js'
-import { blockDefinition, blockAnzeigeName, zusatznameBereinigen } from './blockKatalog.js'
+import {
+  blockDefinition,
+  blockAnzeigeName,
+  zusatznameBereinigen,
+  blockModellKlasse,
+  klasseIstLokal,
+  MODELL_KLASSE_STANDARD,
+  PRUEFBELEG_ETIKETT
+} from './blockKatalog.js'
 
 function blockName(bloecke, instanzId) {
   const eintrag = bloecke.find((b) => b.instanzId === instanzId)
@@ -993,14 +1001,114 @@ export function auftragMitFeldern(def, feldWerte) {
 }
 
 // Ziel der Fehlschlag-Rückführung „zurück zu Block X": die gespeicherte Wahl,
-// wenn sie ein Vorfahre des Prüfers ist — sonst der nächste Vorfahre.
+// wenn sie ein Vorfahre des Prüfers ist — sonst der nächste NICHT-prüfende
+// Vorfahre (BAUPLAN 50), Rückfall: der nächste Vorfahre überhaupt.
 // null = der Prüfer hat keine Vorfahren.
+//
+// Warum nicht mehr blind der nächste Vorfahre: Hinter einem lokalen Prüfer
+// steht seit 50 regelmäßig ein zweiter Prüfer (die Abnahme, Zweitaudit-Muster
+// 0.46.2). Dessen nächster Vorfahre IST der lokale Prüfer — und ein Prüfer
+// repariert nichts. Die Kritik der Abnahme liefe ins Leere, der Korridor
+// öffnete nur Prüfer…Abnahme, der Bauer käme nie wieder dran. Die gespeicherte
+// Wahl gewinnt weiterhin — Georg kann jedes Ziel ausdrücklich setzen.
 export function rueckfuehrungsZiel(bloecke, pfeile, prueferInstanzId) {
   const vorfahren = vorfahrenSortiert(bloecke, pfeile, prueferInstanzId)
   if (vorfahren.length === 0) return null
   const gewaehlt = bloecke.find((b) => b.instanzId === prueferInstanzId)?.zurueckZu
   if (gewaehlt && vorfahren.some((b) => b.instanzId === gewaehlt)) return gewaehlt
+  for (let i = vorfahren.length - 1; i >= 0; i--)
+    if (!blockDefinition(vorfahren[i].blockId)?.prueft) return vorfahren[i].instanzId
   return vorfahren[vorfahren.length - 1].instanzId
+}
+
+// ── Lokaler Prüfer mit Abnahme (BAUPLAN 50) ─────────────────────────────────
+// Ein Prüfer der Klasse „lokal" darf prüfen, aber sein Urteil hängt an zwei
+// Ankern: dem Tor ohne KI (lauf.js spielt seinen Prüfbefehl nach) und einem
+// nicht-lokalen Prüf-Block dahinter, der seinen Prüfbeleg als Eingang bekommt
+// — die Abnahme (Zweitaudit-Muster 0.46.2: die Prüfung der Prüfung ersetzt die
+// Prüfung). Fehlt die Abnahme, sagt es das Schaubild; gesperrt wird nichts
+// („Rückfrage statt Sperre").
+//
+// Die Regel rechnet rein aus (bloecke, pfeile), mit derselben Empfänger-Auswahl
+// wie Vorspann und Lauf (empfaengerLage → uebergabenAuswahl, Verdrängung
+// eingerechnet): Abnahme ist ein Empfänger des Prüfbelegs, der selbst prüft
+// und NICHT lokal ist. Sessionende und Gesamtprüfung sind keine Abnahme (sie
+// prüfen den Beleg nicht nach bzw. nehmen ihn gar nicht); lokal hinter lokal
+// zählt nicht; eigene Prüf-Blöcke mit Prüfbeleg in braucht/brauchtOptional
+// zählen. Auch ohne Sessionende dahinter gilt der Hinweis — ein Ein-Block-Lauf
+// mit lokalem Prüfer hat ebenso keinen Claude-Prüfer, der abnimmt.
+export function lokalerPrueferOhneAbnahme(bloecke, pfeile, instanzId) {
+  const eintrag = bloecke.find((b) => b.instanzId === instanzId)
+  const def = blockDefinition(eintrag?.blockId)
+  if (!def?.prueft || !klasseIstLokal(blockModellKlasse(def, eintrag))) return false
+  const lage = empfaengerLage(bloecke, pfeile, instanzId)
+  return !lage.empfaenger.some((e) => {
+    if (e.etikett !== PRUEFBELEG_ETIKETT) return false
+    const eEintrag = bloecke.find((b) => b.instanzId === e.instanzId)
+    const eDef = blockDefinition(eEintrag?.blockId)
+    return Boolean(eDef?.prueft) && !klasseIstLokal(blockModellKlasse(eDef, eEintrag))
+  })
+}
+
+// Hinweise ohne Sperre fürs ganze Schaubild — bewusst eine LISTE mit Art,
+// getrennt von den string|null-Fehlern (pruefeSchaubild): Ein Hinweis hält
+// nichts an, er steht an der Karte, im Schaubild-Kopf und im Start-Ticker.
+// Heute eine Art: 'lokalerPrueferOhneAbnahme'.
+export function schaubildHinweise(bloecke, pfeile) {
+  const hinweise = []
+  const kennungVon = kennungen(bloecke, pfeile)
+  for (const eintrag of bloecke) {
+    if (!lokalerPrueferOhneAbnahme(bloecke, pfeile, eintrag.instanzId)) continue
+    const name = blockAnzeigeName(blockDefinition(eintrag.blockId), eintrag)
+    hinweise.push({
+      art: 'lokalerPrueferOhneAbnahme',
+      instanzId: eintrag.instanzId,
+      nummer: kennungVon.get(eintrag.instanzId)?.nummer ?? 0,
+      name,
+      text: texte.kette.hinweisLokalerPrueferOhneAbnahme(name)
+    })
+  }
+  return hinweise
+}
+
+// Eindeutige Karten-Kennung ohne node:crypto — shared muss im Browser laufen.
+// Der Renderer gibt crypto.randomUUID() mit (wie bei jeder neuen Karte); der
+// Rückfall hier ist nur für Aufrufer ohne eigene Kennung (Prüfungen).
+function neueKartenKennung(bloecke) {
+  const vergeben = new Set(bloecke.map((b) => b.instanzId))
+  for (;;) {
+    const kennung =
+      typeof globalThis.crypto?.randomUUID === 'function'
+        ? globalThis.crypto.randomUUID()
+        : 'karte-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10)
+    if (!vergeben.has(kennung)) return kennung
+  }
+}
+
+// Fügt hinter einer Karte (dem lokalen Prüfer) eine Abnahme-Karte ein: ein
+// Katalog-Prüfer der Standard-Klasse mit Zusatznamen „Abnahme", Rückführung auf
+// das Ziel des lokalen Prüfers (sonst zielte sie auf den lokalen Prüfer, der
+// nichts repariert). Alle Pfeile vor→X werden zu neu→X, dazu der Pfeil vor→neu
+// — so kommt der Prüfbeleg des lokalen Prüfers bei der Abnahme an und nur ihr
+// Beleg beim Sessionende (Weiterverarbeitung). Liefert neue Listen; der
+// Aufrufer speichert sie (ketteSpeichern prüft pruefeSchaubild). Dieselbe
+// Funktion nutzt Leinwand-Knopf und Prüfung — eine Einfüge-Logik, nicht zwei.
+export function abnahmeKarteEinfuegen(bloecke, pfeile, vorInstanzId, neueInstanzId = null) {
+  const vor = bloecke.find((b) => b.instanzId === vorInstanzId)
+  if (!vor) return { bloecke, pfeile, neueInstanzId: null }
+  const neu = neueInstanzId || neueKartenKennung(bloecke)
+  const karte = {
+    instanzId: neu,
+    blockId: 'pruefer',
+    zusatz: texte.kette.abnahmeZusatzname,
+    modell: MODELL_KLASSE_STANDARD,
+    feldWerte: {},
+    zurueckZu: rueckfuehrungsZiel(bloecke, pfeile, vorInstanzId),
+    position: { x: vor.position?.x ?? 0, y: (vor.position?.y ?? 0) + 190 }
+  }
+  const neuePfeile = pfeile.map((p) => (p.von === vorInstanzId ? { ...p, von: neu } : p))
+  neuePfeile.push({ von: vorInstanzId, nach: neu })
+  return { bloecke: [...bloecke, karte], pfeile: neuePfeile, neueInstanzId: neu }
 }
 
 // Reparatur-Runden je Rückführungs-Ziel (SPEC §5, BAUPLAN 41): Bis Bauschritt

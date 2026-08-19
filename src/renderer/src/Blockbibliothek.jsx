@@ -7,7 +7,9 @@ import {
   blockKategorie,
   blockDefinition,
   blockBereich,
-  katalogEtiketten
+  katalogEtiketten,
+  klasseIstLokal,
+  vorlagenKette
 } from '../../shared/blockKatalog.js'
 import { useKlappen, Klappe } from './klappen.jsx'
 // Etiketten-Bibliothek (SPEC §4.5, BAUPLAN 48): Inhalt der Klappe „Etiketten".
@@ -155,24 +157,41 @@ export default function Blockbibliothek({
         onUmschalten={() => umschalten(KLAPPE_VORLAGEN)}
       >
         <p className="feld-hinweis">{tp.vorlageHinweis}</p>
-        {VORLAGEN.map((vorlage) => (
-          <div
-            key={vorlage.id}
-            className="bib-block bib-vorlage"
-            draggable
-            onDragStart={(e) => {
-              e.dataTransfer.setData('text/flowforge-vorlage', vorlage.id)
-              e.dataTransfer.effectAllowed = 'copy'
-            }}
-          >
-            <p className="karte-titel">
-              {vorlage.symbol} {vorlage.name}
-            </p>
-            <p className="feld-hinweis">
-              {vorlage.kette.map((blockId) => blockDefinition(blockId)?.name).join(' → ')}
-            </p>
-          </div>
-        ))}
+        {VORLAGEN.map((vorlage) => {
+          // Ketten-Glieder mit Klasse/Zusatz (BAUPLAN 50): „Bauer (lokal) →
+          // Prüfer (lokal) → Prüfer · Abnahme" — die Vorlage sagt vorher, was
+          // sie ablegt. Für die lokale Vorlage dazu der Satz, worum es geht.
+          const glieder = vorlagenKette(vorlage)
+          return (
+            <div
+              key={vorlage.id}
+              className="bib-block bib-vorlage"
+              draggable
+              onDragStart={(e) => {
+                e.dataTransfer.setData('text/flowforge-vorlage', vorlage.id)
+                e.dataTransfer.effectAllowed = 'copy'
+              }}
+            >
+              <p className="karte-titel">
+                {vorlage.symbol} {vorlage.name}
+              </p>
+              <p className="feld-hinweis">
+                {glieder
+                  .map((glied) =>
+                    t.vorlageGliedName(
+                      blockDefinition(glied.blockId)?.name,
+                      glied.zusatz,
+                      klasseIstLokal(glied.modell) ? t.vorlageKlasseKurzLokal : ''
+                    )
+                  )
+                  .join(' → ')}
+              </p>
+              {glieder.some((glied) => klasseIstLokal(glied.modell)) && (
+                <p className="feld-hinweis">{t.vorlageErklaerungLokal}</p>
+              )}
+            </div>
+          )
+        })}
       </Klappe>
 
       {BEREICHE.map((bereich) => {

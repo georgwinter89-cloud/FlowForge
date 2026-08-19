@@ -1239,7 +1239,11 @@ export const BLOCK_KATALOG = [
 ]
 
 // Vorlagen-Workflows (SPEC §4.4): fertige Ketten, die per Drag & Drop auf die
-// leere Leinwand gelegt werden.
+// leere Leinwand gelegt werden. Ein Ketten-Glied ist eine blockId (wie bisher)
+// ODER — seit BAUPLAN 50 — ein Objekt { blockId, modell?, zusatz?, zurueckZu? }:
+// modell = Modellklasse der Karte, zusatz = Zusatzname, zurueckZu = Index des
+// Rückführungs-Ziels in derselben Kette (die Leinwand löst ihn zur instanzId
+// auf). Lesen immer über vorlagenKette — nie direkt über kette.
 export const VORLAGEN = [
   // Spec-Erfassung getrennt vom Bauen (Feedback Georg, 07.08.2026): erst das
   // Interview allein laufen lassen — die Karten sind dann da; gebaut wird
@@ -1263,11 +1267,49 @@ export const VORLAGEN = [
     name: 'Bug jagen',
     symbol: '🐞',
     kette: ['diagnose', 'bauer', 'pruefer', 'sessionende']
+  },
+  // Lokaler Prüfer mit Opus-Abnahme (BAUPLAN 50): Opus an den Enden, lokale KI
+  // in der Mitte. Bauer und erster Prüfer laufen lokal; dahinter nimmt ein
+  // Standard-Prüfer „Abnahme" den Prüfbeleg ab (Zweitaudit-Muster 0.46.2) und
+  // führt bei Fehlschlag zum BAUER zurück (Index 2) — nicht zum lokalen
+  // Prüfer, der nichts repariert. Paket schneiden davor, weil Bauer und Prüfer
+  // das Arbeitspaket brauchen (pruefeVersorgung).
+  {
+    id: 'feature-hinzufuegen-lokal',
+    name: 'Feature hinzufügen · lokal',
+    symbol: '🏠',
+    kette: [
+      'paket-schneiden',
+      'angreifer',
+      { blockId: 'bauer', modell: MODELL_KLASSE_LOKAL },
+      { blockId: 'pruefer', modell: MODELL_KLASSE_LOKAL },
+      { blockId: 'pruefer', modell: MODELL_KLASSE_STANDARD, zusatz: 'Abnahme', zurueckZu: 2 },
+      'sessionende'
+    ]
   }
 ]
 
 export function vorlageDefinition(vorlageId) {
   return VORLAGEN.find((v) => v.id === vorlageId) ?? null
+}
+
+// Die Kette einer Vorlage in EINER Form: immer Objektliste
+// [{ blockId, modell: null|Klasse, zusatz: '', zurueckZu: null|Index }].
+// Strings und Objekte dürfen gemischt stehen; ungültige Klassen und Indizes
+// fallen auf null — die Leinwand legt dann die Karte mit Katalog-Voreinstellung
+// ab, wie bei jeder von Hand gezogenen Karte.
+export function vorlagenKette(vorlage) {
+  const roh = Array.isArray(vorlage?.kette) ? vorlage.kette : []
+  return roh.map((glied) => {
+    const g = typeof glied === 'string' ? { blockId: glied } : glied ?? {}
+    const zurueckZu = Number.isInteger(g.zurueckZu) && g.zurueckZu >= 0 && g.zurueckZu < roh.length ? g.zurueckZu : null
+    return {
+      blockId: String(g.blockId ?? ''),
+      modell: modellKlasseGueltig(g.modell),
+      zusatz: zusatznameBereinigen(g.zusatz),
+      zurueckZu
+    }
+  })
 }
 
 // Eigene Blöcke (SPEC §4.5, BAUPLAN 14): vom Nutzer gebaute Blöcke, global für
