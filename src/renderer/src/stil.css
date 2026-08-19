@@ -486,6 +486,15 @@ body {
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
 }
 
+/* Erststart-Wahl (SPEC §9, seit 0.46.4): etwas breiter, damit der ehrliche
+   Abrechnungs-Hinweis nicht in einer schmalen Spalte umbricht. */
+.dialog.erststart {
+  width: 560px;
+}
+.erststart-einleitung {
+  line-height: 1.5;
+}
+
 .dialog h2 {
   font-size: 19px;
   font-weight: 800;

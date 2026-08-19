@@ -5,7 +5,8 @@ const t = texte.einstellungen
 
 // Globale Einstellungen: Motor-Modus (Abo/API), API-Schlüssel, Ausgaben-Obergrenze.
 export default function Einstellungen({ onSchliessen }) {
-  const [modus, setModus] = useState('abo')
+  // '' = noch nicht gewählt (Erststart-Wahl, 0.46.4) — dann ist kein Radio an.
+  const [modus, setModus] = useState('')
   const [apiSchluessel, setApiSchluessel] = useState('')
   const [obergrenze, setObergrenze] = useState(5)
   const [rechteAutomatisch, setRechteAutomatisch] = useState(false)
@@ -25,7 +26,7 @@ export default function Einstellungen({ onSchliessen }) {
   useEffect(() => {
     window.flowforge.einstellungenLaden().then((e) => {
       if (!e.ok) return
-      setModus(e.einstellungen.motorModus)
+      setModus(e.einstellungen.motorModus ?? '')
       setApiSchluessel(e.einstellungen.apiSchluessel)
       setObergrenze(e.einstellungen.ausgabenObergrenzeUsd)
       setRechteAutomatisch(Boolean(e.einstellungen.rechteAutomatisch))

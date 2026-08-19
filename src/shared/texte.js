@@ -2151,9 +2151,13 @@ export const texte = {
     knopf: 'Einstellungen',
     motorUeberschrift: 'KI-Motor',
     modusFeld: 'Wie soll sich der Motor anmelden?',
-    modusAbo: 'Mit meinem Claude-Abo (empfohlen)',
+    modusAbo: 'Mit meinem Claude-Abo',
+    // Abo-Regel neu (SPEC §2, 0.46.4): kein Verstecken, kein Schalter-Theater —
+    // der ehrliche Satz steht beim Erststart und hier in den Einstellungen.
     modusAboHinweis:
-      'Nutzt dein bestehendes Claude-Login und dein Abo-Kontingent. Nur für den eigenen Gebrauch.',
+      'Nutzt dein bestehendes Claude-Login (Claude Code CLI). Läuft über dein Abo-Kontingent. ' +
+      'Anthropic hat angekündigt, Agent-SDK-Nutzung künftig getrennt abzurechnen, und will ' +
+      'vorher Bescheid geben — dann ist der API-Schlüssel der Weg.',
     modusApi: 'Mit API-Schlüssel',
     modusApiHinweis: 'Abrechnung pro Verbrauch über dein Anthropic-Konto.',
     apiSchluesselFeld: 'API-Schlüssel',
@@ -2240,7 +2244,22 @@ export const texte = {
     speichern: 'Speichern',
     abbrechen: 'Abbrechen',
     fehlerApiSchluesselFehlt: 'Für den API-Modus brauchst du einen API-Schlüssel.',
-    fehlerObergrenze: 'Die Ausgaben-Obergrenze muss eine Zahl größer als 0 sein.'
+    fehlerObergrenze: 'Die Ausgaben-Obergrenze muss eine Zahl größer als 0 sein.',
+    // Erststart-Wahl (0.46.4): kein stiller Standard.
+    fehlerModusFehlt:
+      'Wähle zuerst, wie sich der Motor anmelden soll — mit deinem Claude-Abo oder mit API-Schlüssel (Einstellungen → KI-Motor).'
+  },
+  // Erststart-Dialog (SPEC §9, seit 0.46.4): Beim ersten Start wählt der Nutzer
+  // den Motor-Modus selbst; die Wahltexte sind dieselben wie in den Einstellungen.
+  erststart: {
+    ueberschrift: 'Willkommen bei FlowForge',
+    einleitung:
+      'FlowForge startet im Hintergrund die Claude Code CLI als KI-Motor. Bevor es losgeht, ' +
+      'entscheide einmal, wie sich der Motor anmelden soll — du kannst das jederzeit in den ' +
+      'Einstellungen ändern.',
+    aboVoraussetzung:
+      'Voraussetzung: Du bist einmal in der Claude-App bzw. mit „claude" auf diesem Rechner angemeldet.',
+    weiter: 'Los geht’s'
   },
   lauf: {
     laeuft: 'läuft …',

@@ -1,0 +1,9 @@
+# Unterstützen (BAUPLAN 0.46.4): GitHub zeigt aus dieser Datei den „Sponsor"-Knopf
+# oben auf der Repo-Seite. Ehrliche Erwartung: Kaffeegeld, keine Einnahmequelle —
+# der Wert ist das Signal „hier steht ein Mensch dahinter".
+#
+# Das Konto legt Georg selbst an. Sobald es steht, die passende Zeile
+# einkommentieren und den Platzhalter ersetzen — vorher zeigt GitHub keinen Knopf.
+#
+# github: [GITHUB-BENUTZERNAME]   # GitHub Sponsors (Profil muss dafür freigeschaltet sein)
+# ko_fi: KOFI-NAME                # Ko-fi-Seite, z.B. ko_fi: georgwinter

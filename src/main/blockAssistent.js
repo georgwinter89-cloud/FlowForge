@@ -21,7 +21,7 @@ import {
   ETIKETT_MAX,
   ETIKETTEN_MAX
 } from '../shared/blockRegeln.js'
-import { einstellungenLaden, ABO_MODUS_ERLAUBT } from './einstellungen.js'
+import { einstellungenLaden, motorBereit } from './einstellungen.js'
 import { starteMotorFrage } from './motor/claudeCodeMotor.js'
 
 // Das erste vollständige JSON-Objekt aus der Antwort ziehen — Motoren packen
@@ -92,10 +92,8 @@ export async function blockVorschlagErstellen(beschreibung) {
   const wunsch = String(beschreibung ?? '').trim()
   if (!wunsch) return { ok: false, fehler: texte.blockEditor.fehlerBeschreibungFehlt }
   const { einstellungen } = einstellungenLaden()
-  if (einstellungen.motorModus === 'abo' && !ABO_MODUS_ERLAUBT)
-    return { ok: false, fehler: texte.lauf.aboNichtErlaubt }
-  if (einstellungen.motorModus === 'api' && !einstellungen.apiSchluessel)
-    return { ok: false, fehler: texte.einstellungen.fehlerApiSchluesselFehlt }
+  const bereit = motorBereit(einstellungen)
+  if (!bereit.ok) return { ok: false, fehler: bereit.fehler }
 
   const antwort = await starteMotorFrage({
     frage:

@@ -4,13 +4,22 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { texte } from '../shared/texte.js'
 
-// Fest verdrahtete Regel (SPEC §2): Abo-Login nur für den privaten Eigengebrauch.
-// In jeder weitergegebenen Version wird diese Konstante auf false gesetzt —
-// dann läuft FlowForge ausschließlich mit API-Schlüssel.
+// Abo-Regel (SPEC §2, neu seit 0.46.4 — Entscheidung Georg, 19.08.2026): Der
+// Abo-Modus bleibt auch in veröffentlichten Versionen an. Anthropic sagt seit
+// dem 15.06.2026 selbst, dass Agent-SDK- und Drittanbieter-Nutzung bis auf
+// Weiteres über das Abo-Kontingent läuft und Änderungen vorher angekündigt
+// werden. Ein `false` hier wäre ein Schild, kein Schloss — statt Verstecken
+// gibt es die Erststart-Wahl mit ehrlichem Abrechnungs-Hinweis (texte.js).
+// Die Konstante bleibt als Notbremse, falls Anthropic den Weg wirklich sperrt.
 export const ABO_MODUS_ERLAUBT = true
 
+const MOTOR_MODI = ['abo', 'api']
+
 const STANDARD = {
-  motorModus: 'abo',
+  // Kein stiller Standard (0.46.4): Bis der Nutzer beim ersten Start gewählt
+  // hat, ist der Modus leer — Lauf, Chat und Block-Assistent verweigern dann
+  // mit Klartext (motorBereit) statt still über das Abo zu laufen.
+  motorModus: '',
   apiSchluessel: '',
   ausgabenObergrenzeUsd: 5,
   // Automodus (Feedback Georg, 07.08.2026): Rechte-Rückfragen automatisch
@@ -66,21 +75,50 @@ export function einstellungenLaden() {
     // Noch keine Datei — Standardwerte gelten.
   }
   const daten = { ...STANDARD, ...gespeichert }
-  if (!ABO_MODUS_ERLAUBT) daten.motorModus = 'api'
-  return { ok: true, einstellungen: daten, aboErlaubt: ABO_MODUS_ERLAUBT }
+  // Nur die zwei bekannten Modi zählen als Wahl — ein alter oder kaputter
+  // Wert fällt auf „nicht gewählt" zurück und löst die Erststart-Wahl aus.
+  if (!MOTOR_MODI.includes(daten.motorModus)) daten.motorModus = ''
+  if (!ABO_MODUS_ERLAUBT && daten.motorModus === 'abo') daten.motorModus = ''
+  return {
+    ok: true,
+    einstellungen: daten,
+    aboErlaubt: ABO_MODUS_ERLAUBT,
+    motorGewaehlt: motorGewaehlt(daten)
+  }
+}
+
+// Erststart-Wahl (0.46.4): Hat der Nutzer schon gesagt, wie sich der Motor
+// anmelden soll? Erst dann zeigt FlowForge die Projektübersicht ohne den
+// Erststart-Dialog.
+export function motorGewaehlt(einstellungen) {
+  return MOTOR_MODI.includes(einstellungen?.motorModus)
+}
+
+// Eine Stelle für „darf der Motor starten?" — Lauf, Chat und Block-Assistent
+// fragen hier, statt die drei Bedingungen je für sich zu wiederholen.
+export function motorBereit(einstellungen) {
+  if (!motorGewaehlt(einstellungen))
+    return { ok: false, fehler: texte.einstellungen.fehlerModusFehlt }
+  if (einstellungen.motorModus === 'abo' && !ABO_MODUS_ERLAUBT)
+    return { ok: false, fehler: texte.lauf.aboNichtErlaubt }
+  if (einstellungen.motorModus === 'api' && !einstellungen.apiSchluessel)
+    return { ok: false, fehler: texte.einstellungen.fehlerApiSchluesselFehlt }
+  return { ok: true }
 }
 
 export function einstellungenSpeichern(neu) {
-  const modus = neu.motorModus === 'api' ? 'api' : 'abo'
+  const modus = MOTOR_MODI.includes(neu.motorModus) ? neu.motorModus : ''
   const schluessel = String(neu.apiSchluessel ?? '').trim()
   const obergrenze = Number(neu.ausgabenObergrenzeUsd)
+  if (!modus || (modus === 'abo' && !ABO_MODUS_ERLAUBT))
+    return { ok: false, fehler: texte.einstellungen.fehlerModusFehlt }
   if (modus === 'api' && !schluessel)
     return { ok: false, fehler: texte.einstellungen.fehlerApiSchluesselFehlt }
   if (modus === 'api' && (!Number.isFinite(obergrenze) || obergrenze <= 0))
     return { ok: false, fehler: texte.einstellungen.fehlerObergrenze }
 
   const daten = {
-    motorModus: !ABO_MODUS_ERLAUBT ? 'api' : modus,
+    motorModus: modus,
     apiSchluessel: schluessel,
     ausgabenObergrenzeUsd: Number.isFinite(obergrenze) && obergrenze > 0 ? obergrenze : STANDARD.ausgabenObergrenzeUsd,
     rechteAutomatisch: Boolean(neu.rechteAutomatisch),
@@ -109,5 +147,5 @@ export function einstellungenSpeichern(neu) {
   const tmp = dateiPfad() + '.tmp'
   fs.writeFileSync(tmp, JSON.stringify(daten, null, 2), 'utf8')
   fs.renameSync(tmp, dateiPfad())
-  return { ok: true, einstellungen: daten, aboErlaubt: ABO_MODUS_ERLAUBT }
+  return { ok: true, einstellungen: daten, aboErlaubt: ABO_MODUS_ERLAUBT, motorGewaehlt: true }
 }

@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { texte } from '../../shared/texte.js'
 import Projektuebersicht from './Projektuebersicht.jsx'
 import Projektansicht from './Projektansicht.jsx'
 import Einstellungen from './Einstellungen.jsx'
+import Erststart from './Erststart.jsx'
 import Metriken from './Metriken.jsx'
 import Chat from './Chat.jsx'
 
@@ -19,6 +20,14 @@ export default function App() {
   // Co-Pilot (BAUPLAN 33): ein seitliches Chat-Fenster — in der Übersicht wie
   // im Projekt; welcher Chat gemeint ist, entscheidet das offene Projekt.
   const [chatOffen, setChatOffen] = useState(false)
+  // Erststart-Wahl (SPEC §2/§9, seit 0.46.4): Solange der Motor-Modus nicht
+  // gewählt ist, liegt der Erststart-Dialog über allem. null = noch nicht
+  // geladen (kein Aufblitzen des Dialogs bei Nutzern, die längst gewählt haben).
+  const [motorGewaehlt, setMotorGewaehlt] = useState(null)
+  function motorWahlPruefen() {
+    window.flowforge.einstellungenLaden().then((e) => e.ok && setMotorGewaehlt(Boolean(e.motorGewaehlt)))
+  }
+  useEffect(motorWahlPruefen, [])
 
   return (
     <div className="app">
@@ -96,7 +105,16 @@ export default function App() {
           />
         )}
       </div>
-      {einstellungenOffen && <Einstellungen onSchliessen={() => setEinstellungenOffen(false)} />}
+      {einstellungenOffen && (
+        <Einstellungen
+          onSchliessen={() => {
+            setEinstellungenOffen(false)
+            // Wer die Wahl in den Einstellungen trifft, braucht den Erststart nicht mehr.
+            motorWahlPruefen()
+          }}
+        />
+      )}
+      {motorGewaehlt === false && <Erststart onFertig={() => setMotorGewaehlt(true)} />}
     </div>
   )
 }

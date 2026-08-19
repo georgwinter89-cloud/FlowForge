@@ -19,16 +19,28 @@ Sitzungen hinweg Software entsteht — ohne dass dem Agenten der Kontext überl�
 - **Motor-Anschluss:** Eine feste Adapter-Schnittstelle trennt FlowForge vom ausführenden
   KI-Agenten. Die Schnittstelle liefert u.a. den **Kontext-Füllstand** (berechnet aus den
   Token-Verbrauchsdaten des Motors) als Messwert.
-  - **V1-Motor:** Die offizielle Claude-Code-CLI, von FlowForge im Hintergrund gestartet,
-    unter Georgs eigenem Login (Max-Abo-Kontingent). **Nur für den privaten Eigengebrauch
-    des Kontoinhabers** — Anthropics Bedingungen erlauben Abo-Login nicht in Apps für
-    Dritte. Fest verdrahtete Regel: In jeder weitergegebenen Version ist der Abo-Modus
-    deaktiviert; Dritte nutzen eigene API-Schlüssel/Anbieter. Risiko bewusst akzeptiert
-    (Entscheidung Georg, 07.08.2026): Sollte Anthropic die Abo-Nutzung technisch
-    unterbinden, greift die Rückfalllinie.
-  - **Rückfalllinie ab V1:** Derselbe Motor läuft wahlweise mit **API-Schlüssel**
-    (Umschalter in den Einstellungen, kein Umbau). Im API-Modus gilt statt der
-    Kontingent-Pause eine einstellbare **Ausgaben-Obergrenze** pro Lauf.
+  - **V1-Motor:** Die offizielle Claude-Code-CLI, von FlowForge über das Claude Agent
+    SDK im Hintergrund gestartet — wahlweise unter dem Claude-Login des Nutzers
+    (**Abo-Modus**, Abo-Kontingent) oder mit **API-Schlüssel** (Abrechnung pro
+    Verbrauch; statt der Kontingent-Pause gilt eine einstellbare **Ausgaben-Obergrenze**
+    pro Lauf). Beide Modi bleiben auch in veröffentlichten Versionen; die Konstante
+    `ABO_MODUS_ERLAUBT` bleibt `true` und ist nur noch Notbremse, falls Anthropic den
+    Weg wirklich sperrt (Entscheidung Georg, 19.08.2026 — ersetzt die Regel vom
+    07.08.2026 „in weitergegebenen Versionen ist der Abo-Modus deaktiviert": Anthropic
+    sagt seit dem 15.06.2026 selbst, dass Agent-SDK- und Drittanbieter-Nutzung bis auf
+    Weiteres über das Abo-Kontingent läuft und Änderungen vorher angekündigt werden;
+    das Restrisiko ist ein Abrechnungs-, kein Verbotsrisiko. Chronologie und Zitate:
+    README.md. Ein `false` wäre ein Schild, kein Schloss).
+  - **Erststart-Wahl, kein stiller Standard:** Bis der Nutzer gewählt hat, ist der
+    Motor-Modus leer; beim ersten Start fragt ein Dialog (§9) — Abo-Login oder
+    API-Schlüssel —, ohne „Abbrechen". Lauf, Co-Pilot und Block-Assistent verweigern
+    ohne Wahl mit Klartext („Wähle zuerst, wie sich der Motor anmelden soll …") statt
+    still über das Abo zu laufen; die Einstellungen nehmen ebenfalls keine leere Wahl
+    an. Beim Abo steht — im Erststart wie in den Einstellungen — derselbe ehrliche Satz:
+    „Läuft über dein Abo-Kontingent. Anthropic hat angekündigt, Agent-SDK-Nutzung
+    künftig getrennt abzurechnen, und will vorher Bescheid geben — dann ist der
+    API-Schlüssel der Weg." Der API-Modus ist damit die **Rückfalllinie**: derselbe
+    Motor, Umschalter in den Einstellungen, kein Umbau.
   - **Lokale KI schon in V1 — aber nur als Helfer** (Experiment, seit 13.08.2026): Die
     Block-Agenten können Recherche-, Entwurfs- und Bau-Aufträge — auch mittelgroße,
     zusammenhängende Teilaufträge und Neues mit klarer Beschreibung — an eine lokale KI
@@ -1795,6 +1807,12 @@ erscheint als Balken mit roter Marke an der Übertrags-Schwelle — in der Lauf-
 und auf der Hero-Kachel; seit Bauschritt 36 steht der Füllstand des arbeitenden
 Block-Agenten als Hinweis daneben (§6).
 
+- **Erststart-Dialog** (seit 0.46.4): Solange der Motor-Modus nicht gewählt ist (§2),
+  liegt beim Start ein Dialog über der Projektübersicht — „Willkommen bei FlowForge",
+  kurze Einleitung, die zwei Wahlzeilen aus den Einstellungen (Abo mit Abrechnungs-
+  Hinweis und Voraussetzung „einmal mit „claude" angemeldet", API mit Schlüssel und
+  Obergrenze), ein Knopf „Los geht’s", kein Abbrechen. Wer die Wahl stattdessen in den
+  Einstellungen trifft, sieht ihn nicht mehr.
 - **Projektübersicht** beim Start: Läuft gerade ein Lauf, liegt er als große
   **Hero-Kachel** obenauf (Pulspunkt, Workflow, letzte Tickerzeile, Kontext-Balken,
   „Zum Lauf"); darunter die übrigen Projekte als Kacheln mit Zustands-Abzeichen (seit

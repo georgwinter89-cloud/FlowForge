@@ -21,7 +21,7 @@ import path from 'node:path'
 import crypto from 'node:crypto'
 import { app } from 'electron'
 import { texte } from '../shared/texte.js'
-import { einstellungenLaden } from './einstellungen.js'
+import { einstellungenLaden, motorBereit } from './einstellungen.js'
 import { starteChatMotor } from './motor/claudeCodeMotor.js'
 import {
   KONTEXT_FENSTER_STANDARD,
@@ -524,6 +524,10 @@ export function chatSenden(fenster, projektPfad, text, bilder) {
     return { ok: false, fehler: texte.fehler.projektNichtGefunden }
   const chat = chatBesorgen(projektPfad ?? null)
   if (chat.beschaeftigt) return { ok: false, fehler: texte.chat.beschaeftigt }
+  // Erststart-Wahl (0.46.4): Ohne gewählten Motor-Modus startet auch der
+  // Co-Pilot nicht still über das Abo — Klartext statt Anmeldefehler.
+  const bereit = motorBereit(einstellungenLaden().einstellungen)
+  if (!bereit.ok) return { ok: false, fehler: bereit.fehler }
   const sauber = String(text ?? '').trim()
   const geprueft = bildBloecke(bilder)
   if (!geprueft.ok) return { ok: false, fehler: geprueft.fehler }

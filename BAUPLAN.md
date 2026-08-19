@@ -667,8 +667,8 @@ aber durch die schriftliche Duldung vom 15.06. faktisch überholt. Restrisiko is
 Abrechnungs-, kein Verbotsrisiko: Anthropic will den SDK-Weg irgendwann getrennt
 abrechnen [angekündigt: 200 $/Monat bei Max 20x] — mit Vorankündigung; der API-Modus
 bleibt der Rückfall. Ehrlicher Zusatz: „Läuft" ist nicht „ist erlaubt" — aber hier
-sagt der Anbieter selbst, dass es läuft und bis auf Weiteres so bleibt. **Nächste
-Session: zuerst diesen Zwischenschritt, dann 47.**)
+sagt der Anbieter selbst, dass es läuft und bis auf Weiteres so bleibt. Gebaut am
+19.08.2026 — **nächste Session: 47.**)
 - **Abo-Regel neu (SPEC §2):** Beide Modi bleiben; die Konstante `ABO_MODUS_ERLAUBT`
   bleibt `true`, auch in veröffentlichten Versionen. Statt der Deaktivierung: Beim
   ersten Start wählt der Nutzer den Motor-Modus (Abo-Login oder API-Schlüssel) — kein
@@ -677,7 +677,14 @@ Session: zuerst diesen Zwischenschritt, dann 47.**)
   abzurechnen, und will vorher Bescheid geben — dann ist der API-Schlüssel der Weg."
   Die Einstellungen zeigen denselben Satz. Kein Verstecken, kein Schalter-Theater
   (Georg: „Jemand Cleveres würde einem Coding-Agenten sagen, er soll es im Code auf
-  true setzen" — ein `false` wäre ein Schild, kein Schloss).
+  true setzen" — ein `false` wäre ein Schild, kein Schloss). Gebaut: `motorModus`
+  ist bis zur Wahl leer (`STANDARD.motorModus: ''`); `einstellungenLaden` liefert
+  `motorGewaehlt`, `motorBereit(einstellungen)` ist die eine Stelle für „darf der
+  Motor starten?" (Lauf, Co-Pilot-Chat, Block-Assistent — vorher hatte der Chat gar
+  keine Prüfung); `einstellungenSpeichern` lehnt eine leere Wahl ab
+  (`fehlerModusFehlt`). Renderer: `Erststart.jsx` (über App.jsx, solange
+  `motorGewaehlt` false; kein Abbrechen), Einstellungen ohne vorgewähltes Radio.
+  Prüfung: pruefungen/erststartWahl.test.js.
 - **README.md (Deutsch, kurz):** Was FlowForge ist und für wen (Nicht-Programmierer
   bauen Workflows aus Blöcken, die ein KI-Agent mit harten Sperren ausführt), was es
   nicht ist (Ein-Personen-Projekt, Windows, kein Support, keine Beiträge erwartet),
@@ -699,9 +706,13 @@ Session: zuerst diesen Zwischenschritt, dann 47.**)
   keine Einnahmequelle; der Wert ist das Signal „hier steht ein Mensch dahinter".
 - **Repo:** zuerst privat auf GitHub anlegen (Backup sofort, kein Risiko), `main`
   pushen; öffentlich stellen entscheidet Georg danach von Hand. Vorher prüfen: keine
-  Schlüssel, IPs, Datenordner-Pfade oder Laufberichte im Repo (Stand 18.08.: sauber —
+  Schlüssel, IPs, Datenordner-Pfade oder Laufberichte im Repo (Stand 19.08.: sauber —
   `arbeitsablage/`, `dist/`, `out/` sind ignoriert; die persönlichen Bezüge in SPEC/
-  BAUPLAN bleiben bewusst — sie zeigen, wie das Projekt entstanden ist).
+  BAUPLAN bleiben bewusst — sie zeigen, wie das Projekt entstanden ist). Ehrliche
+  Grenze der Bausession 19.08.: Auf dem Rechner gibt es kein `gh` und keinen
+  GitHub-Zugang für Claude — das private Repo legt Georg an (drei Befehle stehen in
+  der Sessionanleitung), ebenso das Sponsors-/Ko-fi-Konto (FUNDING.yml enthält bis
+  dahin nur die vorbereiteten, auskommentierten Zeilen).
 - Nachzuziehen: SPEC §2 (Abo-Regel neu, Erststart-Wahl), §9 (Erststart-Dialog),
   README.md, LICENSE, .github/FUNDING.yml, package.json.
 **Alltagstest:** Georg installiert die frisch gebaute Version auf einem sauberen

@@ -73,7 +73,7 @@ import {
 } from '../shared/lieferschein.js'
 import { fehlerZeilen, neueFehler } from '../shared/torRegeln.js'
 import { diffTextBauen, diffBilanz } from '../shared/laufDiff.js'
-import { einstellungenLaden, ABO_MODUS_ERLAUBT } from './einstellungen.js'
+import { einstellungenLaden, motorBereit } from './einstellungen.js'
 import {
   kartenLaden,
   kontingentVerhaltenLaden,
@@ -1145,10 +1145,8 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
   }
 
   const { einstellungen } = einstellungenLaden()
-  if (einstellungen.motorModus === 'abo' && !ABO_MODUS_ERLAUBT)
-    return { ok: false, fehler: texte.lauf.aboNichtErlaubt }
-  if (einstellungen.motorModus === 'api' && !einstellungen.apiSchluessel)
-    return { ok: false, fehler: texte.einstellungen.fehlerApiSchluesselFehlt }
+  const bereit = motorBereit(einstellungen)
+  if (!bereit.ok) return { ok: false, fehler: bereit.fehler }
 
   // Parallelität (SPEC §5, BAUPLAN 12): Ist das Projekt belegt oder sind alle
   // 3 Plätze vergeben, wartet der Start in der Warteschlange und läuft von
