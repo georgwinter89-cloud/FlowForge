@@ -920,13 +920,16 @@ Metriken zeigen beides getrennt.
   Empfehlung je Feld): **Kontextfenster** (`num_ctx`, besteht seit 0.46.3), **Temperatur**
   (`temperature`), **Top-p / Top-k / Min-p**, **Wiederholungsstrafe** (`repeat_penalty`),
   **Antwortlänge** (`num_predict`), **Entwurfs-Tokens/MTP** (`draft_num_predict`, spekulatives
-  Dekodieren — wirkt nur bei Modellen mit eingebautem Entwurfskopf, z.B. Qwen3.6/Gemma 4; auf
+  Dekodieren — wirkt nur bei Modellen mit eingebautem Entwurfskopf, z.B. Qwen3.8 (Georgs 27B,
+  MTP-GGUF-Fassungen: ~2,0× Durchsatz, 78 % Entwurfs-Annahme laut Hugging Face) oder Gemma 4; auf
   Apple-Silicon seit Ollama 0.23.1 eingebaut, andere Runner „in Validierung" (Mai 2026) —
   FlowForge misst Tokens/s vor/nach und sagt, ob es wirkt), und **Denken** (Ollama `think`:
   aus / an / Stufe low·medium·high·max — die Stufen kennen nur manche Modelle, z.B. gpt-oss;
-  Qwen3: an/aus). Vorlagen-Knöpfe mit den Herstellerempfehlungen (Qwen3.x per Unsloth-Doku:
-  Denken + Coding `temperature 0.6, top_p 0.95, top_k 20, min_p 0`; ohne Denken
-  `temperature 0.7, top_p 0.8, top_k 20, presence_penalty 1.5`) und „Ollama-Standard".
+  Qwen3: an/aus). Vorlagen-Knöpfe mit den Herstellerempfehlungen (Qwen3.8-Modellkarte, Stand
+  August 2026: Denken `temperature 1.0, top_p 0.95, top_k 20, min_p 0, presence_penalty 0`;
+  Coding mit Denken laut Unsloth eher `temperature 0.6`; ohne Denken `temperature 0.7, top_p 0.8,
+  top_k 20, presence_penalty 1.5`; Wiederholungsstrafe 1.0) und „Ollama-Standard" — die
+  Probe misst, welche Vorlage bei Georgs Qwen3.8 die wenigsten Reparatur-Runden bringt.
   Ehrliche Grenzen, in der Machbarkeitsprobe zu klären: (a) wie Ollama das `thinking:
   adaptive` der Claude-CLI abbildet (vermutlich „an") und ob ein `think`-Standard am
   abgeleiteten Modell greift, sonst Schalter nur über Systemprompt (`/no_think` bei Qwen3);
