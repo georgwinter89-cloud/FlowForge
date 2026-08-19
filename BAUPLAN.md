@@ -686,16 +686,24 @@ Session: zuerst diesen Zwischenschritt, dann 47.**)
   (Legal-Doku und 15.-Juni-Update, mit Links), Verweis auf SPEC.md als Produktbeschreibung
   und BAUPLAN.md als Bauweg. Kein zweites Bedien-Dokument (Doku-Regel) — das README
   verweist, es erklärt nicht.
-- **Lizenz:** MIT (Entscheidung Georg: Verbreitung wichtiger als Kontrolle; ehrlich
-  benannt: unter MIT einmal Veröffentlichtes ist nicht rückholbar). `package.json`:
-  `license` auf `MIT`, `private` bleibt `true` (kein npm-Paket). LICENSE-Datei.
+- **Lizenz:** MIT (Entscheidung Georg, 19.08.2026, nach Abwägung gegen PolyForm
+  Noncommercial: Eine Nicht-Kommerziell-Lizenz wäre ohne Anwalt kaum durchsetzbar, und
+  mit KI ist das Konzept ohnehin in Tagen nachbaubar — was bleibt, sind Entscheidungen,
+  Prüfungen und die Person dahinter, nicht der Code. Ehrlich benannt: unter MIT einmal
+  Veröffentlichtes ist nicht rückholbar, V1 bleibt für immer frei — auch für andere; ein
+  späteres kommerzielles V2 bleibt möglich, muss aber über API-Schlüssel oder eigene
+  Abrechnung laufen, nicht über den Abo-Login der Nutzer). `package.json`: `license` auf
+  `MIT`, `private` bleibt `true` (kein npm-Paket). LICENSE-Datei.
+- **Unterstützen:** `.github/FUNDING.yml` (GitHub Sponsors bzw. Ko-fi — Konto legt Georg
+  selbst an) und ein kurzer Absatz „Unterstützen" im README. Ehrliche Erwartung: Kaffeegeld,
+  keine Einnahmequelle; der Wert ist das Signal „hier steht ein Mensch dahinter".
 - **Repo:** zuerst privat auf GitHub anlegen (Backup sofort, kein Risiko), `main`
   pushen; öffentlich stellen entscheidet Georg danach von Hand. Vorher prüfen: keine
   Schlüssel, IPs, Datenordner-Pfade oder Laufberichte im Repo (Stand 18.08.: sauber —
   `arbeitsablage/`, `dist/`, `out/` sind ignoriert; die persönlichen Bezüge in SPEC/
   BAUPLAN bleiben bewusst — sie zeigen, wie das Projekt entstanden ist).
 - Nachzuziehen: SPEC §2 (Abo-Regel neu, Erststart-Wahl), §9 (Erststart-Dialog),
-  README.md, LICENSE, package.json.
+  README.md, LICENSE, .github/FUNDING.yml, package.json.
 **Alltagstest:** Georg installiert die frisch gebaute Version auf einem sauberen
 Benutzerprofil (oder löscht einmal die Einstellungsdatei): Beim ersten Start fragt
 FlowForge nach dem Motor-Modus, beim Abo steht der Abrechnungs-Hinweis dabei; das
