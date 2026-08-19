@@ -66,7 +66,7 @@ describe('lokaleStartRegel (BAUPLAN 51)', () => {
 
   it('zwei Adressen: der zweite lokale Block darf parallel, der dritte wartet mit ALLEN Halter-Namen', () => {
     const a = knoten('Bauer · A', 'laeuft', 'http://127.0.0.1:11434')
-    const b = knoten('Bauer · B', 'laeuft', 'http://192.168.0.9:11434')
+    const b = knoten('Bauer · B', 'laeuft', 'http://ollama-zweitrechner:11434')
     const dritter = knoten('Bauer · C', 'offen')
     expect(lokaleStartRegel(dritter, [a], 2)).toEqual({ darf: true })
     const urteil = lokaleStartRegel(dritter, [a, b, dritter], 2)
@@ -126,8 +126,8 @@ describe('Ticker-Texte zum Adress-Pool (Namensraum ticker, Bauer B)', () => {
   })
 
   it('lokalAdresseAusgeklammert nennt Adresse und Grund', () => {
-    const zeile = tt.lokalAdresseAusgeklammert('http://192.168.0.9:11434', 'nicht erreichbar')
-    expect(zeile).toContain('http://192.168.0.9:11434')
+    const zeile = tt.lokalAdresseAusgeklammert('http://ollama-zweitrechner:11434', 'nicht erreichbar')
+    expect(zeile).toContain('http://ollama-zweitrechner:11434')
     expect(zeile).toContain('nicht erreichbar')
   })
 

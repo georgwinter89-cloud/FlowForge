@@ -40,10 +40,10 @@ describe('BAUPLAN 51 · Migration in einstellungenLaden', () => {
   })
 
   it('alte Datei mit Einzel-String wird zur Ein-Element-Liste — nicht zum Standard', () => {
-    schreiben({ lokaleHelferAdresse: 'http://192.168.1.50:11434' })
+    schreiben({ lokaleHelferAdresse: 'http://ollama-zweitrechner:11434' })
     const { einstellungen } = einstellungenLaden()
-    expect(einstellungen.lokaleHelferAdressen).toEqual(['http://192.168.1.50:11434'])
-    expect(einstellungen.lokaleHelferAdresse).toBe('http://192.168.1.50:11434')
+    expect(einstellungen.lokaleHelferAdressen).toEqual(['http://ollama-zweitrechner:11434'])
+    expect(einstellungen.lokaleHelferAdresse).toBe('http://ollama-zweitrechner:11434')
   })
 
   it('eine gespeicherte Liste wird je Eintrag bereinigt: Slashes, Duplikate, Unsinn', () => {

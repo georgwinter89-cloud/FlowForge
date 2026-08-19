@@ -97,7 +97,7 @@ import { meldungPruefen } from '../src/shared/lieferschein.js'
 import { texte } from '../src/shared/texte.js'
 
 const ADRESSE_1 = 'http://127.0.0.1:11434'
-const ADRESSE_2 = 'http://192.168.0.9:11434'
+const ADRESSE_2 = 'http://ollama-zweitrechner:11434'
 
 // ——— Helfer (Muster aus lokalerPrueferLauf.test.js) —————————————————————————
 
