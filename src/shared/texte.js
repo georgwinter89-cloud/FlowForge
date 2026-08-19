@@ -2866,6 +2866,11 @@ export const texte = {
       `Das Modell „${modell}" ist bei deiner lokalen KI nicht vorhanden. Lade es in Ollama (ollama pull ${modell}) oder trage in den Einstellungen ein vorhandenes Modell ein — FlowForge fällt nie still auf Claude zurück.`,
     lokalModellFehler: (text) =>
       `Das abgeleitete Ollama-Modell für FlowForge konnte nicht angelegt werden: ${text}. Prüfe die Feineinstellungen der lokalen KI und die Ollama-Version — FlowForge fällt nie still auf Claude zurück.`,
+    // Adress-Pool (BAUPLAN 51): Wächter-Text — darf im Betrieb nie erscheinen.
+    // Ein lokaler Block ohne zugeteilte Adresse bricht hart ab, statt still
+    // zur ersten Adresse zu greifen (zwei Motoren auf einer GPU).
+    lokalOhneZuteilung: (name) =>
+      `„${name}" sollte lokal laufen, hat aber keine zugeteilte KI-Adresse — der Block bricht ab, statt sich still eine zu nehmen. Das ist ein Fehler in FlowForge selbst; starte den Lauf neu.`,
     // Ollama hat das Anlegen weder bestätigt noch einen Fehler genannt.
     lokalModellKeinErfolg: 'Ollama hat das Anlegen nicht bestätigt (keine Erfolgsmeldung)'
   },
@@ -3003,15 +3008,28 @@ export const texte = {
       `„${name}" läuft parallel in einer eigenen Session — die Lauf-Session ist gerade beschäftigt.`,
     // Klasse lokal (BAUPLAN 49): Block-Agent auf Georgs lokaler KI (Ollama im
     // Anthropic-Modus) — immer in einer eigenen Motor-Instanz, Kosten 0.
-    lokalBereit: (modell, kontext = null) =>
-      `Lokale KI als Block-Agent bereit (${modell}${kontext ? ', Kontext ' + Math.round(kontext / 1024) + 'k' : ''}) — Blöcke der Klasse „lokal" kosten kein Kontingent.`,
+    // Adress-Pool (BAUPLAN 51): bei mehreren bereiten Adressen steht die
+    // Anzahl dabei — bei einer bleibt die Zeile wortgleich wie bisher.
+    lokalBereit: (modell, kontext = null, adressen = 1) =>
+      `Lokale KI als Block-Agent bereit (${modell}${kontext ? ', Kontext ' + Math.round(kontext / 1024) + 'k' : ''}${adressen > 1 ? ', ' + adressen + ' Adressen' : ''}) — Blöcke der Klasse „lokal" kosten kein Kontingent.`,
+    // Adress-Pool (BAUPLAN 51): Eine nicht bereite Adresse wird für diesen
+    // Lauf ausgeklammert — sichtbar mit Grund, nie still.
+    lokalAdresseAusgeklammert: (adresse, grund) =>
+      `Lokale KI-Adresse ${adresse} ist für diesen Lauf ausgeklammert: ${grund}`,
     lokalSessionGestartet: (modell, kontext = null) =>
       `Motor gestartet gegen deine lokale KI (${modell}${kontext ? ', Kontext ' + Math.round(kontext / 1024) + 'k' : ''}) — kostet kein Kontingent; Kosten und Fenster meldet hier FlowForge, nicht die CLI.`,
     lokalEigeneSession: (blockName, modell) =>
       `„${blockName}" läuft lokal (${modell}) in einer eigenen Session — nie in der Claude-Lauf-Session.`,
-    // Eine GPU je Ollama-Adresse: höchstens ein lokaler Block zur Zeit.
-    warteGrundLokal: (name, anderer = '') =>
-      `„${name}" wartet, bis ${anderer ? `„${anderer}"` : 'der andere lokale Block'} fertig ist — die lokale KI bearbeitet einen Block zur Zeit (eine Grafikkarte).`,
+    // Eine GPU je Ollama-Adresse (BAUPLAN 49/51): je Adresse des Pools läuft
+    // ein lokaler Block zur Zeit. Bei einer Adresse der vertraute Wortlaut;
+    // bei mehreren nennt die Zeile die ehrliche Adress-Anzahl statt einer
+    // festen Grafikkarten-Behauptung (eine Adresse muss keine eigene Karte
+    // sein). `anderer` trägt bei mehreren Haltern alle Namen, bereits mit
+    // '", „' verbunden (warteGrundMelden).
+    warteGrundLokal: (name, anderer = '', anzahl = 1) =>
+      anzahl > 1
+        ? `„${name}" wartet — alle ${anzahl} lokalen KI-Adressen sind belegt (durch „${anderer}").`
+        : `„${name}" wartet, bis ${anderer ? `„${anderer}"` : 'der andere lokale Block'} fertig ist — die lokale KI bearbeitet einen Block zur Zeit.`,
     // Lokale Helfer-KI (Experiment): sichtbar, wenn die lokale KI recherchiert.
     lokaleHelferBereit: (modell, kontext = null) =>
       `Lokale Helfer-KI bereit (${modell}${kontext ? ', Kontext ' + Math.round(kontext / 1024) + 'k' : ''}) — Recherche-Aufträge kosten kein Kontingent.`,

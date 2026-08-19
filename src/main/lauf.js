@@ -336,6 +336,49 @@ export function wellenStartRegel(kandidat, laufende, offeneZweige = []) {
   return { darf: true }
 }
 
+// Die Startregel der lokalen Klasse (BAUPLAN 51): Darf ein lokaler Kandidat
+// starten, oder sind alle Adressen des Ollama-Pools belegt? Eine Adresse hält
+// genau, wer gerade läuft (status 'laeuft') UND eine Zuteilung trägt.
+//
+// AUSDRÜCKLICH NICHT schreiberBelegt: Die Welle zählt Revier-Belegung
+// inklusive Nachlauf und schreibtGerade — richtig für Dateilisten, falsch für
+// GPUs. Im Nachlauf ist der Motor eines lokalen Blocks längst beendet
+// (blockAusfuehren-finally), Ollama ist frei; zählte der Nachlauf mit,
+// serialisierte die Regel lokale Blöcke grundlos — bei einer Adresse wäre das
+// die stille Rücknahme des heutigen Verhaltens, bei zweien fräße es genau die
+// Parallelität, die der Schritt verspricht.
+//
+// Die Freiheit ist ABGELEITET statt verwaltet: frei = adressenAnzahl minus
+// Halter. Jeder Ausgang eines Blocks (fertig, Nachlauf, offen, Abbruch,
+// wartet-entscheidung) wechselt den Status — damit kann keine Adresse lecken.
+// Rückgabe: { darf: true } oder { darf: false, grund: 'lokalBelegt',
+// worauf: [Namen ALLER Halter], anzahl } — worauf ist nie leer, solange
+// belegt ist (warteGrundMelden verschluckt leere Listen).
+export function lokaleStartRegel(kandidat, laufende, adressenAnzahl) {
+  const halter = (laufende ?? []).filter(
+    (nk) => nk && nk !== kandidat && nk.status === 'laeuft' && nk.lokalZuteilung
+  )
+  if (halter.length < adressenAnzahl) return { darf: true }
+  return {
+    darf: false,
+    grund: 'lokalBelegt',
+    worauf: halter.map((nk) => nk.name ?? nk.instanzId ?? '?'),
+    anzahl: adressenAnzahl
+  }
+}
+
+// Die Adressliste der lokalen KI (BAUPLAN 51, Vertrag V1): einstellungenLaden
+// garantiert `lokaleHelferAdressen` als nicht-leeres Array bereinigter
+// Adressen, Element 0 ist die alte Einzeladresse. Der Rückfall aufs alte
+// Einzelfeld deckt ältere gemockte Einstellungs-Ketten in pruefungen/ ab —
+// im echten Betrieb greift er nie.
+function lokaleAdressenVon(einstellungen) {
+  const liste = Array.isArray(einstellungen?.lokaleHelferAdressen)
+    ? einstellungen.lokaleHelferAdressen.filter((a) => typeof a === 'string' && a.trim())
+    : []
+  return liste.length ? liste : [einstellungen?.lokaleHelferAdresse]
+}
+
 // Der Ausgang eines Laufs, dessen Planer-Schleife zu Ende ist und dem noch kein
 // Ausgang zugewiesen wurde (Fehlschlag, Kontingent, harter Stopp setzen ihn
 // früher). Seit der Folgen-Frage je Zweig (BAUPLAN 46) kann ein Lauf zu Ende
@@ -1165,14 +1208,19 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
   if (kette.some((e) => klasseIstLokal(blockModellKlasse(defVon(e.blockId), e)))) {
     if (!einstellungen.lokaleHelferAktiv || !einstellungen.lokalBlockAgent)
       return { ok: false, fehler: texte.lauf.lokalNichtErlaubt }
-    const status = await lokaleHelferPruefen(
-      einstellungen.lokaleHelferModell,
-      einstellungen.lokaleHelferAdresse
+    // Adress-Pool (BAUPLAN 51): Es reicht, wenn MINDESTENS EINE Adresse der
+    // Liste erreichbar ist und das Basis-Modell vorhält — nicht bereite
+    // Adressen klammert der Lauf später sichtbar aus. Parallel geprüft,
+    // sonst hinge der Start je toter Adresse im 3-Sekunden-Timeout.
+    const adressen = lokaleAdressenVon(einstellungen)
+    const stati = await Promise.all(
+      adressen.map((adresse) => lokaleHelferPruefen(einstellungen.lokaleHelferModell, adresse))
     )
-    if (!status.erreichbar)
-      return { ok: false, fehler: texte.lauf.lokalNichtErreichbar(einstellungen.lokaleHelferAdresse) }
-    if (!status.modellDa)
-      return { ok: false, fehler: texte.lauf.lokalModellFehlt(einstellungen.lokaleHelferModell) }
+    if (!stati.some((s) => s.erreichbar && s.modellDa)) {
+      if (stati.some((s) => s.erreichbar))
+        return { ok: false, fehler: texte.lauf.lokalModellFehlt(einstellungen.lokaleHelferModell) }
+      return { ok: false, fehler: texte.lauf.lokalNichtErreichbar(adressen.join(', ')) }
+    }
   }
 
   // Kosten-Rückfrage „Extra (Fable 5)" (0.48.1): Im Abo-Modus kann Fable je
@@ -1466,7 +1514,14 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     kostenUsd: null,
     // Token-Aufschlüsselung (Wunsch Georg, 13.08.2026): Eingabe, Ausgabe,
     // Cache gelesen/geschrieben — über alle Blöcke und Sessions des Laufs.
-    aufschluesselung: { eingabe: 0, ausgabe: 0, cacheLesen: 0, cacheSchreiben: 0 }
+    aufschluesselung: { eingabe: 0, ausgabe: 0, cacheLesen: 0, cacheSchreiben: 0 },
+    // „Davon lokal" (BAUPLAN 51, Vertrag V2): Tokens und Wanduhrzeit aller
+    // lokalen Block-Anläufe — geführt HIER am Lauf statt im Renderer aus den
+    // Blockeinträgen gerechnet: Kontingent-erschöpfte und hart abgebrochene
+    // Anläufe pushen kein blockErgebnis, ihre Tokens stehen aber längst hier.
+    // Die Trennung läuft über TOKENS (Abo-Währung), nicht über Dollar —
+    // lokale Kosten sind ehrlich 0.
+    lokal: { tokens: 0, dauerMs: 0 }
   }
   // Die echte Kontextfenster-Größe lernt der Lauf aus der ersten Motor-Session
   // und reicht sie an alle weiteren durch — für eine richtige Übertrags-Schwelle.
@@ -1739,41 +1794,49 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       lokaleHelferHinweis = texte.ticker.lokaleHelferNichtErreichbar
     }
   }
-  // Lokaler Block-Agent (BAUPLAN 49): Trägt die Kette einen Block der Klasse
-  // „lokal", legt FlowForge jetzt das abgeleitete Ollama-Modell an (Kontext-
+  // Lokaler Block-Agent (BAUPLAN 49/51): Trägt die Kette einen Block der
+  // Klasse „lokal", legt FlowForge das abgeleitete Ollama-Modell an (Kontext-
   // fenster + Feineinstellungen als Standardwerte am Modell; unverändert =
-  // kein Neuladen). Erlaubnis und Erreichbarkeit hat der Start schon geprüft;
-  // scheitert hier etwas, endet der Lauf als Fehlschlag mit Klartext — nie
-  // stiller Rückfall auf Claude. `lokal` ist das, was jeder lokale Block an
-  // seinen eigenen Motor gibt (blockAusfuehren).
-  let lokal = null
+  // kein Neuladen) — seit BAUPLAN 51 je Adresse der Liste, denn jede
+  // Ollama-Instanz hält ihren eigenen Modell-Speicher. Geprüft und
+  // bereitgestellt wird PARALLEL (sequentiell hinge der Laufstart je toter
+  // Adresse bis zu 63 Sekunden). Nur bereite Adressen kommen in den Pool
+  // `lokalPool` (je Eintrag { adresse, modell, kontext, basis }); nicht
+  // bereite werden mit Klartext-Ticker ausgeklammert — nie still. Bleibt der
+  // Pool leer, endet der Lauf als Fehlschlag mit Klartext — nie stiller
+  // Rückfall auf Claude. Der Pool gilt je Lauf; die Helfer-KI (oben) und die
+  // lokale Vorreparatur bleiben fest auf Adresse 1 der Liste.
+  let lokalPool = []
+  let lokalAusgefallene = []
   let lokalFehler = null
   if (kette.some((e) => klasseIstLokal(blockModellKlasse(defVon(e.blockId), e)))) {
     const kontext = Number(einstellungen.lokaleHelferKontext) > 0
       ? Number(einstellungen.lokaleHelferKontext)
       : KONTEXT_FENSTER_STANDARD
-    const status = await lokaleHelferPruefen(
-      einstellungen.lokaleHelferModell,
-      einstellungen.lokaleHelferAdresse
-    )
-    if (!status.erreichbar) lokalFehler = texte.lauf.lokalNichtErreichbar(einstellungen.lokaleHelferAdresse)
-    else if (!status.modellDa) lokalFehler = texte.lauf.lokalModellFehlt(einstellungen.lokaleHelferModell)
-    else {
-      const bereit = await lokalesModellBereitstellen({
-        adresse: einstellungen.lokaleHelferAdresse,
-        basis: einstellungen.lokaleHelferModell,
-        kontext,
-        fein: einstellungen.lokalFein
-      })
-      if (bereit.ok)
-        lokal = {
-          adresse: einstellungen.lokaleHelferAdresse,
-          modell: bereit.modell,
+    const befunde = await Promise.all(
+      lokaleAdressenVon(einstellungen).map(async (adresse) => {
+        const status = await lokaleHelferPruefen(einstellungen.lokaleHelferModell, adresse)
+        if (!status.erreichbar) return { adresse, fehler: texte.lauf.lokalNichtErreichbar(adresse) }
+        if (!status.modellDa)
+          return { adresse, fehler: texte.lauf.lokalModellFehlt(einstellungen.lokaleHelferModell) }
+        const bereit = await lokalesModellBereitstellen({
+          adresse,
+          basis: einstellungen.lokaleHelferModell,
           kontext,
-          basis: einstellungen.lokaleHelferModell
+          fein: einstellungen.lokalFein
+        })
+        if (!bereit.ok) return { adresse, fehler: bereit.fehler }
+        return {
+          adresse,
+          eintrag: { adresse, modell: bereit.modell, kontext, basis: einstellungen.lokaleHelferModell }
         }
-      else lokalFehler = bereit.fehler
-    }
+      })
+    )
+    lokalPool = befunde.filter((b) => b.eintrag).map((b) => b.eintrag)
+    lokalAusgefallene = befunde.filter((b) => b.fehler)
+    // Leerer Pool: exakt der heutige Fehlschlag-Pfad — der Klartext der
+    // ersten Adresse wird der Fehlertext des Laufs.
+    if (!lokalPool.length) lokalFehler = lokalAusgefallene[0]?.fehler ?? null
   }
   // Die Lokale-Helfer-Zeile des Berichts — seit BAUPLAN 31 mit dem Modell,
   // damit die Zahlen einem Modell zuzuordnen sind.
@@ -1814,13 +1877,18 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
   if (einstellungen.unteraufgabenModell !== 'wieBlock')
     tickern(
       texte.ticker.unteraufgabenSparsam(texte.kette.modellNamen.sparsam) +
-        (lokal ? ' ' + texte.ticker.unteraufgabenLokalZusatz : '')
+        (lokalPool.length ? ' ' + texte.ticker.unteraufgabenLokalZusatz : '')
     )
   if (lokaleHelferHinweis) tickern(lokaleHelferHinweis)
-  // Lokaler Block-Agent (BAUPLAN 49): bereit — oder der Grund, warum nicht
-  // (der Lauf endet dann gleich als Fehlschlag, s. Planer).
-  if (lokal) tickern(texte.ticker.lokalBereit(lokal.modell, lokal.kontext))
-  else if (lokalFehler) tickern(lokalFehler)
+  // Lokaler Block-Agent (BAUPLAN 49/51): bereit (mit Adress-Anzahl des Pools)
+  // — oder der Grund, warum nicht (der Lauf endet dann gleich als Fehlschlag,
+  // s. Planer). Nicht bereite Adressen stehen sichtbar im Ticker, solange
+  // wenigstens eine trägt (Ausklammern statt stillem Rückfall).
+  if (lokalPool.length) {
+    for (const ausfall of lokalAusgefallene)
+      tickern(texte.ticker.lokalAdresseAusgeklammert(ausfall.adresse, ausfall.fehler))
+    tickern(texte.ticker.lokalBereit(lokalPool[0].modell, lokalPool[0].kontext, lokalPool.length))
+  } else if (lokalFehler) tickern(lokalFehler)
   // Lokaler Prüfer ohne Claude-Abnahme (BAUPLAN 50): Hinweis, keine Sperre
   // („Rückfrage statt Sperre") — steht im Ticker und damit im Laufbericht,
   // derselbe Befund wie an der Karte und im Schaubild-Kopf (schaubildHinweise).
@@ -2870,17 +2938,29 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       let motor
       let haupt = false
       if (istLokal) {
-        // Lokale Klasse (BAUPLAN 49): IMMER eine eigene Motor-Instanz mit
+        // Lokale Klasse (BAUPLAN 49/51): IMMER eine eigene Motor-Instanz mit
         // Ollama-Umgebung — nie die Lauf-Session (die läuft gegen Claude und
         // ihr Koordinator auf Haiku), nie `haupt`. Nach dem Block wird sie
-        // geschlossen wie ein Zweig-Motor. Ohne `lokal` kommt kein lokaler
-        // Block bis hierher (Start-Prüfung und lokalBereitstellen oben).
-        tickern(texte.ticker.lokalEigeneSession(k.name, lokal.modell))
+        // geschlossen wie ein Zweig-Motor. Die Adresse kommt aus der
+        // Zuteilung des Knotens (bereiteStarten, Adress-Pool BAUPLAN 51) —
+        // sie gilt für alle Anläufe dieses Blocks. Fehlt sie, ist das ein
+        // harter Fehler: nie ein stiller Griff zur ersten Adresse, der führe
+        // zwei Motoren auf eine GPU.
+        if (!k.lokalZuteilung)
+          return Promise.resolve({
+            zustand: 'fehlgeschlagen',
+            fehlertext: texte.lauf.lokalOhneZuteilung(k.name),
+            fehlerArt: null,
+            ergebnisText: '',
+            verbrauch: null,
+            denktiefeGemessen: null
+          })
+        tickern(texte.ticker.lokalEigeneSession(k.name, k.lokalZuteilung.modell))
         motor = motorBauen(
           null,
           () => instanzId,
           () => k.name,
-          lokal
+          k.lokalZuteilung
         )
       } else if (!laufMotorBelegt) {
         motor = laufMotorBesorgen()
@@ -2979,7 +3059,7 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
             ? 'lokal'
             : unterModellFuer(k.def, klasse, einstellungen.unteraufgabenModell),
           modellName: istLokal
-            ? texte.kette.lokalModellName(lokal.modell)
+            ? texte.kette.lokalModellName(k.lokalZuteilung.modell)
             : (texte.kette.modellNamen[klasse] ?? ''),
           uebertrag,
           // Denktiefe (0.48.1): die Wahl an der Karte (sonst Voreinstellung des
@@ -3076,6 +3156,17 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       // Pausen hinweg) — landet sichtbar am Block-Ergebnis im Laufbericht.
       let blockTokens = 0
       let blockKosten = null
+      // Block-Dauer (BAUPLAN 51, Vertrag V2): Summe der Wanduhrzeiten aller
+      // Anläufe dieses Blocks — je Anlauf von Motorstart bis Ergebnis,
+      // gemessen unten um den blockAusfuehren-Aufruf. Rechte-Rückfragen
+      // MITTEN in einem Anlauf zählen mit; Wartezeiten ZWISCHEN Anläufen
+      // (Warteschlange, Kontingent-Pause, Folgen-Frage) zählen nicht —
+      // die Grenze steht ehrlich in SPEC §3.4.
+      let blockDauerMs = 0
+      // Die Klasse dieses Knotens einmal je Anlauf: Verbrauchs-Zufluss
+      // („davon lokal") und Kontextfenster-Wächter unten brauchen sie je
+      // Schleifenrunde.
+      const knotenLokal = klasseIstLokal(blockModellKlasse(k.def, k.eintrag))
       const blockAufschluesselung = { eingabe: 0, ausgabe: 0, cacheLesen: 0, cacheSchreiben: 0 }
       let blockHatAufschluesselung = false
       // Modell je Block (BAUPLAN 36): über alle Anläufe dieses Block-Anlaufs
@@ -3134,6 +3225,9 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           ...ergebnis,
           blockTokens,
           blockKosten,
+          // Block-Dauer (BAUPLAN 51): die Summe der Anlauf-Wanduhrzeiten —
+          // landet als dauerMs an allen vier Bericht-Einträgen.
+          blockDauerMs,
           blockAufschluesselung: blockHatAufschluesselung ? { ...blockAufschluesselung } : null,
           // Modell je Block (BAUPLAN 36): null = kein Modell gemessen (alte
           // Berichte, Tor ohne KI) — das ist etwas anderes als „0 Tokens".
@@ -3309,7 +3403,17 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
 
         const uebertragErlaubt =
           workflow.uebertragGrenze == null || uebertraege < workflow.uebertragGrenze
+        // Block-Dauer (BAUPLAN 51, Vertrag V2): die Wanduhrzeit genau dieses
+        // Anlaufs — Motorstart bis Ergebnis. Der Zähler läuft NUR um diesen
+        // Aufruf, damit Kontingent-Pausen und Folgen-Fragen zwischen zwei
+        // Anläufen nicht mitzählen. Für lokale Blöcke fließt sie zusätzlich
+        // in den Lauf-Topf verbrauch.lokal (auch wenn der Anlauf später kein
+        // blockErgebnis pusht, etwa bei erschöpftem Kontingent).
+        const anlaufStart = Date.now()
         const ergebnis = await blockAusfuehren(k, auftrag, uebertragErlaubt)
+        const anlaufDauerMs = Date.now() - anlaufStart
+        blockDauerMs += anlaufDauerMs
+        if (knotenLokal) gesamtVerbrauch.lokal.dauerMs += anlaufDauerMs
         // Denktiefe gemessen (0.48.1): der jüngste Messwert gewinnt.
         if (typeof ergebnis.denktiefeGemessen === 'string' && ergebnis.denktiefeGemessen)
           blockDenktiefeGemessen = ergebnis.denktiefeGemessen
@@ -3330,6 +3434,10 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
             (ergebnis.verbrauch.blockZuwachs ?? ergebnis.verbrauch.tokens ?? 0) +
             (ergebnis.verbrauch.unterTokens ?? 0)
           gesamtVerbrauch.tokens += zaehlTokens
+          // „Davon lokal" (BAUPLAN 51, Vertrag V2): lokale Tokens zusätzlich
+          // in den eigenen Topf — die Gesamtsumme bleibt unangetastet, der
+          // Ausweis steht daneben (Abo-Anteil = tokens − lokal.tokens).
+          if (knotenLokal) gesamtVerbrauch.lokal.tokens += zaehlTokens
           blockTokens += zaehlTokens
           if (ergebnis.verbrauch.kostenUsd != null) {
             gesamtVerbrauch.kostenUsd = (gesamtVerbrauch.kostenUsd ?? 0) + ergebnis.verbrauch.kostenUsd
@@ -3351,7 +3459,13 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
               eintrag.modell,
               (blockModellTokens.get(eintrag.modell) ?? 0) + (eintrag.tokens ?? 0)
             )
-          if (ergebnis.verbrauch.kontextFenster > 0)
+          // Kontextfenster-Wächter (BAUPLAN 51, Angriffsliste Fund 1): Der
+          // lokale Motor meldet sein festes Ollama-Fenster (z. B. 64k) in
+          // jedem Verbrauch. Übernähme der Lauf es, rechneten alle folgenden
+          // Claude-Blöcke und Abnahmen ihre Übertrags-Schwelle mit dem
+          // kleinen Fenster statt 200k — Überträge kämen rund dreimal zu
+          // früh. Gelernt wird das Fenster darum NUR von Claude-Sessions.
+          if (ergebnis.verbrauch.kontextFenster > 0 && !knotenLokal)
             bekanntesKontextFenster = ergebnis.verbrauch.kontextFenster
         }
 
@@ -3752,7 +3866,10 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         block: vk.def.name,
         zusatz: zusatznameBereinigen(vk.eintrag.zusatz),
         name: vk.name,
-        modell: texte.kette.lokalModellName(lokal?.modell ?? ''),
+        // Der Modellname aus der Zuteilung des Partners (BAUPLAN 51) — alle
+        // Pool-Einträge tragen dasselbe abgeleitete Modell, der Rückfall auf
+        // den Pool deckt nur den nie gelaufenen Partner ab.
+        modell: texte.kette.lokalModellName(vk.lokalZuteilung?.modell ?? lokalPool[0]?.modell ?? ''),
         urteilLokal: urteilAusMeldungen(vk.meldungen) === true ? 'bestanden' : 'fehlgeschlagen',
         torBestaetigung: vk.torBestaetigung ?? null
       }
@@ -4119,8 +4236,10 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       else if (grund === 'umsetzerWartet')
         tickern(texte.ticker.umsetzerWartetAufPruefer(k.name, anderer))
       else if (grund === 'frageOffen') tickern(texte.ticker.warteAufFolgenFrage(k.name, anderer))
-      // Lokale Klasse (BAUPLAN 49): eine GPU je Ollama-Adresse.
-      else if (grund === 'lokalBelegt') tickern(texte.ticker.warteGrundLokal(k.name, anderer))
+      // Lokale Klasse (BAUPLAN 49/51): alle Adressen des Ollama-Pools belegt —
+      // die Zeile nennt ALLE Halter und die ehrliche Adress-Anzahl.
+      else if (grund === 'lokalBelegt')
+        tickern(texte.ticker.warteGrundLokal(k.name, worauf.join('", „'), zusatz.anzahl ?? 1))
       else tickern(texte.ticker.warteAufZweig(k.name, worauf))
     }
 
@@ -4159,20 +4278,21 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
             )
           continue
         }
-        // Lokale Klasse (BAUPLAN 49): eine GPU je Ollama-Adresse — es läuft
-        // höchstens ein lokaler Block zur Zeit. Läuft schon einer, wartet
-        // der Kandidat mit ehrlichem Grund im Ticker.
-        if (klasseIstLokal(blockModellKlasse(k.def, k.eintrag))) {
-          const andererLokaler = laufendeBloecke()
-            .map((id) => knoten.get(id))
-            .find(
-              (nk) =>
-                nk !== k &&
-                nk.status === 'laeuft' &&
-                klasseIstLokal(blockModellKlasse(nk.def, nk.eintrag))
-            )
-          if (andererLokaler) {
-            warteGrundMelden(k, 'lokalBelegt', [andererLokaler.name])
+        // Lokale Klasse (BAUPLAN 49/51): eine GPU je Ollama-Adresse — es
+        // laufen höchstens so viele lokale Blöcke, wie der Adress-Pool
+        // Einträge hat (lokaleStartRegel oben bei wellenStartRegel). Sind
+        // alle Adressen belegt, wartet der Kandidat mit ehrlichem Grund im
+        // Ticker. Bewusst VOR dem nurLesen-Zweig: Auch nur-lesende lokale
+        // Blöcke belegen eine GPU.
+        const kandidatLokal = klasseIstLokal(blockModellKlasse(k.def, k.eintrag))
+        if (kandidatLokal) {
+          const urteilLokal = lokaleStartRegel(
+            k,
+            laufendeBloecke().map((id) => knoten.get(id)),
+            lokalPool.length
+          )
+          if (!urteilLokal.darf) {
+            warteGrundMelden(k, urteilLokal.grund, urteilLokal.worauf, urteilLokal)
             continue
           }
         }
@@ -4206,6 +4326,31 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           // derselben Runde liest die Liste dieses Blocks als „laufend" — und
           // hielte ihn ohne sie für einen Schreiber ohne Datenvertrag.
           k.dateiListeAktiv = kandidat.dateiListe
+        }
+        // Adress-Zuteilung (BAUPLAN 51): erst NACH lokaler Regel UND
+        // wellenStartRegel, unmittelbar mit dem Statuswechsel — bekäme der
+        // Kandidat die Adresse schon beim lokalen Check, hielte er eine GPU,
+        // obwohl die Welle ihn danach ablehnen kann (continue). Die Zuteilung
+        // gilt für ALLE Anläufe des Blocks (Reparatur-Runden, Überträge,
+        // Tore) und wandert bewusst NICHT in den Laufstand (standSpeichern):
+        // Nach einem App-Neustart geht ein Läufer auf 'offen' zurück und
+        // bekommt hier eine frische Zuteilung — eine gespeicherte alte
+        // Adresse könnte auf einen geschrumpften Pool zeigen. Frei ist, was
+        // kein Knoten mit status 'laeuft' hält — dieselbe abgeleitete
+        // Rechnung wie in lokaleStartRegel; weil k.status gleich darunter auf
+        // 'laeuft' geht, zählt derselbe Planer-Durchgang (mehrere Starts je
+        // Runde) die eben vergebene Adresse automatisch mit.
+        if (kandidatLokal) {
+          const belegt = new Set(
+            [...knoten.values()]
+              .filter((nk) => nk !== k && nk.status === 'laeuft' && nk.lokalZuteilung)
+              .map((nk) => nk.lokalZuteilung.adresse)
+          )
+          k.lokalZuteilung = lokalPool.find((eintrag) => !belegt.has(eintrag.adresse)) ?? null
+          // Nach bestandener lokaleStartRegel MUSS eine Adresse frei sein —
+          // der Wächter fängt nur einen künftigen Umbaufehler ab, statt ohne
+          // Zuteilung zu starten (blockAusfuehren bräche dann hart ab).
+          if (!k.lokalZuteilung) continue
         }
         k.warteGemeldet?.clear()
         k.status = 'laeuft'
@@ -4314,6 +4459,8 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           ergebnisText: String(ergebnis.ergebnisText ?? '').slice(0, 4000),
           meldungen: k.meldungen,
           tokens: ergebnis.blockTokens ?? null,
+          // Block-Dauer (BAUPLAN 51, V2): Summe der Anlauf-Wanduhrzeiten.
+          dauerMs: ergebnis.blockDauerMs ?? null,
           aufschluesselung: ergebnis.blockAufschluesselung ?? null,
           kostenUsd: ergebnis.blockKosten ?? null,
           modelle: ergebnis.blockModelle ?? null,
@@ -4420,6 +4567,8 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           zustand: 'fehlgeschlagen',
           ergebnisText: String(ergebnis.fehlertext ?? '').slice(0, 4000),
           tokens: ergebnis.blockTokens ?? null,
+          // Block-Dauer (BAUPLAN 51, V2): Summe der Anlauf-Wanduhrzeiten.
+          dauerMs: ergebnis.blockDauerMs ?? null,
           aufschluesselung: ergebnis.blockAufschluesselung ?? null,
           kostenUsd: ergebnis.blockKosten ?? null,
           modelle: ergebnis.blockModelle ?? null,
@@ -4453,6 +4602,8 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           ergebnisText: String(ergebnis.ergebnisText ?? '').slice(0, 4000),
           meldungen: k.meldungen,
           tokens: ergebnis.blockTokens ?? null,
+          // Block-Dauer (BAUPLAN 51, V2): Summe der Anlauf-Wanduhrzeiten.
+          dauerMs: ergebnis.blockDauerMs ?? null,
           aufschluesselung: ergebnis.blockAufschluesselung ?? null,
           kostenUsd: ergebnis.blockKosten ?? null,
           modelle: ergebnis.blockModelle ?? null,
@@ -4557,6 +4708,11 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         // Verbrauch dieses Anlaufs — so sieht Georg im Laufbericht, was jeder
         // Block gekostet hat (Koordinator-Zuwachs plus seine Agenten).
         tokens: ergebnis.blockTokens ?? null,
+        // Block-Dauer (BAUPLAN 51, V2): Summe der Anlauf-Wanduhrzeiten dieses
+        // Blocks (Motorstart bis Ergebnis je Anlauf; Pausen zwischen Anläufen
+        // zählen nicht — SPEC §3.4). Alte Berichte tragen das Feld nicht;
+        // Anzeige und Metrik lesen „fehlt" als „ohne Angabe", nie als 0.
+        dauerMs: ergebnis.blockDauerMs ?? null,
         // Token-Aufschlüsselung und theoretische API-Kosten je Block
         // (Wunsch Georg, 13.08.2026) — die Kosten rechnet der Motor selbst
         // aus den Preisen der genutzten Modelle.

@@ -137,10 +137,15 @@ Sitzungen hinweg Software entsteht — ohne dass dem Agenten der Kontext überl�
     Blockkarte und als Voreinstellung eigener Blöcke wählbar; der KI-Assistent des Editors
     schlägt sie nie vor.
     **Voraussetzung und kein stiller Rückfall:** Die lokale Helfer-KI (§4.3) muss
-    eingeschaltet und das Häkchen „Lokale KI als Block-Agent" (§9) gesetzt sein; Modell,
-    Adresse und Kontextfenster sind dieselben. Fehlt eines, ist Ollama nicht erreichbar
-    oder das Modell nicht da, **startet der Lauf nicht** — mit Klartext, nie still auf
-    Claude (sonst bezahlt Georg, was er lokal wollte). **Kosten-Wahrheit:** Die CLI
+    eingeschaltet und das Häkchen „Lokale KI als Block-Agent" (§9) gesetzt sein; Modell
+    und Kontextfenster sind dieselben, die Adresse ist seit Bauschritt 51 eine **Liste**
+    (`lokaleHelferAdressen`, §9) — eine Adresse je Ollama-Instanz/GPU, jede muss dasselbe
+    Basis-Modell selbst vorhalten (Modell, Kontext und Feineinstellungen bleiben global,
+    eine Einstellung für alle Adressen). Ist beim Start **keine einzige** Adresse
+    erreichbar oder fehlt überall das Modell, **startet der Lauf nicht** — mit Klartext,
+    nie still auf Claude (sonst bezahlt Georg, was er lokal wollte). Nicht bereite
+    Adressen einer teilweise tragenden Liste werden beim Laufstart **mit
+    Klartext-Ticker-Zeile ausgeklammert** — auch das nie still. **Kosten-Wahrheit:** Die CLI
     meldet für das fremde Modell ein erfundenes Kontextfenster (200k) und erfundene
     Dollar; der lokale Motor nimmt das Fenster aus den Einstellungen, setzt die Kosten auf
     0, merkt sich kein Fenster und setzt keine Ausgaben-Obergrenze (sie bräche lokale
@@ -154,8 +159,9 @@ Sitzungen hinweg Software entsteht — ohne dass dem Agenten der Kontext überl�
     spillt aus dem Grafikspeicher; gleiche Werte laden nicht neu. **Denken bleibt an**
     (gemessen 19.08.2026: über diesen Weg nicht abschaltbar) — deshalb kein Schalter,
     und die Denktiefe gilt für lokale Blöcke nicht. Ein lokaler Block läuft **immer in
-    einer eigenen Motor-Instanz** (nie in der Lauf-Session), und je Ollama-Adresse läuft
-    **ein lokaler Block zur Zeit** (§5). Der Ticker nennt „lokal (<Ollama-Modell>)";
+    einer eigenen Motor-Instanz** (nie in der Lauf-Session), und je Adresse der Liste läuft
+    **ein lokaler Block zur Zeit** — mehrere eingetragene Adressen erlauben entsprechend
+    viele lokale Blöcke parallel (§5). Der Ticker nennt „lokal (<Ollama-Modell>)";
     Laufbericht und Metriken führen die Klasse „lokal (Ollama)" und das Ollama-Modell als
     eigene Modellzeile, mit „Denktiefe: gilt hier nicht" und „Kosten: keine" (§3, §3.4).
     **Lokaler Prüfer mit Opus-Abnahme** (seit Bauschritt 50): Auch der Prüfer darf lokal
@@ -1610,10 +1616,23 @@ umstellbar wie jede Karte.
   Block —, weil die Lauf-Session mit Claude-Login läuft und die Umgebung einer Instanz
   nicht wechseln kann; der Koordinator dieser Instanz ist dasselbe lokale Modell (es gibt
   dort kein Haiku), ihr Kontextfenster ist das aus den Einstellungen, und die Instanz
-  endet mit dem Block wie ein Zweig-Motor. Der Übertrag misst ihren eigenen Faden. Je
-  Ollama-Adresse läuft **ein lokaler Block zur Zeit** (eine Grafikkarte): Ein zweiter
-  lokaler Kandidat wartet mit Ticker-Grund, auch in der Welle; Claude-Blöcke laufen daneben
-  weiter.
+  endet mit dem Block wie ein Zweig-Motor. Der Übertrag misst ihren eigenen Faden — und
+  das Kontextfenster, das der Lauf für die Übertrags-Schwelle „lernt", lernt er **nur von
+  Claude-Sessions**: Das feste Ollama-Fenster eines lokalen Blocks wird nie übernommen,
+  sonst rechneten alle folgenden Claude-Blöcke mit dem kleinen Fenster. **Adress-Pool**
+  (seit Bauschritt 51): Beim Laufstart prüft FlowForge alle eingetragenen Adressen (§9)
+  parallel und legt das abgeleitete Modell je bereiter Adresse an; nicht bereite Adressen
+  werden mit Klartext-Ticker ausgeklammert, ein leerer Pool ist ein Fehlschlag mit
+  Klartext (nie stiller Claude-Rückfall). Je Adresse des Pools läuft **ein lokaler Block
+  zur Zeit** — die Adresse wird beim Blockstart zugeteilt (erst nachdem Adress- UND
+  Wellenregel bestanden sind) und gilt für alle Anläufe des Blocks; frei ist, was kein
+  laufender Block hält (ein Block im Nachlauf hält keine Adresse — sein Motor ist
+  beendet). Sind alle Adressen belegt, wartet der Kandidat mit ehrlichem Ticker-Grund:
+  bei einer Adresse „die lokale KI bearbeitet einen Block zur Zeit", bei mehreren „alle
+  N lokalen KI-Adressen sind belegt" mit den Namen der Halter. Claude-Blöcke laufen
+  daneben weiter. Ehrliche Grenzen: Der Pool gilt **je Lauf** — bis zu drei parallele
+  Läufe können dieselbe Adresse weiterhin gleichzeitig befahren; Helfer-KI und lokale
+  Vorreparatur bleiben fest auf Adresse 1 der Liste.
 - **Reparatur-Runde mit Diff und Vor-Fazit** (seit Bauschritt 34): Der frische Agent einer
   Reparatur-Runde bekommt neben der Prüferkritik zwei von FlowForge gerechnete Tatsachen —
   den **exakten Unterschied** „Das hast du in diesem Lauf bisher geändert" aus den
