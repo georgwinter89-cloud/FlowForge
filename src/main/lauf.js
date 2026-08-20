@@ -1902,6 +1902,15 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     for (const ausfall of lokalAusgefallene)
       tickern(texte.ticker.lokalAdresseAusgeklammert(ausfall.adresse, ausfall.grund ?? ausfall.fehler))
     tickern(texte.ticker.lokalBereit(lokalPool[0].modell, lokalPool[0].kontext, lokalPool.length))
+    // Zu kleines Fenster (Befund Prüfer 2, 0.51.1): Die CLI reserviert vom
+    // Fenster rund 33.000 Tokens für Antwort und Zusammenfassung — bei 32k
+    // bleibt für den Block-Agenten NICHTS übrig, der erste Turn läuft schon
+    // über (gemessen: Start-Prompt allein ~23k). Warnung, keine Sperre
+    // (Rückfrage-statt-Sperre-Regel): Georg soll es sehen, bevor der Lauf
+    // Stunden kostet. Grenze 48k: darunter ist der Arbeitsraum kleiner als
+    // ein einziger Start-Prompt samt Reserve.
+    if (lokalPool[0].kontext < 49152)
+      tickern(texte.ticker.lokalFensterKnapp(lokalPool[0].kontext))
   } else if (lokalFehler) tickern(lokalFehler)
   // Lokaler Prüfer ohne Claude-Abnahme (BAUPLAN 50): Hinweis, keine Sperre
   // („Rückfrage statt Sperre") — steht im Ticker und damit im Laufbericht,

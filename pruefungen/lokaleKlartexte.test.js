@@ -166,7 +166,7 @@ describe('0.51.1 · Einsatzstellen im Quelltext festgenagelt', () => {
   })
 
   it('ein Fazit, das nur die Marke ist, macht den Block fehlgeschlagen — VOR dem Erfolg', () => {
-    const marke = motorQuelle.indexOf('const rohMarke =')
+    const marke = motorQuelle.indexOf('const fehlerMarke =')
     const erfolg = motorQuelle.indexOf("if (block.fazit) return blockAufloesen('erfolgreich'")
     expect(marke).toBeGreaterThan(0)
     expect(marke).toBeLessThan(erfolg)
@@ -221,11 +221,36 @@ describe('Nacharbeit Prüfer 1 · Umhüllte Marken und erwartete Abbrüche', () 
       expect(rohenCliFehlerUebersetzen(text, { nurGanzerText: true })).toBeNull()
   })
 
-  it('agentFehler wird nicht-streng geprüft (is_error ist nie Erzähltext)', () => {
-    const marke = motorQuelle.indexOf('const rohMarke =')
-    const rumpf = motorQuelle.slice(marke, marke + 400)
-    expect(rumpf).toMatch(/rohenCliFehlerUebersetzen\(block\.agentFehler, lokalFehlerInfo\(\)\)/)
+  it('agentFehler wird nicht-streng, aber mit vollen Lokal-Angaben geprüft (Befund Prüfer 2)', () => {
+    // lokalFehlerInfo ist die Hüll-Form für fehlerAusErgebnis — direkt an die
+    // Übersetzung gereicht fehlte `lokal`, und der Abbruch-Text verlor die
+    // Ollama-Fassung. Deshalb: rohMarkenInfo, nur ohne die strenge Prüfung.
+    const marke = motorQuelle.indexOf('const fehlerMarke =')
+    const rumpf = motorQuelle.slice(marke, marke + 900)
+    expect(rumpf).toMatch(/rohenCliFehlerUebersetzen\(block\.agentFehler, \{\s*\.\.\.rohMarkenInfo\(\),\s*nurGanzerText: false\s*\}\)/)
     expect(rumpf).toMatch(/rohenCliFehlerUebersetzen\(block\.fazit, rohMarkenInfo\(\)\)/)
+  })
+
+  it('eine agentFehler-Marke erzeugt eine Ticker-Zeile (Befund Prüfer 2)', () => {
+    // is_error-Ergebnisse laufen nie als Agenten-Text durch den Ticker — ohne
+    // eigene Zeile stünde der Klartext nur im Bericht und Georg sähe live nichts.
+    const marke = motorQuelle.indexOf('const fehlerMarke =')
+    const rumpf = motorQuelle.slice(marke, marke + 900)
+    expect(rumpf).toMatch(/if \(fehlerMarke\) aufEreignis\(\{ art: 'ticker', text: fehlerMarke\.fehlertext \}\)/)
+  })
+
+  it('die Start-Prompt-Zeile ordnet die eigene Zahl ein, die Warnzeile fürs knappe Fenster existiert', () => {
+    // Befund Prüfer 2: „~886 von 65.536" las sich wie „fast leer", während
+    // real 13.500 belegt waren — die Zeile sagt jetzt, was die Differenz ist.
+    expect(texte.ticker.lokalStartPrompt(13500, 886, 65536)).toMatch(/Werkzeug-Vorspann/)
+    expect(texte.ticker.lokalStartPrompt(13500, 886, 65536)).toMatch(/gemessenen Gesamtzahl/)
+    // Befund Prüfer 2: 32k kann keinen Block-Agenten tragen (CLI-Reserve ~33k).
+    expect(texte.ticker.lokalFensterKnapp(32768)).toMatch(/64k oder mehr/)
+    const laufQuelle = fs.readFileSync(
+      path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'src', 'main', 'lauf.js'),
+      'utf8'
+    )
+    expect(laufQuelle).toMatch(/kontext < 49152\)\s*\n\s*tickern\(texte\.ticker\.lokalFensterKnapp/)
   })
 
   it('erwarteter Abbruch (Stopp, Wächter-Übertrag) erzeugt keine Abbruch-Ticker-Zeile', () => {

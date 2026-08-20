@@ -2010,9 +2010,18 @@ export function starteLaufMotor(optionen) {
         // agentFehler ist von der CLI als is_error markiert — nie Erzähltext
         // eines Agenten, deshalb genügt dort „enthält" (Befund Prüfer 1:
         // „API Error: Prompt is too long" rutschte streng geprüft durch).
-        const rohMarke =
-          rohenCliFehlerUebersetzen(block.agentFehler, lokalFehlerInfo()) ??
-          rohenCliFehlerUebersetzen(block.fazit, rohMarkenInfo())
+        // Aber mit den vollen Lokal-Angaben (Befund Prüfer 2: lokalFehlerInfo
+        // ist die Hüll-Form für fehlerAusErgebnis — direkt an die Übersetzung
+        // gereicht fehlte `lokal`, und der Text verlor die Ollama-Fassung).
+        const fehlerMarke = rohenCliFehlerUebersetzen(block.agentFehler, {
+          ...rohMarkenInfo(),
+          nurGanzerText: false
+        })
+        // Eine agentFehler-Marke läuft nie als Agenten-Text durch den Ticker
+        // (is_error ist ein Werkzeug-Ergebnis) — ohne diese Zeile stünde der
+        // Klartext nur im Bericht und Georg sähe live nichts (Befund Prüfer 2).
+        if (fehlerMarke) aufEreignis({ art: 'ticker', text: fehlerMarke.fehlertext })
+        const rohMarke = fehlerMarke ?? rohenCliFehlerUebersetzen(block.fazit, rohMarkenInfo())
         if (rohMarke) return blockAufloesen('fehlgeschlagen', rohMarke)
         // Das Ergebnis des Blocks ist das Fazit des Block-Agenten — nicht der
         // Koordinator-Text, der z.B. die Prüfer-Urteils-Marke verlieren könnte.

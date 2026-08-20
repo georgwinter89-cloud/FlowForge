@@ -3617,7 +3617,9 @@ export const texte = {
     // Beide Zahlen der Start-Zeile sind Absicht: Der Vergleich zeigt, ob die
     // gemeldete Zahl überhaupt zur Wirklichkeit passt.
     lokalStartPrompt: (gemeldet, geschaetzt, fenster) =>
-      `Start-Prompt des lokalen Blocks: ~${Math.round(gemeldet).toLocaleString('de-DE')} Tokens (von der lokalen KI gemeldet) · ~${Math.round(geschaetzt).toLocaleString('de-DE')} Tokens (von FlowForge geschätzt) von ${Math.round(fenster).toLocaleString('de-DE')}.`,
+      `Start-Prompt des lokalen Blocks: ~${Math.round(gemeldet).toLocaleString('de-DE')} Tokens (von der lokalen KI gemeldet) · ~${Math.round(geschaetzt).toLocaleString('de-DE')} Tokens davon sind Auftrag und Systemtext, der Rest ist der feste Werkzeug-Vorspann des Motors — FlowForge rechnet ab jetzt mit der gemessenen Gesamtzahl. Fenster: ${Math.round(fenster).toLocaleString('de-DE')} Tokens.`,
+    lokalFensterKnapp: (kontext) =>
+      `Achtung: Das Kontextfenster der lokalen KI (${Math.round(kontext).toLocaleString('de-DE')} Tokens) ist für lokale Block-Agenten zu knapp — der Motor reserviert davon rund 33.000 Tokens für Antwort und Zusammenfassung, und allein der Start-Auftrag wiegt gut 20.000. Stell in den Einstellungen 64k oder mehr ein, sonst läuft der Block sofort über.`,
     lokalWaechterUebertrag: (geschaetzt, fenster) =>
       `Das Arbeitsgedächtnis des lokalen Blocks ist fast voll (~${Math.round(geschaetzt).toLocaleString('de-DE')} von ${Math.round(fenster).toLocaleString('de-DE')} Tokens, von FlowForge geschätzt) — FlowForge übergibt an einen frischen Anlauf, bevor die lokale KI still vergisst.`,
     uebertragAngefordert: (von, bis) =>
