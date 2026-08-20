@@ -1105,12 +1105,13 @@ lokal_bauen-Versuche, der Agent fiel aufs Selbermachen zurück und blähte den K
   der Klasse „lokal": lokale Helfer-Werkzeuge nicht freischalten und die Auftrags-Zusätze
   (bauenAuftragZusatz, lokal_recherchieren-Hinweise) weglassen. Bewusst NICHT: Helfer auf
   eine zweite Pool-Adresse legen (bräuchte zweite GPU; eigener Schritt, falls je nötig).
-- **Systemtext im abgeleiteten Modell:** lokalesModellBereitstellen (/api/create) um einen
-  SYSTEM-Text erweitern: gezielt ändern statt Dateien neu schreiben, einmal verifizieren
-  statt mehrfach, deutsch arbeiten (Denk-Export: 45/45 Abschnitte englisch, README komplett
-  neu geschrieben + dreifach verifiziert inkl. Hexdump einer Einzelzeile). VORHER klein
-  messen, ob Ollamas Anthropic-Endpunkt den Modelfile-SYSTEM überhaupt anwendet, wenn die
-  CLI ihren eigenen Systemtext mitschickt — sonst ist der Punkt wirkungslos und fliegt raus.
+- **Systemtext im abgeleiteten Modell — GESTRICHEN (Messung 20.08.2026):** Die Vorab-Messung
+  fiel negativ aus: Sobald die Anfrage einen eigenen Systemtext trägt (die CLI schickt immer
+  einen), ersetzt Ollamas Anthropic-Endpunkt den Modelfile-SYSTEM vollständig — er wird nicht
+  einmal in die input_tokens gezählt (gemessen an qwen2.5:7b: Marker-SYSTEM wirkt ohne
+  request-system, verschwindet mit; 35 vs. 50 Tokens). Der Punkt ist wirkungslos und fliegt
+  raus, wie oben vorentschieden. Wer das lokale Modell deutsch und sparsam arbeiten lassen
+  will, muss es über den Auftrag tun (Auftrags-Diät, siehe Kleinmessung).
 - **Kleinmessung:** Die Eingabe-Token-Zahl des ersten Ollama-Turns eines lokalen Blocks als
   Ticker-Zeile („Start-Prompt des lokalen Blocks: ~15.400 Tokens von 65.536") — macht die
   Auftrags-Diät-Frage später mit Zahlen entscheidbar (Rechnung 20.08.: Start ≈ 14–17k von
@@ -1135,11 +1136,58 @@ lokal_bauen-Versuche, der Agent fiel aufs Selbermachen zurück und blähte den K
   die 32-GB-Karte (RAM-Kriechgang war die zweite Todesursache des Laufs); Blöcken
   Zusatznamen geben („Bauer · Server"), sonst heißt es „«Bauer» wartet auf «Bauer»".
 **Alltagstest:** Georg wiederholt den Life-OS-Lauf mit 64k: kein „Prompt is too long",
-stattdessen bei Bedarf sichtbar „Der Motor hat das Arbeitsgedächtnis … zusammengefasst";
+stattdessen bei Bedarf sichtbar „Der Motor hat das Arbeitsgedächtnis … zusammengefasst"
+oder der FlowForge-Wächter übergibt an einen frischen Anlauf;
 keine Helfer-Timeout-Kaskade bei lokalen Blöcken; scheitert doch etwas, steht die Ursache
 auf Deutsch im Bericht und beschuldigt nicht den Nutzer. Im Ticker heißen die zwei
 unbenannten Bauer nach dem Zuschnitt automatisch z. B. „Bauer · Server-Briefing" und
 „Bauer · Ruheanzeige Web" — die Karten auf der Leinwand bleiben unverändert.
+- **Gebaut (20.08.2026):** Kernbefund der Angriffsliste: `CLAUDE_CODE_MAX_CONTEXT_TOKENS`
+  war seit Schritt 49 gesetzt und die CLI honoriert es (im CLI-Binary belegt; Auto-
+  Zusammenfassung gilt auch für Block-Agenten) — aber sie misst den Füllstand allein an
+  Ollamas usage-Meldung, und die ist GEMESSEN nur unterhalb der Fensterkante ehrlich:
+  Übersteigt ein Prompt das Fenster, kappt Ollama still (HTTP 200, Modell sieht Müll) und
+  meldet dauerhaft ~die Fensterhälfte. Ein großer Werkzeug-Ergebnis-Sprung überspringt so
+  die CLI-Schwelle für immer — exakt der Life-OS-Tod. Deshalb (Entscheidung Georg):
+  **FlowForge-eigener Lokal-Wächter** — Zeichen-basierte Füllstands-Schätzung des
+  Block-Agenten (reine Funktionen, Faktor 3,5 Zeichen/Token, Selbst-Kalibrierung an der
+  ehrlichen Erstmeldung mit 90-%-Deckel), löst bei 80 % den vorhandenen Übertrag aus;
+  Schwelle wird nach JEDER Nachricht geprüft (auch direkt nach tool_result). Dazu:
+  Start-Prompt-Messzeile je lokalem Block (gemeldet vs. eigener Anteil, gemessen Faktor
+  6–20 durch den Werkzeug-Vorspann der CLI); deutsche Klartexte für „Prompt is too long"
+  und „[Request interrupted by user for tool use]" an Ticker, Blockergebnis (toter Block
+  läuft nie mehr als „erfolgreich" durch) und fehlerAusErgebnis (vor der Kontingent-Regel,
+  neue Arten kontext-voll/werkzeug-abbruch; kein Abbruch-Echo nach eigenem Stopp/Übertrag);
+  gemeinsame `umgebungBereinigen`-Funktion für alle drei Motor-Sessions inkl. präfixloser
+  CLI-Schalter (DISABLE_*, API_TIMEOUT_MS, MCP_*, BASH_*, MAX_* — geerbte Schalter einer
+  Claude-Code-Elternsession änderten sonst still Compaction und Timeouts); Helfer-Werkzeuge
+  lokaler Blöcke stumm (lokale Motor-Instanz ohne lokaleHelfer, kein bauenAuftragZusatz,
+  Katalog-Hinweis ersetzt, keine lokale Vorreparatur nach lokalem Prüfer); Kurzname je
+  benanntem Ziel in melde_arbeitspaket (Schema optional, Pflicht in Ebene 2 nur bei
+  zielBlock, Auftragstexte von Paket schneiden/Angreifer), Laufzeit-Zusatzname an der
+  Ziel-Instanz (Georgs Karten-Name gewinnt, erster Melder gewinnt, Dopplungen nummeriert,
+  eigenes Laufstand-Feld laufzeitZusaetze neben zusaetze), Warnzeile bei Kontextfenster
+  unter 48k (CLI-Reserve ~33k; 32k läuft im ersten Turn über, gemessen: Start-Prompt allein
+  ~23k = 69 % von 32k).
+- **Messwerte der Bausession (20.08.2026, 1 Angreifer, 2 Bauer mit Vertrag in Worktrees,
+  2 Prüfer, Integrator; Agents auf Opus 5, Ansage Georg):** Angriffsliste 10 Funde (3
+  blockierend: Punkt 1 war schon gebaut und wirkungslos aus anderem Grund; Klartexte am
+  falschen Einstiegspunkt geplant; Kurzname am falschen Werkzeug geplant — paket_melden hat
+  keine Ziele). Prüfer 1 (Mechanik, 102 Wegwerf-Prüfungen): 6 wichtige Befunde
+  nachgearbeitet (Schwelle nach jeder Nachricht, Selbst-Kalibrierung, Abbruch-Echo,
+  Zuschnitt-Zeile mit frischen Namen, Schalterliste, umhüllte Marken). Prüfer 2
+  (Ende-zu-Ende, gebaute App, CDP, eigener Datenordner, Ersatzserver für Georgs 27B):
+  Wächter übergab zweimal sauber bei 64k („~54.206 von 65.536 geschätzt"), Klartexte in
+  Ticker und Bericht, 35 Werkzeuge ohne ein einziges mcp__lokal__*, Kurzname-Abweisung
+  sichtbar mit Nachtrag, workflow.json bytegleich, Georgs Karten-Name gewinnt; eine
+  Regression meiner P1-Nacharbeit gefunden und behoben (Abbruch-Text verlor Ollama-Fassung
+  und Ticker-Zeile). Bewusst offen (klein): „Fertig nach N Sekunden" auch bei Fehlschlag
+  (vorbestehend, alle Blockarten); Berichtskopf (workflow/bloecke) ohne Zusatznamen
+  (vorbestehend); Auftrags-Vorspann nennt Ziele mit Karten-Namen statt Laufzeit-Namen
+  (Vorspann entsteht vor dem Lauf aus der Leinwand); Nummerierung deckelt bei 99;
+  529-Meldung schlägt kontext-voll. Ehrliche Grenze: qwen2.5:7b ruft das Agent-Werkzeug
+  nie — der volle lokale E2E-Beleg braucht Georgs 27B (Start-Prompt-Zeile liefert dafür
+  jetzt die Zahlen).
 
 ## Reihenfolge-Begründung (Paket 40–48)
 Im Paket 40–48 bestimmt die Angriffsliste die Reihenfolge, nicht der Nutzen: Die
