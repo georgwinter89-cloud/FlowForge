@@ -4258,11 +4258,18 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         tickern(
           texte.ticker.zuschnittGeschnitten(
             texte.ticker.blockBezeichnung(nummerVon.get(k.eintrag.instanzId), k.name),
-            zuschnitte.map((p) =>
-              p.zielBezeichnung
-                ? texte.ticker.zuschnittZiel(p.zielBezeichnung, p.erlaubteDateien?.length ?? 0)
+            zuschnitte.map((p) => {
+              // Frisch rechnen statt aus der eingefrorenen Meldung (Befund
+              // Prüfer 1): laufzeitNamenAnheften lief eben — die Zeile, die
+              // beide Ziele nebeneinander stellt, soll die neuen Namen tragen.
+              const zielKnoten = p.zielInstanzId ? knoten.get(p.zielInstanzId) : null
+              const bezeichnung = zielKnoten
+                ? texte.ticker.blockBezeichnung(nummerVon.get(p.zielInstanzId), zielKnoten.name)
+                : p.zielBezeichnung
+              return bezeichnung
+                ? texte.ticker.zuschnittZiel(bezeichnung, p.erlaubteDateien?.length ?? 0)
                 : texte.ticker.zuschnittOhneZiel(p.erlaubteDateien?.length ?? 0)
-            )
+            })
           )
         )
       }

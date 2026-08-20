@@ -169,6 +169,11 @@ export function zusatznameBereinigen(roh) {
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, ZUSATZNAME_MAX)
+    // Der Schnitt kann mitten im Wort enden — ohne trim bliebe ein
+    // Leerzeichen hängen („Bauer · Ein langer Name ") und stünde so in
+    // Ticker und Bericht. Seit den maschinellen Kurznamen (0.51.1) ist der
+    // Fall alltäglich statt exotisch.
+    .trim()
 }
 
 // Der Name, den Georg sieht: Katalogname plus Zusatzname. Für Metriken bleibt

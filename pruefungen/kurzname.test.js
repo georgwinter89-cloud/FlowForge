@@ -437,3 +437,35 @@ describe('0.51.1 · Die Wiederaufnahme stellt die Laufzeit-Namen wieder her', ()
     expect(bauer.zusatz).toBe('Server-Briefing')
   })
 })
+
+// Nacharbeit nach Prüfer 1 (0.51.1): Der 30-Zeichen-Schnitt konnte mitten im
+// Wort enden und ließ ein Leerzeichen am Ende stehen — bei maschinell
+// erzeugten Kurznamen alltäglich. Und die Zuschnitt-Ticker-Zeile trug noch
+// die eingefrorenen Namen aus der Meldung statt der frisch angehefteten.
+describe('Nacharbeit Prüfer 1 · Kappen ohne Leerzeichen, frische Zuschnitt-Zeile', () => {
+  it('zusatznameBereinigen lässt kein Leerzeichen am Ende stehen', async () => {
+    const { zusatznameBereinigen } = await import('../src/shared/blockKatalog.js')
+    const gekappt = zusatznameBereinigen('Ein  sehr\tsehr   langer Kurzname mit vielen Wörtern')
+    expect(gekappt.length).toBeLessThanOrEqual(30)
+    expect(gekappt).toBe(gekappt.trim())
+    expect(zusatznameBereinigen('  Server-Briefing  ')).toBe('Server-Briefing')
+  })
+
+  it('die Zuschnitt-Zeile rechnet die Ziel-Bezeichnung frisch aus den Knoten', async () => {
+    const fs = await import('node:fs')
+    const path = await import('node:path')
+    const { fileURLToPath } = await import('node:url')
+    const laufQuelle = fs.readFileSync(
+      path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'src', 'main', 'lauf.js'),
+      'utf8'
+    )
+    const tickern = laufQuelle.slice(
+      laufQuelle.indexOf('function zuschnittTickern('),
+      laufQuelle.indexOf('function zuschnittNachfordern(') > 0
+        ? laufQuelle.indexOf('function zuschnittNachfordern(')
+        : laufQuelle.indexOf('function zuschnittTickern(') + 2500
+    )
+    expect(tickern).toMatch(/p\.zielInstanzId \? knoten\.get\(p\.zielInstanzId\) : null/)
+    expect(tickern).toMatch(/blockBezeichnung\(nummerVon\.get\(p\.zielInstanzId\), zielKnoten\.name\)/)
+  })
+})

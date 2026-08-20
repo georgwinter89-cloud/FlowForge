@@ -193,3 +193,35 @@ describe('0.51.1 · Regel im Quelltext festgenagelt', () => {
     expect(rumpf).toMatch(/texte\.ticker\.lokalStartPrompt\(/)
   })
 })
+
+// Nacharbeit nach Prüfer 1 (0.51.1): Der Wächter prüfte die Schwelle nur nach
+// Assistent-Nachrichten — der eine große Werkzeug-Ergebnis-Sprung, für den er
+// gebaut wurde, ging so noch einmal ungebremst an Ollama. Und die
+// Startschätzung kannte nur Auftrag + Systemtext; die Differenz zur ehrlichen
+// Erstmeldung Ollamas wird jetzt einmalig als Aufschlag übernommen.
+describe('Nacharbeit Prüfer 1 · Sofortprüfung und Selbst-Kalibrierung', () => {
+  const motorQuelle = fs.readFileSync(
+    path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'src', 'main', 'motor', 'claudeCodeMotor.js'),
+    'utf8'
+  )
+  const waechter = motorQuelle.slice(
+    motorQuelle.indexOf('function lokalWaechter('),
+    motorQuelle.indexOf('function blockAufloesen(')
+  )
+
+  it('kein früher Ausstieg mehr vor der Schwellenprüfung', () => {
+    // Die Schwelle wird nach JEDER Nachricht geprüft — ein Rücksprung nur für
+    // Nicht-Assistent-Nachrichten stünde ZWISCHEN Summierung und Schwelle.
+    expect(waechter).not.toMatch(/if \(nachricht\.type !== 'assistant'\) return/)
+    expect(waechter).toMatch(/geschaetzt < \(fenster \* LOKAL_WAECHTER_PROZENT\) \/ 100/)
+  })
+
+  it('Start-Prompt-Zeile bleibt an die erste Assistent-Nachricht gebunden', () => {
+    expect(waechter).toMatch(/nachricht\.type === 'assistant' &&\s*\n\s*!block\.startPromptGemeldet/)
+  })
+
+  it('Selbst-Kalibrierung: Aufschlag nur bei ehrlicher Erstmeldung unter 90 % des Fensters', () => {
+    expect(waechter).toMatch(/gemeldet > geschaetztStart && gemeldet < fensterJetzt \* 0\.9/)
+    expect(waechter).toMatch(/\(gemeldet - geschaetztStart\) \* ZEICHEN_JE_TOKEN/)
+  })
+})

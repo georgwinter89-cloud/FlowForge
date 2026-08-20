@@ -190,3 +190,49 @@ describe('0.51.1 · Einsatzstellen im Quelltext festgenagelt', () => {
     expect(roh).toBeLessThan(kontingent)
   })
 })
+
+// Nacharbeit nach den Nachstellwegen von Prüfer 1 (0.51.1).
+describe('Nacharbeit Prüfer 1 · Umhüllte Marken und erwartete Abbrüche', () => {
+  const motorQuelle = fs.readFileSync(
+    path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'src', 'main', 'motor', 'claudeCodeMotor.js'),
+    'utf8'
+  )
+
+  it('streng: eine kurz umhüllte Marke zählt noch als Marke', () => {
+    for (const text of [
+      'API Error: Prompt is too long',
+      'Error: Prompt is too long',
+      'error Prompt is too long'
+    ])
+      expect(rohenCliFehlerUebersetzen(text, { nurGanzerText: true })?.fehlerArt).toBe('kontext-voll')
+    expect(
+      rohenCliFehlerUebersetzen('API Error: [Request interrupted by user for tool use]', {
+        nurGanzerText: true
+      })?.fehlerArt
+    ).toBe('werkzeug-abbruch')
+  })
+
+  it('streng: Erzähltext über die Marke bleibt weiterhin unangetastet', () => {
+    for (const text of [
+      'Der vorige Lauf endete mit „Prompt is too long" — ich prüfe den Stand.',
+      'Prompt is too long (see logs)',
+      'The situation is clear: the previous run ended with "Prompt is too long".'
+    ])
+      expect(rohenCliFehlerUebersetzen(text, { nurGanzerText: true })).toBeNull()
+  })
+
+  it('agentFehler wird nicht-streng geprüft (is_error ist nie Erzähltext)', () => {
+    const marke = motorQuelle.indexOf('const rohMarke =')
+    const rumpf = motorQuelle.slice(marke, marke + 400)
+    expect(rumpf).toMatch(/rohenCliFehlerUebersetzen\(block\.agentFehler, lokalFehlerInfo\(\)\)/)
+    expect(rumpf).toMatch(/rohenCliFehlerUebersetzen\(block\.fazit, rohMarkenInfo\(\)\)/)
+  })
+
+  it('erwarteter Abbruch (Stopp, Wächter-Übertrag) erzeugt keine Abbruch-Ticker-Zeile', () => {
+    expect(motorQuelle).toMatch(/abbruchErwartet = false/)
+    expect(motorQuelle).toMatch(/'werkzeug-abbruch' && abbruchErwartet\) continue/)
+    expect(motorQuelle).toMatch(
+      /sanftAngefordert \|\| hartAngefordert \|\| block\?\.uebertragPhase != null/
+    )
+  })
+})

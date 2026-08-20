@@ -66,7 +66,22 @@ export const CLI_SCHALTER_WEG = new Set([
   'DISABLE_ERROR_REPORTING',
   'DISABLE_COST_WARNINGS',
   'DISABLE_AUTOUPDATER',
-  'DISABLE_INTERLEAVED_THINKING'
+  'DISABLE_INTERLEAVED_THINKING',
+  // Befund Prüfer 1 (0.51.1): auch diese präfixlosen Schalter wertet die CLI
+  // aus — sie steuern Wartezeiten und die Größe von Werkzeug-Ergebnissen,
+  // also genau das, was lokale Kontexte sprengt. In einer aus Claude Code
+  // gestarteten Testinstanz standen API_TIMEOUT_MS und
+  // MCP_CONNECTION_NONBLOCKING real in der geerbten Umgebung.
+  'API_TIMEOUT_MS',
+  'MCP_CONNECTION_NONBLOCKING',
+  'MCP_TIMEOUT',
+  'MCP_TOOL_TIMEOUT',
+  'MAX_MCP_OUTPUT_TOKENS',
+  'MAX_THINKING_TOKENS',
+  'BASH_DEFAULT_TIMEOUT_MS',
+  'BASH_MAX_OUTPUT_LENGTH',
+  'USE_BUILTIN_RIPGREP',
+  'DISABLE_NON_ESSENTIAL_MODEL_CALLS'
 ])
 
 // Saubere Umgebung für JEDE Motor-Instanz (Lauf-Session, Einmal-Frage, Chat):
@@ -837,13 +852,18 @@ export function fazitStutzen(text) {
 // Chat-Antwort und bleibt draußen.
 // lokalFenster (0.51.1): das Kontextfenster der lokalen KI — es steht im
 // Klartext, wenn eine rohe CLI-Marke als Agenten-Zeile hereinkommt.
+// abbruchErwartet (Befund Prüfer 1): Hat Georg selbst gestoppt oder der
+// Wächter den Übertrag angefordert, ist die Abbruch-Marke der CLI ERWARTET —
+// der Klartext „das kam nicht von dir" wäre dann dieselbe Lüge wie der alte
+// Text, nur umgedreht. Die Zeile entfällt dann ganz.
 function tickerZeilen(
   nachricht,
   projektPfad,
   blockTaskIds,
   mitHauptfaden = false,
   lokalAdresse = '',
-  lokalFenster = 0
+  lokalFenster = 0,
+  abbruchErwartet = false
 ) {
   const t = texte.ticker
   // Überlastete KI-Server: die CLI wiederholt selbst — ohne diese Zeile sähe
@@ -872,6 +892,9 @@ function tickerZeilen(
         adresse: lokalAdresse,
         nurGanzerText: true
       })
+      // Erwarteter Abbruch (eigener Stopp, Wächter-Übertrag): Die Marke ist
+      // dann nur das Echo des Abbruchs — keine Ticker-Zeile wert.
+      if (klartext?.fehlerArt === 'werkzeug-abbruch' && abbruchErwartet) continue
       zeilen.push(klartext ? klartext.fehlertext : rohText)
     }
     if (block.type !== 'tool_use') continue
@@ -967,8 +990,10 @@ const WERKZEUG_ABBRUCH_REGEX = /\[request interrupted by user[^\]]*\]/i
 // Streng: Der GANZE Text ist die Marke. Ein Agent, der über den Fehler REDET
 // („der Block scheiterte an ‚Prompt is too long'"), ist kein Fehler — im
 // Schadensfall steht die Marke allein im Feld.
-const KONTEXT_VOLL_GANZ_REGEX = /^(prompt is too long|input length and .{0,3}max_?tokens.{0,3} exceed context limit)[.!]?$/i
-const WERKZEUG_ABBRUCH_GANZ_REGEX = /^\[request interrupted by user[^\]]*\]$/i
+// Eine kurze technische Umhüllung („API Error: …", „Error: …") zählt noch als
+// Marke (Befund Prüfer 1) — ein ganzer Satz drumherum nicht mehr.
+const KONTEXT_VOLL_GANZ_REGEX = /^(?:api\s+)?(?:error:?\s+)?(prompt is too long|input length and .{0,3}max_?tokens.{0,3} exceed context limit)[.!]?$/i
+const WERKZEUG_ABBRUCH_GANZ_REGEX = /^(?:api\s+)?(?:error:?\s+)?\[request interrupted by user[^\]]*\]$/i
 
 // Übersetzt eine dieser Marken in deutschen Klartext; null, wenn keine passt.
 // `lokal`/`fenster`/`adresse` machen den Text konkret (Ollama-Bezug nur, wenn
@@ -1434,20 +1459,23 @@ export function starteLaufMotor(optionen) {
   // exakt beim bisherigen Verhalten (dort misst die CLI ehrlich, und die
   // Übertrags-Schwelle unten am Koordinator-Faden bleibt die einzige).
   // Läuft nach JEDER Nachricht des Block-Agenten: Er summiert die Zeichen und
-  // prüft nach jedem Turn (assistant), ob die Schätzung die Schwelle reißt —
-  // bewusst unabhängig von den usage-Zahlen, denn genau die lügen bei Ollama,
+  // prüft die Schwelle auch sofort — insbesondere direkt nach einem
+  // tool_result (Befund Prüfer 1: genau der eine große Werkzeug-Ergebnis-
+  // Sprung, für den der Wächter gebaut ist, ging sonst noch einmal ungebremst
+  // an Ollama, bevor die nächste Assistent-Nachricht die Schwelle prüfte).
+  // Bewusst unabhängig von den usage-Zahlen, denn genau die lügen bei Ollama,
   // sobald das Fenster einmal übergelaufen ist.
   function lokalWaechter(nachricht) {
     if (!lokal || !block) return
     const zuwachs = blockAgentZeichen(nachricht, block.blockTaskIds)
     if (zuwachs > 0) block.schaetzZeichen += zuwachs
-    if (nachricht.type !== 'assistant') return
 
     // Start-Prompt-Messung (BAUPLAN 0.51.1, Punkt 5): einmal je lokalem Block
     // beide Zahlen nebeneinander — was Ollama meldet und was FlowForge schätzt.
     // Der Vergleich IST die Messung: Die gemeldete Zahl kann lügen, die
     // geschätzte nicht wissen, wie das Modell wirklich zerlegt.
     if (
+      nachricht.type === 'assistant' &&
       !block.startPromptGemeldet &&
       nachricht.message?.usage &&
       block.blockTaskIds.has(nachricht.parent_tool_use_id)
@@ -1458,14 +1486,21 @@ export function starteLaufMotor(optionen) {
         (u.input_tokens ?? 0) +
         (u.cache_creation_input_tokens ?? 0) +
         (u.cache_read_input_tokens ?? 0)
+      const fensterJetzt = bekanntesFenster || KONTEXT_FENSTER_STANDARD
+      const geschaetztStart = lokaleKontextSchaetzung(block.startZeichen)
       aufEreignis({
         art: 'ticker',
-        text: texte.ticker.lokalStartPrompt(
-          gemeldet,
-          lokaleKontextSchaetzung(block.startZeichen),
-          bekanntesFenster || KONTEXT_FENSTER_STANDARD
-        )
+        text: texte.ticker.lokalStartPrompt(gemeldet, geschaetztStart, fensterJetzt)
       })
+      // Selbst-Kalibrierung (Befund Prüfer 1): Die Startschätzung kennt nur
+      // Auftrag + Systemtext — Werkzeug-Definitionen und CLI-Vorspann fehlen
+      // ihr (~gleich groß wie der gezählte Teil). Beim ersten Turn ist Ollamas
+      // Meldung noch ehrlich (unterhalb der Fensterkante, gemessen), also wird
+      // die Differenz einmalig als fester Aufschlag übernommen. Der Wächter
+      // rät dann nicht mehr, er hat gemessen. Deckel bei 90 % des Fensters:
+      // Eine schon gekappte (lügende) Meldung darf nicht kalibrieren.
+      if (gemeldet > geschaetztStart && gemeldet < fensterJetzt * 0.9)
+        block.schaetzZeichen += Math.round((gemeldet - geschaetztStart) * ZEICHEN_JE_TOKEN)
     }
 
     // Übertrag anfordern — denselben Weg wie die Schwelle des Koordinators.
@@ -1972,8 +2007,11 @@ export function starteLaufMotor(optionen) {
         // lief bisher als „erfolgreich" durch, mit der Marke als Ergebnistext
         // für die Folgeblöcke. Streng geprüft (ganzer Text), damit ein Agent,
         // der über den Fehler berichtet, nicht selbst zum Fehler wird.
+        // agentFehler ist von der CLI als is_error markiert — nie Erzähltext
+        // eines Agenten, deshalb genügt dort „enthält" (Befund Prüfer 1:
+        // „API Error: Prompt is too long" rutschte streng geprüft durch).
         const rohMarke =
-          rohenCliFehlerUebersetzen(block.agentFehler, rohMarkenInfo()) ??
+          rohenCliFehlerUebersetzen(block.agentFehler, lokalFehlerInfo()) ??
           rohenCliFehlerUebersetzen(block.fazit, rohMarkenInfo())
         if (rohMarke) return blockAufloesen('fehlgeschlagen', rohMarke)
         // Das Ergebnis des Blocks ist das Fazit des Block-Agenten — nicht der
@@ -2015,7 +2053,8 @@ export function starteLaufMotor(optionen) {
           block?.blockTaskIds,
           false,
           lokal?.adresse ?? '',
-          lokal ? bekanntesFenster : 0
+          lokal ? bekanntesFenster : 0,
+          sanftAngefordert || hartAngefordert || block?.uebertragPhase != null
         ))
           aufEreignis({ art: 'ticker', text: zeile })
 

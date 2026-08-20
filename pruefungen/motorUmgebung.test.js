@@ -117,3 +117,27 @@ describe('0.51.1 · alle drei Motor-Sessions benutzen dieselbe Bereinigung', () 
     expect(bereinigt).toBeLessThan(ollama)
   })
 })
+
+// Nacharbeit nach Prüfer 1 (0.51.1): auch präfixlose Schalter, die Wartezeiten
+// und Werkzeug-Ergebnis-Größen steuern, dürfen nicht aus einer Eltern-Session
+// in den Motor durchsickern (API_TIMEOUT_MS und MCP_CONNECTION_NONBLOCKING
+// standen real in der geerbten Umgebung der Bausession).
+describe('Nacharbeit Prüfer 1 · erweiterte Schalterliste', () => {
+  it('entfernt die gemessen durchgerutschten Schalter', () => {
+    const quelle = {
+      PATH: 'x',
+      API_TIMEOUT_MS: '900000',
+      MCP_CONNECTION_NONBLOCKING: 'true',
+      MCP_TIMEOUT: '1',
+      MCP_TOOL_TIMEOUT: '1',
+      MAX_MCP_OUTPUT_TOKENS: '1',
+      MAX_THINKING_TOKENS: '1',
+      BASH_DEFAULT_TIMEOUT_MS: '1',
+      BASH_MAX_OUTPUT_LENGTH: '1',
+      USE_BUILTIN_RIPGREP: '0',
+      DISABLE_NON_ESSENTIAL_MODEL_CALLS: '1'
+    }
+    const sauber = umgebungBereinigen(quelle)
+    expect(Object.keys(sauber)).toEqual(['PATH'])
+  })
+})
