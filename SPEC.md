@@ -179,6 +179,10 @@ Sitzungen hinweg Software entsteht — ohne dass dem Agenten der Kontext überl�
     viele lokale Blöcke parallel (§5). Der Ticker nennt „lokal (<Ollama-Modell>)";
     Laufbericht und Metriken führen die Klasse „lokal (Ollama)" und das Ollama-Modell als
     eigene Modellzeile, mit „Denktiefe: gilt hier nicht" und „Kosten: keine" (§3, §3.4).
+    **Eigener Weg ins Netz** (seit 0.51.2): Nur die lokale Motor-Instanz bekommt zusätzlich
+    die zwei rein lesenden Web-Werkzeuge `web_suche` und `webseite_lesen` (§4.3) — die
+    Internet-Werkzeuge der CLI laufen über Anthropics Server und gibt es gegen Ollama nicht.
+    Claude-Blöcke behalten `WebSearch`/`WebFetch` unverändert.
     **Lokaler Prüfer mit Opus-Abnahme** (seit Bauschritt 50): Auch der Prüfer darf lokal
     laufen — sein Urteil hängt dann an zwei Ankern: dem **Tor-Anker** (sein Prüfbefehl wird
     nach einem „bestanden" mechanisch nachgespielt, Rot dreht das Urteil; §4.1) und der
@@ -1441,6 +1445,38 @@ gebaute Teilstücke in der Lokale-Helfer-Zeile. Bauen und Abnehmen sind
 Schreibarbeit und unter „darf nur lesen" gesperrt; das Häkchen je Block (s.u.)
 gilt auch hier.
 
+**Websuche der lokalen Blöcke** (seit 0.51.2, Wunsch Georg, 20.08.2026): Blöcke der
+Klasse „lokal" (§2) bekommen zwei rein lesende Nachschlage-Werkzeuge — `web_suche`
+(Suchbegriff → Titel, Adresse, Kurztext je Treffer) und `webseite_lesen`
+(Adresse → Seitentext). Sie hängen an der **lokalen Motor-Instanz und nur dort**:
+Claude-Blöcke haben `WebSearch`/`WebFetch` der CLI, die über Anthropics Server laufen und
+für ein Ollama-Modell schlicht nicht existieren — ohne diese zwei Werkzeuge hat ein
+lokaler Block gar keinen Weg ins Netz. Anlass ist ein gemessener Reflex (20.08.2026,
+qwen3.8-davidau:27b): Erkennt das Modell eine Wissenslücke, greift es von selbst zum
+Suchwerkzeug; es fehlte nur der Stecker. **Quelle wählbar, ohne Umbau:** Standard ist
+eine **eingebaute, kostenlose** Abfrage ohne Konto (DuckDuckGo); trägt der Nutzer in den
+Einstellungen (§9) eine **SearXNG-Adresse** ein, läuft die Suche darüber. Die eingebaute
+Quelle ist geduldet, nicht garantiert: Bei zu vielen Abfragen in kurzer Zeit sperrt sie
+(gemessen: nach 2–7 Abfragen, Erholung 45–241 s) — FlowForge erkennt das **am Seiteninhalt**
+(die Sperrseite meldet HTTP-„alles in Ordnung") und sagt „Quelle sperrt gerade" statt
+„nichts gefunden"; eine eigene Drossel hält die Abfragen auseinander, einen automatischen
+Wiederholversuch gibt es nicht. Ist eine SearXNG-Adresse eingetragen, antwortet aber nicht
+brauchbar, **weicht FlowForge auf die eingebaute Quelle aus und sagt es im Ticker** — kein
+stiller Wechsel (Entscheidung Georg). **Harte Deckel** (absolut, nicht am Kontextfenster
+skaliert): 6 Treffer je Suche, ~200 Zeichen Kurztext je Treffer, 6.000 Zeichen Seitentext,
+1.000.000 Bytes am rohen Rumpf (schon während des Ladens abgeschnitten — eine große
+Wikipedia-Seite liefert über zwei Millionen Zeichen), 10 s Zeitlimit für die Suche, 20 s
+fürs Lesen. Der Seitentext wird zusätzlich an der **Restluft des Lokal-Wächters** (§2)
+gedeckelt; ist keine mehr da, kommt statt Text der Klartext „kein Platz mehr im
+Arbeitsgedächtnis". **Adress-Sperre:** nur `http`/`https`; dieser Rechner und das eigene
+Netz (127.0.0.0/8, ::1, 10./172.16–31./192.168./169.254., fc00::/7, fe80::) sind hart
+gesperrt — geprüft an der Adresse **und** an der Namensauflösung, und bei **jedem**
+Weiterleitungssprung neu, denn eine harmlos aussehende Seite kann per Weiterleitung auf
+Router, NAS oder die Ollama-Oberfläche zeigen (gemessen). Einzige Ausnahme ist die vom
+Nutzer selbst eingetragene SearXNG-Adresse. Im Ticker steht immer die **Endadresse**, nicht
+die Startadresse. Die Einstufung „rein lesend, ohne Rückfrage" und die ehrliche
+Fremdtext-Grenze stehen in §7.
+
 **Häkchen je Block** (seit Bauschritt 20): An jeder Block-Karte im Schaubild
 sitzt ein Abwahl-Häkchen **„lokale KI erlaubt"** (Standard: an, erbt den
 globalen Schalter). Abgewählt ist es eine echte Sperre: FlowForge lehnt die
@@ -1993,8 +2029,9 @@ umstellbar wie jede Karte.
 | Ohne Rückfrage | Mit Rückfrage |
 |---|---|
 | Im Projektordner schreiben/löschen | Alles außerhalb des Projektordners |
-| Programmbibliotheken installieren (offizielle Quellen) | Sonstige Internetzugriffe |
+| Programmbibliotheken installieren (offizielle Quellen) | Alle übrigen Internetzugriffe |
 | Tests ausführen | Alles Unumkehrbare |
+| Nachschlagen mit den zwei rein lesenden Web-Werkzeugen lokaler Blöcke (§4.3) | |
 
 Der Rechte-Standard ist sichtbar (seit Bauschritt 15): Der Knopf
 **„Projekt-Einstellungen"** im Kopf der Projektansicht zeigt die drei Gruppen
@@ -2007,6 +2044,25 @@ Automodus werden Rechte-Rückfragen ohne Nachfrage erlaubt und im Liveticker
 sowie im Laufbericht als „automatisch erlaubt" vermerkt. Die harten Sperren
 (Git, Verwaltungsdateien, „darf nur lesen") gelten unverändert — der Automodus
 betrifft nur die Rückfrage-Fälle.
+
+**Nachschlagen im Internet** (seit 0.51.2, Entscheidung Georg, 20.08.2026): Die zwei
+Web-Werkzeuge lokaler Blöcke (`web_suche`, `webseite_lesen`, §4.3) sind **rein lesend
+im Code erzwungen** — sie kennen nur `http`/`https`, sperren diesen Rechner und das
+eigene Netz, prüfen jeden Weiterleitungssprung neu und deckeln hart. Deshalb laufen sie
+**ohne Rückfrage** und sind auch unter der Sperre „darf nur lesen" erlaubt — dieselbe
+Begründung wie bei der lokalen Helfer-KI, und gerade die nur-lesenden Blöcke
+(Angreifer, Diagnose, Audit) schlagen am meisten nach. Dafür steht **jeder** Zugriff im
+Liveticker und damit im Laufbericht: Suchbegriff, gelesene Endadresse, Trefferzahl,
+Fehlgrund. Die Internet-Werkzeuge der CLI (`WebSearch`/`WebFetch`, in Claude-Blöcken)
+bleiben unverändert Rückfrage-Fälle; ein Automodus-Ja gilt für sie wie bisher.
+**Ehrliche Grenze** (gemessen 20.08.2026): Eine gelesene Webseite ist Fremdtext an einem
+Agenten, der schreiben darf, und ein kleines lokales Modell ist leichter reinzulegen als
+Opus. Mechanisch dagegen stehen die harten Größendeckel, die Verwaltungsdatei- und
+Prüfmappen-Sperren, die Dateiliste des Datenvertrags und die Git-Sperre — sie greifen
+unabhängig vom Gelesenen. **Nicht** gedeckt sind Paket-Installationen und Skriptläufe:
+`npm install`, `npx`, `pip install` und `node -e …` laufen bei einem schreibenden Block
+ohne Rückfrage durch (Befehls-Einstufung, unten), ein aus Fremdtext übernommener solcher
+Befehl also auch. Das einzige Gegenmittel dort ist die Sichtbarkeit im Ticker.
 
 Befehls-Einstufung (seit Bauschritt 8): Kommandozeilen-Befehle, die mit einem bekannten
 Entwickler-Werkzeug beginnen (node, npm, npx, pnpm, yarn, tsc, vitest, jest, python,
@@ -2274,7 +2330,20 @@ Block-Agenten als Hinweis daneben (§6).
   an (kein Schalter), das abgeleitete Modell lädt nur beim Ändern der Werte neu, ohne
   erreichbare lokale KI startet ein Lauf mit lokalem Block nicht. Ein Wert außerhalb der
   Grenzen wird beim Speichern mit Klartext abgelehnt statt still geklemmt ·
-  **Sessions & Übertrag** (Test-Schalter, §5).
+  **Websuche der lokalen Blöcke** (seit 0.51.2, §4.3): ein Feld **„SearXNG-Adresse"** —
+  **leer heißt eingebaute Quelle**, es gibt bewusst kein zweites Feld für die Quellenwahl
+  (ein Feld weniger, das beim Speichern verlorengehen kann). Live-Status wie bei den
+  Ollama-Adressen, aber mit drei ehrlich getrennten Zuständen, die an der **Antwort selbst**
+  gemessen werden: „nicht erreichbar" · „erreichbar, liefert aber kein JSON" — mit dem
+  konkreten Handgriff, denn eine Standard-SearXNG-Installation liefert **kein** JSON, das
+  muss in `settings.yml` unter `search:` als `formats: [html, json]` freigeschaltet und der
+  Container neu gestartet werden — · „bereit". Eine leere Adresse wird gar nicht erst
+  geprüft. **Alle** Live-Status-Abfragen des Dialogs (auch die der Ollama-Adressen) sind seit
+  0.51.2 **entprellt**: Vorher ging je Tastendruck eine echte Anfrage an den fremden Rechner
+  hinaus (gemessen: 19 getippte Zeichen = 19 Anfragen) — ausgerechnet an eine Quelle, die auf
+  Häufung mit Drosselung reagiert · **Sessions & Übertrag** (Test-Schalter, §5).
+  **Ehrliche Grenze aller Einstellungen:** Ein Lauf friert sie beim Start ein — eine mitten
+  im Lauf geänderte Adresse oder Wahl wirkt erst beim nächsten Laufstart.
 - **Projektübersicht** beim Start: Läuft gerade ein Lauf, liegt er als große
   **Hero-Kachel** obenauf (Pulspunkt, Workflow, letzte Tickerzeile, Kontext-Balken,
   „Zum Lauf"); darunter die übrigen Projekte als Kacheln mit Zustands-Abzeichen (seit
