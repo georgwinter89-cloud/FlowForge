@@ -1251,11 +1251,28 @@ den FlowForge bisher nicht sehen kann.)
   Ehrlicher Hinweistext an der Einstellung: Mehr Geduld verhindert den Abbruch, macht
   aber aus einem Speicherproblem kriechende Läufe — die eigentliche Lösung ist ein
   Fenster, das in die Karte passt (siehe Warnzeile).
+- **96k-Zwischenstufe bei der Fensterwahl:** Die Auswahl in den Einstellungen (heute
+  32k/64k/128k, lokaleHelferKontextWahl) bekommt 96k als Mittelweg — bei 64k bleiben
+  nach dem gemessenen Start-Prompt (~23,5k) nur ~28k Arbeitsraum bis zur
+  Wächter-Marke, 128k sprengt unkomprimiert die 32-GB-Karte. Mitzuziehen: die
+  Werkzeug-/Runden-Deckel (lokaleHelfer.js grenzenFuer — 96k fällt heute in die
+  64k-Stufe, bewusst prüfen, welche Stufe fair ist) und die Prüfungen in
+  lokaleHelferKontext.test.js.
+- **KV-Cache-Kompression als dokumentierter Weg zu 128k:** Georg hat am 20.08.2026
+  auf dem Gaming-PC `OLLAMA_FLASH_ATTENTION=1` und `OLLAMA_KV_CACHE_TYPE=q8_0` als
+  Benutzervariablen gesetzt (halbiert grob den Zwischenspeicher-Bedarf — 128k passt
+  damit voraussichtlich in die 32-GB-Karte; Messung stand beim Planen noch aus, und
+  die Verträglichkeit mit der MTP-Beschleunigung ist ungetestet — erster Verdächtiger,
+  falls Läufe danach zicken). FlowForge-Anteil: Die Empfehlung gehört als Satz in den
+  Hinweistext der Fensterwahl (SPEC §9) — es sind Ollama-Servervariablen, KEINE
+  FlowForge-Einstellung (FlowForge kann fremde Server-Umgebungen nicht setzen; die
+  VRAM-Passt-Prüfung oben ist der ehrliche Beleg, ob die Kompression wirkt).
 - Nachzuziehen: SPEC §2 (Klasse lokal: Speicher-Grenze sichtbar), §9 (neue
-  Einstellung), §3.2 (Warnzeile im Laufbericht).
-**Alltagstest:** Georg stellt absichtlich 128k ein und startet einen lokalen
-Ein-Block-Lauf: Kurz nach dem Blockstart steht die Warnzeile mit dem
-In-der-Karte-Anteil im Ticker. Er stellt 64k ein: keine Warnzeile. Die neue
+  Einstellung, 96k-Stufe, Kompressions-Hinweis), §3.2 (Warnzeile im Laufbericht).
+**Alltagstest:** Georg stellt absichtlich ein Fenster ein, das nicht in die Karte
+passt, und startet einen lokalen Ein-Block-Lauf: Kurz nach dem Blockstart steht die
+Warnzeile mit dem In-der-Karte-Anteil im Ticker; mit passendem Fenster (bzw. dank
+KV-Kompression) keine Warnzeile. In der Fensterwahl gibt es 96k. Die neue
 Geduld-Einstellung steht in den Einstellungen mit ehrlichem Hinweis und wirkt
 nur auf lokale Blöcke.
 
