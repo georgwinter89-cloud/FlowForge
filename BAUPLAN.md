@@ -1065,6 +1065,67 @@ Laufbericht zeigt beide Urteile nebeneinander.
 **Alltagstest:** Zwei lokale Bauer in einer Welle (oder nacheinander mit Grund im Ticker),
 Metriken weisen den lokalen Anteil des Laufs aus.
 
+### Zwischenschritt 0.51.1 — Lokale Blöcke überleben lange Arbeit
+(Geplant 20.08.2026 aus der Analyse von Georgs erstem fast-komplett-lokalen Lauf
+[Life OS, Laufbericht `D:\Projekte\Erweiterung Life OS\laufberichte\2026-08-20T05-54-58-099Z.json`,
+Denk-Export `C:\Users\Patro\Downloads\Lokal Thinking.JSON`]. Befund: 4h13m, fehlgeschlagen;
+Bauer 3 starb nach 87 min mit rohem „Prompt is too long" [410k Eingabe gegen 128k-Fenster,
+`uebertraege: []`, `zusammenfassungen: []`], Bauer 4 nach 109 min mit „[Request interrupted
+by user for tool use]" als Fehlertext, obwohl Georg nichts unterbrochen hat [11 min Stille
+nach automatisch erlaubter Rechte-Frage, dann Abbruch aus der Werkzeug-Schicht]. Die
+51er-Zählung selbst stimmte aufs Token [davon lokal = Summe der lokalen Blöcke, Wächter
+hielt die Lauf-Session auf 200k]. Wurzel-Diagnose, in 49 schon gemessen: Die CLI hält
+fremde Modelle für 200k-Fenster — ihre eigene Zusammenfassung [Compaction] rechnet gegen
+die geglaubten 200k und feuert nie, bevor Ollama bei real 64k/128k ablehnt. Lokale Blöcke
+haben damit KEINE der drei Schutzschichten der Claude-Blöcke [großes Fenster, Compaction,
+Prompt-Cache]. Der 85%-Übertrag hilft nicht — er misst den Koordinator-Faden, nicht den
+Block-Agenten [Klarstellung Georg, 20.08.2026]. Dazu: Die Helfer-Aufrufe des lokalen
+Block-Agenten liefen gegen dieselbe belegte GPU — 48 Timeout-Meldungen, 57
+lokal_bauen-Versuche, der Agent fiel aufs Selbermachen zurück und blähte den Kontext.)
+- **Wahres Fenster für lokale Instanzen:** In der Ollama-Umgebung der lokalen Motor-Instanz
+  (claudeCodeMotor.js, bei ANTHROPIC_BASE_URL/Alias-Setzung ~Z.1536-1551)
+  `CLAUDE_CODE_MAX_CONTEXT_TOKENS` = Kontextfenster aus den Einstellungen setzen. Offiziell
+  dokumentiert (code.claude.com/docs model-config, „Correct the window for a gateway or
+  custom model ID"; geprüft 20.08.2026, SDK 0.3.224): gilt für Modellkennungen, die nicht
+  mit „claude-" beginnen — unsere `flowforge-…` passt. Damit feuert die CLI-eigene
+  Zusammenfassung am echten Fenster; die Ticker-Zeile dafür existiert seit Schritt 36.
+  `CLAUDE_CODE_AUTO_COMPACT_WINDOW` hat laut Doku Untergrenze 100.000 — nur setzen, wenn
+  Kontext ≥ 128k, sonst weglassen. ACHTUNG: Die Umgebungs-Bereinigung des Motors muss die
+  neue Variable durchlassen (bekannte Stolperstelle, wie damals ANTHROPIC_*). Ehrliche
+  Grenze in die SPEC: Die Zusammenfassung schreibt das lokale Modell selbst — Qualität
+  beim ersten echten Lauf messen.
+- **Deutsche Klartexte statt roher CLI-Fehler:** „Prompt is too long" (stand roh im Ticker
+  und als ergebnisText) → Alltagssprache mit Ursache („Das Arbeitsgedächtnis des lokalen
+  Blocks ist übergelaufen …"); „[Request interrupted by user for tool use]" →
+  Text OHNE Nutzer-Beschuldigung (der Abbruch kam aus der Werkzeug-Schicht/Ollama, nicht
+  von Georg). Einstiegspunkte: fehlerAusErgebnis (claudeCodeMotor.js:917) und die Stellen,
+  die ergebnisText/fehlertext aus dem CLI-Ergebnis übernehmen.
+- **Helfer-Werkzeuge lokaler Blöcke stummschalten:** Ein lokaler Block-Agent IST die lokale
+  KI — Delegieren an dieselbe GPU ist sinnlos und im Lauf gemessen schädlich. Für Blöcke
+  der Klasse „lokal": lokale Helfer-Werkzeuge nicht freischalten und die Auftrags-Zusätze
+  (bauenAuftragZusatz, lokal_recherchieren-Hinweise) weglassen. Bewusst NICHT: Helfer auf
+  eine zweite Pool-Adresse legen (bräuchte zweite GPU; eigener Schritt, falls je nötig).
+- **Systemtext im abgeleiteten Modell:** lokalesModellBereitstellen (/api/create) um einen
+  SYSTEM-Text erweitern: gezielt ändern statt Dateien neu schreiben, einmal verifizieren
+  statt mehrfach, deutsch arbeiten (Denk-Export: 45/45 Abschnitte englisch, README komplett
+  neu geschrieben + dreifach verifiziert inkl. Hexdump einer Einzelzeile). VORHER klein
+  messen, ob Ollamas Anthropic-Endpunkt den Modelfile-SYSTEM überhaupt anwendet, wenn die
+  CLI ihren eigenen Systemtext mitschickt — sonst ist der Punkt wirkungslos und fliegt raus.
+- **Kleinmessung:** Die Eingabe-Token-Zahl des ersten Ollama-Turns eines lokalen Blocks als
+  Ticker-Zeile („Start-Prompt des lokalen Blocks: ~15.400 Tokens von 65.536") — macht die
+  Auftrags-Diät-Frage später mit Zahlen entscheidbar (Rechnung 20.08.: Start ≈ 14–17k von
+  64k, größter steuerbarer Posten sind die zwei 8.000-Zeichen-Übergaben).
+- Nachzuziehen: SPEC §2 (Klasse lokal: wahres Fenster, Zusammenfassung durch das lokale
+  Modell, keine Helfer-Werkzeuge), §5 (lokale Blöcke: Compaction statt Übertrag, Grenze
+  ehrlich), §4.3 (Helfer-KI: gilt nicht für Blöcke der Klasse lokal).
+- Empfehlung an Georg (kein Code): Kontextfenster zurück auf 64k — 128k-KV-Cache sprengt
+  die 32-GB-Karte (RAM-Kriechgang war die zweite Todesursache des Laufs); Blöcken
+  Zusatznamen geben („Bauer · Server"), sonst heißt es „«Bauer» wartet auf «Bauer»".
+**Alltagstest:** Georg wiederholt den Life-OS-Lauf mit 64k: kein „Prompt is too long",
+stattdessen bei Bedarf sichtbar „Der Motor hat das Arbeitsgedächtnis … zusammengefasst";
+keine Helfer-Timeout-Kaskade bei lokalen Blöcken; scheitert doch etwas, steht die Ursache
+auf Deutsch im Bericht und beschuldigt nicht den Nutzer.
+
 ## Reihenfolge-Begründung (Paket 40–48)
 Im Paket 40–48 bestimmt die Angriffsliste die Reihenfolge, nicht der Nutzen: Die
 Kanten müssen verlustfrei sein (40), bevor ein Auftrag verspricht, wohin eine
