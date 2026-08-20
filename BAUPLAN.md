@@ -1115,16 +1115,31 @@ lokal_bauen-Versuche, der Agent fiel aufs Selbermachen zurück und blähte den K
   Ticker-Zeile („Start-Prompt des lokalen Blocks: ~15.400 Tokens von 65.536") — macht die
   Auftrags-Diät-Frage später mit Zahlen entscheidbar (Rechnung 20.08.: Start ≈ 14–17k von
   64k, größter steuerbarer Posten sind die zwei 8.000-Zeichen-Übergaben).
+- **Automatische Zusatznamen aus dem Zuschnitt (Wunsch Georg, 20.08.2026):** `paket_melden`
+  bekommt im Schema je Ziel ein Pflichtfeld **Kurzname** (2–3 Wörter, Längendeckel;
+  FlowForge validiert und nummeriert Dopplungen mechanisch nach). FlowForge heftet den
+  Kurznamen an die Ziel-Instanz, sobald der Zuschnitt gemeldet ist — er läuft überall mit,
+  wo der Zusatzname durchgereicht wird (Ticker, Warte-Gründe, Laufbericht,
+  Block-Ergebnisse; Metriken führen Katalogname/Zusatz ohnehin getrennt, Schritt 41).
+  Zwei Regeln: Georgs eigener Zusatzname an der Karte GEWINNT immer (automatisch nur bei
+  leerem Feld); der automatische Name gilt NUR für den Lauf, die Leinwand-Karte bleibt
+  unangetastet (Entscheidungsgrund: die Leinwand gehört dem Nutzer, und ein geänderter
+  Karten-Zusatzname macht seit Schritt 41 den Laufstand ungültig — der Laufzeit-Name
+  umgeht beides). Er darf im Laufstand mitwandern (kommt aus den Paket-Daten, die dort
+  ohnehin liegen), die Wiederaufnahme-Prüfung bleibt unberührt.
 - Nachzuziehen: SPEC §2 (Klasse lokal: wahres Fenster, Zusammenfassung durch das lokale
   Modell, keine Helfer-Werkzeuge), §5 (lokale Blöcke: Compaction statt Übertrag, Grenze
-  ehrlich), §4.3 (Helfer-KI: gilt nicht für Blöcke der Klasse lokal).
+  ehrlich), §4.3 (Helfer-KI: gilt nicht für Blöcke der Klasse lokal; Zuschnitt:
+  Kurzname je Ziel, Laufzeit-Zusatzname), §4.1 (Zusatzname: automatische Laufzeit-Namen).
 - Empfehlung an Georg (kein Code): Kontextfenster zurück auf 64k — 128k-KV-Cache sprengt
   die 32-GB-Karte (RAM-Kriechgang war die zweite Todesursache des Laufs); Blöcken
   Zusatznamen geben („Bauer · Server"), sonst heißt es „«Bauer» wartet auf «Bauer»".
 **Alltagstest:** Georg wiederholt den Life-OS-Lauf mit 64k: kein „Prompt is too long",
 stattdessen bei Bedarf sichtbar „Der Motor hat das Arbeitsgedächtnis … zusammengefasst";
 keine Helfer-Timeout-Kaskade bei lokalen Blöcken; scheitert doch etwas, steht die Ursache
-auf Deutsch im Bericht und beschuldigt nicht den Nutzer.
+auf Deutsch im Bericht und beschuldigt nicht den Nutzer. Im Ticker heißen die zwei
+unbenannten Bauer nach dem Zuschnitt automatisch z. B. „Bauer · Server-Briefing" und
+„Bauer · Ruheanzeige Web" — die Karten auf der Leinwand bleiben unverändert.
 
 ## Reihenfolge-Begründung (Paket 40–48)
 Im Paket 40–48 bestimmt die Angriffsliste die Reihenfolge, nicht der Nutzen: Die
