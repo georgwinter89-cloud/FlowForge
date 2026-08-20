@@ -47,14 +47,34 @@ const w = texte.agentenWebsuche
 // Content-Length taugt nicht als Maß (Wikipedia „World War II" meldet 321.974
 // und liefert 2.055.659 Zeichen, Faktor 6,4; ein 199-kB-gzip-Rumpf ergab
 // 209.715.200 Zeichen und +656 MB Arbeitsspeicher, gemessen 20.08.2026).
+//
+// titelZeichen/adresseZeichen/seitentitelZeichen sind die Deckel auf den
+// übrigen Fremdtext-Feldern (Nacharbeit Befund 9). Bis dahin galt der Deckel
+// NUR für den Kurztext: Gemessen wurden 481.553 Zeichen tool_result aus sechs
+// Treffern mit langen Titeln — 137.587 geschätzte Token, also 210 % von Georgs
+// 64k-Fenster in EINER Nachricht. Die Adresse wird dabei NICHT gekürzt,
+// sondern der ganze Treffer weggelassen: Eine mit „…" abgeschnittene Adresse
+// ist für den nächsten webseite_lesen-Aufruf unbrauchbar und erzeugte statt
+// eines Deckels einen stillen Folgefehler.
+//
+// seiteGesamtMs/sucheGesamtMs sind die Frist je WERKZEUGAUFRUF (Nacharbeit
+// Befund 11). Die Einzellimits gelten je Versuch und summierten sich: gemessen
+// 114.082 ms Stille für EINEN Seitenabruf (6 Sprünge × 19 s) und 32.529 ms für
+// EINE Suche, wenn die eigene SearXNG-Adresse hängt. 25 s lassen einen
+// langsamen Abruf plus ein, zwei schnelle Weiterleitungen weiterhin durch.
 export const WEB_DECKEL = {
   treffer: 6,
   kurztextZeichen: 200,
+  titelZeichen: 200,
+  adresseZeichen: 500,
+  seitentitelZeichen: 200,
   seiteZeichen: 6000,
   seiteZeichenMax: 12000,
   rumpfBytes: 1000000,
   sucheZeitlimitMs: 10000,
   seiteZeitlimitMs: 20000,
+  sucheGesamtMs: 25000,
+  seiteGesamtMs: 25000,
   sprungDeckel: 5,
   drosselPauseMs: 60000,
   mindestAbstandMs: 2500
@@ -66,6 +86,117 @@ const HTML_ADRESSE = 'https://html.duckduckgo.com/html/'
 // ---------------------------------------------------------------------------
 // Reine Textarbeit (netzfrei — genau diese Funktionen sind hart geprüft)
 // ---------------------------------------------------------------------------
+
+// LINEAR ENTKERNEN statt mit fauler Wiederholung (Nacharbeit Befund 8).
+//
+// Muster wie /<!--[\s\S]*?-->/g, /<script\b[^>]*>[\s\S]*?<\/script>/gi oder
+// /<[^>]*>/g laufen von JEDEM Anfang einmal bis zum Rumpfende, wenn das
+// passende Ende fehlt — das ist quadratisch, und es passiert im
+// Electron-HAUPTPROZESS: Fenster, Ticker, Rückfragen, Speichern und alle
+// parallelen Blöcke stehen währenddessen still (der Prüfer maß 0 von 1.964
+// erwarteten Timer-Takten). Ein Zeitlimit hilft dagegen nichts, weil in dieser
+// Zeit kein einziger Timer läuft.
+//
+// Gemessen 21.08.2026 am echten Modul (node 24, dieser Rechner), vorher → nachher:
+//   1 MB nur „<!--"                     232.849 ms →     4 ms
+//   1 MB nur „<"                    ~640.000 ms(*) →     8 ms
+//   900 kB nur „<a>" (ddgZustand)       114.862 ms →    36 ms
+//   440 kB „<!--" als Treffer-Kurztext   36.601 ms →     1 ms
+//   980 kB „<title>" ohne Ende            4.114 ms →     8 ms
+//   1 MB „<script>" ohne Ende             3.335 ms →     8 ms
+//   harmlose 1-MB-Seite (Gegenprobe)         16 ms →    14 ms
+// (*) hochgerechnet aus der gemessenen Kurve 100 kB = 6.320 ms, 250 kB =
+//     40.210 ms, 500 kB = 160.539 ms; der volle Lauf riss die
+//     Zehn-Minuten-Grenze der Messung.
+//
+// Die Regel aller Helfer hier ist dieselbe wie beim Regex, nur ohne Vollsuche:
+// Fehlt zu einem Anfang das Ende, kann es auch für jeden SPÄTEREN Anfang keins
+// mehr geben — dann ist die Suche fertig.
+function kommentareEntfernen(roh) {
+  const text = String(roh ?? '')
+  let start = text.indexOf('<!--')
+  if (start < 0) return text
+  const stuecke = []
+  let stelle = 0
+  while (start >= 0) {
+    const ende = text.indexOf('-->', start + 4)
+    if (ende < 0) break
+    stuecke.push(text.slice(stelle, start), ' ')
+    stelle = ende + 3
+    start = text.indexOf('<!--', stelle)
+  }
+  stuecke.push(text.slice(stelle))
+  return stuecke.join('')
+}
+
+// Alle Marken „<…>" entfernen (Ersatz für /<[^>]*>/g). Das war die teuerste
+// Stelle des ganzen Moduls und stand in keinem Befund: Fehlt das „>", probiert
+// [^>]* an JEDEM „<" die volle Restlänge durch.
+function markenEntfernen(roh) {
+  const text = String(roh ?? '')
+  let start = text.indexOf('<')
+  if (start < 0) return text
+  const stuecke = []
+  let stelle = 0
+  while (start >= 0) {
+    const ende = text.indexOf('>', start + 1)
+    if (ende < 0) break
+    stuecke.push(text.slice(stelle, start), ' ')
+    stelle = ende + 1
+    start = text.indexOf('<', stelle)
+  }
+  stuecke.push(text.slice(stelle))
+  return stuecke.join('')
+}
+
+// Nächste öffnende Marke ab `ab`. `muster` ist ein g-Regex auf den MARKENKOPF
+// (z.B. /<a\b/gi) — kurz und ohne Wiederholung, also linear; das Ende des
+// Kopfes findet indexOf('>'), nicht [^>]*>.
+function markeSuchen(text, muster, ab) {
+  muster.lastIndex = ab
+  const treffer = muster.exec(text)
+  if (!treffer) return null
+  const kopfEnde = text.indexOf('>', muster.lastIndex)
+  if (kopfEnde < 0) return null
+  return {
+    anfang: treffer.index,
+    name: treffer[1],
+    kopf: text.slice(muster.lastIndex, kopfEnde),
+    nach: kopfEnde + 1
+  }
+}
+
+// Ein ganzes Element samt Inhalt entfernen (Rahmen-Marken).
+function elementEntfernen(roh, marke) {
+  const text = String(roh ?? '')
+  const auf = new RegExp(`<${marke}\\b`, 'gi')
+  const zu = new RegExp(`</${marke}\\s*>`, 'gi')
+  const stuecke = []
+  let stelle = 0
+  for (;;) {
+    const anfang = markeSuchen(text, auf, stelle)
+    if (!anfang) break
+    zu.lastIndex = anfang.nach
+    const ende = zu.exec(text)
+    if (!ende) break
+    stuecke.push(text.slice(stelle, anfang.anfang), ' ')
+    stelle = zu.lastIndex
+  }
+  if (!stuecke.length) return text
+  stuecke.push(text.slice(stelle))
+  return stuecke.join('')
+}
+
+// Inhalt des ersten Elements dieser Marke (für den Seitentitel).
+function elementInhalt(roh, marke) {
+  const text = String(roh ?? '')
+  const anfang = markeSuchen(text, new RegExp(`<${marke}\\b`, 'gi'), 0)
+  if (!anfang) return ''
+  const zu = new RegExp(`</${marke}\\s*>`, 'gi')
+  zu.lastIndex = anfang.nach
+  const ende = zu.exec(text)
+  return ende ? text.slice(anfang.nach, ende.index) : ''
+}
 
 // Rahmen einer Seite, der nie Inhalt ist. Gemessen 20.08.2026 an echten
 // Seiten: Ohne diese Marken bestehen die ersten 380 Zeichen einer GitHub-Seite
@@ -140,11 +271,7 @@ function entitaetenLoesen(text) {
 // zusammenziehen. Gemessen: Kurztexte tragen Markup und Entitäten („All
 // historical <b>Electron</b> releases.").
 function entmarkupt(roh) {
-  return entitaetenLoesen(
-    String(roh ?? '')
-      .replace(/<!--[\s\S]*?-->/g, ' ')
-      .replace(/<[^>]*>/g, ' ')
-  )
+  return entitaetenLoesen(markenEntfernen(kommentareEntfernen(roh)))
     .replace(/\s+/g, ' ')
     .trim()
 }
@@ -154,18 +281,32 @@ function kuerzen(text, deckel) {
   return t.length > deckel ? t.slice(0, deckel).trimEnd() + '…' : t
 }
 
+// Ein fertiger Treffer — an EINER Stelle gebaut, damit die Deckel auf Titel und
+// Adresse nicht in drei Übersetzer verstreut liegen (Nacharbeit Befund 9).
+// Eine übermäßig lange Adresse lässt den Treffer WEGFALLEN (null): Gekürzt wäre
+// sie unbrauchbar, ungekürzt wäre sie das Loch, das der Deckel schließen soll.
+// Die Trefferliste bleibt damit unter 6 × (200 + 500 + 201) ≈ 5.400 Zeichen.
+function trefferBauen(titelRoh, adresse, kurztextRoh) {
+  if (adresse.length > WEB_DECKEL.adresseZeichen) return null
+  return {
+    titel: kuerzen(entmarkupt(titelRoh), WEB_DECKEL.titelZeichen) || adresse,
+    adresse,
+    kurztext: kuerzen(entmarkupt(kurztextRoh), WEB_DECKEL.kurztextZeichen)
+  }
+}
+
 // HTML zu lesbarem Text. Reihenfolge zählt: erst Rahmen samt Inhalt raus, dann
 // Blockenden zu Zeilenumbrüchen, dann Marken weg, ERST DANN Entitäten lösen —
 // andersherum würde ein „&lt;script&gt;" im Fließtext hinterher wie eine Marke
 // aussehen.
 export function htmlZuText(html) {
-  let roh = String(html ?? '').replace(/<!--[\s\S]*?-->/g, ' ')
-  for (const marke of RAHMEN_MARKEN)
-    roh = roh.replace(new RegExp(`<${marke}\\b[^>]*>[\\s\\S]*?<\\/${marke}\\s*>`, 'gi'), ' ')
-  roh = roh
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/(p|div|li|tr|h[1-6]|section|article|table|blockquote|pre)\s*>/gi, '\n')
-    .replace(/<[^>]*>/g, ' ')
+  let roh = kommentareEntfernen(html)
+  for (const marke of RAHMEN_MARKEN) roh = elementEntfernen(roh, marke)
+  roh = markenEntfernen(
+    roh
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<\/(p|div|li|tr|h[1-6]|section|article|table|blockquote|pre)\s*>/gi, '\n')
+  )
   return entitaetenLoesen(roh)
     .replace(/\r/g, '')
     .replace(/[ \t ]+/g, ' ')
@@ -219,15 +360,28 @@ function dekodieren(bytes, kennzeichen) {
 // 20.08.2026 schreibt lite/ per POST `href` VOR `class` in EINFACHEN
 // Anführungszeichen, html/ genau andersherum in doppelten — die naheliegende
 // Regex `class=['"]result-link['"][^>]*href=` traf auf lite/ null von zehn.
+//
+// Auch hier linear (Nacharbeit Befund 8): Das frühere
+// /<a\b([^>]*)>([\s\S]*?)<\/a\s*>/gi kostete an 900 kB aus lauter „<a>" ohne
+// Ende 114.862 ms Stillstand — dieser Rumpf kommt von der Suchquelle, ist also
+// ebenfalls Fremdtext.
 function ankerMitKlasse(html, klasse) {
+  const text = String(html ?? '')
   const gefunden = []
-  const marken = /<a\b([^>]*)>([\s\S]*?)<\/a\s*>/gi
-  let treffer
-  while ((treffer = marken.exec(String(html ?? '')))) {
-    if (!hatKlasse(treffer[1], klasse)) continue
-    const href = /href\s*=\s*["']([^"']*)["']/i.exec(treffer[1])
+  const auf = /<a\b/gi
+  const zu = /<\/a\s*>/gi
+  let stelle = 0
+  for (;;) {
+    const marke = markeSuchen(text, auf, stelle)
+    if (!marke) break
+    zu.lastIndex = marke.nach
+    const ende = zu.exec(text)
+    if (!ende) break
+    stelle = zu.lastIndex
+    if (!hatKlasse(marke.kopf, klasse)) continue
+    const href = /href\s*=\s*["']([^"']*)["']/i.exec(marke.kopf)
     if (!href) continue
-    gefunden.push({ href: href[1], anker: treffer[2] })
+    gefunden.push({ href: href[1], anker: text.slice(marke.nach, ende.index) })
   }
   return gefunden
 }
@@ -245,12 +399,28 @@ function hatKlasse(kopf, klasse) {
 function elementeMitKlasse(html, klasse) {
   const roh = String(html ?? '')
   const gefunden = []
-  const marken = /<(a|td|div|span|p)\b([^>]*)>/gi
-  let treffer
-  while ((treffer = marken.exec(roh))) {
-    if (!hatKlasse(treffer[2], klasse)) continue
-    const ende = new RegExp(`</${treffer[1]}\\s*>`, 'i').exec(roh.slice(marken.lastIndex))
-    gefunden.push(ende ? roh.slice(marken.lastIndex, marken.lastIndex + ende.index) : '')
+  const auf = /<(a|td|div|span|p)\b/gi
+  // Eine Marke, zu der ab hier kein Ende mehr kommt, hat auch für jeden
+  // späteren Anfang keins — sonst suchte jedes offene Element den Rest des
+  // Rumpfes noch einmal ab (gemessen 21.08.2026: 980 kB offene Kurztext-Marken
+  // 1.895 ms → 9 ms).
+  const ohneEnde = new Set()
+  let stelle = 0
+  for (;;) {
+    const marke = markeSuchen(roh, auf, stelle)
+    if (!marke) break
+    stelle = marke.nach
+    if (!hatKlasse(marke.kopf, klasse)) continue
+    const name = marke.name.toLowerCase()
+    if (ohneEnde.has(name)) {
+      gefunden.push('')
+      continue
+    }
+    const zu = new RegExp(`</${name}\\s*>`, 'gi')
+    zu.lastIndex = marke.nach
+    const ende = zu.exec(roh)
+    if (!ende) ohneEnde.add(name)
+    gefunden.push(ende ? roh.slice(marke.nach, ende.index) : '')
   }
   return gefunden
 }
@@ -274,11 +444,8 @@ export function ddgLiteTreffer(html) {
   for (let i = 0; i < anker.length && liste.length < WEB_DECKEL.treffer; i++) {
     const adresse = absolut(entitaetenLoesen(anker[i].href), LITE_ADRESSE)
     if (!adresse || !/^https?:/i.test(adresse)) continue
-    liste.push({
-      titel: entmarkupt(anker[i].anker) || adresse,
-      adresse,
-      kurztext: kuerzen(entmarkupt(kurztexte[i] ?? ''), WEB_DECKEL.kurztextZeichen)
-    })
+    const treffer = trefferBauen(anker[i].anker, adresse, kurztexte[i] ?? '')
+    if (treffer) liste.push(treffer)
   }
   return liste
 }
@@ -294,11 +461,8 @@ export function ddgHtmlTreffer(html) {
   for (let i = 0; i < anker.length && liste.length < WEB_DECKEL.treffer; i++) {
     const adresse = uddgAuspacken(anker[i].href)
     if (!adresse) continue
-    liste.push({
-      titel: entmarkupt(anker[i].anker) || adresse,
-      adresse,
-      kurztext: kuerzen(entmarkupt(kurztexte[i] ?? ''), WEB_DECKEL.kurztextZeichen)
-    })
+    const treffer = trefferBauen(anker[i].anker, adresse, kurztexte[i] ?? '')
+    if (treffer) liste.push(treffer)
   }
   return liste
 }
@@ -348,11 +512,8 @@ export function searxngTreffer(daten) {
     if (liste.length >= WEB_DECKEL.treffer) break
     const adresse = String(eintrag?.url ?? '').trim()
     if (!/^https?:\/\//i.test(adresse)) continue
-    liste.push({
-      titel: entmarkupt(eintrag?.title) || adresse,
-      adresse,
-      kurztext: kuerzen(entmarkupt(eintrag?.content), WEB_DECKEL.kurztextZeichen)
-    })
+    const treffer = trefferBauen(eintrag?.title, adresse, eintrag?.content)
+    if (treffer) liste.push(treffer)
   }
   return liste
 }
@@ -582,6 +743,16 @@ async function rumpfLesen(antwort, deckel) {
   return { bytes: alles, abgeschnitten }
 }
 
+// Wie viel Zeit darf dieser eine fetch noch kosten? Das kleinere aus
+// Einzellimit und Restfrist (Nacharbeit Befund 11). 0 heißt: gar nicht mehr
+// abrufen. Das frische Einzelsignal je fetch bleibt — die Frist deckelt nur die
+// SUMME, damit ein Werkzeugaufruf nicht wie gemessen 114 s schweigt.
+function restFrist(frist, einzelLimitMs) {
+  if (!Number.isFinite(frist)) return einzelLimitMs
+  const rest = frist - Date.now()
+  return rest <= 0 ? 0 : Math.min(einzelLimitMs, rest)
+}
+
 // Jeder fetch bekommt ein FRISCHES Zeitlimit-Signal. Gegenbeispiel im Haus
 // (lokalesModell.js): ein Signal für zwei Aufrufe teilt sich das Budget.
 // Gemessen: ohne Signal läuft ein Abruf gegen einen Server, der den Rumpf nie
@@ -620,20 +791,35 @@ function suchFehler(art, text) {
   }
 }
 
-async function ddgAbfragen(adresse, begriff, perPost) {
+// Eine abgelaufene Frist ist wie ein Zeitlimit — netzFehlerText macht daraus
+// denselben deutschen Klartext wie bei einem echten TimeoutError.
+const FRIST_ABGELAUFEN = Object.assign(new Error('Frist abgelaufen'), { name: 'TimeoutError' })
+
+async function ddgAbfragen(adresse, begriff, perPost, frist) {
+  // Zweite Fristprüfung: Zwischen der Prüfung in der Schleife und diesem Abruf
+  // liegt der Mindestabstand von 2,5 s — der kann die Frist gerade aufbrauchen.
+  const zeitlimitMs = restFrist(frist, WEB_DECKEL.sucheZeitlimitMs)
+  if (zeitlimitMs <= 0) throw FRIST_ABGELAUFEN
   const antwort = await holen(perPost ? adresse : adresse + '?q=' + encodeURIComponent(begriff), {
     methode: perPost ? 'POST' : 'GET',
     koerper: perPost ? new URLSearchParams({ q: begriff }).toString() : null,
     kopfzeilen: perPost ? { 'content-type': 'application/x-www-form-urlencoded' } : {},
-    zeitlimitMs: WEB_DECKEL.sucheZeitlimitMs
+    zeitlimitMs
   })
   const { bytes } = await rumpfLesen(antwort, WEB_DECKEL.rumpfBytes)
   return textAusBytes(bytes, antwort.headers.get('content-type'))
 }
 
-async function eingebauteSuche(begriff) {
+async function eingebauteSuche(begriff, frist) {
   if (Date.now() < gesperrtBis) return suchFehler('gesperrt', w.quelleGesperrt)
   return anstellen(async () => {
+    // Die gemerkte Sperre NOCH EINMAL prüfen, nachdem gewartet wurde
+    // (Nacharbeit Befund 14): Drei gleichzeitige Suchen passieren die Prüfung
+    // oben alle drei, solange gesperrtBis noch 0 ist — die zweite und dritte
+    // schickten dann gemessen (0/2.532/5.048 ms) echte Abfragen an eine Quelle,
+    // die schon bei der ersten „gesperrt" gesagt hatte. Genau das Nachtreten
+    // verlängert die Sperre.
+    if (Date.now() < gesperrtBis) return suchFehler('gesperrt', w.quelleGesperrt)
     // Weg 1: lite/ per POST — liefert direkte Adressen ohne Umleiter.
     // Weg 2: html/ mit uddg-Auspacken. Weg 2 ist KEINE Ausweichquelle bei
     // Sperre: Beide Endpunkte teilen sie (gemessen: alle Wege binnen Sekunden
@@ -644,12 +830,19 @@ async function eingebauteSuche(begriff) {
     ]
     let letzterFehler = null
     for (let i = 0; i < wege.length; i++) {
+      // Die Frist VOR dem Mindestabstand prüfen: Sonst wartet der Aufruf noch
+      // 2,5 s, um danach doch nur das Zeitlimit zu melden.
+      if (restFrist(frist, WEB_DECKEL.sucheZeitlimitMs) <= 0) {
+        letzterFehler = FRIST_ABGELAUFEN
+        break
+      }
       if (i > 0) await pause(WEB_DECKEL.mindestAbstandMs)
       let html
       try {
-        html = await ddgAbfragen(wege[i].adresse, begriff, wege[i].perPost)
+        html = await ddgAbfragen(wege[i].adresse, begriff, wege[i].perPost, frist)
       } catch (fehler) {
         letzterFehler = fehler
+        if (fehler === FRIST_ABGELAUFEN) break
         continue
       }
       const zustand = ddgZustand(html)
@@ -689,13 +882,15 @@ async function eingebauteSuche(begriff) {
 
 // SearXNG geht an der Drossel vorbei: Es ist Georgs eigene Instanz, sie
 // braucht keinen Schutz vor Georgs eigenen Blöcken.
-async function searxngSuche(begriff, adresse) {
+async function searxngSuche(begriff, adresse, frist) {
   const basis = adresseBereinigen(adresse)
   if (!basis) return { ok: false, treffer: [], grund: w.grund.unlesbar }
+  const zeitlimitMs = restFrist(frist, WEB_DECKEL.sucheZeitlimitMs)
+  if (zeitlimitMs <= 0) return { ok: false, treffer: [], grund: w.grund.zeit }
   try {
     const antwort = await holen(
       basis + '/search?q=' + encodeURIComponent(begriff) + '&format=json',
-      { kopfzeilen: { accept: 'application/json' }, zeitlimitMs: WEB_DECKEL.sucheZeitlimitMs }
+      { kopfzeilen: { accept: 'application/json' }, zeitlimitMs }
     )
     if (antwort.status === 429) return { ok: false, treffer: [], grund: w.grund.gedrosselt }
     const { bytes } = await rumpfLesen(antwort, WEB_DECKEL.rumpfBytes)
@@ -721,9 +916,13 @@ async function searxngSuche(begriff, adresse) {
 export async function websucheDurchfuehren({ suchbegriff, searxngAdresse } = {}) {
   const begriff = String(suchbegriff ?? '').trim()
   if (!begriff) return suchFehler('begriffFehlt', w.begriffFehlt)
+  // Die Frist entsteht EINMAL am Eingang und gilt für alles, was dieser eine
+  // Werkzeugaufruf noch anstellt — auch für das Ausweichen und für die
+  // Wartezeit in der Drossel-Schlange (Nacharbeit Befund 11).
+  const frist = Date.now() + WEB_DECKEL.sucheGesamtMs
   const searx = String(searxngAdresse ?? '').trim()
-  if (!searx) return eingebauteSuche(begriff)
-  const versuch = await searxngSuche(begriff, searx)
+  if (!searx) return eingebauteSuche(begriff, frist)
+  const versuch = await searxngSuche(begriff, searx, frist)
   if (versuch.ok)
     return {
       ok: true,
@@ -734,7 +933,7 @@ export async function websucheDurchfuehren({ suchbegriff, searxngAdresse } = {})
       fehlerArt: '',
       fehlertext: ''
     }
-  const ersatz = await eingebauteSuche(begriff)
+  const ersatz = await eingebauteSuche(begriff, frist)
   return { ...ersatz, ausgewichen: true, ausweichGrund: versuch.grund }
 }
 
@@ -742,7 +941,13 @@ export async function websucheDurchfuehren({ suchbegriff, searxngAdresse } = {})
 // Seite lesen
 // ---------------------------------------------------------------------------
 
-function seitenFehler(adresse, art, text) {
+// `grund` ist der KURZE Grund in Georgs Sprache, zusätzlich zum langen Satz an
+// den Agenten (Nacharbeit Befund 1). Ohne ihn erfand die Ticker-Zeile ihren
+// eigenen: Bei einer Weiterleitungsschleife auf httpbin.org stand dort
+// gemessen „erlaubt sind nur öffentliche Seiten … nicht das eigene Netz",
+// während der Agent korrekt „zu viele Weiterleitungen hintereinander" las.
+// `status` trägt den HTTP-Code, damit die Ticker-Zeile ihn nennen kann.
+function seitenFehler(adresse, art, text, grund = '', status = 0) {
   return {
     ok: false,
     adresse,
@@ -750,7 +955,10 @@ function seitenFehler(adresse, art, text) {
     text: '',
     gekuerzt: false,
     zeichen: 0,
+    gesamtZeichen: 0,
+    status,
     fehlerArt: art,
+    grund,
     fehlertext: text
   }
 }
@@ -771,26 +979,33 @@ export async function webseiteLesen({ adresse, zeichenDeckel, searxngAdresse } =
   const roh = String(adresse ?? '').trim()
   if (!roh) return seitenFehler('', 'adresseFehlt', w.adresseFehlt)
   const deckel = deckelWaehlen(zeichenDeckel)
+  // Frist für den GANZEN Aufruf, nicht je Sprung (Nacharbeit Befund 11).
+  const frist = Date.now() + WEB_DECKEL.seiteGesamtMs
   let ziel = roh
   for (let sprung = 0; sprung <= WEB_DECKEL.sprungDeckel; sprung++) {
     const geprueft = await adressePruefen(ziel, searxngAdresse)
     if (!geprueft.ok)
-      return seitenFehler(geprueft.adresse, 'abgelehnt', w.adresseAbgelehnt(geprueft.grund))
+      return seitenFehler(
+        geprueft.adresse,
+        'abgelehnt',
+        w.adresseAbgelehnt(geprueft.grund),
+        geprueft.grund
+      )
+    const zeitlimitMs = restFrist(frist, WEB_DECKEL.seiteZeitlimitMs)
+    // Ist die Frist aufgebraucht, bricht die Sprungkette hier ab — statt wie
+    // gemessen erst am sprungDeckel nach 114 s, und dann auch noch mit dem
+    // falschen Grund „zu viele Weiterleitungen".
+    if (zeitlimitMs <= 0)
+      return seitenFehler(geprueft.adresse, 'zeitlimit', w.zeitlimit, w.grund.zeit)
     let antwort
     try {
-      antwort = await holen(geprueft.adresse, {
-        zeitlimitMs: WEB_DECKEL.seiteZeitlimitMs,
-        umleitung: 'manual'
-      })
+      antwort = await holen(geprueft.adresse, { zeitlimitMs, umleitung: 'manual' })
     } catch (fehler) {
       const name = String(fehler?.name ?? '')
       if (name === 'TimeoutError' || name === 'AbortError')
-        return seitenFehler(geprueft.adresse, 'zeitlimit', w.zeitlimit)
-      return seitenFehler(
-        geprueft.adresse,
-        'nichtErreichbar',
-        w.quelleNichtErreichbar(netzFehlerText(fehler))
-      )
+        return seitenFehler(geprueft.adresse, 'zeitlimit', w.zeitlimit, w.grund.zeit)
+      const grund = netzFehlerText(fehler)
+      return seitenFehler(geprueft.adresse, 'nichtErreichbar', w.seiteNichtErreichbar(grund), grund)
     }
     const weiter = antwort.headers.get('location')
     if (UMLEITUNGEN.has(antwort.status) && weiter) {
@@ -800,16 +1015,41 @@ export async function webseiteLesen({ adresse, zeichenDeckel, searxngAdresse } =
         // Umleitungen haben meist gar keinen Rumpf.
       }
       const naechste = absolut(weiter, geprueft.adresse)
-      if (!naechste) return seitenFehler(geprueft.adresse, 'abgelehnt', w.adresseAbgelehnt(w.grund.unlesbar))
+      if (!naechste)
+        return seitenFehler(
+          geprueft.adresse,
+          'abgelehnt',
+          w.adresseAbgelehnt(w.grund.unlesbar),
+          w.grund.unlesbar
+        )
       ziel = naechste
       continue
     }
     return await antwortLesen(antwort, geprueft.adresse, deckel)
   }
-  return seitenFehler(ziel, 'abgelehnt', w.adresseAbgelehnt(w.grund.spruenge))
+  return seitenFehler(ziel, 'abgelehnt', w.adresseAbgelehnt(w.grund.spruenge), w.grund.spruenge)
+}
+
+// Erkennt Binärdaten am Anfang des Rumpfes — nur nötig, wenn der Server GAR
+// KEINEN content-type geschickt hat (Nacharbeit Befund 13).
+function siehtBinaerAus(bytes) {
+  const anfang = bytes.subarray(0, 1000)
+  for (const byte of anfang) if (byte === 0) return true
+  const kopf = new TextDecoder('iso-8859-1').decode(bytes.subarray(0, 8))
+  return ['%PDF', '\x89PNG', 'GIF8', 'PK\x03\x04', '\xff\xd8\xff', '\x1f\x8b', 'RIFF', '%!PS'].some(
+    (marke) => kopf.startsWith(marke)
+  )
 }
 
 async function antwortLesen(antwort, adresse, deckel) {
+  const status = Number(antwort.status) || 0
+  // Beim SEITENLESEN ist der Status die einzige verfügbare Wahrheit
+  // (Nacharbeit Befund 10). Die Hausregel „Erfolg nie am Statuscode
+  // festmachen" gilt ausdrücklich für die SUCHE — dort meldet die
+  // DuckDuckGo-Sperrseite gemessen 202. Hier lief bis jetzt jede 404- und
+  // 500-Seite als „Webseite gelesen" durch: nodejs.org/de/docs/gibt-es-nicht
+  // kam gemessen als erfolgreich gelesene Seite mit 0 Zeichen an.
+  const statusSchlecht = status > 0 && (status < 200 || status >= 300)
   const art = String(antwort.headers.get('content-type') ?? '')
     .split(';')[0]
     .trim()
@@ -819,7 +1059,14 @@ async function antwortLesen(antwort, adresse, deckel) {
   // „%PDF-1.4 %äüöß 2 0 obj > stream x…" (2.588 Ersatzzeichen — der auf
   // Überschätzung ausgelegte Wächter unterschätzt diesen Müll sogar), und aus
   // einem SVG 0 Zeichen, was wie eine leere Seite aussieht.
-  const istHtml = art === 'text/html' || art === 'application/xhtml+xml'
+  //
+  // FEHLT die Kopfzeile ganz, gilt HTML (Nacharbeit Befund 13): „keine Angabe"
+  // heißt nicht „kein Text", und kleine oder ältere Server liefern echten
+  // Seitentext ohne content-type. Die Zeichensatz-Erkennung entscheidet an
+  // derselben Stelle genauso (ohne charset gilt utf-8). Gegen wirkliche
+  // Binärdaten ohne Kopfzeile hilft die Probe am Rumpfanfang weiter unten.
+  const kopfFehlt = !art
+  const istHtml = art === 'text/html' || art === 'application/xhtml+xml' || kopfFehlt
   const istText = art.startsWith('text/') || art === 'application/json' || art.endsWith('+json')
   if (!istHtml && !istText) {
     try {
@@ -827,7 +1074,9 @@ async function antwortLesen(antwort, adresse, deckel) {
     } catch {
       // Nichts abzubrechen.
     }
-    return seitenFehler(adresse, 'keineTextseite', w.keineTextseite(art || '?'))
+    return statusSchlecht
+      ? seitenFehler(adresse, 'statusFehler', statusText(status, ''), w.grund.status(status), status)
+      : seitenFehler(adresse, 'keineTextseite', w.keineTextseite(art), w.grund.keinText(art), status)
   }
   let bytes
   try {
@@ -835,24 +1084,63 @@ async function antwortLesen(antwort, adresse, deckel) {
   } catch (fehler) {
     const name = String(fehler?.name ?? '')
     if (name === 'TimeoutError' || name === 'AbortError')
-      return seitenFehler(adresse, 'zeitlimit', w.zeitlimit)
-    return seitenFehler(adresse, 'nichtErreichbar', w.quelleNichtErreichbar(netzFehlerText(fehler)))
+      return seitenFehler(adresse, 'zeitlimit', w.zeitlimit, w.grund.zeit, status)
+    const grund = netzFehlerText(fehler)
+    return seitenFehler(adresse, 'nichtErreichbar', w.seiteNichtErreichbar(grund), grund, status)
   }
+  if (kopfFehlt && siehtBinaerAus(bytes))
+    return seitenFehler(adresse, 'keineTextseite', w.keineTextseite(''), w.grund.keinText(''), status)
   const roh = textAusBytes(bytes, antwort.headers.get('content-type'))
-  const titel = istHtml ? entmarkupt(/<title[^>]*>([\s\S]*?)<\/title\s*>/i.exec(roh)?.[1] ?? '') : ''
+  // Der Titel kommt über elementInhalt, nicht über /<title[^>]*>([\s\S]*?)…/i:
+  // Das Muster probiert an jedem „<title" ohne Ende den ganzen Rumpf durch
+  // (gemessen 21.08.2026: 140 kB = 560 ms, am 1-MB-Deckel rund 28 s).
+  //
+  // Der Titel ist Fremdtext wie alles andere und wird deshalb gedeckelt
+  // (Nacharbeit Befund 9): Ein <title> mit 300.000 Zeichen ergab gemessen ein
+  // tool_result von 300.109 Zeichen ≈ 85.746 Token, während der Ticker „(20
+  // Zeichen)" meldete. Er teilt sich außerdem das Zeichenbudget mit dem Text
+  // und zählt in `zeichen` mit — sonst löge die Ticker-Zahl weiter.
+  const titel = istHtml
+    ? kuerzen(entmarkupt(elementInhalt(roh, 'title')), Math.min(WEB_DECKEL.seitentitelZeichen, deckel))
+    : ''
+  const textDeckel = Math.max(0, deckel - titel.length)
   const voll = istHtml ? htmlZuText(roh) : roh.trim()
-  const gekuerzt = voll.length > deckel
-  const text = gekuerzt ? voll.slice(0, deckel).trimEnd() : voll
+  const gekuerzt = voll.length > textDeckel
+  const text = gekuerzt ? voll.slice(0, textDeckel).trimEnd() : voll
+  if (statusSchlecht)
+    return seitenFehler(
+      adresse,
+      'statusFehler',
+      statusText(status, (titel ? titel + '\n' : '') + text),
+      w.grund.status(status),
+      status
+    )
+  // Null Zeichen sind kein Erfolg (Nachbefund zu 10): Eine erst im Browser
+  // zusammengebaute Seite lief bisher als „Webseite gelesen (0 Zeichen)"
+  // durch, und das Modell bekam nur den Fremdtext-Rahmen ohne jeden Inhalt.
+  // Geprüft wird der VOLLE Text, nicht der gedeckelte: Bei nur noch einem
+  // Zeichen Restluft im Arbeitsgedächtnis ist der Ausschnitt leer, die Seite
+  // aber nicht — dann gilt die ehrliche Kürzung, nicht „leere Seite".
+  if (!voll) return seitenFehler(adresse, 'leereSeite', w.leereSeite, w.grund.leer, status)
   return {
     ok: true,
     adresse,
     titel,
     text,
     gekuerzt,
-    zeichen: text.length,
+    zeichen: titel.length + text.length,
+    gesamtZeichen: titel.length + voll.length,
+    status,
     fehlerArt: '',
+    grund: '',
     fehlertext: ''
   }
+}
+
+// 429 bekommt einen eigenen Satz — „drosselt gerade" ist etwas anderes als
+// „gibt es nicht", dieselbe Sprachregelung wie auf der Suchseite.
+function statusText(status, seitentext) {
+  return status === 429 ? w.statusGedrosselt(status, seitentext) : w.statusFehler(status, seitentext)
 }
 
 // ---------------------------------------------------------------------------

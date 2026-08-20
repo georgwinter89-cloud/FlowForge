@@ -1996,6 +1996,14 @@ export const texte = {
     quelleNichtErreichbar: (grund) =>
       `Die Suchquelle ist nicht erreichbar: ${grund}. Arbeite mit dem, was du weißt, und ` +
       'schreib in dein Ergebnis, dass du es nicht nachschlagen konntest.',
+    // Eigener Satz für den LESE-Pfad (Nacharbeit Befund 5): Dort war keine
+    // Suchquelle im Spiel, sondern eine vom Modell gewählte Seite. Gemessen an
+    // expired.badssl.com las das Modell „Die Suchquelle ist nicht erreichbar"
+    // und hätte das so ins Fazit getragen — Georg sucht den Fehler dann an der
+    // falschen Stelle.
+    seiteNichtErreichbar: (grund) =>
+      `Diese Seite ist nicht erreichbar: ${grund}. Nimm einen anderen Treffer — und schreib ` +
+      'in dein Ergebnis, wenn du es nicht nachschlagen konntest.',
     ausgewichen: (grund) =>
       `Deine eigene Such-Instanz hat nicht brauchbar geantwortet (${grund}) — diese Suche ` +
       'lief über die eingebaute Quelle.',
@@ -2005,13 +2013,45 @@ export const texte = {
       // Kürzungs-Anhang eigens für Webseiten (Fund 3): Der Anhang der lokalen
       // Werkzeuge sagt „lies gezielter weiter, z.B. mit vonZeile" — ein
       // Zeilenfenster gibt es für eine Webseite nicht.
+      //
+      // Die Tatsachenbehauptung steht bewusst andersherum als bis 0.51.2
+      // (Nacharbeit Befund 2): Dort stand „mehr Text dieser Seite gibt es
+      // nicht" — beweisbar falsch, denn dieser Zweig feuert per Definition nur,
+      // wenn FlowForge im selben Moment MEHR Text in der Hand hält, als es
+      // weitergibt (gemessen: 6.000 von 1.001.345 Zeichen). Ein 7B/27B-Modell
+      // nimmt den Satz wörtlich und schließt aus dem Bruchstück. Der Auftrag,
+      // die Teilgrundlage ins Ergebnis zu schreiben, ist dasselbe bewährte
+      // Muster wie bei keineTreffer und quelleGesperrt.
       (gekuerzt
-        ? '\n\n… (hier gekürzt — mehr Text dieser Seite gibt es nicht. Brauchst du mehr, ' +
-          'nimm eine gezieltere Unterseite oder einen anderen Treffer.)'
+        ? '\n\n… (hier abgeschnitten — die Seite geht weiter, der Rest passt nicht in dein ' +
+          'Arbeitsgedächtnis. Was oben steht, ist nur der Anfang: Schreib in dein Ergebnis, ' +
+          'worauf du dich stützt. Brauchst du den Rest, nimm eine gezieltere Unterseite oder ' +
+          'einen anderen Treffer.)'
         : ''),
     keineTextseite: (art) =>
-      `Das ist keine Textseite (${art}) — daraus lässt sich kein Text lesen. Nimm eine ` +
-      'andere Adresse.',
+      (art
+        ? `Das ist keine Textseite (${art}) — daraus lässt sich kein Text lesen.`
+        : 'Das ist keine Textseite — der Server nennt keine Art und liefert Binärdaten.') +
+      ' Nimm eine andere Adresse.',
+    // HTTP-Fehlerseiten ehrlich melden (Nacharbeit Befund 10): 404, 403 und 500
+    // liefen bis 0.51.2 als „Webseite gelesen" durch, samt Trostseite des
+    // Servers als vermeintlicher Auskunft. Der vorhandene Seitentext bleibt als
+    // Zusatz erhalten — manche Fehlerseiten tragen Brauchbares (gemessen:
+    // electronjs.org/404 hat 194 Zeichen Klartext).
+    statusFehler: (code, seitentext) =>
+      `Der Server hat den Fehler ${code} gemeldet — was hier steht, ist keine Antwort auf ` +
+      'deine Frage, sondern eine Fehlerseite. Prüf die Adresse oder nimm einen anderen ' +
+      'Treffer, und erfinde keine Auskunft.' +
+      (seitentext ? `\n\nWas die Fehlerseite selbst schreibt (Fremdtext):\n${seitentext}` : ''),
+    statusGedrosselt: (code, seitentext) =>
+      `Diese Seite drosselt gerade (${code} — zu viele Abfragen in kurzer Zeit). Das ist KEIN ` +
+      '„gibt es nicht": Nimm einen anderen Treffer oder arbeite mit dem, was du weißt, und ' +
+      'schreib in dein Ergebnis, dass du es nicht nachschlagen konntest.' +
+      (seitentext ? `\n\nWas die Seite selbst schreibt (Fremdtext):\n${seitentext}` : ''),
+    leereSeite:
+      'Die Seite hat keinen lesbaren Text geliefert — sie baut ihren Inhalt vermutlich erst ' +
+      'im Browser zusammen. Nimm einen anderen Treffer und erfinde nicht, was dort stehen ' +
+      'könnte.',
     adresseAbgelehnt: (grund) =>
       `Diese Adresse ist gesperrt: ${grund}. Erlaubt sind nur öffentliche Seiten im Internet.`,
     zeitlimit:
@@ -2042,6 +2082,11 @@ export const texte = {
       unverstanden: 'die Antwort der Quelle war nicht zu verstehen',
       gedrosselt: 'sie drosselt gerade',
       keinJson: 'sie liefert kein JSON',
+      // Kurzgründe des Lese-Pfads, die in der Ticker-Zeile stehen können
+      // (Nacharbeit Befund 1 und 10).
+      status: (code) => `der Server hat den Fehler ${code} gemeldet`,
+      leer: 'die Seite hat keinen lesbaren Text geliefert',
+      keinText: (art) => (art ? `keine Textseite (${art})` : 'keine Textseite'),
       unbekannt: (code) => `unerwarteter Netzfehler (${code})`
     }
   },
