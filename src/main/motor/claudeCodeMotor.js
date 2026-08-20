@@ -793,12 +793,17 @@ export function fazitStutzen(text) {
 // mitHauptfaden (BAUPLAN 27): Im Nachlauf-Chat arbeitet der Hauptfaden selbst —
 // seine Werkzeug-Zeilen gehören in den Ticker; sein Antworttext ist die
 // Chat-Antwort und bleibt draußen.
-function tickerZeilen(nachricht, projektPfad, blockTaskIds, mitHauptfaden = false) {
+function tickerZeilen(nachricht, projektPfad, blockTaskIds, mitHauptfaden = false, lokalAdresse = '') {
   const t = texte.ticker
   // Überlastete KI-Server: die CLI wiederholt selbst — ohne diese Zeile sähe
-  // Georg nur eine stumme App.
+  // Georg nur eine stumme App. Beim lokalen Motor kommt der Fehler von
+  // Ollama, nicht von den Anthropic-Servern — der Text sagt das ehrlich.
   if (nachricht.type === 'system' && nachricht.subtype === 'api_retry')
-    return [t.motorWartet(nachricht.attempt ?? '?', nachricht.max_retries ?? '?')]
+    return [
+      lokalAdresse
+        ? t.motorWartetLokal(lokalAdresse, nachricht.attempt ?? '?', nachricht.max_retries ?? '?')
+        : t.motorWartet(nachricht.attempt ?? '?', nachricht.max_retries ?? '?')
+    ]
   if (nachricht.type !== 'assistant') return []
   const hauptfaden = !nachricht.parent_tool_use_id
   const zeilen = []
@@ -1743,7 +1748,7 @@ export function starteLaufMotor(optionen) {
         nachrichtEmpfangen = true
         if (typeof nachricht.session_id === 'string' && nachricht.session_id)
           sessionKennung = nachricht.session_id
-        for (const zeile of tickerZeilen(nachricht, projektPfad, block?.blockTaskIds))
+        for (const zeile of tickerZeilen(nachricht, projektPfad, block?.blockTaskIds, false, lokal?.adresse ?? ''))
           aufEreignis({ art: 'ticker', text: zeile })
 
         // Denk-Ansicht (BAUPLAN 24): die Denk-Blöcke der Assistent-Nachrichten

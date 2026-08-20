@@ -3015,7 +3015,10 @@ export const texte = {
     // Adress-Pool (BAUPLAN 51): Eine nicht bereite Adresse wird für diesen
     // Lauf ausgeklammert — sichtbar mit Grund, nie still.
     lokalAdresseAusgeklammert: (adresse, grund) =>
-      `Lokale KI-Adresse ${adresse} ist für diesen Lauf ausgeklammert: ${grund}`,
+      `Lokale KI-Adresse ${adresse} ist für diesen Lauf ausgeklammert: ${grund} ` +
+      `Der Lauf läuft ohne diese Adresse weiter — prüfe sie in den Einstellungen.`,
+    lokalGrundNichtErreichbar: 'Sie ist gerade nicht erreichbar.',
+    lokalGrundModellFehlt: (modell) => `Das Basis-Modell „${modell}" fehlt dort.`,
     lokalSessionGestartet: (modell, kontext = null) =>
       `Motor gestartet gegen deine lokale KI (${modell}${kontext ? ', Kontext ' + Math.round(kontext / 1024) + 'k' : ''}) — kostet kein Kontingent; Kosten und Fenster meldet hier FlowForge, nicht die CLI.`,
     lokalEigeneSession: (blockName, modell) =>
@@ -3579,6 +3582,10 @@ export const texte = {
       'Der Platz war frei — dieser Lauf startet jetzt von allein aus der Warteschlange.',
     motorWartet: (versuch, max) =>
       `Die KI-Server sind gerade überlastet — der Motor versucht es weiter (Versuch ${versuch} von ${max}).`,
+    // Lokaler Motor (Befund Prüfer 2, Bausession 51): Der Fehler kommt von
+    // Ollama, nicht von den Anthropic-Servern — der Text darf nicht so tun.
+    motorWartetLokal: (adresse, versuch, max) =>
+      `Deine lokale KI unter ${adresse} meldet einen Fehler — der Motor versucht es weiter (Versuch ${versuch} von ${max}).`,
     wiederaufnahme: (nummer, gesamt, name) =>
       `Wiederaufnahme am letzten Sicherungspunkt — weiter mit Block ${nummer} von ${gesamt}: „${name}".`,
     sessionFortsetzenGescheitert:

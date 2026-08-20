@@ -425,11 +425,14 @@ describe('BAUPLAN 51 · (d) nicht bereite Adressen: ausklammern mit Klartext, le
     expect(motor.start('a').lokal.adresse).toBe(ADRESSE_1)
     expect(steuerung.bereitgestellt).toEqual([ADRESSE_1])
     const zeilen = sicht.ticker()
+    // Kurzer Grund statt des vollen Fehlertexts (Befund Prüfer 2): Der volle
+    // Text rät „starte den Lauf neu" — verwirrend, der Lauf läuft ja weiter.
     const ausgeklammert = texte.ticker.lokalAdresseAusgeklammert(
       ADRESSE_2,
-      texte.lauf.lokalNichtErreichbar(ADRESSE_2)
+      texte.ticker.lokalGrundNichtErreichbar
     )
     expect(zaehle(zeilen, ausgeklammert)).toBe(1)
+    expect(zeilen.some((z) => z.includes('ausgeklammert') && z.includes('starte den Lauf neu'))).toBe(false)
     // Bei nur EINER bereiten Adresse bleibt die Bereit-Zeile wortgleich wie bisher.
     expect(zaehle(zeilen, texte.ticker.lokalBereit('flowforge-qwen3-8-27b', 65536))).toBe(1)
   }, 60000)
@@ -472,5 +475,39 @@ describe('BAUPLAN 51 · (d) nicht bereite Adressen: ausklammern mit Klartext, le
       ok: false,
       fehler: texte.lauf.lokalNichtErreichbar(ADRESSE_1 + ', ' + ADRESSE_2)
     })
+  }, 60000)
+})
+
+// ——— (e) Lokale Token-Ehrlichkeit (Befund Prüfer 2, Bausession 51) ——————————
+
+describe('BAUPLAN 51 · (e) lokale Tokens aus der Modell-Aufschlüsselung, wenn der Faden-Zuwachs 0 meldet', () => {
+  it('zählt die Ollama-Tokens in Gesamt UND Lokal-Topf, obwohl blockZuwachs 0 ist', async () => {
+    // Gemessen an der gebauten App: Ein lokaler Anlauf ohne Fazit meldete
+    // blockZuwachs 0, die Aufschlüsselung aber 48.419 echte Ollama-Tokens —
+    // verbrauch.lokal stand auf 0 und die „Davon lokal"-Zeile fehlte.
+    steuerung.einstellungenZusatz = { lokaleHelferAdressen: [ADRESSE_1], lokaleHelferAdresse: ADRESSE_1 }
+    steuerung.pruefen = () => ({ erreichbar: true, modellDa: true })
+    steuerung.bereitstellen = null
+    steuerung.bereitgestellt = []
+    const lauf = laufAufbauen(
+      'tokenehrlich',
+      [{ instanzId: 'a', blockId: 'spaeher', zusatz: 'A', modell: 'lokal' }],
+      [],
+      () => ({
+        blockZuwachs: 0,
+        unterTokens: 0,
+        kostenUsd: null,
+        kontextFenster: 65536,
+        modelle: [{ modell: 'flowforge-qwen3-8-27b', tokens: 48419 }]
+      })
+    )
+    const { projekt, motor, sicht } = lauf
+    expect(await laufStarten(sicht.fenster, projekt, [], null, false, null)).toEqual({ ok: true })
+    await motor.freigeben('a')
+    const ende = await sicht.warteAufEnde()
+    expect(ende.zustand).toBe('erfolgreich')
+    const bericht = gespeicherterBericht(projekt)
+    expect(bericht.verbrauch.tokens).toBe(48419)
+    expect(bericht.verbrauch.lokal.tokens).toBe(48419)
   }, 60000)
 })

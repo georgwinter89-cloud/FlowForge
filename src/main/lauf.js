@@ -1815,10 +1815,23 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       : KONTEXT_FENSTER_STANDARD
     const befunde = await Promise.all(
       lokaleAdressenVon(einstellungen).map(async (adresse) => {
+        // Neben dem vollen Fehlertext (für den Leerer-Pool-Fehlschlag) ein
+        // kurzer Grund fürs Ausklammern — der volle Text rät „starte den
+        // Lauf neu", was mitten im weiterlaufenden Lauf verwirrt (Befund
+        // Prüfer 2, Bausession 51).
         const status = await lokaleHelferPruefen(einstellungen.lokaleHelferModell, adresse)
-        if (!status.erreichbar) return { adresse, fehler: texte.lauf.lokalNichtErreichbar(adresse) }
+        if (!status.erreichbar)
+          return {
+            adresse,
+            fehler: texte.lauf.lokalNichtErreichbar(adresse),
+            grund: texte.ticker.lokalGrundNichtErreichbar
+          }
         if (!status.modellDa)
-          return { adresse, fehler: texte.lauf.lokalModellFehlt(einstellungen.lokaleHelferModell) }
+          return {
+            adresse,
+            fehler: texte.lauf.lokalModellFehlt(einstellungen.lokaleHelferModell),
+            grund: texte.ticker.lokalGrundModellFehlt(einstellungen.lokaleHelferModell)
+          }
         const bereit = await lokalesModellBereitstellen({
           adresse,
           basis: einstellungen.lokaleHelferModell,
@@ -1886,7 +1899,7 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
   // wenigstens eine trägt (Ausklammern statt stillem Rückfall).
   if (lokalPool.length) {
     for (const ausfall of lokalAusgefallene)
-      tickern(texte.ticker.lokalAdresseAusgeklammert(ausfall.adresse, ausfall.fehler))
+      tickern(texte.ticker.lokalAdresseAusgeklammert(ausfall.adresse, ausfall.grund ?? ausfall.fehler))
     tickern(texte.ticker.lokalBereit(lokalPool[0].modell, lokalPool[0].kontext, lokalPool.length))
   } else if (lokalFehler) tickern(lokalFehler)
   // Lokaler Prüfer ohne Claude-Abnahme (BAUPLAN 50): Hinweis, keine Sperre
@@ -3430,9 +3443,22 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           // Gezählt wird der ehrliche Anteil dieses Blocks: der Zuwachs des
           // Koordinator-Fadens plus der Verbrauch seiner Agenten (Block-Agent
           // und Helfer) — nicht die Historie der ganzen Lauf-Session.
-          const zaehlTokens =
+          let zaehlTokens =
             (ergebnis.verbrauch.blockZuwachs ?? ergebnis.verbrauch.tokens ?? 0) +
             (ergebnis.verbrauch.unterTokens ?? 0)
+          // Lokale Ehrlichkeit (Befund Prüfer 2, Bausession 51): Beim lokalen
+          // Motor kann der Faden-Zuwachs 0 melden, obwohl die Modell-
+          // Aufschlüsselung echte Ollama-Tokens trägt (gemessen: 0 gegen
+          // 48.419 bei einem Anlauf ohne Fazit). Für lokale Blöcke gewinnt
+          // die größere Zahl — sie fließt in Gesamt UND Lokal-Topf, sonst
+          // löge der Abo-Anteil (gesamt − lokal).
+          if (knotenLokal) {
+            const modelleSumme = (ergebnis.verbrauch.modelle ?? []).reduce(
+              (summe, m) => summe + (m.tokens ?? 0),
+              0
+            )
+            zaehlTokens = Math.max(zaehlTokens, modelleSumme)
+          }
           gesamtVerbrauch.tokens += zaehlTokens
           // „Davon lokal" (BAUPLAN 51, Vertrag V2): lokale Tokens zusätzlich
           // in den eigenen Topf — die Gesamtsumme bleibt unangetastet, der
