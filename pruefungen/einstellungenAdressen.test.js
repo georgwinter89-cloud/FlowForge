@@ -4,8 +4,9 @@
 // bereinigter Adressen, und das alte Feld lokaleHelferAdresse spiegelt IMMER
 // Element 0 — beim Laden UND beim Speichern. einstellungenSpeichern bereinigt
 // je Eintrag (trim, End-Slashes, ^https?://), verwirft Ungültige, entfernt
-// exakte Duplikate und fällt bei Aufrufern ohne Array aufs Einzelfeld zurück —
-// sonst verlöre jedes Speichern ohne das Feld die Liste still.
+// exakte Duplikate. Aufrufer OHNE Array-Feld dürfen die Liste nicht verlieren
+// (Befund Prüfer 1, Bausession 51): Sie wird aus der Datei übernommen; ein
+// gültiges Einzelfeld ersetzt nur den Anker (Element 0).
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import fs from 'node:fs'
 import os from 'node:os'
@@ -97,16 +98,52 @@ describe('BAUPLAN 51 · einstellungenSpeichern mit Adress-Liste', () => {
     expect(datei.lokaleHelferAdresse).toBe('http://a:11434')
   })
 
-  it('Aufrufer ohne Array-Feld (ältere Dialoge/Prüfungen) fallen aufs Einzelfeld zurück', () => {
+  it('Aufrufer ohne Array-Feld (ältere Dialoge/Prüfungen): Einzelfeld ersetzt nur den Anker', () => {
     const e = einstellungenSpeichern({ ...basis, lokaleHelferAdresse: 'http://solo:11434' })
     expect(e.einstellungen.lokaleHelferAdressen).toEqual(['http://solo:11434'])
     expect(e.einstellungen.lokaleHelferAdresse).toBe('http://solo:11434')
   })
 
-  it('ganz ohne Adressfelder gilt der Standard — die Liste ist nie leer', () => {
+  it('ganz ohne Adressfelder und ohne Datei gilt der Standard — die Liste ist nie leer', () => {
     const e = einstellungenSpeichern({ ...basis })
     expect(e.einstellungen.lokaleHelferAdressen).toEqual([STANDARD_ADRESSE])
     expect(e.einstellungen.lokaleHelferAdresse).toBe(STANDARD_ADRESSE)
+  })
+
+  // Befund Prüfer 1 (Bausession 51): Genau diese zwei Aufrufe verloren die
+  // gespeicherte Zwei-GPU-Liste — der eine warf sie auf den Standard, der
+  // andere auf ein Ein-Element-Array. Beides verlor Georgs Konfiguration still.
+  it('Speichern ganz ohne Adressfelder übernimmt die Liste aus der Datei', () => {
+    schreiben({ lokaleHelferAdressen: ['http://gaming-pc:11434', 'http://ollama-zweitrechner:11434'] })
+    const e = einstellungenSpeichern({ ...basis })
+    expect(e.einstellungen.lokaleHelferAdressen).toEqual([
+      'http://gaming-pc:11434',
+      'http://ollama-zweitrechner:11434'
+    ])
+    const datei = JSON.parse(fs.readFileSync(dateiPfad, 'utf8'))
+    expect(datei.lokaleHelferAdressen).toEqual([
+      'http://gaming-pc:11434',
+      'http://ollama-zweitrechner:11434'
+    ])
+  })
+
+  it('Speichern nur mit Einzelfeld ersetzt den Anker, die weiteren Adressen bleiben', () => {
+    schreiben({ lokaleHelferAdressen: ['http://gaming-pc:11434', 'http://ollama-zweitrechner:11434'] })
+    const e = einstellungenSpeichern({ ...basis, lokaleHelferAdresse: 'http://neuer-anker:11434' })
+    expect(e.einstellungen.lokaleHelferAdressen).toEqual([
+      'http://neuer-anker:11434',
+      'http://ollama-zweitrechner:11434'
+    ])
+    expect(e.einstellungen.lokaleHelferAdresse).toBe('http://neuer-anker:11434')
+  })
+
+  it('ein ungültiges Einzelfeld ohne Array lässt die Datei-Liste unangetastet', () => {
+    schreiben({ lokaleHelferAdressen: ['http://gaming-pc:11434', 'http://ollama-zweitrechner:11434'] })
+    const e = einstellungenSpeichern({ ...basis, lokaleHelferAdresse: 'quatsch' })
+    expect(e.einstellungen.lokaleHelferAdressen).toEqual([
+      'http://gaming-pc:11434',
+      'http://ollama-zweitrechner:11434'
+    ])
   })
 
   it('Laden → Speichern des kompletten Satzes verliert die Mehrfach-Liste nicht (Erststart-Muster)', () => {

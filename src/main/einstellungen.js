@@ -212,14 +212,22 @@ export function einstellungenSpeichern(neu) {
     return { ok: false, fehler: texte.einstellungen.fehlerObergrenze }
 
   // Adress-Liste (BAUPLAN 51): je Eintrag bereinigen, Ungültige verwerfen,
-  // Duplikate raus, leer → Standard. Aufrufer ohne Array (Erststart vor der
-  // Migration, ältere Prüfungen) fallen auf das Einzelfeld zurück — sonst
-  // verlöre jedes Speichern ohne das Feld die Liste still.
-  const adressen = adressListeBereinigen(
-    Array.isArray(neu.lokaleHelferAdressen)
-      ? neu.lokaleHelferAdressen
-      : [neu.lokaleHelferAdresse]
-  )
+  // Duplikate raus, leer → Standard. Aufrufer ohne Array dürfen die Liste
+  // nicht verlieren (Befund Prüfer 1, Bausession 51): Sie wird wie die
+  // gemerkten Antworten aus der DATEI übernommen; schickt der Aufrufer nur
+  // das alte Einzelfeld, ersetzt das den Anker (Element 0), die weiteren
+  // Adressen bleiben — sonst verlöre jedes Speichern ohne das Feld still
+  // Georgs GPU-Konfiguration.
+  let adressen
+  if (Array.isArray(neu.lokaleHelferAdressen)) {
+    adressen = adressListeBereinigen(neu.lokaleHelferAdressen)
+  } else {
+    const { einstellungen: bisher } = einstellungenLaden()
+    const einzel = adresseBereinigen(neu.lokaleHelferAdresse)
+    adressen = adressListeBereinigen(
+      einzel ? [einzel, ...bisher.lokaleHelferAdressen.slice(1)] : bisher.lokaleHelferAdressen
+    )
+  }
 
   const daten = {
     motorModus: modus,
