@@ -127,6 +127,8 @@ function schreiben(wurzel, relativ, inhalt) {
 function paketMeldung(block, liste) {
   const pakete = block.ziele.map((ziel) => ({
     zielBlock: ziel.adresse,
+    // Kurzname je Ziel (0.51.1): bei benanntem Ziel Pflicht.
+    kurzname: 'Teil ' + ziel.nummer,
     ziel: 'Teil ' + ziel.name,
     fertigKriterien: ['Läuft.'],
     erlaubteDateien: liste

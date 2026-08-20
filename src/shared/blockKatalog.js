@@ -403,6 +403,11 @@ export const BLOCK_KATALOG = [
       'Fertig-Kriterien auf. ' +
       'Deine Meldung sind die Arbeitspakete — halte jedes Feld kompakt. Je Paket: ' +
       'zielBlock (die Blocknummer des Ziels), ' +
+      // Kurzname je Ziel (0.51.1): Ohne diesen Satz liefert kein Agent das
+      // Feld — und ohne Feld hießen zwei Bauer im Ticker beide „Bauer".
+      'kurzname (ein Kurzname aus 2–3 Wörtern für diesen Ziel-Block, der sagt, woran er ' +
+      'arbeitet, z.B. „Server-Briefing" — FlowForge hängt ihn als Zusatznamen an das Ziel, ' +
+      'damit im Ticker nicht zweimal derselbe Blockname steht; bei benanntem Ziel Pflicht), ' +
       'ziel (das Ziel des Pakets in einem Satz), fundstellen (voraussichtlich betroffene ' +
       'Dateien), schritte (Umsetzungsschritte in sinnvoller Reihenfolge), nichtDabei (was ' +
       'ausdrücklich NICHT Teil des Pakets ist) und fertigKriterien: prüfbare Aussagen, an denen ' +
@@ -526,7 +531,11 @@ export const BLOCK_KATALOG = [
       'Deine Meldung sind die Arbeitspakete — für JEDES benannte Ziel hinter dir (die Blöcke, ' +
       'die ein Arbeitspaket umsetzen) eines, alle in EINEM Aufruf von melde_arbeitspaket. ' +
       'Gibt es nur ein Ziel, ist es ein Paket. Je Paket: zielBlock (die Blocknummer des ' +
-      'Ziels), ziel (das Fehlerbild und die belegte ' +
+      // Kurzname je Ziel (0.51.1): dieselbe Sprache wie bei Paket schneiden.
+      'Ziels), kurzname (ein Kurzname aus 2–3 Wörtern für diesen Ziel-Block, z.B. ' +
+      '„Absturz Ticker" — FlowForge hängt ihn als Zusatznamen an das Ziel, damit im Ticker ' +
+      'nicht zweimal derselbe Blockname steht; bei benanntem Ziel Pflicht), ' +
+      'ziel (das Fehlerbild und die belegte ' +
       'Ursache in einem Satz), fundstellen (Fundort der Ursache und betroffene Dateien), ' +
       'schritte (der minimale Fix in möglichst kleinen Schritten), nichtDabei (was ausdrücklich ' +
       'NICHT angefasst wird) und fertigKriterien — darunter: ein Test, der den ' +

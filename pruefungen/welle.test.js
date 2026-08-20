@@ -439,6 +439,8 @@ const rahmen = { fazit: 'Erledigt.', getan: [], offen: [], anmerkung: '' }
 function paketMeldung(block, listen) {
   const pakete = block.ziele.map((ziel) => ({
     zielBlock: ziel.adresse,
+    // Kurzname je Ziel (0.51.1): bei benanntem Ziel Pflicht.
+    kurzname: 'Teil ' + ziel.nummer,
     ziel: 'Teil ' + ziel.name,
     fertigKriterien: ['Läuft.'],
     erlaubteDateien: listen[ziel.instanzId]

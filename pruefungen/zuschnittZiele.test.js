@@ -185,6 +185,8 @@ describe('BAUPLAN 44 · Zuschnitt und Datenvertrag als geprüfte Felder', () => 
   const paket = (zielBlock, ziel) => ({
     zielBlock,
     ziel,
+    // Kurzname je Ziel (0.51.1): bei benanntem Ziel Pflicht.
+    kurzname: 'Zuschnitt ' + zielBlock,
     fertigKriterien: ['Der Test läuft grün.'],
     erlaubteDateien: zielBlock === '4' ? ['src/main/motor/'] : ['src/renderer/src/Leinwand.jsx']
   })
@@ -348,6 +350,8 @@ describe('BAUPLAN 46 · Überschneidende Zuschnitte werden beim Melden abgewiese
   const ziele = zielListe(bloecke, pfeile, 'p')
   const paket = (zielBlock, erlaubteDateien) => ({
     zielBlock,
+    // Kurzname je Ziel (0.51.1): bei benanntem Ziel Pflicht.
+    kurzname: 'Zuschnitt ' + zielBlock,
     ziel: 'Etwas bauen',
     fertigKriterien: ['Läuft.'],
     erlaubteDateien

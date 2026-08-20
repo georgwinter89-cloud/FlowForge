@@ -50,7 +50,8 @@ function meldung(pakete, umfeld = { ziele, paket }) {
 }
 
 function zuschnitt(zielBlock, ziel, aufgabenIds) {
-  return { zielBlock, ziel, fertigKriterien: ['Läuft grün.'], aufgabenIds }
+  // Kurzname je Ziel (0.51.1): bei benanntem Ziel Pflicht.
+  return { zielBlock, ziel, kurzname: ziel, fertigKriterien: ['Läuft grün.'], aufgabenIds }
 }
 
 describe('BAUPLAN 44 · Jede gemeldete Aufgabe muss in einem Zuschnitt vorkommen', () => {
@@ -233,6 +234,7 @@ describe('BAUPLAN 44 · Beide Enden derselben Rechnung reichen gleich weit', () 
         pakete: [
           {
             zielBlock: einZiel[0].adresse,
+            kurzname: 'Alles',
             ziel: 'Alles',
             fertigKriterien: ['Läuft grün.'],
             aufgabenIds: einundzwanzig.map((a) => a.id)
@@ -269,6 +271,7 @@ describe('BAUPLAN 44 · Beide Enden derselben Rechnung reichen gleich weit', () 
         pakete: [
           {
             zielBlock: einZiel[0].adresse,
+            kurzname: 'Alles',
             ziel: 'Alles',
             fertigKriterien: ['Läuft.'],
             aufgabenIds: viele

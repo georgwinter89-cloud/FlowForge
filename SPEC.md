@@ -583,6 +583,19 @@ Seite aufs Projekt vorgefiltert zeigt (eigener Baustein, nicht Teil der Leinwand
   gespeicherten Laufstand ungültig (die Wiederaufnahme bietet ihn nicht mehr an —
   Übergaben und Zuteilungen des unterbrochenen Laufs zeigten sonst auf Namen, die
   es nicht mehr gibt).
+- **Automatische Laufzeit-Zusatznamen** (seit 0.51.1, Wunsch Georg): Trägt eine
+  Karte keinen eigenen Zusatznamen, gibt ihr der **Zuschnitt** einen — jedes
+  adressierte Arbeitspaket nennt einen `kurzname` für sein Ziel (§4.3), und
+  FlowForge heftet ihn der Ziel-Instanz an. Aus zwei namenlosen „Bauer" wird so
+  „Bauer · Server-Briefing" und „Bauer · Ticker-Anzeige"; ohne das stand im
+  Ticker „„Bauer" wartet, bis „Bauer" fertig ist". Vier Regeln: **Georgs eigener
+  Zusatzname gewinnt** (FlowForge benennt nie um, was Georg benannt hat); der
+  **erste** vergebene Laufzeit-Name gewinnt (melden zwei Auftragsquellen für
+  dasselbe Ziel, benennt der spätere nicht um); eine **Dopplung** wird
+  mechanisch durchnummeriert („… 2"); und der Name gilt **nur für den Lauf** —
+  die Leinwand bleibt unberührt. Der Laufstand führt diese Namen in einem
+  eigenen Feld, getrennt von den Karten-Zusatznamen, damit eine Wiederaufnahme
+  gültig bleibt.
 - **Modellklasse und Denktiefe an der Karte** (§2): zwei Auswahlfelder je Blockkarte
   (seit Bauschritt 37 bzw. 0.48.1), gespeichert je Karte in workflow.json wie das Häkchen
   „lokale KI erlaubt" (§4.3); ohne Wahl gilt die Voreinstellung des Blocks. Bei „Extra
@@ -835,6 +848,14 @@ hängengeblieben und für den Gehorsam abgewiesen. **Alle** Pakete gehen in
 **einem** Aufruf von
 `melde_arbeitspaket` (Feld `pakete`); ein zweiter Aufruf ersetzt den ersten, wie
 bei jeder Meldung. Zwei Pakete für dasselbe Ziel weist FlowForge ab.
+**Jedes adressierte Paket trägt einen Kurznamen für sein Ziel** (`kurzname`,
+2–3 Wörter, seit 0.51.1): Er wird zum Laufzeit-Zusatznamen der Ziel-Instanz
+(§4.1) und macht zwei gleichartige Ziele im Ticker unterscheidbar. Pflicht ist
+er, sobald `zielBlock` gesetzt ist, und geprüft wird das in der **Prüfebene**
+(deutscher Klartext), nicht im Schema — ein Schema-Pflichtfeld ließe ältere
+Meldungen und schwache lokale Modelle an einem rohen Formfehler scheitern statt
+an einem Satz, der sagt, was zu tun ist. Ein **adressloses** Paket braucht
+keinen; nennt es einen, gilt er für sein einziges Ziel.
 **Überschneidende Zuschnitte nebenläufiger Ziele weist FlowForge ab** (seit
 Bauschritt 46): Zwei benannte Ziele, von denen keines Vorfahr des anderen ist
 (zwei Bauer im Fächer hinter Paket schneiden), laufen im Lauf gleichzeitig
@@ -1276,7 +1297,14 @@ lesende Werkzeuge (Ordner auflisten, Datei lesen, suchen), hart im Code auf den
 Projektordner begrenzt — schreiben, ausführen oder außerhalb lesen kann sie dabei
 nicht, deshalb ist das Werkzeug auch unter „darf nur lesen" erlaubt. Steht die lokale KI bereit, weisen die
 Blockaufträge sie als **erste Wahl** fürs Delegieren aus (das Agent-Werkzeug ist der
-Rückfall). **Nachrichtenform** (Wunsch Georg, 18.08.2026): Jede Nachricht, die
+Rückfall). **Blöcke der Klasse „lokal" (§2) bekommen keine Helfer-KI** (seit
+0.51.1): Ein solcher Block IST die lokale KI — sein Helfer liefe gegen dieselbe
+Grafikkarte, die ihn gerade rechnen lässt (gemessen in Georgs Lauf vom
+20.08.2026: 48 Timeouts à 5 Minuten, danach machte der Agent alles selbst und
+blähte dabei seinen Kontext). Ihr Motor bekommt deshalb weder die Helfer-
+Werkzeuge noch den Helfer-Zusatz im Systemtext, ihr Auftrag weder die
+Zerlege-Anweisung noch den Katalog-Hinweis auf `lokal_recherchieren` (dort steht
+„(Agent-Werkzeug)"). Claude-Blöcke behalten ihre Helfer unverändert. **Nachrichtenform** (Wunsch Georg, 18.08.2026): Jede Nachricht, die
 FlowForge an die lokale KI schickt, hat die Form `{"role":"user","content":"…"}` —
 kein System-Eintrag (der Rahmentext steht am Anfang der ersten Nutzer-Nachricht,
 davor nichts), keine tool-Rolle (Werkzeug-Ergebnisse gehen als Nutzer-Nachricht
@@ -1350,7 +1378,11 @@ verbraucht, ohne eine Nachprüfung zu kosten. Jeder Versuch steht samt Ausgang
 im Ticker („Lokale Reparatur, Versuch 1 von 2 …") und in der
 Lokale-Helfer-Zeile des Laufberichts. Aktiv nur, wenn die lokale KI
 eingeschaltet und beim Laufstart erreichbar war — sonst läuft die Rückführung
-wie gehabt.
+wie gehabt. **Nach dem Urteil eines Prüfers der Klasse „lokal" (§2) entfällt
+die Vorreparatur** (seit 0.51.1): Dasselbe Modell auf derselben Grafikkarte
+kann nicht reparieren, was es eben nicht geprüft bekommen hat, und es stritte
+mit dem nächsten lokalen Block um die Ollama-Adresse. Der Motor-Bauer übernimmt
+sofort; der Grund steht im Ticker.
 
 **Lokale Entwürfe** (seit Bauschritt 21): **Schreibarbeit mit Vorbild oder klarer
 Beschreibung** — von „eine weitere Prüfdatei nach dem Muster von X" bis zu einem

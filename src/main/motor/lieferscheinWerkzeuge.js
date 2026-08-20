@@ -55,6 +55,12 @@ function teilFelder(art) {
       pakete: liste(
           z.object({
             zielBlock: z.string().optional().describe(p.zielBlock),
+            // Kurzname je Ziel (Zwischenschritt 0.51.1): BEWUSST optional im
+            // Schema, obwohl er bei benanntem Ziel Pflicht ist. Ein
+            // Zod-Pflichtfeld bräche jede Meldung aus der Zeit davor mit einem
+            // rohen Schema-Fehler — die Pflicht sitzt deshalb in Ebene 2
+            // (lieferschein.zuschnittPruefen) und antwortet in Klartext.
+            kurzname: z.string().optional().describe(p.kurzname),
             ziel: z.string().describe(p.ziel),
             fertigKriterien: liste(z.string()).describe(p.fertigKriterien),
             schritte: liste(z.string()).optional().describe(p.schritte),
