@@ -13,6 +13,22 @@
 // Ein Denken-Schalter fehlt absichtlich: Über diesen Weg ist das Denken bei
 // Qwen3.8 nicht abschaltbar (gemessen), die Einstellungen sagen es ehrlich.
 
+// Eine Adresse säubern: trim, End-Slashes weg, muss mit http(s):// beginnen —
+// sonst null (die Liste verwirft Ungültiges, statt still zu ersetzen).
+// Wohnort seit 0.51.2 hier statt im Hauptprozess: Der Einstellungen-Dialog
+// putzte Adressen bisher selbst (roh.trim()) und kam damit auf einen anderen
+// Wert als die gespeicherte Normalform — gemessen 20.08.2026 fragte der
+// Live-Status „http://gaming-pc:8080/" ab, während „http://gaming-pc:8080"
+// gespeichert wurde, und der doppelte Schrägstrich landete wörtlich beim
+// fremden Rechner. Renderer und Hauptprozess rechnen jetzt mit derselben
+// Regel.
+export function adresseBereinigen(roh) {
+  const wert = String(roh ?? '')
+    .trim()
+    .replace(/\/+$/, '')
+  return /^https?:\/\/.+/.test(wert) ? wert : null
+}
+
 export const LOKAL_FEIN_FELDER = [
   'temperatur',
   'topP',

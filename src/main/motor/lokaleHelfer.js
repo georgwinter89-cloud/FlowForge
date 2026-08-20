@@ -132,7 +132,13 @@ export async function lokaleHelferPruefen(modell, adresse = STANDARD_ADRESSE) {
     const antwort = await fetch((adresse || STANDARD_ADRESSE) + '/api/tags', { signal: abbruch })
     if (!antwort.ok) return { erreichbar: false, modellDa: false }
     const daten = await antwort.json()
-    const namen = (daten.models ?? []).map((m) => m.name)
+    // Feld wirklich prüfen, nicht nur „irgendein JSON kam zurück" (gemessene
+    // Restlücke, 20.08.2026): Ein Dienst, der unter dieser Adresse zufällig
+    // {"irgendwas":"x"} liefert, ergab bisher {erreichbar:true, modelle:[]} —
+    // die Anzeige sagte dann „Ollama läuft, Modell fehlt", obwohl dort gar kein
+    // Ollama antwortet.
+    if (!Array.isArray(daten?.models)) return { erreichbar: true, modellDa: false, modelle: [] }
+    const namen = daten.models.map((m) => String(m?.name ?? '')).filter(Boolean)
     const modellDa = namen.some((n) => n === modell || n === modell + ':latest')
     return { erreichbar: true, modellDa, modelle: namen }
   } catch {

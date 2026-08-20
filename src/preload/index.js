@@ -22,6 +22,8 @@ contextBridge.exposeInMainWorld('flowforge', {
   extraKostenBestaetigen: () => ipcRenderer.invoke('extra-kosten-bestaetigen'),
   lokaleHelferStatus: (modell, adresse) =>
     ipcRenderer.invoke('lokale-helfer-status', { modell, adresse }),
+  // Websuche der lokalen Blöcke (0.51.2): Live-Status der SearXNG-Adresse.
+  searxngStatus: (adresse) => ipcRenderer.invoke('searxng-status', adresse),
 
   eigeneBloeckeLaden: () => ipcRenderer.invoke('eigene-bloecke-laden'),
   eigenenBlockSpeichern: (block) => ipcRenderer.invoke('eigener-block-speichern', block),

@@ -3,7 +3,7 @@ import { app } from 'electron'
 import fs from 'node:fs'
 import path from 'node:path'
 import { texte } from '../shared/texte.js'
-import { LOKAL_FEIN_VORLAGEN, lokalFeinBereinigen } from '../shared/lokalRegeln.js'
+import { LOKAL_FEIN_VORLAGEN, lokalFeinBereinigen, adresseBereinigen } from '../shared/lokalRegeln.js'
 
 // Abo-Regel (SPEC §2, neu seit 0.46.4 — Entscheidung Georg, 19.08.2026): Der
 // Abo-Modus bleibt auch in veröffentlichten Versionen an. Anthropic sagt seit
@@ -78,6 +78,11 @@ const STANDARD = {
   // ein abgeleitetes Ollama-Modell an (lokalRegeln.js). null = Ollama-Standard.
   // Basis-Modell, Adresse und Kontext sind die lokaleHelfer*-Felder oben.
   lokalFein: LOKAL_FEIN_VORLAGEN['ollama-standard'],
+  // Websuche der lokalen Blöcke (0.51.2): Adresse einer eigenen SearXNG-
+  // Instanz. Leer = eingebaute Quelle — es gibt bewusst KEIN zweites Feld für
+  // die Quellenwahl (Entscheidung Georg, 20.08.2026): ein Feld weniger, das
+  // durch die Speicher-Siebe verlorengehen kann.
+  searxngAdresse: '',
   // Kosten-Rückfrage „Extra (Fable 5)" (0.48.1): Beim ersten Lauf mit einem
   // Extra-Block fragt FlowForge einmal, ob der Lauf trotz möglicher
   // Guthaben-Abrechnung starten darf. true = Georg hat „trotzdem starten"
@@ -88,15 +93,6 @@ const STANDARD = {
 }
 
 const KONTEXT_WAHL = [32768, 65536, 131072]
-
-// Eine Ollama-Adresse säubern: trim, End-Slashes weg, muss mit http(s)://
-// beginnen — sonst null (die Liste verwirft Ungültiges, statt still zu ersetzen).
-function adresseBereinigen(roh) {
-  const wert = String(roh ?? '')
-    .trim()
-    .replace(/\/+$/, '')
-  return /^https?:\/\/.+/.test(wert) ? wert : null
-}
 
 // Die Adress-Liste säubern (BAUPLAN 51): je Eintrag dieselbe Regel wie bisher
 // beim Einzelfeld, Ungültige verwerfen, exakte String-Duplikate entfernen —
@@ -229,6 +225,30 @@ export function einstellungenSpeichern(neu) {
     )
   }
 
+  // SearXNG-Adresse (0.51.2) — dasselbe Muster wie die Adress-Liste darüber,
+  // aus demselben Grund: einstellungenSpeichern schreibt eine Positivliste,
+  // und ein Aufrufer, der das Feld gar nicht mitschickt (jeder ältere Dialog),
+  // löschte es sonst still. Deshalb drei Fälle, jeder eine bewusste Aussage:
+  //   undefined → der Aufrufer kennt das Feld nicht: Wert aus der DATEI halten;
+  //   Leerstring → Georg hat das Feld geleert: eingebaute Quelle;
+  //   sonst      → bereinigen; Ungültiges verwirft die Hausregel der
+  //                Adress-Liste, dann bleibt die alte Adresse stehen (kein
+  //                Fehler, der das ganze Speichern abbräche).
+  let searxng
+  if (neu.searxngAdresse === undefined) {
+    const { einstellungen: bisher } = einstellungenLaden()
+    searxng = bisher.searxngAdresse
+  } else if (String(neu.searxngAdresse).trim() === '') {
+    searxng = ''
+  } else {
+    const sauber = adresseBereinigen(neu.searxngAdresse)
+    if (sauber) searxng = sauber
+    else {
+      const { einstellungen: bisher } = einstellungenLaden()
+      searxng = bisher.searxngAdresse
+    }
+  }
+
   const daten = {
     motorModus: modus,
     apiSchluessel: schluessel,
@@ -259,6 +279,8 @@ export function einstellungenSpeichern(neu) {
     // Fehlt lokalFein (ältere Aufrufer), bleibt alles Ollama-Standard.
     lokalBlockAgent: Boolean(neu.lokalBlockAgent),
     lokalFein: lokalFeinBereinigen(neu.lokalFein),
+    // Websuche der lokalen Blöcke (0.51.2): leer = eingebaute Quelle.
+    searxngAdresse: searxng,
     // NIE aus `neu` (siehe gemerkteAntworten).
     ...gemerkteAntworten()
   }

@@ -3,6 +3,7 @@ import { texte } from '../../shared/texte.js'
 import {
   LOKAL_FEIN_FELDER,
   LOKAL_FEIN_VORLAGEN,
+  adresseBereinigen,
   lokalFeinBereinigen,
   lokalFeinVorlageErkennen,
   lokalesModellName
@@ -23,6 +24,14 @@ const LOKAL_FEIN_GRENZEN = {
   entwurfsTokens: { min: 0, max: 64, step: 1 }
 }
 const VORLAGEN_REIHENFOLGE = ['qwen-denken', 'qwen-coding', 'ollama-standard']
+
+// Entprellung der Live-Status-Abfragen (0.51.2). Gemessen 20.08.2026 in der
+// gebauten App: 19 getippte Zeichen ergaben 19 echte HTTP-Anfragen an den
+// fremden Rechner (//api/tags, /g/api/tags, /ga/api/tags, …), und gegen einen
+// hängenden Server standen 7 Anfragen gleichzeitig offen. Halbfertige
+// Rechnernamen kosten dabei allein 2,7 s Namensauflösung. Bei einer Suchquelle
+// wäre das doppelt schlimm — sie reagiert auf Häufung mit Drosselung.
+const STATUS_ENTPRELLUNG_MS = 600
 
 // Zahlen ↔ Text der Eingabefelder: null wird zum leeren Feld und zurück.
 function feinAlsText(fein) {
@@ -67,6 +76,11 @@ export default function Einstellungen({ onSchliessen }) {
   // Live-Status je Adresse (Schlüssel: getrimmte Adresse) über das bestehende
   // IPC lokaleHelferStatus — der Renderer fragt je Zeile einzeln, parallel.
   const [helferStatusJeAdresse, setHelferStatusJeAdresse] = useState({})
+  // Websuche der lokalen Blöcke (0.51.2): leer = eingebaute Quelle. Eigener
+  // Zustand statt eines gemeinsamen Objekts mit den Ollama-Adressen — die zwei
+  // Prüfungen sagen Verschiedenes und dürfen sich nicht gegenseitig leeren.
+  const [searxngAdresse, setSearxngAdresse] = useState('')
+  const [searxngZustand, setSearxngZustand] = useState(null)
   const [aboErlaubt, setAboErlaubt] = useState(true)
   const [fehler, setFehler] = useState('')
   const [geladen, setGeladen] = useState(false)
@@ -97,6 +111,7 @@ export default function Einstellungen({ onSchliessen }) {
       setLokaleHelferKontext(Number(e.einstellungen.lokaleHelferKontext) || 65536)
       setLokalBlockAgent(Boolean(e.einstellungen.lokalBlockAgent))
       setLokalFeinText(feinAlsText(lokalFeinBereinigen(e.einstellungen.lokalFein)))
+      setSearxngAdresse(e.einstellungen.searxngAdresse ?? '')
       setAboErlaubt(e.aboErlaubt)
       setGeladen(true)
     })
@@ -104,20 +119,49 @@ export default function Einstellungen({ onSchliessen }) {
 
   // Status der lokalen KI live anzeigen, sobald der Schalter an ist —
   // Georg sieht je Adress-Zeile sofort, ob Ollama läuft und das Modell da ist.
+  // Entprellt (0.51.2): Der Effekt hängt an Modellfeld UND Adressliste, feuerte
+  // also je Tastendruck in JEDEM dieser Felder für JEDE Zeile eine echte
+  // Anfrage. Geprüft wird nur, was als Adresse durchgeht (bereinigt) — und
+  // genau die bereinigte Fassung ist auch der Schlüssel der Statuszeile, damit
+  // Oberfläche und Hauptprozess dieselbe Adresse meinen.
   useEffect(() => {
     if (!lokaleHelferAktiv || !lokaleHelferModell.trim()) return setHelferStatusJeAdresse({})
     let aktuell = true
     const modell = lokaleHelferModell.trim()
-    for (const roh of lokaleHelferAdressen) {
-      const adresse = roh.trim()
-      window.flowforge.lokaleHelferStatus(modell, adresse).then((s) => {
-        if (aktuell) setHelferStatusJeAdresse((alt) => ({ ...alt, [adresse]: s }))
-      })
-    }
+    const uhr = setTimeout(() => {
+      for (const roh of lokaleHelferAdressen) {
+        const adresse = adresseBereinigen(roh)
+        if (!adresse) continue
+        window.flowforge.lokaleHelferStatus(modell, adresse).then((s) => {
+          if (aktuell) setHelferStatusJeAdresse((alt) => ({ ...alt, [adresse]: s }))
+        })
+      }
+    }, STATUS_ENTPRELLUNG_MS)
     return () => {
       aktuell = false
+      clearTimeout(uhr)
     }
   }, [lokaleHelferAktiv, lokaleHelferModell, lokaleHelferAdressen])
+
+  // Live-Status der SearXNG-Adresse (0.51.2) — eigener Effekt, eigener Zustand,
+  // eigene Texte. Er hängt an dieser einen Adresse (und am Schalter, der den
+  // Abschnitt überhaupt zeigt): Ein Tastendruck im Ollama-Modellfeld darf hier
+  // keine Anfrage auslösen, und ein leeres Feld heißt „eingebaute Quelle" —
+  // dann wird gar nicht erst geprüft.
+  useEffect(() => {
+    const adresse = adresseBereinigen(searxngAdresse)
+    if (!lokaleHelferAktiv || !adresse) return setSearxngZustand(null)
+    let aktuell = true
+    const uhr = setTimeout(() => {
+      Promise.resolve(window.flowforge?.searxngStatus?.(adresse)).then((s) => {
+        if (aktuell && s) setSearxngZustand(s)
+      })
+    }, STATUS_ENTPRELLUNG_MS)
+    return () => {
+      aktuell = false
+      clearTimeout(uhr)
+    }
+  }, [lokaleHelferAktiv, searxngAdresse])
 
   // Aktive Vorlage (Markierung der Knöpfe) und der Wert, der gespeichert
   // wird — beides aus denselben Feldern gerechnet.
@@ -157,7 +201,10 @@ export default function Einstellungen({ onSchliessen }) {
       lokaleHelferAdressen,
       lokaleHelferKontext,
       lokalBlockAgent,
-      lokalFein: lokalFeinBereinigt
+      lokalFein: lokalFeinBereinigt,
+      // Websuche der lokalen Blöcke (0.51.2): Diese Liste ist handgeschrieben —
+      // ein hier vergessenes Feld verschwindet still beim nächsten Speichern.
+      searxngAdresse
     })
     if (!ergebnis.ok) return setFehler(ergebnis.fehler)
     onSchliessen()
@@ -323,7 +370,10 @@ export default function Einstellungen({ onSchliessen }) {
               <div className="feld">
                 <span>{t.lokaleHelferAdressen}</span>
                 {lokaleHelferAdressen.map((adresse, i) => {
-                  const status = helferStatusJeAdresse[adresse.trim()]
+                  // Derselbe Schlüssel, mit dem der Effekt oben gefragt hat —
+                  // sonst zeigt die Zeile den Status einer anderen Adresse.
+                  const sauber = adresseBereinigen(adresse)
+                  const status = sauber ? helferStatusJeAdresse[sauber] : null
                   return (
                     <div key={i}>
                       <div className="filter-zeile">
@@ -348,7 +398,7 @@ export default function Einstellungen({ onSchliessen }) {
                           {t.lokaleHelferAdresseEntfernen}
                         </button>
                       </div>
-                      {status && adresse.trim() !== '' && (
+                      {status && (
                         <span className="feld-hinweis">
                           {status.erreichbar && status.modellDa
                             ? t.lokaleHelferStatusBereit(lokaleHelferModell.trim())
@@ -398,6 +448,32 @@ export default function Einstellungen({ onSchliessen }) {
                 </select>
                 <span className="feld-hinweis">{t.lokaleHelferKontextHinweis}</span>
               </label>
+              {/* Websuche der lokalen Blöcke (0.51.2): ein Feld. Leer =
+                  eingebaute Quelle, gefüllt = eigene SearXNG-Instanz. */}
+              <div className="feld">
+                <span>{t.websucheUeberschrift}</span>
+                <label className="feld">
+                  <span>{t.searxngAdresse}</span>
+                  <input
+                    type="text"
+                    placeholder="http://192.168.x.x:8080"
+                    value={searxngAdresse}
+                    onChange={(e) => setSearxngAdresse(e.target.value)}
+                  />
+                </label>
+                {searxngZustand && (
+                  <span className="feld-hinweis">
+                    {!searxngZustand.erreichbar
+                      ? t.searxngStatusAus
+                      : searxngZustand.gedrosselt
+                        ? t.searxngStatusGedrosselt
+                        : searxngZustand.jsonDa
+                          ? t.searxngStatusBereit
+                          : t.searxngStatusKeinJson}
+                  </span>
+                )}
+                <span className="feld-hinweis">{t.searxngHinweis}</span>
+              </div>
             </>
           )}
         </div>

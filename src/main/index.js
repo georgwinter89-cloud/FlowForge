@@ -17,6 +17,7 @@ import {
 } from './projekte.js'
 import { einstellungenLaden, einstellungenSpeichern, extraKostenBestaetigen } from './einstellungen.js'
 import { lokaleHelferPruefen } from './motor/lokaleHelfer.js'
+import { searxngStatus } from './motor/websuche.js'
 import {
   laufStarten,
   sonderlaufStarten,
@@ -149,6 +150,15 @@ function registriereIpc() {
   ipcMain.handle('lokale-helfer-status', (_e, { modell, adresse } = {}) =>
     lokaleHelferPruefen(String(modell ?? ''), String(adresse ?? '') || undefined)
   )
+  // Websuche der lokalen Blöcke (0.51.2): Live-Status der SearXNG-Adresse.
+  // Eine leere Adresse wird gar nicht erst geprüft — leer heißt „eingebaute
+  // Quelle", da gibt es nichts anzuzeigen (und der Ollama-Handler daneben zeigt,
+  // wie ein leerer Wert sonst still auf eine Standardadresse fiele).
+  ipcMain.handle('searxng-status', (_e, adresse) => {
+    const wert = String(adresse ?? '').trim()
+    if (!wert) return { erreichbar: false, jsonDa: false, gedrosselt: false }
+    return searxngStatus(wert)
+  })
 
   // Block-Editor mit KI-Assistent (SPEC §4.5, BAUPLAN 14).
   ipcMain.handle('eigene-bloecke-laden', () => eigeneBloeckeListe())
