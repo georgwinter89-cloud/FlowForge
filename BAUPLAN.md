@@ -1034,6 +1034,34 @@ Laufbericht zeigt beide Urteile nebeneinander.
   (Einstellungen: Liste statt eine Adresse); sonst nacheinander mit ehrlichem Ticker-Grund.
 - Kosten-/Kontingent-Sicht: Metriken zeigen je Lauf „davon lokal" (Tokens, Dauer) neben dem
   Abo-Verbrauch; Empfehlung im Co-Pilot, welche Blöcke lokal gut liefen.
+- **Gebaut (20.08.2026):** Einstellungen führen `lokaleHelferAdressen` als Liste (Migration
+  nur in einstellungenLaden, Einzelfeld bleibt Spiegel von Element 0 und Anker für Helfer-KI/
+  Vorreparatur; Listeneditor mit Live-Status je Zeile); Ablaufplaner baut je Lauf einen
+  Adress-Pool (parallel geprüft/bereitgestellt, nicht bereite Adressen sichtbar ausgeklammert,
+  leerer Pool = Fehlschlag), reine `lokaleStartRegel` neben der wellenStartRegel (Zuteilung
+  `k.lokalZuteilung` erst nach Adress- UND Wellenregel, gilt für alle Anläufe, Nachlauf hält
+  keine Adresse); Ticker-Grund mehradressen-fähig („alle N lokalen KI-Adressen belegt" mit
+  Halter-Namen); `bericht.verbrauch.lokal` (Tokens, Dauer) im Hauptprozess geführt,
+  Block-Dauer an allen vier Bericht-Pfaden; Metriken mit „davon lokal" je Kette/Projekt/Woche
+  und Ø-Dauer in Blocktyp × Modell; reine `lokaleBilanz` (Schwellen 5/0.7/0.2, Deckel 15) als
+  Datenblock im Co-Pilot-Systemtext (SPEC-Präzisierung: das Metriken-Verbot zielt auf
+  Lauf-Agenten). **Dazu behoben: 49er-Altfehler Kontextfenster-Vergiftung** — ein lokaler
+  Block drückte die gelernte Fenstergröße aller folgenden Claude-Blöcke auf sein
+  Ollama-Fenster (Überträge kämen ~3× zu früh); gelernt wird jetzt nur von Claude-Sessions.
+- **Messwerte der Bausession (20.08.2026, Workflows: 4 Leser + Angreifer, 2 Bauer mit
+  Vertrag in Worktrees, 2 Prüfer, Integrator):** Angriffsliste 12 Funde (3 blockierend, alle
+  ausgeräumt). Prüfer 1 (Mechanik, 38 Wegwerf-Prüfungen): 36 grün; Befund B1 nachgearbeitet
+  (Speichern ohne Adressfelder verlor die Liste — übernimmt sie jetzt aus der Datei,
+  Einzelfeld ersetzt nur den Anker). Prüfer 2 (Ende-zu-Ende, gebaute App, eigener
+  Datenordner): Migration/Listeneditor/Nacheinander-mit-Grund/Ausklammern/Ø-Dauer bestätigt,
+  Ticker-Wortlaute gemessen; nachgearbeitet: lokale Tokens zählen aus der
+  Modell-Aufschlüsselung, wenn der Faden-Zuwachs 0 meldet (gemessen 0 vs. 48.419);
+  Ausklammer-Text ohne „starte den Lauf neu"; api_retry-Zeile nennt beim lokalen Motor die
+  Ollama-Adresse. Ehrliche Grenze der Prüfung: Der echte Durchlauf scheiterte am
+  Testrechner-Modell qwen2.5:7b (liefert als Block-Agent kein Fazit — kein 51er-Fehler; die
+  49/50-Läufe fuhren auf flowforge-qwen3.8-27b, das derzeit nicht installiert ist). Der
+  Parallel-Fall mit zwei echten GPUs blieb ungemessen (nur eine vorhanden) — mechanisch von
+  Regel- und Verhaltens-Tests gedeckt (2 Adressen → getrennte Zuteilungen, Dritter erbt).
 **Alltagstest:** Zwei lokale Bauer in einer Welle (oder nacheinander mit Grund im Ticker),
 Metriken weisen den lokalen Anteil des Laufs aus.
 

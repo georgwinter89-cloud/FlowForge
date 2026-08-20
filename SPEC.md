@@ -1679,7 +1679,10 @@ umstellbar wie jede Karte.
   Ausgaben-Obergrenze immer an — automatisches Weiterlaufen würde die Obergrenze aushebeln,
   weil jede frische Motor-Session sie neu zählt. Bei **überlasteten KI-Servern**
   (vorübergehende Störung) pausiert der Lauf immer automatisch im 10-Minuten-Takt, unabhängig
-  von dieser Einstellung; Wiederholungsversuche des Motors sind im Liveticker sichtbar.
+  von dieser Einstellung; Wiederholungsversuche des Motors sind im Liveticker sichtbar. Kommt
+  der Fehler von einem **lokalen Motor**, nennt die Ticker-Zeile die Ollama-Adresse statt der
+  KI-Server (seit Bauschritt 51) — der Fehler liegt dann bei der eigenen Grafikkarte, nicht
+  bei Anthropic.
 - **Lauf-Ende-Benachrichtigung:** Ist das Fenster beim Laufende nicht im Vordergrund, meldet
   sich FlowForge per Windows-Benachrichtigung.
 - **Kontext-Zuführung:** Beim Start wählt die App Karten automatisch vor — festgenagelt auf
