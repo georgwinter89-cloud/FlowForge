@@ -1189,7 +1189,42 @@ unbenannten Bauer nach dem Zuschnitt automatisch z. B. „Bauer · Server-Briefi
   nie — der volle lokale E2E-Beleg braucht Georgs 27B (Start-Prompt-Zeile liefert dafür
   jetzt die Zahlen).
 
-### Zwischenschritt 0.51.2 — Websuche für lokale Blöcke
+### Zwischenschritt 0.51.2 — Speicher-Ehrlichkeit der lokalen KI
+(Wunsch Georg, 20.08.2026, aus der Analyse des Wiederholungslaufs Life OS
+[2026-08-20T16-24-42-941Z]: Alle 0.51.1-Bauten griffen — Kurznamen, Start-Prompt-Zeile
+23.539/8.361 von 131.072, Helfer stumm, deutscher Abbruch-Text, Block ehrlich
+fehlgeschlagen —, aber der lokale Bauer starb nach 72 min am Zeitlimit der
+Werkzeug-Schicht: Kontextfenster stand auf 128k, dessen KV-Cache [~30 GB beim 27B]
+sprengt die 32-GB-Karte, Ollama lagert in den System-RAM aus [Georg gemessen: 7,5 →
+42 GB], jeder Gesprächswechsel rechnet das volle Gespräch im RAM-Kriechgang neu durch,
+und ab der Zeitlimit-Kante wird „langsam" zu „tot" — 11 min Stille, dann Abbruch. Der
+Lokal-Wächter feuerte korrekt nicht: Es war kein Kontext-Überlauf, sondern Speicherdruck,
+den FlowForge bisher nicht sehen kann.)
+- **VRAM-Passt-Prüfung:** Nach dem ersten Turn des ersten lokalen Blocks je Adresse
+  (das Modell ist dann sicher geladen; derselbe Einmal-Moment wie die
+  Start-Prompt-Zeile) fragt FlowForge Ollamas Prozessliste ab (`/api/ps`: `size` vs.
+  `size_vram` des abgeleiteten Modells). Liegt das Modell nicht (nahezu) vollständig
+  in der Grafikkarte, eine Warnzeile in Ticker und Laufbericht in Alltagssprache:
+  Anteil in der Karte, Ursache (Fenster zu groß für den Grafikspeicher), Empfehlung
+  (Kontextfenster verkleinern), ehrliche Folge (sonst drohen Zeitüberschreitungen).
+  Warnung, keine Sperre (Rückfrage-statt-Sperre-Regel). Je Adresse einmal je Lauf.
+- **Geduld der Werkzeug-Schicht als Einstellung (Entscheidung Georg):** Neues Feld in
+  den Einstellungen (Bereich lokale KI): „Wartezeit auf Antworten der lokalen KI" —
+  Standard (CLI-Vorgabe) / verlängerte Stufen. Wirkt NUR auf die Umgebung der lokalen
+  Motor-Instanzen (API_TIMEOUT_MS wird dort gesetzt — die Bereinigung aus 0.51.1
+  entfernt weiterhin nur GEERBTE Werte; die Helfer-KI behält ihr eigenes 5-min-Limit).
+  Ehrlicher Hinweistext an der Einstellung: Mehr Geduld verhindert den Abbruch, macht
+  aber aus einem Speicherproblem kriechende Läufe — die eigentliche Lösung ist ein
+  Fenster, das in die Karte passt (siehe Warnzeile).
+- Nachzuziehen: SPEC §2 (Klasse lokal: Speicher-Grenze sichtbar), §9 (neue
+  Einstellung), §3.2 (Warnzeile im Laufbericht).
+**Alltagstest:** Georg stellt absichtlich 128k ein und startet einen lokalen
+Ein-Block-Lauf: Kurz nach dem Blockstart steht die Warnzeile mit dem
+In-der-Karte-Anteil im Ticker. Er stellt 64k ein: keine Warnzeile. Die neue
+Geduld-Einstellung steht in den Einstellungen mit ehrlichem Hinweis und wirkt
+nur auf lokale Blöcke.
+
+### Zwischenschritt 0.51.3 — Websuche für lokale Blöcke
 (Wunsch Georg, 20.08.2026. Anlass: Georgs Hinweis, dass die Qwen3.8-Generation darauf
 trainiert ist, bei erkannter Unsicherheit selbständig zu suchen — **gemessen am 20.08.2026**
 an qwen3.8-davidau:27b über Ollamas Anthropic-Endpunkt: Frage nach der „diese Woche
