@@ -24,6 +24,7 @@ import {
 } from './schnittstelle.js'
 import { kartenWerkzeugServer } from './kartenWerkzeuge.js'
 import { helferWerkzeugServer } from './helferWerkzeuge.js'
+import { webWerkzeugServer } from './webWerkzeuge.js'
 import { menschWerkzeugServer } from './menschWerkzeuge.js'
 import { kontextFensterFuerModell, kontextFensterMerken } from './motorWissen.js'
 import { startWerkzeugServer } from './startWerkzeuge.js'
@@ -168,6 +169,18 @@ const PRUEFBEFEHL_PRAEFIX = 'mcp__pruefbefehl__'
 // Ollama — im Code auf Auflisten/Lesen/Suchen im Projektordner begrenzt,
 // deshalb ohne Rückfrage und auch unter „darf nur lesen" erlaubt.
 const HELFER_PRAEFIX = 'mcp__helfer__'
+
+// Websuche lokaler Blöcke (0.51.2): web_suche und webseite_lesen — im Code
+// rein lesend (nur http/https, Privat- und Schleifenadressen gesperrt, jeder
+// Weiterleitungssprung neu geprüft, harte Größendeckel), deshalb ohne
+// Rückfrage und auch unter „darf nur lesen" erlaubt. Genau die nur-lesenden
+// Blöcke (Angreifer, Diagnose, Späher, Audit) recherchieren am meisten —
+// dieselbe Begründung wie beim HELFER_PRAEFIX. Registriert wird der
+// Werkzeugkasten ohnehin nur an der Motor-Instanz eines lokalen Blocks;
+// Claude-Blöcke behalten WebSearch/WebFetch der CLI samt Rückfrage.
+const WEB_PRAEFIX = 'mcp__web__'
+const WEB_SUCHE = WEB_PRAEFIX + 'web_suche'
+const WEB_SEITE = WEB_PRAEFIX + 'webseite_lesen'
 
 // Karten-Vorschläge (BAUPLAN 26): Der Karten-Prüfer schlägt vor, der Nutzer
 // entscheidet, FlowForge wendet an — das Werkzeug selbst ändert nichts und
@@ -640,6 +653,13 @@ export function pruefeWerkzeug(name, eingabe, projektPfad, nurLesen, darfPruefen
       return { gesperrt: texte.rechteFrage.nurLesenGesperrtFuerAgent, tickerText: texte.ticker.nurLesenGesperrt }
     return { erlaubt: true }
   }
+  // Websuche lokaler Blöcke (0.51.2): rein lesend, hart gedeckelt, jeder
+  // Zugriff im Ticker — deshalb ohne Rückfrage UND unter „darf nur lesen"
+  // erlaubt (Entscheidung Georg, 20.08.2026). Dieser Zweig MUSS vor dem
+  // nur-lesen-Auffangnetz weiter unten stehen: Dort würde er sonst als
+  // „Schreib-Versuch gestoppt" gemeldet — eine unwahre Begründung, gemessen
+  // 20.08.2026 an der echten pruefeWerkzeug.
+  if (name.startsWith(WEB_PRAEFIX)) return { erlaubt: true }
   // App-Werkzeuge des Co-Piloten (BAUPLAN 33): Ausgabe lesen ist frei; die
   // App starten/stoppen ändert keine Projektdatei, greift aber in laufende
   // Prozesse ein — im Reparatur-Modus frei, sonst Rückfrage; einen fremden
@@ -856,7 +876,9 @@ export function fazitStutzen(text) {
 // Wächter den Übertrag angefordert, ist die Abbruch-Marke der CLI ERWARTET —
 // der Klartext „das kam nicht von dir" wäre dann dieselbe Lüge wie der alte
 // Text, nur umgedreht. Die Zeile entfällt dann ganz.
-function tickerZeilen(
+// Exportiert (0.51.2), damit sich die Zeilen ohne laufenden Motor am echten
+// Modul prüfen lassen — bisher ging das nur über eine Lesekopie der Datei.
+export function tickerZeilen(
   nachricht,
   projektPfad,
   blockTaskIds,
@@ -918,6 +940,20 @@ function tickerZeilen(
     if (block.name.startsWith(VORSCHLAG_PRAEFIX)) continue
     // Die lokale Helfer-KI meldet Start, Schritte und Fazit selbst.
     if (block.name.startsWith(HELFER_PRAEFIX)) continue
+    // Websuche lokaler Blöcke (0.51.2, Fund 8): Der Aufruf zeigt, WONACH
+    // gesucht bzw. WELCHE Seite geladen wird — sonst stünde hier nur die
+    // Maschinen-Kennung aus dem default-Zweig. Das Ergebnis (Trefferzahl,
+    // Sperre, Endadresse) meldet der Werkzeug-Server selbst: Ein
+    // Werkzeug-Ergebnis erreicht diese Funktion gemessen nie, weil alles
+    // verworfen wird, was nicht type 'assistant' ist.
+    if (block.name === WEB_SUCHE) {
+      zeilen.push(t.websucheLaeuft(kuerzen(e.begriff ?? '')))
+      continue
+    }
+    if (block.name === WEB_SEITE) {
+      zeilen.push(t.webseiteLaedt(kuerzen(e.adresse ?? '')))
+      continue
+    }
     switch (block.name) {
       case 'Write':
         zeilen.push(t.schreibtDatei(kurzerPfad(e.file_path, projektPfad)))
@@ -1241,6 +1277,13 @@ export function starteLaufMotor(optionen) {
     // (die CLI meldet 200000), Kosten verworfen (0). Sperren, Lieferschein,
     // Hooks, Rechte-Rückfragen, Übertrag, Sicherungspunkte: unverändert.
     lokal = null,
+    // Websuche lokaler Blöcke (0.51.2): { searxngAdresse } — leer heißt
+    // eingebaute Quelle. Die zwei Werkzeuge hängen an `lokal`, nicht an dieser
+    // Option: Ein lokaler Block hat sonst gar keinen Weg ins Netz (WebSearch/
+    // WebFetch der CLI laufen über Anthropics Server und gibt es gegen Ollama
+    // nicht). Fehlt die Option, bleibt eben die eingebaute Quelle — kein
+    // stilles Abschalten, wenn ein Feld unterwegs verlorengeht (Fund 4).
+    websuche = null,
     // Einstellung „Befehle trotz nur-lesen" (Entscheidung Georg, 14.08.2026).
     nurLesenBefehle = false,
     aufEreignis,
@@ -1816,6 +1859,29 @@ export function starteLaufMotor(optionen) {
         })
       : null
 
+    // Websuche (0.51.2): NUR an der Motor-Instanz eines lokalen Blocks. Ein
+    // Opus-Block hat WebSearch/WebFetch der CLI (mit Rückfrage) und braucht
+    // nichts davon; ein lokaler Block hätte sonst gar keinen Weg ins Netz.
+    const webServer = lokal
+      ? await webWerkzeugServer({
+          searxngAdresse: websuche?.searxngAdresse ?? '',
+          aufEreignis,
+          // Platz im Arbeitsgedächtnis (Fund 17): verbleibende ZEICHEN bis zur
+          // Wächter-Schwelle des GERADE laufenden Blocks — je Aufruf frisch
+          // abgelesen (Muster holeSicherung/holeDateiListe oben). Ist die
+          // Übertragsgrenze des Laufs erschöpft, zählt der Wächter zwar weiter,
+          // bremst aber nicht mehr; dann ist dieser Deckel die einzige Bremse.
+          // null heißt „unbekannt" — dann gilt der Standard-Deckel.
+          holeLuft: () => {
+            if (!block) return null
+            const fenster = bekanntesFenster || KONTEXT_FENSTER_STANDARD
+            const schwelleTokens = (fenster * LOKAL_WAECHTER_PROZENT) / 100
+            const restTokens = schwelleTokens - lokaleKontextSchaetzung(block.schaetzZeichen)
+            return Math.floor(restTokens * ZEICHEN_JE_TOKEN)
+          }
+        })
+      : null
+
     // Saubere Umgebung (umgebungBereinigen): ANTHROPIC_*/CLAUDE*-Variablen und
     // die präfixlosen CLI-Schalter fliegen raus — sie könnten Anmeldung,
     // Verhalten oder Messung des Motors umleiten (z.B. wenn FlowForge selbst aus
@@ -1851,7 +1917,16 @@ export function starteLaufMotor(optionen) {
         ? '\n' +
           texte.agentenLokaleHelfer.systemZusatz +
           (lokaleHelfer.bewerten ? texte.agentenLokaleHelfer.bewertenSystemZusatz : '')
-        : '')
+        : '') +
+      // Websuche (0.51.2, Fund 13): Der Zusatz hängt an `lokal`, NICHT an
+      // helferServer. Gemessen 20.08.2026: lauf.js gibt lokalen Motoren
+      // absichtlich keinen lokaleHelfer — ein an helferServer gehängter
+      // Hinweis landete in jedem Claude-Block und in keinem lokalen, also
+      // genau falsch herum. Er steht bewusst in DIESEM Text, damit
+      // blockAgentSystemZeichen ihn automatisch in die Startschätzung des
+      // Lokal-Wächters aufnimmt. Die MCP-instructions des Servers werden hier
+      // NIE hineinkopiert — sie kosten den Block sonst ~88 Token neu.
+      (lokal ? '\n' + texte.agentenWebsuche.systemZusatz : '')
     // Lokal-Wächter (0.51.1): Der Systemtext zählt zur Startschätzung.
     blockAgentSystemZeichen = blockAgentSystemText.length
     const agentDefinitionen = blockAgentDefinitionen(blockAgentSystemText)
@@ -1896,7 +1971,9 @@ export function starteLaufMotor(optionen) {
           ...(laufVorschlagServer ? { naechsterlauf: laufVorschlagServer } : {}),
           ...(zuteilungServer ? { zuteilung: zuteilungServer } : {}),
           ...(lieferscheinServer ? { lieferschein: lieferscheinServer } : {}),
-          ...(helferServer ? { helfer: helferServer } : {})
+          ...(helferServer ? { helfer: helferServer } : {}),
+          // Websuche (0.51.2): steht nur in lokalen Motor-Instanzen.
+          ...(webServer ? { web: webServer } : {})
         },
         // Der Hauptfaden ist der Koordinator: schlanker eigener Systemtext
         // statt des vollen Werkzeug-Vorspanns — er arbeitet ja nicht selbst.

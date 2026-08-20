@@ -88,5 +88,7 @@ describe('Werkzeug-Server lassen sich wirklich bauen (BAUPLAN 50)', () => {
     await appWerkzeugServer({ projektPfad: 'x', aufEreignis: () => {} })
     const { helferWerkzeugServer } = await import('../src/main/motor/helferWerkzeuge.js')
     await helferWerkzeugServer({ projektPfad: 'x', modell: 'm', adresse: 'http://127.0.0.1:1', aufEreignis: () => {} })
+    const { webWerkzeugServer } = await import('../src/main/motor/webWerkzeuge.js')
+    await webWerkzeugServer({ searxngAdresse: '', aufEreignis: () => {}, holeLuft: () => null })
   })
 })

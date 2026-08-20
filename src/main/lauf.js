@@ -1902,6 +1902,15 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     for (const ausfall of lokalAusgefallene)
       tickern(texte.ticker.lokalAdresseAusgeklammert(ausfall.adresse, ausfall.grund ?? ausfall.fehler))
     tickern(texte.ticker.lokalBereit(lokalPool[0].modell, lokalPool[0].kontext, lokalPool.length))
+    // Websuche der lokalen Blöcke (0.51.2): EINE Zeile je Laufstart, nicht je
+    // Block — welche Quelle gilt, gehört an den Anfang des Laufberichts.
+    // Ehrlich benannt: die eingebaute Quelle ist DuckDuckGo, Georgs eigene
+    // Instanz wird mit Adresse genannt.
+    tickern(
+      einstellungen.searxngAdresse
+        ? texte.ticker.websucheQuelleAmStartEigene(einstellungen.searxngAdresse)
+        : texte.ticker.websucheQuelleAmStartEingebaut
+    )
     // Zu kleines Fenster (Befund Prüfer 2, 0.51.1): Die CLI reserviert vom
     // Fenster rund 33.000 Tokens für Antwort und Zusammenfassung — bei 32k
     // bleibt für den Block-Agenten NICHTS übrig, der erste Turn läuft schon
@@ -2808,8 +2817,20 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         // `lokaleHelfer: null` entfallen im Motor Helfer-Server UND
         // System-Zusatz — der Auftrag verspricht dann nichts, was es nicht gibt.
         lokaleHelfer: lokalOption ? null : lokaleHelfer,
+        // ACHTUNG (Fund 4, 20.08.2026): `lokal` ist ein NEUES Objekt-Literal
+        // aus einzeln aufgezählten Feldern, kein Spread — ein neues Feld muss
+        // hier von Hand nachgetragen werden, sonst kommt es im Motor nie an
+        // (Beweis am Bestand: die Pool-Einträge tragen zusätzlich `basis`, und
+        // im ganzen Motor gibt es dafür null Fundstellen).
         ...(lokalOption
-          ? { lokal: { adresse: lokalOption.adresse, modell: lokalOption.modell, kontext: lokalOption.kontext } }
+          ? {
+              lokal: { adresse: lokalOption.adresse, modell: lokalOption.modell, kontext: lokalOption.kontext },
+              // Websuche der lokalen Blöcke (0.51.2): nur lokale Motoren
+              // bekommen die zwei Nachschlage-Werkzeuge — Claude-Motoren haben
+              // WebSearch/WebFetch der CLI. Leere Adresse heißt eingebaute
+              // Quelle (kein eigenes Quellen-Wahlfeld, Entscheidung Georg).
+              websuche: { searxngAdresse: einstellungen.searxngAdresse ?? '' }
+            }
           : {}),
         nurLesenBefehle: Boolean(einstellungen.nurLesenBefehle),
         // Lieferschein (BAUPLAN 42): Beim Laufstart steht das Schaubild fest —

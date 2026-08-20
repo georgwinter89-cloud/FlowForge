@@ -326,7 +326,11 @@ export const texte = {
       nurLesen: {
         name: 'Sperre „darf nur lesen"',
         hinweis:
-          'Der Block darf dann nichts verändern: kein Schreiben, keine verändernden Befehle (rein lesende laufen durch), kein Internet — nur lesen. Die sichere Wahl für alles, was nur ansehen und berichten soll. Nur-lesende Blöcke dürfen außerdem parallel zu einem schreibenden laufen.'
+          // Ehrlich seit 0.51.2: Lokale Blöcke haben zwei rein lesende
+          // Nachschlage-Werkzeuge (suchen, Seite lesen). Sie verändern nichts
+          // und laufen deshalb auch unter dieser Sperre — „kein Internet"
+          // wäre ab jetzt schlicht falsch.
+          'Der Block darf dann nichts verändern: kein Schreiben, keine verändernden Befehle (rein lesende laufen durch) — nur lesen. Die sichere Wahl für alles, was nur ansehen und berichten soll. Ins Internet kommt er nur über die beiden rein lesenden Nachschlage-Werkzeuge lokaler Blöcke (suchen, Seite lesen); jeder Zugriff steht im Ticker. Nur-lesende Blöcke dürfen außerdem parallel zu einem schreibenden laufen.'
       },
       prueft: {
         name: 'Prüft',
@@ -2872,8 +2876,12 @@ export const texte = {
       'sonst wird unnötig oft übergeben.',
     rechteUeberschrift: 'Rechte-Rückfragen',
     rechteFragen: 'Jedes Mal fragen (Standard)',
+    // Ehrlich seit 0.51.2: Ein unbedingtes „wirst du gefragt" stimmt nicht
+    // mehr — die beiden rein lesenden Nachschlage-Werkzeuge lokaler Blöcke
+    // laufen ohne Rückfrage (sie können nichts verändern), dafür steht jeder
+    // Zugriff im Ticker und damit im Laufbericht.
     rechteFragenHinweis:
-      'Bei allem außerhalb des Projektordners, Internet und unbekannten Befehlen wirst du gefragt.',
+      'Bei allem außerhalb des Projektordners, Internetzugriffen und unbekannten Befehlen wirst du gefragt. Ausnahme: die beiden rein lesenden Nachschlage-Werkzeuge lokaler Blöcke (suchen, Seite lesen) — sie fragen nie, jeder ihrer Zugriffe steht dafür im Ticker.',
     // Befehle trotz „darf nur lesen" (Entscheidung Georg, 14.08.2026):
     // Auf-eigene-Gefahr-Schalter, Standard aus.
     nurLesenBefehle: 'Nur-lesende Blöcke dürfen Befehle ausführen (auf eigene Gefahr)',
@@ -2887,8 +2895,10 @@ export const texte = {
     rechteAutomatischHinweis:
       'Rückfragen werden ohne Nachfrage erlaubt und im Laufbericht vermerkt. Die harten Sperren ' +
       '(Git, FlowForge-Verwaltungsdateien, „darf nur lesen") gelten weiterhin. Der Agent darf dann ' +
-      'aber z.B. außerhalb des Projektordners schreiben und ins Internet — nutze das nur, wenn du ' +
-      'dem Auftrag vertraust.',
+      'aber z.B. außerhalb des Projektordners schreiben und frei ins Internet — nutze das nur, wenn du ' +
+      'dem Auftrag vertraust. Unabhängig davon: Die beiden rein lesenden Nachschlage-Werkzeuge ' +
+      'lokaler Blöcke (suchen, Seite lesen) laufen immer ohne Rückfrage, auch ohne Automodus — sie ' +
+      'können nichts verändern, und jeder Zugriff steht im Ticker.',
     speichern: 'Speichern',
     abbrechen: 'Abbrechen',
     fehlerApiSchluesselFehlt: 'Für den API-Modus brauchst du einen API-Schlüssel.',
@@ -3085,8 +3095,12 @@ export const texte = {
       'Der Nutzer hat das nicht erlaubt. Suche einen anderen Weg innerhalb des Projektordners — oder beende den Auftrag mit einer kurzen Erklärung.',
     gitGesperrtFuerAgent:
       'Git ist in FlowForge-Projekten gesperrt: Die App verwaltet Sicherungspunkte selbst. Arbeite ohne Git weiter.',
+    // Ehrlich seit 0.51.2: „Internet ist gesperrt" stimmt nicht mehr — die
+    // beiden rein lesenden Nachschlage-Werkzeuge lokaler Blöcke sind auch
+    // unter dieser Sperre erlaubt. Wer den Satz liest, hat ohnehin gerade ein
+    // ANDERES Werkzeug versucht; er darf ihn nicht in die Irre führen.
     nurLesenGesperrtFuerAgent:
-      'Dieser Block darf nur lesen. Schreiben, verändernde Befehle und Internet sind hier gesperrt. Beende den Auftrag nur mit Lese-Werkzeugen.',
+      'Dieser Block darf nur lesen. Schreiben, verändernde Befehle und freie Internetzugriffe sind hier gesperrt. Beende den Auftrag nur mit Lese-Werkzeugen — dazu zählen auch die rein lesenden Nachschlage-Werkzeuge, falls du sie hast.',
     // Verfeinerte Lese-Sperre (Feedback Georg, 12.08.2026): rein lesende
     // Befehle laufen durch — für alles andere sagt die Meldung ehrlich, warum.
     nurLesenBefehlFuerAgent:
@@ -3319,6 +3333,52 @@ export const texte = {
     befehl: (befehl) => `Kommandozeile: ${befehl}`,
     internet: (ziel) => `Internetzugriff: ${ziel}`,
     werkzeug: (name) => `Nutzt Werkzeug: ${name}`,
+    // Websuche der lokalen Blöcke (0.51.2). Bewusst zwei Sorten Zeilen: Die
+    // AUFRUF-Zeilen (websucheLaeuft/webseiteLaedt) kommen aus tickerZeilen,
+    // sobald der Block-Agent das Werkzeug ruft — ohne sie stünde dort nur die
+    // Maschinen-Kennung „mcp__web__…". Die ERGEBNIS-Zeilen meldet der
+    // Werkzeug-Server selbst, denn ein Werkzeug-Ergebnis erreicht tickerZeilen
+    // gemessen nie. Getrennte Texte je Ausgang, weil „Quelle sperrt gerade"
+    // und „nichts gefunden" für Georg zwei völlig verschiedene Nachrichten
+    // sind — genau dieses Zusammenfallen soll der Schritt abschaffen.
+    websucheLaeuft: (begriff) => `Sucht im Internet: ${begriff}`,
+    webseiteLaedt: (adresse) => `Lädt Webseite: ${adresse}`,
+    websucheOhneBegriff:
+      'Suche ohne Suchbegriff — abgewiesen; der Block bekommt einen Klartext-Hinweis.',
+    websucheQuelleEingebaut: 'die eingebaute Suchquelle',
+    websucheQuelleEigene: (adresse) => `deine eigene Such-Instanz (${adresse})`,
+    websucheTreffer: (anzahl, quelle) => `${anzahl} Treffer über ${quelle}.`,
+    websucheNichts: (begriff) =>
+      `Nichts gefunden zu „${begriff}" — die Quelle hat geantwortet, sie kennt dazu nichts.`,
+    websucheGesperrt:
+      'Die eingebaute Suchquelle sperrt gerade (zu viele Abfragen in kurzer Zeit) — diese Suche bleibt ohne Ergebnis. Das ist ausdrücklich KEIN „nichts gefunden".',
+    websucheNichtErreichbar:
+      'Die Suchquelle ist nicht erreichbar — diese Suche bleibt ohne Ergebnis.',
+    websucheUnverstanden:
+      'Die Suchquelle hat unverständlich geantwortet — diese Suche bleibt ohne Ergebnis.',
+    websucheAusgewichen:
+      'Deine eigene Such-Instanz hat nicht brauchbar geantwortet — diese Suche lief über die eingebaute Quelle.',
+    webseiteOhneAdresse:
+      'Seitenabruf ohne Adresse — abgewiesen; der Block bekommt einen Klartext-Hinweis.',
+    // Immer die Endadresse nach allen Weiterleitungen — die Startadresse kann
+    // harmlos aussehen und woanders hinführen.
+    webseiteGelesen: (adresse, zeichen) =>
+      `Webseite gelesen: ${adresse} (${Math.round(zeichen).toLocaleString('de-DE')} Zeichen).`,
+    webseiteGekuerzt: (adresse, zeichen) =>
+      `Webseite gelesen: ${adresse} (auf ${Math.round(zeichen).toLocaleString('de-DE')} Zeichen gekürzt).`,
+    webseiteAbgelehnt: (adresse) =>
+      `Seitenabruf gestoppt: ${adresse} — erlaubt sind nur öffentliche Seiten im Internet (http/https), nicht dieser Rechner und nicht das eigene Netz.`,
+    webseiteKeineTextseite: (adresse) =>
+      `Keine Textseite: ${adresse} — daraus lässt sich kein Text lesen (z.B. PDF oder Bild).`,
+    webseiteZeitlimit: (adresse) => `${adresse} hat nicht rechtzeitig geantwortet — abgebrochen.`,
+    webseiteNichtErreichbar: (adresse) => `Nicht erreichbar: ${adresse}.`,
+    webseiteKeinPlatz:
+      'Kein Platz mehr im Arbeitsgedächtnis des lokalen Blocks — kein Seitentext geladen; der Block soll jetzt zusammenfassen.',
+    // Eine Zeile je Laufstart, nicht je Block: Welche Quelle gilt überhaupt?
+    websucheQuelleAmStartEingebaut:
+      'Websuche der lokalen Blöcke: eingebaute Quelle (DuckDuckGo), kostenlos — jeder Zugriff steht hier im Ticker.',
+    websucheQuelleAmStartEigene: (adresse) =>
+      `Websuche der lokalen Blöcke: deine eigene Such-Instanz ${adresse} — jeder Zugriff steht hier im Ticker.`,
     rechteFrageGestellt: 'Rechte-Rückfrage an dich — bitte oben beantworten.',
     rechteAutomatischErlaubt: (beschreibung) => `Automodus — automatisch erlaubt: ${beschreibung}`,
     rechteFrageErlaubt: 'Du hast es erlaubt.',
@@ -3750,8 +3810,11 @@ export const texte = {
     // gemeldete Zahl überhaupt zur Wirklichkeit passt.
     lokalStartPrompt: (gemeldet, geschaetzt, fenster) =>
       `Start-Prompt des lokalen Blocks: ~${Math.round(gemeldet).toLocaleString('de-DE')} Tokens (von der lokalen KI gemeldet) · ~${Math.round(geschaetzt).toLocaleString('de-DE')} Tokens davon sind Auftrag und Systemtext, der Rest ist der feste Werkzeug-Vorspann des Motors — FlowForge rechnet ab jetzt mit der gemessenen Gesamtzahl. Fenster: ${Math.round(fenster).toLocaleString('de-DE')} Tokens.`,
+    // Seit 0.51.2 gehört der Zusammenhang mit der Websuche in dieselbe Zeile:
+    // Ein geladener Seitentext braucht denselben Platz wie alles andere im
+    // Arbeitsgedächtnis. Gewarnt, nicht gesperrt (Rückfrage-statt-Sperre).
     lokalFensterKnapp: (kontext) =>
-      `Achtung: Das Kontextfenster der lokalen KI (${Math.round(kontext).toLocaleString('de-DE')} Tokens) ist für lokale Block-Agenten zu knapp — der Motor reserviert davon rund 33.000 Tokens für Antwort und Zusammenfassung, und allein der Start-Auftrag wiegt gut 20.000. Stell in den Einstellungen 64k oder mehr ein, sonst läuft der Block sofort über.`,
+      `Achtung: Das Kontextfenster der lokalen KI (${Math.round(kontext).toLocaleString('de-DE')} Tokens) ist für lokale Block-Agenten zu knapp — der Motor reserviert davon rund 33.000 Tokens für Antwort und Zusammenfassung, und allein der Start-Auftrag wiegt gut 20.000. Auch nachgeschlagene Seitentexte brauchen genau diesen Platz: Jede gelesene Webseite füllt das Arbeitsgedächtnis weiter. Stell in den Einstellungen 64k oder mehr ein, sonst läuft der Block sofort über.`,
     lokalWaechterUebertrag: (geschaetzt, fenster) =>
       `Das Arbeitsgedächtnis des lokalen Blocks ist fast voll (~${Math.round(geschaetzt).toLocaleString('de-DE')} von ${Math.round(fenster).toLocaleString('de-DE')} Tokens, von FlowForge geschätzt) — FlowForge übergibt an einen frischen Anlauf, bevor die lokale KI still vergisst.`,
     uebertragAngefordert: (von, bis) =>
@@ -3877,12 +3940,17 @@ export const texte = {
       'Im Projektordner lesen, schreiben und löschen',
       'Programmbibliotheken aus offiziellen Quellen installieren',
       'Tests und bekannte Entwickler-Werkzeuge ausführen (node, npm, python …)',
-      'Rein lesende Kommandozeilen-Befehle (dir, type, findstr …)'
+      'Rein lesende Kommandozeilen-Befehle (dir, type, findstr …)',
+      // Eigene Zeile seit 0.51.2 (Entscheidung Georg, 20.08.2026): Die zwei
+      // Nachschlage-Werkzeuge lokaler Blöcke laufen rückfragefrei und auch
+      // unter der Sperre „darf nur lesen". Ohne diese Zeile stünde in der
+      // Rechte-Übersicht das Gegenteil dessen, was die App tut.
+      'Nachschlagen im Internet mit den beiden rein lesenden Werkzeugen lokaler Blöcke (suchen, Seite lesen) — hart gedeckelt, auch unter „darf nur lesen" erlaubt, jeder Zugriff steht im Ticker'
     ],
     mitRueckfrageTitel: 'Nur mit deiner Erlaubnis',
     mitRueckfrage: [
       'Alles außerhalb des Projektordners',
-      'Sonstige Internetzugriffe',
+      'Alle übrigen Internetzugriffe (Suche und Seitenabruf des Motors, Downloads)',
       'Unbekannte Kommandozeilen-Befehle und alles Unumkehrbare'
     ],
     gesperrtTitel: 'Immer gesperrt (hartes Nein)',
