@@ -1189,6 +1189,40 @@ unbenannten Bauer nach dem Zuschnitt automatisch z. B. „Bauer · Server-Briefi
   nie — der volle lokale E2E-Beleg braucht Georgs 27B (Start-Prompt-Zeile liefert dafür
   jetzt die Zahlen).
 
+### Zwischenschritt 0.51.2 — Websuche für lokale Blöcke
+(Wunsch Georg, 20.08.2026. Anlass: Georgs Hinweis, dass die Qwen3.8-Generation darauf
+trainiert ist, bei erkannter Unsicherheit selbständig zu suchen — **gemessen am 20.08.2026**
+an qwen3.8-davidau:27b über Ollamas Anthropic-Endpunkt: Frage nach der „diese Woche
+aktuellen" Electron-Version mit angebotenem web_suche-Werkzeug → Denkspur wörtlich „Da ich
+keinen Echtzeit-Zugriff auf das Internet habe, kann ich nicht verifizieren …", dann sauberer
+tool_use-Aufruf. Der Reflex ist da; ihm fehlt nur der Stecker: Die WebSearch der CLI läuft
+über Anthropics Server und existiert für den lokalen Motor nicht. Entscheidung Georg gegen
+Chrome MCP (Dutzende Werkzeug-Definitionen im ohnehin ~23k schweren Start-Prompt, falsches
+Kaliber fürs Nachschlagen) und für zwei schlanke Werkzeuge mit wählbarer Quelle.)
+- **Zwei rein lesende Werkzeuge** im bestehenden MCP-Muster, registriert NUR an der
+  lokalen Motor-Instanz (Opus-Blöcke haben WebSearch/WebFetch der CLI und bleiben
+  unverändert): `web_suche` (Suchbegriff → Titel, Adresse, Kurztext je Treffer, Anzahl
+  gedeckelt) und `webseite_lesen` (Adresse → Seitentext, hart gedeckelt — der
+  Lokal-Wächter aus 0.51.1 zählt die geladenen Texte ohnehin mit).
+- **Wählbare Quelle (Entscheidung Georg):** Standard „eingebaut, kostenlos" (Abfrage ohne
+  Konto, ehrliche Ticker-Zeile, wenn die Quelle nichts liefert — geduldet, nicht
+  garantiert); dazu in den Einstellungen ein Feld **„SearXNG-Adresse"** (eigene Instanz,
+  JSON-Format, Live-Status wie bei den Ollama-Adressen). Umstieg = Adresse eintragen,
+  kein Umbau. Die SearXNG-Einrichtung selbst (Docker auf dem Gaming-PC) ist Georgs
+  Nachmittagsprojekt mit geführter Anleitung, kein FlowForge-Code.
+- **Ehrliche Grenze in die SPEC:** Webseiten sind Fremdtext an einem schreibberechtigten
+  Agenten (Anweisungs-Einschleusung möglich; ein lokales Modell ist leichter reinzulegen
+  als Opus). Mechanische Gegenmittel benennen: harte Größendeckel, Datenvertrag- und
+  Verwaltungsdatei-Sperren greifen unabhängig vom Gelesenen; Ticker macht jeden
+  Internet-Zugriff sichtbar.
+- Nachzuziehen: SPEC §2/§4.3 (Werkzeuge der Klasse lokal), §7 (Einstufung rein lesend,
+  wie die Internet-Werkzeuge der CLI), §9 (Einstellungs-Feld SearXNG-Adresse).
+**Alltagstest:** Georg gibt einem lokalen Bauer eine Aufgabe mit einer Wissenslücke
+(z. B. „nutze die aktuelle Version von X"): Im Ticker erscheint die Such-Zeile, danach
+das Lesen eines Treffers, und das Ergebnis stimmt. Ohne erreichbare Quelle steht eine
+ehrliche Fehlzeile im Ticker statt stillen Ratens. Trägt er seine SearXNG-Adresse ein,
+zeigt der Live-Status grün und die Suche läuft darüber.
+
 ## Reihenfolge-Begründung (Paket 40–48)
 Im Paket 40–48 bestimmt die Angriffsliste die Reihenfolge, nicht der Nutzen: Die
 Kanten müssen verlustfrei sein (40), bevor ein Auftrag verspricht, wohin eine
