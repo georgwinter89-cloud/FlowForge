@@ -168,6 +168,8 @@ const rahmen = { fazit: 'Erledigt.', getan: [], offen: [], anmerkung: '' }
 function paketMeldung(block, listen) {
   const pakete = block.ziele.map((ziel) => ({
     zielBlock: ziel.adresse,
+    // Kurzname je Ziel (0.51.1): bei benanntem Ziel Pflicht.
+    kurzname: 'Teil ' + ziel.nummer,
     ziel: 'Teil ' + ziel.name,
     fertigKriterien: ['Läuft.'],
     erlaubteDateien: listen[ziel.instanzId]
@@ -274,6 +276,11 @@ async function laufAufbauen(name, urteile, schaubild = { bloecke, pfeile }) {
 
 const zaehle = (zeilen, zeile) => zeilen.filter((z) => z === zeile).length
 
+// Laufzeit-Zusatzname (0.51.1): Der Bauer trägt keinen Zusatznamen auf der
+// Karte, also gewinnt der Kurzname aus dem Zuschnitt — hier „Teil 2" (die
+// Blocknummer des Ziels, siehe paketMeldung).
+const NAME_BAUER = 'Bauer · Teil 2'
+
 describe('BAUPLAN 47 · Zwei Prüfer hinter einem Bauer fallen durch — EINE Reparatur-Runde, beide Kritiken', () => {
   // Runde 1: A und B fallen durch. Nachprüfung: B besteht, A fällt noch einmal
   // durch (das misst, dass die zweite Runde noch da ist). Danach besteht A.
@@ -284,7 +291,7 @@ describe('BAUPLAN 47 · Zwei Prüfer hinter einem Bauer fallen durch — EINE Re
     // A urteilt zuerst — und der Planer hat A verarbeitet, bevor B dran ist.
     await motor.freigeben('pa')
     await sicht.warteAuf(
-      () => sicht.ticker().includes(texte.ticker.rueckfuehrung('Bauer', 1, 2)),
+      () => sicht.ticker().includes(texte.ticker.rueckfuehrung(NAME_BAUER, 1, 2)),
       'Rückführung durch A'
     )
     // Der Bauer wartet derweil: B prüft noch.
@@ -311,15 +318,15 @@ describe('BAUPLAN 47 · Zwei Prüfer hinter einem Bauer fallen durch — EINE Re
 
   it('zählt EINE Reparatur-Runde und sagt im Ticker, dass B gebündelt wurde', () => {
     const zeilen = lauf.sicht.ticker()
-    expect(zaehle(zeilen, texte.ticker.rueckfuehrung('Bauer', 1, 2))).toBe(1)
-    expect(zaehle(zeilen, texte.ticker.rueckfuehrung('Bauer', 2, 2))).toBe(0)
-    expect(zaehle(zeilen, texte.ticker.rueckfuehrungGebuendelt('Prüfer · B', 'Bauer', 1))).toBe(1)
+    expect(zaehle(zeilen, texte.ticker.rueckfuehrung(NAME_BAUER, 1, 2))).toBe(1)
+    expect(zaehle(zeilen, texte.ticker.rueckfuehrung(NAME_BAUER, 2, 2))).toBe(0)
+    expect(zaehle(zeilen, texte.ticker.rueckfuehrungGebuendelt('Prüfer · B', NAME_BAUER, 1))).toBe(1)
     expect(zeilen.some((z) => z.startsWith('„Prüfer · A" schickt'))).toBe(false)
     // Beide Übergaben stehen im Ticker — je Prüfer eine Beanstandung.
-    expect(zaehle(zeilen, texte.ticker.beanstandungenUebergeben(1, 'Bauer'))).toBe(2)
+    expect(zaehle(zeilen, texte.ticker.beanstandungenUebergeben(1, NAME_BAUER))).toBe(2)
     // Der Bauer startet erst, nachdem B gebündelt hat — nie dazwischen.
-    const startBauer = zeilen.lastIndexOf(texte.ticker.blockStartet(2, 4, 'Bauer'))
-    const gebuendelt = zeilen.indexOf(texte.ticker.rueckfuehrungGebuendelt('Prüfer · B', 'Bauer', 1))
+    const startBauer = zeilen.lastIndexOf(texte.ticker.blockStartet(2, 4, NAME_BAUER))
+    const gebuendelt = zeilen.indexOf(texte.ticker.rueckfuehrungGebuendelt('Prüfer · B', NAME_BAUER, 1))
     expect(gebuendelt).toBeGreaterThan(-1)
     expect(startBauer).toBeGreaterThan(gebuendelt)
   })
@@ -341,14 +348,14 @@ describe('BAUPLAN 47 · Zwei Prüfer hinter einem Bauer fallen durch — EINE Re
     await motor.freigeben('pa')
     await sicht.warteAuf(() => motor.starts('b') === 3, 'Bauer ein drittes Mal gestartet')
     const zeilen = sicht.ticker()
-    expect(zaehle(zeilen, texte.ticker.rueckfuehrung('Bauer', 2, 2))).toBe(1)
+    expect(zaehle(zeilen, texte.ticker.rueckfuehrung(NAME_BAUER, 2, 2))).toBe(1)
     expect(sicht.ereignisse.some((e) => e.art === 'entscheidung')).toBe(false)
     expect(laufZustand(lauf.projekt).entscheidung ?? null).toBeNull()
     // Der dritte Auftrag trägt nur noch A's Kritik — B war zufrieden.
     expect(motor.auftraege('b')[2]).toContain(teilA)
     expect(motor.auftraege('b')[2]).not.toContain(teilB)
     // Kein Bündel mehr: B hat nichts mehr zurückgeschickt.
-    expect(zaehle(zeilen, texte.ticker.rueckfuehrungGebuendelt('Prüfer · B', 'Bauer', 1))).toBe(1)
+    expect(zaehle(zeilen, texte.ticker.rueckfuehrungGebuendelt('Prüfer · B', NAME_BAUER, 1))).toBe(1)
     // Zu Ende: A prüft allein nach (B bleibt fertig) und besteht.
     await motor.freigeben('b')
     await sicht.warteAuf(() => motor.starts('pa') === 3, 'A prüft ein drittes Mal')
@@ -368,7 +375,7 @@ describe('BAUPLAN 47 · Nur ein Prüfer fällt durch — kein Bündel, der Bauer
     const { motor, sicht } = lauf
     await motor.freigeben('pa')
     await sicht.warteAuf(
-      () => sicht.ticker().includes(texte.ticker.rueckfuehrung('Bauer', 1, 2)),
+      () => sicht.ticker().includes(texte.ticker.rueckfuehrung(NAME_BAUER, 1, 2)),
       'Rückführung durch A'
     )
     await motor.freigeben('pb')
@@ -381,7 +388,7 @@ describe('BAUPLAN 47 · Nur ein Prüfer fällt durch — kein Bündel, der Bauer
     expect(auftrag).toContain(teilA)
     expect(auftrag).not.toContain('Von „Prüfer · B"')
     const zeilen = sicht.ticker()
-    expect(zaehle(zeilen, texte.ticker.rueckfuehrung('Bauer', 1, 2))).toBe(1)
+    expect(zaehle(zeilen, texte.ticker.rueckfuehrung(NAME_BAUER, 1, 2))).toBe(1)
     expect(zeilen.some((z) => z.includes('gebündelt'))).toBe(false)
     expect(zaehle(zeilen, texte.ticker.pruefungBestanden)).toBe(1)
     // Nur A prüft nach; B bleibt fertig.
@@ -488,7 +495,7 @@ describe('BAUPLAN 47 · Nachgeholte Rückführung bei laufendem Ziel (Nacharbeit
 
 describe('BAUPLAN 47 · Die neuen Zeilen sind für Georg geschrieben', () => {
   const zeilen = [
-    texte.ticker.rueckfuehrungGebuendelt('Prüfer · B', 'Bauer', 1),
+    texte.ticker.rueckfuehrungGebuendelt('Prüfer · B', NAME_BAUER, 1),
     texte.ticker.rueckfuehrungGebuendelt('Prüfer · B', 'Bauer', 3),
     texte.ticker.rueckfuehrungNachgeholt('Angreifer'),
     texte.agentenUebergabe.prueferRueckmeldungTeil('Prüfer · A', '[grundsätzlich] Der Aufbau trägt nicht.')

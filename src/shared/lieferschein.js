@@ -22,7 +22,7 @@
 import { texte } from './texte.js'
 import { TITEL_MAX, TEXT_MAX } from './kartenRegeln.js'
 import { zielFuerAdresse } from './kettenRegeln.js'
-import { eigenesEtikett, eigeneEtikettenListe } from './blockKatalog.js'
+import { eigenesEtikett, eigeneEtikettenListe, zusatznameBereinigen } from './blockKatalog.js'
 
 // Ein Werkzeug je liefert-Etikett, nicht je Blocksorte: Die MCP-Server werden
 // einmal je Motor gebaut und ein Lauf-Motor bedient alle Blöcke (BAUPLAN 19) —
@@ -417,11 +417,28 @@ function zuschnittPruefen(roh, umfeld) {
       zielBezeichnung = rohZiel
     }
   }
+  // Kurzname je Ziel (Zwischenschritt 0.51.1): Georgs Kernbeschwerde aus dem
+  // Life-OS-Lauf war „„Bauer" wartet, bis „Bauer" fertig ist" — unbenannte
+  // gleiche Blöcke sind im Ticker nicht auseinanderzuhalten. Wer ein Paket
+  // adressiert, weiß am besten, wonach er geschnitten hat, und gibt dem Ziel
+  // deshalb einen Kurznamen mit. Pflicht ist er NUR bei benanntem Ziel: Ein
+  // adressloses Paket gilt für alle (Routing-Regel) und hat niemanden zu
+  // benennen — genannt werden darf es dort trotzdem (Ein-Nachfolger-Fall).
+  //
+  // Ebene 2, nicht Ebene 1 (bewusst): Ein Zod-Pflichtfeld bräche alte
+  // Fixtures und ließe das schwache lokale Modell an einem rohen Schema-Fehler
+  // verhungern; hier bekommt es einen deutschen Klartext, der sagt, was zu tun
+  // ist. Gedeckelt wird mit derselben Rechnung wie beim Karten-Zusatznamen —
+  // der Name steht in Ticker, Aufträgen und Laufbericht.
+  const kurzname = zusatznameBereinigen(roh?.kurzname)
+  if (rohZiel && !kurzname)
+    return { fehler: tl.kurznameFehlt(zielBezeichnung || rohZiel) }
   return {
     paket: {
       zielBlock,
       zielInstanzId,
       zielBezeichnung,
+      kurzname,
       ziel: ziel.text,
       fertigKriterien: kriterien,
       schritte,

@@ -32,7 +32,8 @@ import {
   unterModellFuer,
   DENKTIEFE_STANDARD,
   UEBERTRAG_GRENZE_STANDARD,
-  PRUEFBELEG_ETIKETT
+  PRUEFBELEG_ETIKETT,
+  ZUSATZNAME_MAX
 } from '../shared/blockKatalog.js'
 import {
   pruefeSchaubild,
@@ -1981,7 +1982,15 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           def: defVon(eintrag.blockId),
           // Anzeigename (BAUPLAN 41): Katalogname plus Zusatzname — alles, was
           // Georg liest. Der Katalogname bleibt an def.name für die Metriken.
+          // Seit 0.51.1 wird er NEU gerechnet, sobald ein Zuschnitt einen
+          // Laufzeit-Zusatznamen anheftet (laufzeitNamenAnheften).
           name: anzeigeVon(eintrag),
+          // Laufzeit-Zusatzname (Zwischenschritt 0.51.1): der Kurzname, den
+          // ein Zuschnitt diesem Ziel gegeben hat — NUR für diesen Lauf. Die
+          // Leinwand (workflow.json) bleibt unangetastet: Georgs Karte behält
+          // ihren Namen, und der Laufstand führt diese Namen in einem eigenen
+          // Feld (laufzeitZusaetze), nie im Vergleichsanker stand.zusaetze.
+          laufzeitZusatz: '',
           // Prüfordner dieser Instanz (BAUPLAN 41) — leer bei allen, die keine
           // Prüfungen schreiben.
           pruefOrdner: ordnerVon(eintrag),
@@ -2408,6 +2417,15 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           eintrag.instanzId,
           zusatznameBereinigen(eintrag.zusatz)
         ]),
+        // Laufzeit-Zusatznamen (0.51.1) in einem EIGENEN Feld — NIE in
+        // zusaetze: Das ist der Vergleichsanker von laufstandPasst gegen die
+        // Leinwand. Ein Laufzeit-Name dort machte jede Wiederaufnahme
+        // ungültig, weil die Karte ihn nicht trägt (und tragen soll sie ihn
+        // auch nicht). Alte Laufstände ohne dieses Feld bleiben gültig — die
+        // Wiederaufnahme liest es tolerant.
+        laufzeitZusaetze: kettenIds
+          .filter((id) => knoten.get(id)?.laufzeitZusatz)
+          .map((id) => [id, knoten.get(id).laufzeitZusatz]),
         pfeile: workflow.pfeile.map((p) => [p.von, p.nach]),
         kartenIds: ausgewaehlt,
         fertigIds: kettenIds.filter((id) => knoten.get(id).status === 'fertig'),
@@ -2546,6 +2564,27 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     if (fortsetzung) {
       for (const id of fortsetzung.fertigIds)
         if (knoten.has(id)) knoten.get(id).status = 'fertig'
+      // Laufzeit-Zusatznamen (0.51.1) zurück an die Knoten — sonst hieße ein
+      // Block nach dem Neustart wieder „Bauer", obwohl Ticker und Laufbericht
+      // des unterbrochenen Laufs ihn längst unter seinem Kurznamen führen.
+      // Tolerant gelesen: Ein Laufstand von vor 0.51.1 kennt das Feld nicht.
+      for (const [id, zusatz] of Array.isArray(fortsetzung.laufzeitZusaetze)
+        ? fortsetzung.laufzeitZusaetze
+        : []) {
+        const zk = knoten.get(id)
+        const name = zusatznameBereinigen(zusatz)
+        // Georgs Karten-Zusatzname gewinnt auch hier: Hat er die Karte seit
+        // dem Abbruch benannt, ist der alte Laufzeit-Name überholt.
+        if (!zk || !name || zusatznameBereinigen(zk.eintrag.zusatz)) continue
+        zk.laufzeitZusatz = name
+        zk.name = blockAnzeigeName(zk.def, { zusatz: name })
+        for (const ziele of zieleVon.values())
+          for (const ziel of ziele)
+            if (ziel.instanzId === id) {
+              ziel.name = zk.name
+              ziel.bezeichnung = texte.ticker.blockBezeichnung(ziel.nummer, zk.name)
+            }
+      }
       for (const [id, text] of Array.isArray(fortsetzung.lieferungen) ? fortsetzung.lieferungen : [])
         if (knoten.has(id) && typeof text === 'string') knoten.get(id).lieferung = text
       // Lieferschein (BAUPLAN 42): Die geprüften Meldungen kommen zurück —
@@ -2752,7 +2791,14 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         apiSchluessel: einstellungen.apiSchluessel,
         ausgabenObergrenzeUsd: einstellungen.ausgabenObergrenzeUsd,
         fortsetzen,
-        lokaleHelfer,
+        // Helfer-KI nur für Claude-Motoren (BAUPLAN 0.51.1, Punkt 3): Ein
+        // lokaler Block IST die lokale KI — er liefe mit lokal_recherchieren
+        // gegen dieselbe GPU, die ihn selbst gerade rechnen lässt. Gemessen im
+        // Life-OS-Lauf vom 20.08.2026: 48 Timeouts à 5 Minuten, danach machte
+        // der Agent alles selbst und blähte dabei seinen Kontext. Mit
+        // `lokaleHelfer: null` entfallen im Motor Helfer-Server UND
+        // System-Zusatz — der Auftrag verspricht dann nichts, was es nicht gibt.
+        lokaleHelfer: lokalOption ? null : lokaleHelfer,
         ...(lokalOption
           ? { lokal: { adresse: lokalOption.adresse, modell: lokalOption.modell, kontext: lokalOption.kontext } }
           : {}),
@@ -3400,7 +3446,15 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         else if (k.uebergabeVerloren) auftrag += texte.agentenUebergabe.uebertragOhneUebergabe
         // Lokaler Bauer (BAUPLAN 22): Bau-Blöcke bekommen die Zerlege-Anweisung
         // — nur wenn die lokale KI bereitsteht und das Häkchen am Block an ist.
-        if (lokaleHelfer && k.def.startanleitungPflicht && k.eintrag.lokaleKi !== false)
+        // Nicht für Blöcke der Klasse „lokal" (BAUPLAN 0.51.1, Punkt 3): Deren
+        // Motor bekommt gar keine Helfer mehr (motorBauen), der Zusatz
+        // verspräche also ein Werkzeug, das im Auftrag fehlt.
+        if (
+          lokaleHelfer &&
+          !knotenLokal &&
+          k.def.startanleitungPflicht &&
+          k.eintrag.lokaleKi !== false
+        )
           auftrag += texte.agentenLokaleHelfer.bauenAuftragZusatz
         // Einstellung „Nur-lesende Blöcke dürfen Befehle ausführen" (Zweit-
         // Audit D-01): Die Katalog-Aufträge verbieten Befehle kategorisch
@@ -3411,7 +3465,11 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         // Häkchen je Block (BAUPLAN 20): Ist die lokale KI für diesen Block
         // abgewählt, fliegt ihr Hinweis aus dem Auftrag — die harte Sperre
         // für das Werkzeug selbst sitzt im Motor.
-        if (k.eintrag.lokaleKi === false)
+        // Ebenso bei Blöcken der Klasse „lokal" (BAUPLAN 0.51.1, Punkt 3):
+        // Ihr Motor kennt lokal_recherchieren gar nicht mehr — ohne diese
+        // Ersetzung stünde im Katalog-Auftrag ein Werkzeug, das es nicht gibt,
+        // und der Agent verbrauchte Anläufe an einem toten Aufruf.
+        if (k.eintrag.lokaleKi === false || knotenLokal)
           auftrag = auftrag.replace(/\(bevorzugt[^()]*lokal_recherchieren[^()]*\)/g, '(Agent-Werkzeug)')
 
         const uebertragErlaubt =
@@ -3890,7 +3948,7 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       return {
         instanzId,
         block: vk.def.name,
-        zusatz: zusatznameBereinigen(vk.eintrag.zusatz),
+        zusatz: wirksamerZusatz(vk),
         name: vk.name,
         // Der Modellname aus der Zuteilung des Partners (BAUPLAN 51) — alle
         // Pool-Einträge tragen dasselbe abgeleitete Modell, der Rückfall auf
@@ -4092,9 +4150,107 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       })
     }
 
+    // Der Zusatzname, der für diesen Knoten WIRKT (Zwischenschritt 0.51.1):
+    // Georgs Karten-Zusatzname, sonst der Laufzeit-Name aus dem Zuschnitt.
+    // Eine Stelle für alle Berichte, Ticker und Warte-Gründe — zwei
+    // Rechnungen hießen zwei verschiedene Namen für denselben Block.
+    function wirksamerZusatz(k) {
+      return zusatznameBereinigen(k?.eintrag?.zusatz) || k?.laufzeitZusatz || ''
+    }
+
+    // Ein Laufzeit-Zusatzname, der in dieser Kette noch frei ist. Verglichen
+    // wird gegen ALLE schon vergebenen Zusätze — Karten- wie Laufzeit-Namen:
+    // Zwei gleich benannte Ziele wären genau das Problem zurück, das dieser
+    // Schritt löst. Gedoppelte Namen bekommen mechanisch „… 2", „… 3";
+    // der Deckel (ZUSATZNAME_MAX) darf die Nummer nicht abschneiden, sonst
+    // stünde die Dopplung wieder da.
+    function freierLaufzeitName(kurz) {
+      const vergeben = new Set()
+      for (const eintrag of kette) {
+        const karte = zusatznameBereinigen(eintrag.zusatz)
+        if (karte) vergeben.add(karte.toLowerCase())
+        const laufzeit = knoten.get(eintrag.instanzId)?.laufzeitZusatz
+        if (laufzeit) vergeben.add(laufzeit.toLowerCase())
+      }
+      if (!vergeben.has(kurz.toLowerCase())) return kurz
+      for (let nummer = 2; nummer <= 99; nummer++) {
+        const anhang = ' ' + nummer
+        const kandidat = kurz.slice(0, ZUSATZNAME_MAX - anhang.length).trim() + anhang
+        if (!vergeben.has(kandidat.toLowerCase())) return kandidat
+      }
+      return kurz
+    }
+
+    // Laufzeit-Zusatznamen aus dem Zuschnitt (Zwischenschritt 0.51.1, Wunsch
+    // Georg): Georgs Kernbeschwerde aus dem Life-OS-Lauf war „„Bauer" wartet,
+    // bis „Bauer" fertig ist" — zwei unbenannte gleiche Blöcke sind im Ticker
+    // nicht auseinanderzuhalten. Wer das Paket schneidet, weiß am besten,
+    // wonach er geschnitten hat; sein kurzname wird für DIESEN Lauf zum
+    // Zusatznamen der Ziel-Instanz. Drei Regeln:
+    //   (1) Georgs eigener Karten-Zusatzname gewinnt — FlowForge benennt nie
+    //       um, was Georg selbst benannt hat.
+    //   (2) Der ERSTE vergebene Laufzeit-Name gewinnt: Im Lauf melden oft
+    //       Paket schneiden UND Angreifer ein Arbeitspaket für dieselben
+    //       Ziele — ein späterer Melder benennt nicht um, sonst widerspräche
+    //       sich der Ticker selbst („Bauer · A" wartet auf „Bauer · B").
+    //   (3) Nur der Lauf: workflow.json wird nicht angefasst.
+    function laufzeitNamenAnheften(k, meldungen) {
+      let angeheftet = false
+      for (const paket of zuschnitteAusMeldungen(meldungen)) {
+        const kurz = zusatznameBereinigen(paket?.kurzname)
+        if (!kurz) continue
+        // Adressiert: das benannte Ziel. Adresslos: der Ein-Nachfolger-Fall —
+        // ein Paket ohne Adresse gilt für alle, bei genau EINEM benannten Ziel
+        // ist der Name also eindeutig gemeint. Bei mehreren wüsste niemand,
+        // wen er meint; dann bleibt er ungenutzt.
+        let zielId = paket?.zielInstanzId ?? null
+        if (!zielId) {
+          const ziele = zieleVon.get(k.eintrag.instanzId) ?? []
+          if (ziele.length !== 1) continue
+          zielId = ziele[0].instanzId
+        }
+        const zk = knoten.get(zielId)
+        if (!zk) continue
+        if (zusatznameBereinigen(zk.eintrag.zusatz)) continue
+        if (zk.laufzeitZusatz) continue
+        const alterName = zk.name
+        zk.laufzeitZusatz = freierLaufzeitName(kurz)
+        // Der Anzeigename wird NEU gerechnet — er entstand beim Kettenaufbau
+        // einmalig aus dem Karten-Zusatz. Alles, was k.name liest (Ticker,
+        // Warte-Gründe, Übergaben), zeigt ab hier den wirksamen Namen.
+        zk.name = blockAnzeigeName(zk.def, { zusatz: zk.laufzeitZusatz })
+        // Die Ziel-Listen tragen den Namen nach: Sie stehen im Auftrag jeder
+        // Auftragsquelle und in den Abweisungstexten des Melde-Werkzeugs. Die
+        // ADRESSE (Blocknummer) bleibt unangetastet — sie ist der stabile
+        // Anker, an dem zielFuerAdresse zustellt; nur die Bezeichnung folgt
+        // dem neuen Namen, sonst adressierte der nächste Melder an einen
+        // Namen, den der Ticker längst nicht mehr benutzt.
+        for (const ziele of zieleVon.values())
+          for (const ziel of ziele)
+            if (ziel.instanzId === zielId) {
+              ziel.name = zk.name
+              ziel.bezeichnung = texte.ticker.blockBezeichnung(ziel.nummer, zk.name)
+            }
+        tickern(
+          texte.ticker.laufzeitZusatzAngeheftet(
+            alterName,
+            zk.name,
+            texte.ticker.blockBezeichnung(nummerVon.get(k.eintrag.instanzId), k.name)
+          )
+        )
+        angeheftet = true
+      }
+      // Nur wenn wirklich etwas dazukam: Der Laufstand hält die Namen fest,
+      // damit die Wiederaufnahme nicht wieder zwei „Bauer" zeigt.
+      if (angeheftet) standSpeichern()
+    }
+
     // Ein gemeldeter Zuschnitt als Ticker-Zeile: je Paket sein Ziel mit
     // Blocknummer und wie viele Dateien der Datenvertrag freigibt (BAUPLAN 44).
+    // Davor werden die Kurznamen des Zuschnitts angeheftet (0.51.1) — dann
+    // trägt schon die Zuschnitt-Zeile die neuen Namen der Ziele.
     function zuschnittTickern(k, meldungen) {
+      laufzeitNamenAnheften(k, meldungen)
       for (const meldung of meldungen ?? []) {
         if (meldung?.art !== 'arbeitspaket') continue
         const zuschnitte = zuschnitteAusMeldung(meldung)
@@ -4479,7 +4635,7 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         bericht.blockErgebnisse.push({
           instanzId: id,
           block: k.def.name,
-          zusatz: zusatznameBereinigen(k.eintrag.zusatz),
+          zusatz: wirksamerZusatz(k),
           zeit: jetztIso(),
           zustand: 'zuschnitt-unvollstaendig',
           ergebnisText: String(ergebnis.ergebnisText ?? '').slice(0, 4000),
@@ -4588,7 +4744,7 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           // Katalogname und Zusatzname getrennt (BAUPLAN 41, SPEC §3.4): Sonst
           // zerfiele „Blocktyp" in den Metriken in beliebig viele Typen.
           block: k.def.name,
-          zusatz: zusatznameBereinigen(k.eintrag.zusatz),
+          zusatz: wirksamerZusatz(k),
           zeit: jetztIso(),
           zustand: 'fehlgeschlagen',
           ergebnisText: String(ergebnis.fehlertext ?? '').slice(0, 4000),
@@ -4622,7 +4778,7 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         bericht.blockErgebnisse.push({
           instanzId: id,
           block: k.def.name,
-          zusatz: zusatznameBereinigen(k.eintrag.zusatz),
+          zusatz: wirksamerZusatz(k),
           zeit: jetztIso(),
           zustand: 'ohne-meldung',
           ergebnisText: String(ergebnis.ergebnisText ?? '').slice(0, 4000),
@@ -4720,7 +4876,7 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         instanzId: id,
         // Katalogname für die Metriken, Zusatzname daneben (BAUPLAN 41).
         block: k.def.name,
-        zusatz: zusatznameBereinigen(k.eintrag.zusatz),
+        zusatz: wirksamerZusatz(k),
         zeit: jetztIso(),
         zustand: 'erfolgreich',
         // Der lesbare Lieferschein — alte Berichte tragen hier den früheren
@@ -5019,7 +5175,7 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           eintrag.abnahme = {
             instanzId: id,
             block: k.def.name,
-            zusatz: zusatznameBereinigen(k.eintrag.zusatz),
+            zusatz: wirksamerZusatz(k),
             urteil: urteilAbnahme,
             widerspruch: paar.widerspruch
           }
@@ -5222,15 +5378,33 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
               tickern(texte.ticker.beanstandungenUebergeben(belegKritik.anzahl, zielK.name))
             return
           }
+          // Lokaler Prüfer (BAUPLAN 0.51.1, Punkt 3): Hat DIESER Prüfer selbst
+          // auf der lokalen KI geurteilt, bringt eine lokale Vorreparatur
+          // nichts — dasselbe Modell auf derselben GPU kann nicht, was der
+          // Prüfer eben nicht konnte, und sie stritte mit dem nächsten lokalen
+          // Block um die Ollama-Adresse. Stattdessen übernimmt gleich der
+          // Motor-Bauer; der Grund steht ehrlich im Ticker.
+          const prueferLokal = klasseIstLokal(blockModellKlasse(k.def, k.eintrag))
           // Nur aktiv, wenn die lokale KI beim Laufstart bereitstand und das
           // Häkchen am Ziel-Block (dessen Reparatur-Runde ersetzt würde) an ist.
           const lokalErlaubt =
+            Boolean(lokaleHelfer) &&
+            !prueferLokal &&
+            zielK != null &&
+            zielK.eintrag.lokaleKi !== false &&
+            !lauf.sanft &&
+            !lauf.hart &&
+            !endZustand
+          if (
+            prueferLokal &&
             Boolean(lokaleHelfer) &&
             zielK != null &&
             zielK.eintrag.lokaleKi !== false &&
             !lauf.sanft &&
             !lauf.hart &&
             !endZustand
+          )
+            tickern(texte.ticker.lokaleVorreparaturUebersprungen(k.name))
           if (lokalErlaubt && !warLokaleNachpruefung) {
             // Frischer Fehlschlag: Opus sortiert vor — nur wenn ALLE
             // Beanstandungen mechanisch markiert sind, lohnt die lokale Wette.

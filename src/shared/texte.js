@@ -2232,6 +2232,13 @@ export const texte = {
     zielBlockUnbekannt: (gewaehlt, gueltig) =>
       `„${gewaehlt}" ist keines deiner benannten Ziele. Adressieren kannst du an: ${gueltig} — ` +
       'trage in zielBlock die Blocknummer ein (z.B. „3").',
+    // Kurzname je Ziel (0.51.1): Pflicht, sobald das Paket adressiert ist —
+    // aus ihm wird der Laufzeit-Zusatzname der Ziel-Instanz, damit zwei
+    // gleiche Blöcke im Ticker auseinanderzuhalten sind.
+    kurznameFehlt: (zielBezeichnung) =>
+      `Dem Paket für ${zielBezeichnung} fehlt der kurzname. Gib dem Ziel einen Kurznamen aus ` +
+      '2–3 Wörtern, der sagt, woran es arbeitet (z.B. „Server-Briefing") — FlowForge hängt ihn ' +
+      'als Zusatznamen an den Block, damit im Ticker nicht zwei gleichnamige Blöcke stehen.',
     zielBlockOhneZiele: (gewaehlt) =>
       `Du hast das Paket an „${gewaehlt}" adressiert, aber hinter dir liegt kein Block, der ein ` +
       'Arbeitspaket umsetzt. Lass zielBlock leer — dann gilt dein Paket für alle.',
@@ -2397,6 +2404,12 @@ export const texte = {
         'aus: Nur dieser Block und die Blöcke hinter ihm, die an seiner Arbeit weiterarbeiten, ' +
         'bekommen diesen Zuschnitt. Leer lassen, wenn es nur ein Ziel gibt oder keines ' +
         'benannt ist.',
+      // Kurzname je Ziel (0.51.1) — daraus wird der Laufzeit-Zusatzname.
+      kurzname:
+        'Ein Kurzname für den Ziel-Block dieses Zuschnitts, 2–3 Wörter, die sagen, woran er ' +
+        'arbeitet (z.B. „Server-Briefing"). FlowForge hängt ihn als Zusatznamen an die ' +
+        'Ziel-Instanz — sonst tragen zwei gleichartige Ziele denselben Namen und niemand ' +
+        'sieht im Verlauf, wer gerade woran arbeitet. Pflicht, sobald du zielBlock angibst.',
       paketAufgabenIds:
         'Die ids der Aufgaben-Karten aus deiner paket_melden-Meldung, die dieser Zuschnitt ' +
         'abdeckt — daran erkennt FlowForge, dass keine Aufgabe unter den Tisch fällt.',
@@ -3115,6 +3128,14 @@ export const texte = {
     teilstueckVerworfen: (teilstueck) =>
       `Teilstück „${teilstueck}" nicht gehalten — Stand zurückgerollt, der Agent baut selbst.`,
     // Lokale Vorreparatur (BAUPLAN 20): jeder Versuch ehrlich im Ticker.
+    // Übersprungen bei einem Prüfer der Klasse „lokal" (0.51.1): dasselbe
+    // Modell auf derselben GPU repariert nicht, was es eben nicht geprüft
+    // bekommen hat — und es stritte mit dem nächsten lokalen Block um die
+    // Adresse. Der Grund steht im Ticker, sonst hielte Georg das Ausbleiben
+    // der Vorreparatur für einen Fehler.
+    lokaleVorreparaturUebersprungen: (prueferName) =>
+      `Lokale Vorreparatur übersprungen — „${prueferName}" lief selbst auf der lokalen KI. ` +
+      'Die Reparatur geht direkt an den Motor-Bauer.',
     lokaleReparaturNichtMechanisch: (zielName) =>
       `Keine rein mechanischen Beanstandungen — die Reparatur geht direkt an „${zielName}" (Motor).`,
     lokaleReparaturStart: (versuch, max, modell) =>
@@ -3411,6 +3432,12 @@ export const texte = {
       `${bezeichnung} — ${anzahlDateien} erlaubte Datei${anzahlDateien === 1 ? '' : 'en'}`,
     zuschnittOhneZiel: (anzahlDateien) =>
       `ohne Ziel (gilt für alle) — ${anzahlDateien} erlaubte Datei${anzahlDateien === 1 ? '' : 'en'}`,
+    // Laufzeit-Zusatzname (0.51.1): Das Umbenennen muss sichtbar sein — sonst
+    // heißt ein Block im Ticker plötzlich anders, ohne dass Georg weiß, woher.
+    // Die Leinwand bleibt unangetastet, deshalb „in diesem Lauf".
+    laufzeitZusatzAngeheftet: (alterName, neuerName, quelle) =>
+      `„${alterName}" heißt in diesem Lauf jetzt „${neuerName}" — Kurzname aus dem Zuschnitt ` +
+      `von ${quelle}. Die Leinwand bleibt unverändert.`,
     // Vollständigkeit des Zuschnitts (BAUPLAN 44). Jede Zeile steht im Ticker
     // und damit im Laufbericht — Georgs Alltagstest („er übergeht eine Aufgabe")
     // muss dort sichtbar sein, sonst hält er die Prüfung für nicht gelaufen.

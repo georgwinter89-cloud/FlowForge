@@ -93,6 +93,10 @@ import { texte } from '../src/shared/texte.js'
 const LOKAL_MODELL = texte.kette.lokalModellName('flowforge-qwen3-8-27b')
 const NAME_LOKAL = 'Prüfer · lokal'
 const NAME_ABNAHME = 'Prüfer · Abnahme'
+// Laufzeit-Zusatzname (0.51.1): Der Bauer trägt keinen Zusatznamen auf der
+// Karte, also gewinnt der Kurzname aus dem Zuschnitt — hier „Teil 2" (die
+// Blocknummer des Ziels, siehe paketMeldung).
+const NAME_BAUER = 'Bauer · Teil 2'
 const ROT_AUSGABE = 'FAIL pruefung/lokal/probe.test.js > der lokale Prüfer hat etwas übersehen\n'
 
 // ——— Helfer (Muster aus gebuendelteRueckfuehrung.test.js) ———————————————————
@@ -203,6 +207,8 @@ const rahmen = { fazit: 'Erledigt.', getan: [], offen: [], anmerkung: '' }
 function paketMeldung(block, liste) {
   const pakete = block.ziele.map((ziel) => ({
     zielBlock: ziel.adresse,
+    // Kurzname je Ziel (0.51.1): bei benanntem Ziel Pflicht.
+    kurzname: 'Teil ' + ziel.nummer,
     ziel: 'Teil ' + ziel.name,
     fertigKriterien: ['Läuft.'],
     erlaubteDateien: liste
@@ -461,7 +467,7 @@ describe('BAUPLAN 50 · (b) Tor rot dreht das lokale „bestanden" — Rückfüh
     const { motor, sicht } = lauf
     const zeilen = sicht.ticker()
     expect(zaehle(zeilen, texte.ticker.torDrehtLokal(NAME_LOKAL, 1))).toBe(1)
-    expect(zaehle(zeilen, texte.ticker.rueckfuehrung('Bauer', 1, 2))).toBe(1)
+    expect(zaehle(zeilen, texte.ticker.rueckfuehrung(NAME_BAUER, 1, 2))).toBe(1)
     expect(motor.starts('b')).toBe(2)
     expect(motor.starts('pl')).toBe(2)
     const [, zweiterAuftrag] = motor.auftraege('b')
@@ -559,7 +565,7 @@ describe('BAUPLAN 50 · (c) Abnahme widerspricht dem lokalen „bestanden" — z
   it('die Rückführung der Abnahme zielt auf den BAUER (zurueckZu) — der lokale Prüfer läuft im Korridor mit', () => {
     const { motor, sicht } = lauf
     const zeilen = sicht.ticker()
-    expect(zaehle(zeilen, texte.ticker.rueckfuehrung('Bauer', 1, 2))).toBe(1)
+    expect(zaehle(zeilen, texte.ticker.rueckfuehrung(NAME_BAUER, 1, 2))).toBe(1)
     expect(zeilen.some((z) => z.startsWith('Zurück zu „' + NAME_LOKAL + '"'))).toBe(false)
     expect(motor.starts('b')).toBe(2)
     expect(motor.starts('pl')).toBe(2)
@@ -663,8 +669,8 @@ describe('BAUPLAN 50 · (e) fällt das Urteil der Abnahme am eigenen Vor-Tor, tr
     expect(lokal[1].abnahme).toMatchObject({ urteil: 'fehlgeschlagen', widerspruch: true })
     expect(lokal[2].abnahme).toMatchObject({ urteil: 'bestanden', widerspruch: false })
     const zeilen = lauf.sicht.ticker()
-    expect(zaehle(zeilen, texte.ticker.rueckfuehrung('Bauer', 1, 2))).toBe(1)
-    expect(zaehle(zeilen, texte.ticker.rueckfuehrung('Bauer', 2, 2))).toBe(1)
+    expect(zaehle(zeilen, texte.ticker.rueckfuehrung(NAME_BAUER, 1, 2))).toBe(1)
+    expect(zaehle(zeilen, texte.ticker.rueckfuehrung(NAME_BAUER, 2, 2))).toBe(1)
   })
 })
 
