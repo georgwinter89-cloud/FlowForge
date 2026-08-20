@@ -45,6 +45,48 @@ function claudeExePfad() {
   return roh.replace(`app.asar${path.sep}`, `app.asar.unpacked${path.sep}`)
 }
 
+// Präfixlose Schalter der CLI, die Verhalten UND Messungen kippen (0.51.1):
+// Sie heißen nicht ANTHROPIC*/CLAUDE*, wirken aber genauso tief. Wird FlowForge
+// aus einer Claude-Code-Elternsession heraus gestartet, erbt der Motor sie still
+// — gemessen 20.08.2026 in der Bausession: DISABLE_MICROCOMPACT und
+// DISABLE_AUTOUPDATER standen in der Umgebung. Ein geerbtes DISABLE_MICROCOMPACT
+// ändert die Zusammenfassungs-Politik des Motors, ein geerbtes
+// DISABLE_PROMPT_CACHING seine Verbrauchszahlen: FlowForge maße dann etwas
+// anderes, als der Nutzer eingestellt hat. Deshalb fliegen sie alle raus.
+export const CLI_SCHALTER_WEG = new Set([
+  'DISABLE_COMPACT',
+  'DISABLE_AUTO_COMPACT',
+  'DISABLE_MICROCOMPACT',
+  'DISABLE_PROMPT_CACHING',
+  'DISABLE_PROMPT_CACHING_OPUS',
+  'DISABLE_PROMPT_CACHING_SONNET',
+  'DISABLE_PROMPT_CACHING_HAIKU',
+  'DISABLE_PROMPT_CACHING_FABLE',
+  'DISABLE_TELEMETRY',
+  'DISABLE_ERROR_REPORTING',
+  'DISABLE_COST_WARNINGS',
+  'DISABLE_AUTOUPDATER',
+  'DISABLE_INTERLEAVED_THINKING'
+])
+
+// Saubere Umgebung für JEDE Motor-Instanz (Lauf-Session, Einmal-Frage, Chat):
+// Alle ANTHROPIC_*/CLAUDE*-Variablen fliegen raus — sie könnten Anmeldung oder
+// Verhalten des Motors umleiten — dazu die präfixlosen CLI-Schalter oben.
+// Eine Funktion statt dreier Kopien: Was die Lauf-Session bereinigt, bereinigen
+// Chat und Einmal-Frage genauso. Exportiert, damit sich das ohne Motor prüfen
+// lässt. Was FlowForge selbst setzen will (Ollama-Adresse, API-Schlüssel),
+// kommt NACH der Bereinigung dazu.
+export function umgebungBereinigen(quelle = process.env) {
+  const umgebung = {}
+  for (const [name, wert] of Object.entries(quelle ?? {})) {
+    const gross = String(name).toUpperCase()
+    if (gross.startsWith('ANTHROPIC') || gross.startsWith('CLAUDE')) continue
+    if (CLI_SCHALTER_WEG.has(gross)) continue
+    umgebung[name] = wert
+  }
+  return umgebung
+}
+
 // Werkzeuge, die nur lesen oder rein intern arbeiten — laut SPEC §7 ohne Rückfrage.
 // „Task" und „Agent" sind zwei Namen desselben Unteraufgaben-Werkzeugs (die CLI
 // nennt es inzwischen Agent); ToolSearch lädt nur Werkzeug-Beschreibungen nach.
@@ -793,7 +835,16 @@ export function fazitStutzen(text) {
 // mitHauptfaden (BAUPLAN 27): Im Nachlauf-Chat arbeitet der Hauptfaden selbst —
 // seine Werkzeug-Zeilen gehören in den Ticker; sein Antworttext ist die
 // Chat-Antwort und bleibt draußen.
-function tickerZeilen(nachricht, projektPfad, blockTaskIds, mitHauptfaden = false, lokalAdresse = '') {
+// lokalFenster (0.51.1): das Kontextfenster der lokalen KI — es steht im
+// Klartext, wenn eine rohe CLI-Marke als Agenten-Zeile hereinkommt.
+function tickerZeilen(
+  nachricht,
+  projektPfad,
+  blockTaskIds,
+  mitHauptfaden = false,
+  lokalAdresse = '',
+  lokalFenster = 0
+) {
   const t = texte.ticker
   // Überlastete KI-Server: die CLI wiederholt selbst — ohne diese Zeile sähe
   // Georg nur eine stumme App. Beim lokalen Motor kommt der Fehler von
@@ -809,8 +860,20 @@ function tickerZeilen(nachricht, projektPfad, blockTaskIds, mitHauptfaden = fals
   const zeilen = []
   for (const block of nachricht.message?.content ?? []) {
     if (hauptfaden && !mitHauptfaden) continue
-    if (block.type === 'text' && block.text?.trim() && !hauptfaden)
-      zeilen.push(block.text.trim())
+    if (block.type === 'text' && block.text?.trim() && !hauptfaden) {
+      // Rohe CLI-Marken (0.51.1) kommen als Agenten-Text herein — im Ticker
+      // stand bisher englischer Rohtext, der beim Werkzeug-Abbruch sogar dem
+      // Nutzer die Schuld gab. Streng geprüft: nur wenn die Zeile die Marke
+      // IST, nicht wenn ein Agent über sie schreibt.
+      const rohText = block.text.trim()
+      const klartext = rohenCliFehlerUebersetzen(rohText, {
+        lokal: Boolean(lokalAdresse),
+        fenster: lokalFenster,
+        adresse: lokalAdresse,
+        nurGanzerText: true
+      })
+      zeilen.push(klartext ? klartext.fehlertext : rohText)
+    }
     if (block.type !== 'tool_use') continue
     if (block.name === 'ToolSearch') continue
     const e = block.input ?? {}
@@ -889,6 +952,111 @@ export function extraNichtVerfuegbarFehler(text) {
   return { fehlertext: texte.lauf.extraNichtVerfuegbar, fehlerArt: 'extra-nicht-verfuegbar' }
 }
 
+// Rohe CLI-Marken in Klartext (0.51.1, Befund Life-OS-Lauf 20.08.2026): Läuft
+// das Arbeitsgedächtnis eines lokalen Blocks über, reicht die CLI ihre eigenen
+// englischen Marken durch — sie landeten bisher wörtlich im Ticker, im
+// Block-Ergebnis und im Laufbericht. Zwei davon sind gemessen:
+//  - „Prompt is too long" (und die zweite Formulierung derselben Sache) stand
+//    als ergebnisText eines Blocks, der als ERFOLG durchlief.
+//  - „[Request interrupted by user for tool use]" stand als ergebnisText UND
+//    als bericht.fehlertext — obwohl Georg nichts unterbrochen hat: Der Abbruch
+//    kam aus der Werkzeug-Schicht. Ein Text, der dem Nutzer die Schuld gibt,
+//    ist eine Lüge und schickt ihn auf die falsche Fährte.
+const KONTEXT_VOLL_REGEX = /prompt is too long|input length and .{0,3}max_?tokens.{0,3} exceed context limit/i
+const WERKZEUG_ABBRUCH_REGEX = /\[request interrupted by user[^\]]*\]/i
+// Streng: Der GANZE Text ist die Marke. Ein Agent, der über den Fehler REDET
+// („der Block scheiterte an ‚Prompt is too long'"), ist kein Fehler — im
+// Schadensfall steht die Marke allein im Feld.
+const KONTEXT_VOLL_GANZ_REGEX = /^(prompt is too long|input length and .{0,3}max_?tokens.{0,3} exceed context limit)[.!]?$/i
+const WERKZEUG_ABBRUCH_GANZ_REGEX = /^\[request interrupted by user[^\]]*\]$/i
+
+// Übersetzt eine dieser Marken in deutschen Klartext; null, wenn keine passt.
+// `lokal`/`fenster`/`adresse` machen den Text konkret (Ollama-Bezug nur, wenn
+// die Meldung wirklich aus einem lokalen Block kommt). `nurGanzerText` schaltet
+// auf die strenge Prüfung — die gilt dort, wo Agenten-Text im Spiel ist
+// (Ticker-Zeile, Block-Fazit); im Motor-Fehlerpfad genügt „enthält".
+export function rohenCliFehlerUebersetzen(
+  text,
+  { lokal = false, fenster = 0, adresse = '', nurGanzerText = false } = {}
+) {
+  if (typeof text !== 'string') return null
+  const roh = text.trim()
+  if (!roh) return null
+  if ((nurGanzerText ? KONTEXT_VOLL_GANZ_REGEX : KONTEXT_VOLL_REGEX).test(roh))
+    return {
+      fehlertext: lokal ? texte.lauf.kontextVollLokal(fenster) : texte.lauf.kontextVoll(fenster),
+      fehlerArt: 'kontext-voll'
+    }
+  if ((nurGanzerText ? WERKZEUG_ABBRUCH_GANZ_REGEX : WERKZEUG_ABBRUCH_REGEX).test(roh))
+    return {
+      fehlertext: lokal ? texte.lauf.werkzeugAbbruchLokal(adresse) : texte.lauf.werkzeugAbbruch,
+      fehlerArt: 'werkzeug-abbruch'
+    }
+  return null
+}
+
+// ── Lokal-Wächter (0.51.1) ──────────────────────────────────────────────────
+// Warum FlowForge bei lokalen Blöcken selbst schätzt (gemessen 20.08.2026):
+// Die Auto-Zusammenfassung der CLI misst den Füllstand AUSSCHLIESSLICH an der
+// usage der letzten Assistent-Nachricht. Ollama meldet die ehrlich, solange der
+// Prompt unter der Fensterkante bleibt — übersteigt er sie, kappt Ollama STILL
+// (HTTP 200, das Modell sieht Müll) und meldet danach dauerhaft nur noch etwa
+// die Fensterhälfte. Ein einziger großer Werkzeug-Ergebnis-Sprung überspringt
+// so die CLI-Schwelle (Fenster − 33k); danach hält die CLI den Block für halb
+// leer, fasst nie zusammen, vergisst still — und nach Stunden steht „Prompt is
+// too long" im Ergebnis. Deshalb zählt FlowForge die Zeichen des Block-Agenten
+// selbst und nutzt den vorhandenen Übertrags-Mechanismus, bevor es kippt.
+export const LOKAL_WAECHTER_PROZENT = 80
+// Bewusst überschätzend: deutscher Text liegt bei etwa 4 Zeichen je Token,
+// Code eher bei 3–3,5. Lieber ein Übertrag zu früh als stilles Kappen.
+export const ZEICHEN_JE_TOKEN = 3.5
+export function lokaleKontextSchaetzung(zeichen) {
+  const zahl = Number(zeichen)
+  if (!Number.isFinite(zahl) || zahl <= 0) return 0
+  return Math.ceil(zahl / ZEICHEN_JE_TOKEN)
+}
+
+// Zeichen EINER SDK-Nachricht, die im Arbeitsgedächtnis des Block-Agenten
+// landen — 0 für alles andere. Der Motor sieht mit forwardSubagentText die
+// volle Unteragenten-Konversation: assistant-Nachrichten (Text, Denken,
+// Werkzeugaufrufe) UND user-Nachrichten (Werkzeug-Ergebnisse), beide mit
+// parent_tool_use_id. Gezählt wird nur der Block-Agent selbst (blockTaskIds),
+// nicht seine tieferen Unteraufgaben: die tragen ihren eigenen Kontext und
+// liefern ihm nur ihr Fazit zurück (das steckt dann in seinem tool_result).
+export function blockAgentZeichen(nachricht, blockTaskIds) {
+  const eltern = nachricht?.parent_tool_use_id
+  if (!eltern || typeof blockTaskIds?.has !== 'function' || !blockTaskIds.has(eltern)) return 0
+  const istAssistent = nachricht.type === 'assistant'
+  if (!istAssistent && nachricht.type !== 'user') return 0
+  const inhalt = nachricht.message?.content
+  // Werkzeug-Ergebnisse kommen mal als reiner Text, mal als Teileliste.
+  if (typeof inhalt === 'string') return inhalt.length
+  if (!Array.isArray(inhalt)) return 0
+  let zeichen = 0
+  for (const teil of inhalt) {
+    if (teil?.type === 'text') zeichen += String(teil.text ?? '').length
+    else if (istAssistent && teil?.type === 'thinking')
+      zeichen += String(teil.thinking ?? '').length
+    else if (istAssistent && teil?.type === 'tool_use')
+      zeichen += String(teil.name ?? '').length + textLaenge(teil.input)
+    else if (!istAssistent && teil?.type === 'tool_result') zeichen += textLaenge(teil.content)
+  }
+  return zeichen
+}
+
+// Länge eines beliebigen Inhalts als Text — Werkzeug-Eingaben und -Ergebnisse
+// sind mal Zeichenkette, mal Objekt, mal Teileliste. Ein nicht serialisierbarer
+// Wert darf den Wächter nicht sprengen: dann zählt er 0.
+function textLaenge(wert) {
+  if (wert == null) return 0
+  if (typeof wert === 'string') return wert.length
+  try {
+    return JSON.stringify(wert)?.length ?? 0
+  } catch {
+    return 0
+  }
+}
+
 // Die Block-Agenten der Lauf-Session (BAUPLAN 19, 0.48.1): ein Agententyp je
 // Denktiefe, alle sonst identisch. Die Denktiefe ist ein Feld der
 // Agent-Definition (SDK `effort`), kein Session-Schalter — so bleibt der
@@ -914,7 +1082,9 @@ export function blockAgentDefinitionen(systemText) {
 
 // Fehlermeldung des Motors in Klartext übersetzen und einstufen — an der
 // fehlerArt entscheidet die Lauf-Verwaltung z.B. über die Kontingent-Pause.
-export function fehlerAusErgebnis(ergebnis, stderrRest) {
+// `lokalInfo` (0.51.1) macht die Texte der lokalen Marken konkret; ohne die
+// Angabe bleiben sie neutral (Chat, Einmal-Frage, Claude-Sessions).
+export function fehlerAusErgebnis(ergebnis, stderrRest, lokalInfo = null) {
   const teile = []
   // Bei is_error steckt die eigentliche Meldung im result-Text.
   if (ergebnis?.is_error && typeof ergebnis.result === 'string' && ergebnis.result)
@@ -932,6 +1102,15 @@ export function fehlerAusErgebnis(ergebnis, stderrRest) {
   // Klartext am Block stehen bleiben.
   const extra = extraNichtVerfuegbarFehler(text)
   if (extra) return extra
+  // Übergelaufenes Arbeitsgedächtnis und Werkzeug-Abbruch (0.51.1) — ebenfalls
+  // VOR der Kontingent-Regel: „Prompt is too long" hat mit dem Kontingent
+  // nichts zu tun und darf den Lauf nicht in eine 10-Minuten-Pause schicken.
+  const roh = rohenCliFehlerUebersetzen(text, {
+    lokal: Boolean(lokalInfo),
+    fenster: lokalInfo?.fenster ?? 0,
+    adresse: lokalInfo?.adresse ?? ''
+  })
+  if (roh) return roh
   // Abo-Kontingent erschöpft (SPEC §5) — die typischen Formulierungen der CLI.
   if (/usage limit|limit reached|rate.?limit|quota|out of extra usage/i.test(text))
     return { fehlertext: texte.lauf.kontingentErschoepft, fehlerArt: 'kontingent' }
@@ -948,13 +1127,8 @@ export function fehlerAusErgebnis(ergebnis, stderrRest) {
 export async function starteMotorFrage({ frage, modus, apiSchluessel, ausgabenObergrenzeUsd, arbeitsOrdner }) {
   const { query } = await import('@anthropic-ai/claude-agent-sdk')
   let stderrPuffer = ''
-  // Saubere Umgebung wie beim Lauf: keine ANTHROPIC_*/CLAUDE*-Reste.
-  const umgebung = {}
-  for (const [name, wert] of Object.entries(process.env)) {
-    if (name.toUpperCase().startsWith('ANTHROPIC') || name.toUpperCase().startsWith('CLAUDE'))
-      continue
-    umgebung[name] = wert
-  }
+  // Saubere Umgebung wie beim Lauf (umgebungBereinigen).
+  const umgebung = umgebungBereinigen(process.env)
   if (modus === 'api') umgebung.ANTHROPIC_API_KEY = apiSchluessel
 
   const abfrage = query({
@@ -1154,6 +1328,11 @@ export function starteLaufMotor(optionen) {
   // Parallele Zweige bekommen eigene Motoren (lauf.js).
   let block = null
 
+  // Lokal-Wächter (0.51.1): Länge des Systemtexts der Block-Agenten — der
+  // steht ab dem ersten Turn im Arbeitsgedächtnis und gehört deshalb in die
+  // Startschätzung. Steht erst fest, wenn die Session gebaut ist (unten).
+  let blockAgentSystemZeichen = 0
+
   // Steht dieser Block gerade in einer Welle (BAUPLAN 46), läuft also neben ihm
   // ein anderer Schreiber? Der Lauf gibt eine FUNKTION herein, kein Kennzeichen:
   // Nachbarn starten und enden, während dieser Block arbeitet — ein beim Start
@@ -1171,6 +1350,20 @@ export function starteLaufMotor(optionen) {
   function unterSumme() {
     return block ? [...block.unterVerbrauch.values()].reduce((a, b) => a + b, 0) : 0
   }
+
+  // Angaben für die Klartext-Übersetzung roher CLI-Marken (0.51.1). Als
+  // Funktionen, nicht als eingefrorene Werte: Das Fenster kann sich während der
+  // Session noch ändern (Startmeldung, modelUsage).
+  // lokalFehlerInfo: für fehlerAusErgebnis (Motor-Fehlerpfad, „enthält" reicht).
+  // rohMarkenInfo: für Agenten-Text (Ticker, Fazit) — dort streng.
+  const lokalFehlerInfo = () =>
+    lokal ? { fenster: bekanntesFenster, adresse: lokal.adresse ?? '' } : null
+  const rohMarkenInfo = () => ({
+    lokal: Boolean(lokal),
+    fenster: bekanntesFenster,
+    adresse: lokal?.adresse ?? '',
+    nurGanzerText: true
+  })
 
   // Füllstand des gerade arbeitenden Block-Agenten (BAUPLAN 36): sein eigener
   // kumulierter Stand — NICHT die Summe seiner Helfer (die tragen ihren
@@ -1237,6 +1430,60 @@ export function starteLaufMotor(optionen) {
     aufEreignis({ art: 'verbrauch', verbrauch: blockVerbrauch() })
   }
 
+  // Lokal-Wächter (0.51.1) — NUR für lokale Motoren; Claude-Sessions bleiben
+  // exakt beim bisherigen Verhalten (dort misst die CLI ehrlich, und die
+  // Übertrags-Schwelle unten am Koordinator-Faden bleibt die einzige).
+  // Läuft nach JEDER Nachricht des Block-Agenten: Er summiert die Zeichen und
+  // prüft nach jedem Turn (assistant), ob die Schätzung die Schwelle reißt —
+  // bewusst unabhängig von den usage-Zahlen, denn genau die lügen bei Ollama,
+  // sobald das Fenster einmal übergelaufen ist.
+  function lokalWaechter(nachricht) {
+    if (!lokal || !block) return
+    const zuwachs = blockAgentZeichen(nachricht, block.blockTaskIds)
+    if (zuwachs > 0) block.schaetzZeichen += zuwachs
+    if (nachricht.type !== 'assistant') return
+
+    // Start-Prompt-Messung (BAUPLAN 0.51.1, Punkt 5): einmal je lokalem Block
+    // beide Zahlen nebeneinander — was Ollama meldet und was FlowForge schätzt.
+    // Der Vergleich IST die Messung: Die gemeldete Zahl kann lügen, die
+    // geschätzte nicht wissen, wie das Modell wirklich zerlegt.
+    if (
+      !block.startPromptGemeldet &&
+      nachricht.message?.usage &&
+      block.blockTaskIds.has(nachricht.parent_tool_use_id)
+    ) {
+      block.startPromptGemeldet = true
+      const u = nachricht.message.usage
+      const gemeldet =
+        (u.input_tokens ?? 0) +
+        (u.cache_creation_input_tokens ?? 0) +
+        (u.cache_read_input_tokens ?? 0)
+      aufEreignis({
+        art: 'ticker',
+        text: texte.ticker.lokalStartPrompt(
+          gemeldet,
+          lokaleKontextSchaetzung(block.startZeichen),
+          bekanntesFenster || KONTEXT_FENSTER_STANDARD
+        )
+      })
+    }
+
+    // Übertrag anfordern — denselben Weg wie die Schwelle des Koordinators.
+    // block.uebertrag.aktiv respektiert die Übertragsgrenze des Workflows: Ist
+    // sie erschöpft, läuft der Block weiter wie bisher; kippt er dann doch,
+    // fängt ihn der Klartext („Arbeitsgedächtnis übergelaufen") ehrlich ab.
+    if (!block.uebertrag.aktiv || block.uebertragPhase !== null) return
+    if (sanftAngefordert || hartAngefordert) return
+    const fenster = bekanntesFenster || KONTEXT_FENSTER_STANDARD
+    const geschaetzt = lokaleKontextSchaetzung(block.schaetzZeichen)
+    if (geschaetzt < (fenster * LOKAL_WAECHTER_PROZENT) / 100) return
+    block.uebertragPhase = 'angefordert'
+    const band = kontextBand(geschaetzt, fenster)
+    block.uebertragBand = { von: band.von, bis: band.bis }
+    aufEreignis({ art: 'ticker', text: texte.ticker.lokalWaechterUebertrag(geschaetzt, fenster) })
+    abfrage?.interrupt().catch(() => {})
+  }
+
   // Löst den laufenden Block-Dispatch mit einem endgültigen Ergebnis auf.
   // Die Lieferschein-Meldungen (BAUPLAN 42) gehen bei JEDEM Ausgang mit: Auch
   // ein Übertrag oder ein sanfter Stopp mitten im Block darf eine bereits
@@ -1286,6 +1533,12 @@ export function starteLaufMotor(optionen) {
         if (!block || block.auftragEingesetzt) return nein(texte.agentenLaufSession.nurEinAgent)
         block.auftragEingesetzt = true
         block.blockTaskIds.add(hookDaten.tool_use_id)
+        // Lokal-Wächter (0.51.1): Hier steht der Startinhalt des
+        // Arbeitsgedächtnisses fest — Arbeitsauftrag plus Systemtext des
+        // Block-Agenten. Alles Weitere zählt der Wächter Nachricht für
+        // Nachricht dazu (lokalWaechter).
+        block.startZeichen = String(block.auftrag ?? '').length + blockAgentSystemZeichen
+        block.schaetzZeichen = block.startZeichen
         aufEreignis({
           art: 'ticker',
           text: lokal
@@ -1528,16 +1781,12 @@ export function starteLaufMotor(optionen) {
         })
       : null
 
-    // Saubere Umgebung: Alle ANTHROPIC_*/CLAUDE*-Variablen fliegen raus — sie
-    // könnten Anmeldung oder Verhalten des Motors umleiten (z.B. wenn FlowForge
-    // selbst aus einer Claude-Code-Session heraus gestartet wurde). Im Abo-Modus
-    // meldet sich der Motor dann über Georgs gespeichertes Claude-Login an.
-    const umgebung = {}
-    for (const [name, wert] of Object.entries(process.env)) {
-      if (name.toUpperCase().startsWith('ANTHROPIC') || name.toUpperCase().startsWith('CLAUDE'))
-        continue
-      umgebung[name] = wert
-    }
+    // Saubere Umgebung (umgebungBereinigen): ANTHROPIC_*/CLAUDE*-Variablen und
+    // die präfixlosen CLI-Schalter fliegen raus — sie könnten Anmeldung,
+    // Verhalten oder Messung des Motors umleiten (z.B. wenn FlowForge selbst aus
+    // einer Claude-Code-Session heraus gestartet wurde). Im Abo-Modus meldet
+    // sich der Motor dann über Georgs gespeichertes Claude-Login an.
+    const umgebung = umgebungBereinigen(process.env)
     if (lokal) {
       // Lokaler Block-Agent (BAUPLAN 49, Machbarkeitsprobe 19.08.2026): NACH
       // der Bereinigung die Ollama-Umgebung setzen — Basis-Adresse, ein
@@ -1561,14 +1810,16 @@ export function starteLaufMotor(optionen) {
     // Block-Agenten-Definitionen: je Denktiefe eine (0.48.1). Lokal (BAUPLAN
     // 49): alle auf dem Ollama-Modell und OHNE effort — die Denktiefe ist ein
     // Claude-Feld, beim Ollama-Modell bleibt das Denken ohnehin an (gemessen).
-    const agentDefinitionen = blockAgentDefinitionen(
+    const blockAgentSystemText =
       texte.agentenLaufSession.blockAgentSystem(projektPfad, TITEL_MAX, TEXT_MAX) +
-        (helferServer
-          ? '\n' +
-            texte.agentenLokaleHelfer.systemZusatz +
-            (lokaleHelfer.bewerten ? texte.agentenLokaleHelfer.bewertenSystemZusatz : '')
-          : '')
-    )
+      (helferServer
+        ? '\n' +
+          texte.agentenLokaleHelfer.systemZusatz +
+          (lokaleHelfer.bewerten ? texte.agentenLokaleHelfer.bewertenSystemZusatz : '')
+        : '')
+    // Lokal-Wächter (0.51.1): Der Systemtext zählt zur Startschätzung.
+    blockAgentSystemZeichen = blockAgentSystemText.length
+    const agentDefinitionen = blockAgentDefinitionen(blockAgentSystemText)
     if (lokal)
       for (const def of Object.values(agentDefinitionen)) {
         def.model = lokal.modell
@@ -1715,6 +1966,16 @@ export function starteLaufMotor(optionen) {
           block.agentFehler ?? (block.meldungen.length === 0 ? block.fazit : null)
         )
         if (extra) return blockAufloesen('fehlgeschlagen', extra)
+        // Rohe CLI-Marken (0.51.1, Befund Life-OS-Lauf 20.08.2026): Läuft das
+        // Arbeitsgedächtnis über oder bricht die Werkzeug-Schicht ab, steht die
+        // englische Marke ALLEIN im Fazit bzw. im Agent-Fehler — und der Block
+        // lief bisher als „erfolgreich" durch, mit der Marke als Ergebnistext
+        // für die Folgeblöcke. Streng geprüft (ganzer Text), damit ein Agent,
+        // der über den Fehler berichtet, nicht selbst zum Fehler wird.
+        const rohMarke =
+          rohenCliFehlerUebersetzen(block.agentFehler, rohMarkenInfo()) ??
+          rohenCliFehlerUebersetzen(block.fazit, rohMarkenInfo())
+        if (rohMarke) return blockAufloesen('fehlgeschlagen', rohMarke)
         // Das Ergebnis des Blocks ist das Fazit des Block-Agenten — nicht der
         // Koordinator-Text, der z.B. die Prüfer-Urteils-Marke verlieren könnte.
         if (block.fazit) return blockAufloesen('erfolgreich', { ergebnisText: block.fazit })
@@ -1724,7 +1985,7 @@ export function starteLaufMotor(optionen) {
             : texte.lauf.blockOhneFazit
         })
       }
-      const { fehlertext, fehlerArt } = fehlerAusErgebnis(nachricht, stderrPuffer)
+      const { fehlertext, fehlerArt } = fehlerAusErgebnis(nachricht, stderrPuffer, lokalFehlerInfo())
       // Fortsetzen-Versuch, den die CLI mit „Session nicht gefunden" ablehnt
       // (real beobachtet: „No conversation found with session ID: …"): kein
       // echter Fehler des Blocks — still auf frische Session zurück. Echte
@@ -1748,7 +2009,14 @@ export function starteLaufMotor(optionen) {
         nachrichtEmpfangen = true
         if (typeof nachricht.session_id === 'string' && nachricht.session_id)
           sessionKennung = nachricht.session_id
-        for (const zeile of tickerZeilen(nachricht, projektPfad, block?.blockTaskIds, false, lokal?.adresse ?? ''))
+        for (const zeile of tickerZeilen(
+          nachricht,
+          projektPfad,
+          block?.blockTaskIds,
+          false,
+          lokal?.adresse ?? '',
+          lokal ? bekanntesFenster : 0
+        ))
           aufEreignis({ art: 'ticker', text: zeile })
 
         // Denk-Ansicht (BAUPLAN 24): die Denk-Blöcke der Assistent-Nachrichten
@@ -1860,6 +2128,10 @@ export function starteLaufMotor(optionen) {
             else block.fazit = fazitStutzen(text)
           }
         }
+
+        // Lokal-Wächter (0.51.1): vor der usage-Buchführung — er darf gerade
+        // NICHT davon abhängen, ob Ollama überhaupt brauchbare Zahlen meldet.
+        lokalWaechter(nachricht)
 
         if (nachricht.type === 'assistant' && nachricht.message?.usage) {
           const u = nachricht.message.usage
@@ -2020,7 +2292,8 @@ export function starteLaufMotor(optionen) {
         else {
           const { fehlertext, fehlerArt } = fehlerAusErgebnis(
             null,
-            stderrPuffer || String(fehler?.message ?? '')
+            stderrPuffer || String(fehler?.message ?? ''),
+            lokalFehlerInfo()
           )
           blockAufloesen('fehlgeschlagen', { fehlertext, fehlerArt })
         }
@@ -2138,6 +2411,13 @@ export function starteLaufMotor(optionen) {
           uebertragPhase: null,
           startProzent: null,
           uebertragBand: null,
+          // Lokal-Wächter (0.51.1): geschätzter Füllstand des Block-Agenten in
+          // Zeichen. Startwert setzt der Hook, sobald der Auftrag eingesetzt
+          // ist (Auftrag + Systemtext); startZeichen bleibt für die
+          // Start-Prompt-Zeile stehen. Nur lokale Motoren führen sie.
+          schaetzZeichen: 0,
+          startZeichen: 0,
+          startPromptGemeldet: false,
           fazit: null,
           agentFehler: null,
           startTokens: hauptTokens,
@@ -2395,12 +2675,8 @@ export function starteChatMotor(optionen) {
       mcpServers.app = await appWerkzeugServer({ projektPfad, aufEreignis })
     }
 
-    const umgebung = {}
-    for (const [name, wert] of Object.entries(process.env)) {
-      if (name.toUpperCase().startsWith('ANTHROPIC') || name.toUpperCase().startsWith('CLAUDE'))
-        continue
-      umgebung[name] = wert
-    }
+    // Saubere Umgebung wie beim Lauf (umgebungBereinigen).
+    const umgebung = umgebungBereinigen(process.env)
     if (modus === 'api') umgebung.ANTHROPIC_API_KEY = apiSchluessel
 
     abfrage = query({

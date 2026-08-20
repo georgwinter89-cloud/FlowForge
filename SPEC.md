@@ -150,7 +150,22 @@ Sitzungen hinweg Software entsteht — ohne dass dem Agenten der Kontext überl�
     Dollar; der lokale Motor nimmt das Fenster aus den Einstellungen, setzt die Kosten auf
     0, merkt sich kein Fenster und setzt keine Ausgaben-Obergrenze (sie bräche lokale
     Läufe ab). Es gibt keinen Prompt-Cache: Jeder Turn verarbeitet den vollen Kontext neu
-    — lokale Blöcke sind langsamer, nicht teurer. **Abgeleitetes Modell:** Weil die CLI
+    — lokale Blöcke sind langsamer, nicht teurer. **Füllstands-Wächter statt
+    CLI-Zusammenfassung** (seit 0.51.1, gemessen 20.08.2026): Ollama meldet den Füllstand
+    nur **unterhalb** der Fensterkante ehrlich — übersteigt ein Prompt das Fenster, kappt
+    es still (HTTP 200, das Modell sieht Müll) und meldet danach dauerhaft etwa die
+    Fensterhälfte. Weil die Auto-Zusammenfassung der CLI genau an dieser Zahl hängt, fasst
+    sie nie zusammen: Der Block vergisst still und endet nach Stunden mit „Prompt is too
+    long". Deshalb verlässt sich FlowForge bei lokalen Blöcken nicht auf die CLI, sondern
+    **schätzt den Füllstand selbst** (Zeichen des Block-Agenten geteilt durch 3,5, bewusst
+    überschätzend) und **übergibt bei 80 % sichtbar an einen frischen Anlauf** über die
+    vorhandene Übertrags-Mechanik (§5). Der Ticker nennt je lokalem Block einmal den
+    Start-Prompt mit **beiden** Zahlen (gemeldet und geschätzt), und rohe CLI-Marken stehen
+    deutsch in Ticker und Laufbericht: „Prompt is too long" als übergelaufenes
+    Arbeitsgedächtnis, „[Request interrupted by user for tool use]" als Abbruch der
+    Werkzeug-Schicht — ohne Nutzer-Beschuldigung, denn der Nutzer hat nichts unterbrochen.
+    Ein Block mit einer solchen Marke als Ergebnis gilt als **fehlgeschlagen**, nicht als
+    Erfolg mit englischem Ergebnistext. **Abgeleitetes Modell:** Weil die CLI
     keine Sampling-Optionen mitschickt, legt FlowForge vor dem Lauf per Ollama-API ein
     Modell `flowforge-<basis>` an (Kontextfenster + Feineinstellungen als
     Modell-Standardwerte: Temperatur, Top-p, Top-k, Min-p, Wiederholungsstrafe,
@@ -1657,6 +1672,13 @@ umstellbar wie jede Karte.
   Einstellungen: „Übertrag schon bei etwa 10 %" — greift beim Startfüllstand plus
   10 Prozentpunkte; im Testmodus zählt der Verbrauch der Block-Agenten mit, damit der
   Übertrag vorführbar bleibt (im Normalbetrieb zählt nur der Koordinator-Faden).
+  **Lokale Blöcke** (Klasse „lokal", §2) haben seit 0.51.1 einen zweiten Auslöser: Weil
+  die lokale KI ihren Füllstand oberhalb der Fensterkante still falsch meldet, schätzt
+  FlowForge ihn selbst (Zeichen des Block-Agenten, überschätzend) und fordert bei **80 %
+  des eingestellten Kontextfensters** denselben Übertrag an — sichtbar im Ticker, mit
+  beiden Zahlen. Ist die Übertragsgrenze des Workflows erschöpft, läuft der Block wie
+  bisher weiter; kippt er dann, steht der Grund deutsch im Bericht statt als englische
+  CLI-Marke.
 - **Übertrags-Grenze pro Workflow einstellbar** (im Schaubild-Kopf): Zahl (Standard 5) oder
   unbegrenzt (Feld leer). Ist die Grenze erreicht, läuft der Block ohne weiteren Übertrag zu
   Ende — ehrlich im Ticker vermerkt.

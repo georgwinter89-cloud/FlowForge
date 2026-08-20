@@ -2872,7 +2872,26 @@ export const texte = {
     lokalOhneZuteilung: (name) =>
       `„${name}" sollte lokal laufen, hat aber keine zugeteilte KI-Adresse — der Block bricht ab, statt sich still eine zu nehmen. Das ist ein Fehler in FlowForge selbst; starte den Lauf neu.`,
     // Ollama hat das Anlegen weder bestätigt noch einen Fehler genannt.
-    lokalModellKeinErfolg: 'Ollama hat das Anlegen nicht bestätigt (keine Erfolgsmeldung)'
+    lokalModellKeinErfolg: 'Ollama hat das Anlegen nicht bestätigt (keine Erfolgsmeldung)',
+    // Rohe CLI-Marken in Klartext (0.51.1, Befund Life-OS-Lauf 20.08.2026):
+    // „Prompt is too long" stand wörtlich als Ergebnis eines Blocks, der als
+    // ERFOLG durchlief; „[Request interrupted by user for tool use]" stand als
+    // Ergebnis UND als Fehlertext im Bericht — und beschuldigte Georg einer
+    // Unterbrechung, die er nie ausgelöst hat.
+    kontextVoll: (fenster = 0) =>
+      'Das Arbeitsgedächtnis des Blocks ist übergelaufen — es passte mehr Text hinein, als das Kontextfenster' +
+      (fenster > 0 ? ` (${fenster.toLocaleString('de-DE')} Tokens)` : '') +
+      ' fasst. Der Block ist stehen geblieben.',
+    kontextVollLokal: (fenster = 0) =>
+      'Das Arbeitsgedächtnis des lokalen Blocks ist übergelaufen — es passte mehr Text hinein, als das Kontextfenster deiner lokalen KI' +
+      (fenster > 0 ? ` (${fenster.toLocaleString('de-DE')} Tokens)` : '') +
+      ' fasst. FlowForge bricht solche Blöcke künftig vorher mit einem Übertrag ab; prüfe außerdem, ob das eingestellte Kontextfenster zu deiner Grafikkarte passt.',
+    werkzeugAbbruch:
+      'Die Werkzeug-Schicht hat die Anfrage abgebrochen — das kam nicht von dir. Der Block ist stehen geblieben; ein neuer Anlauf ist der übliche Weg.',
+    werkzeugAbbruchLokal: (adresse = '') =>
+      'Die Werkzeug-Schicht hat die Anfrage abgebrochen — das kam nicht von dir. Bei der lokalen KI' +
+      (adresse ? ` unter ${adresse}` : '') +
+      ' passiert das, wenn Ollama unter Last nicht rechtzeitig antwortet. Ein neuer Anlauf ist der übliche Weg; hilft das nicht, ist das Modell für diese Grafikkarte zu groß.'
   },
   rechteFrage: {
     ueberschrift: 'Der Agent bittet um Erlaubnis',
@@ -3566,6 +3585,14 @@ export const texte = {
       `Du hast entschieden: „${name}" — Stand von vor dem Lauf wiederherstellen (nur für diesen Zweig).`,
     entscheidungWiederhergestelltGanz: (name) =>
       `Du hast entschieden: „${name}" — Stand von vor dem Lauf wiederherstellen; ohne Datenvertrag trifft das am Laufende den ganzen Projektordner.`,
+    // Lokal-Wächter (0.51.1): FlowForge schätzt den Füllstand lokaler Blöcke
+    // selbst, weil Ollama ihn oberhalb der Fensterkante still falsch meldet.
+    // Beide Zahlen der Start-Zeile sind Absicht: Der Vergleich zeigt, ob die
+    // gemeldete Zahl überhaupt zur Wirklichkeit passt.
+    lokalStartPrompt: (gemeldet, geschaetzt, fenster) =>
+      `Start-Prompt des lokalen Blocks: ~${Math.round(gemeldet).toLocaleString('de-DE')} Tokens (von der lokalen KI gemeldet) · ~${Math.round(geschaetzt).toLocaleString('de-DE')} Tokens (von FlowForge geschätzt) von ${Math.round(fenster).toLocaleString('de-DE')}.`,
+    lokalWaechterUebertrag: (geschaetzt, fenster) =>
+      `Das Arbeitsgedächtnis des lokalen Blocks ist fast voll (~${Math.round(geschaetzt).toLocaleString('de-DE')} von ${Math.round(fenster).toLocaleString('de-DE')} Tokens, von FlowForge geschätzt) — FlowForge übergibt an einen frischen Anlauf, bevor die lokale KI still vergisst.`,
     uebertragAngefordert: (von, bis) =>
       `Der Kontext ist zu etwa ${von}–${bis} % gefüllt — Übertrag: Der Agent notiert den Zwischenstand und übergibt.`,
     uebertragWeiter: (nummer, grenze) =>
