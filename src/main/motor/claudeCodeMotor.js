@@ -1058,7 +1058,7 @@ const WERKZEUG_ABBRUCH_GANZ_REGEX = /^(?:api\s+)?(?:error:?\s+)?\[request interr
 // (Ticker-Zeile, Block-Fazit); im Motor-Fehlerpfad genügt „enthält".
 export function rohenCliFehlerUebersetzen(
   text,
-  { lokal = false, fenster = 0, adresse = '', nurGanzerText = false } = {}
+  { lokal = false, fenster = 0, adresse = '', geduldMinuten = 0, nurGanzerText = false } = {}
 ) {
   if (typeof text !== 'string') return null
   const roh = text.trim()
@@ -1070,7 +1070,9 @@ export function rohenCliFehlerUebersetzen(
     }
   if ((nurGanzerText ? WERKZEUG_ABBRUCH_GANZ_REGEX : WERKZEUG_ABBRUCH_REGEX).test(roh))
     return {
-      fehlertext: lokal ? texte.lauf.werkzeugAbbruchLokal(adresse) : texte.lauf.werkzeugAbbruch,
+      fehlertext: lokal
+        ? texte.lauf.werkzeugAbbruchLokal(adresse, geduldMinuten)
+        : texte.lauf.werkzeugAbbruch,
       fehlerArt: 'werkzeug-abbruch'
     }
   return null
@@ -1088,6 +1090,35 @@ export function rohenCliFehlerUebersetzen(
 // too long" im Ergebnis. Deshalb zählt FlowForge die Zeichen des Block-Agenten
 // selbst und nutzt den vorhandenen Übertrags-Mechanismus, bevor es kippt.
 export const LOKAL_WAECHTER_PROZENT = 80
+
+// ── Schonung nach abgegebener Lieferung (0.51.4) ────────────────────────────
+// Gemessen am Life-OS-Lauf 21.08.2026: Der Block „Angreifer" hat um 08:23:15Z
+// seine fertige Angriffsliste über den Lieferschein abgegeben — und in
+// DERSELBEN SEKUNDE schlug der Lokal-Wächter bei 105.406 von 131.072 Tokens
+// zu. FlowForge warf die fertige Session weg, ein frischer Anlauf las 43
+// Minuten lang dieselben Dateien erneut und starb dann beim zweiten Versuch,
+// dieselben acht Funde abzuliefern. Der Lauf endete nach 2 h 15 min bei Block
+// 2 von 5; gebaut wurde nichts.
+//
+// Der Fehler ist die fehlende Frage: Ein Block, dessen Lieferschein schon
+// angekommen ist, braucht nur noch sein Fazit — ihn dafür bei null anfangen zu
+// lassen ist reine Verschwendung. Deshalb gilt ab der ersten Meldung eine
+// höhere Marke. Aufgehoben ist der Schutz damit NICHT: Bei 95 % übergibt
+// FlowForge trotzdem, denn oberhalb der Fensterkante kappt Ollama still (der
+// Grund, aus dem es den Wächter überhaupt gibt). Die Lieferung selbst geht bei
+// keinem Ausgang verloren — blockAufloesen reicht `meldungen` immer mit.
+export const WAECHTER_NOTBREMSE_PROZENT = 95
+
+// Die geltende Übertrags-Marke in Prozent. `meldungen` ist die Liste der
+// abgegebenen Lieferschein-Meldungen des Blocks; ist sie leer, bleibt alles
+// wie bisher. Bewusst als Maximum gebildet: Eine Notbremse, die unter der
+// normalen Marke läge, wäre keine.
+export function schwelleNachLieferung(schwelle, meldungen) {
+  const normal = Number(schwelle)
+  if (!Number.isFinite(normal)) return WAECHTER_NOTBREMSE_PROZENT
+  if (!Array.isArray(meldungen) || meldungen.length === 0) return normal
+  return Math.max(normal, WAECHTER_NOTBREMSE_PROZENT)
+}
 // Bewusst überschätzend: deutscher Text liegt bei etwa 4 Zeichen je Token,
 // Code eher bei 3–3,5. Lieber ein Übertrag zu früh als stilles Kappen.
 export const ZEICHEN_JE_TOKEN = 3.5
@@ -1189,7 +1220,8 @@ export function fehlerAusErgebnis(ergebnis, stderrRest, lokalInfo = null) {
   const roh = rohenCliFehlerUebersetzen(text, {
     lokal: Boolean(lokalInfo),
     fenster: lokalInfo?.fenster ?? 0,
-    adresse: lokalInfo?.adresse ?? ''
+    adresse: lokalInfo?.adresse ?? '',
+    geduldMinuten: lokalInfo?.geduldMinuten ?? 0
   })
   if (roh) return roh
   // Abo-Kontingent erschöpft (SPEC §5) — die typischen Formulierungen der CLI.
@@ -1450,12 +1482,23 @@ export function starteLaufMotor(optionen) {
   // Session noch ändern (Startmeldung, modelUsage).
   // lokalFehlerInfo: für fehlerAusErgebnis (Motor-Fehlerpfad, „enthält" reicht).
   // rohMarkenInfo: für Agenten-Text (Ticker, Fazit) — dort streng.
+  // geduldMinuten (0.51.4): Der Abbruch-Klartext nennt die eingestellte
+  // Wartezeit, weil genau sie der Hebel ist — ohne die Zahl bleibt der Rat
+  // „erhöhe die Wartezeit" eine Floskel.
+  const geduldMinuten = () => Math.round(Number(lokal?.geduldMs ?? 0) / 60000)
   const lokalFehlerInfo = () =>
-    lokal ? { fenster: bekanntesFenster, adresse: lokal.adresse ?? '' } : null
+    lokal
+      ? {
+          fenster: bekanntesFenster,
+          adresse: lokal.adresse ?? '',
+          geduldMinuten: geduldMinuten()
+        }
+      : null
   const rohMarkenInfo = () => ({
     lokal: Boolean(lokal),
     fenster: bekanntesFenster,
     adresse: lokal?.adresse ?? '',
+    geduldMinuten: geduldMinuten(),
     nurGanzerText: true
   })
 
@@ -1618,12 +1661,31 @@ export function starteLaufMotor(optionen) {
     if (sanftAngefordert || hartAngefordert) return
     const fenster = bekanntesFenster || KONTEXT_FENSTER_STANDARD
     const geschaetzt = lokaleKontextSchaetzung(block.schaetzZeichen)
-    if (geschaetzt < (fenster * LOKAL_WAECHTER_PROZENT) / 100) return
+    // Schonung nach abgegebener Lieferung (0.51.4).
+    const schwelle = schwelleNachLieferung(LOKAL_WAECHTER_PROZENT, block.meldungen)
+    if (geschaetzt < (fenster * schwelle) / 100)
+      return schonungMelden((geschaetzt / fenster) * 100, LOKAL_WAECHTER_PROZENT, schwelle)
     block.uebertragPhase = 'angefordert'
     const band = kontextBand(geschaetzt, fenster)
     block.uebertragBand = { von: band.von, bis: band.bis }
     aufEreignis({ art: 'ticker', text: texte.ticker.lokalWaechterUebertrag(geschaetzt, fenster) })
     abfrage?.interrupt().catch(() => {})
+  }
+
+  // Sagt einmal je Block, dass hier eigentlich ein Übertrag fällig gewesen
+  // wäre (0.51.4). Ohne diese Zeile sähe Georg im Ticker nur eine
+  // unerklärliche Ruhe oberhalb der gewohnten Marke — und beim späteren
+  // Übertrag an der Notbremse eine Zahl, die zu keiner Schwelle passt.
+  // Beide Aufrufer geben ihre eigene normale Marke mit; gemeldet wird nur,
+  // wenn die Schonung wirklich greift und die normale Marke schon fällt.
+  function schonungMelden(prozent, normal, schwelle) {
+    if (!block || block.schonungGemeldet) return
+    if (schwelle <= normal || prozent < normal) return
+    block.schonungGemeldet = true
+    aufEreignis({
+      art: 'ticker',
+      text: texte.ticker.uebertragNachLieferungGeschont(block.blockName)
+    })
   }
 
   // Löst den laufenden Block-Dispatch mit einem endgültigen Ergebnis auf.
@@ -2367,9 +2429,15 @@ export function starteLaufMotor(optionen) {
               : hauptTokens
             const prozent = (messTokens / fenster) * 100
             if (block.startProzent === null) block.startProzent = prozent
+            // Schonung nach abgegebener Lieferung (0.51.4) — dieselbe Regel
+            // wie beim Lokal-Wächter, denn der Schaden ist derselbe: Ein
+            // Block, der schon geliefert hat, würde im frischen Anlauf nur
+            // seine eigene Arbeit wiederholen. Der Testmodus ist bewusst
+            // ausgenommen: Er existiert, um einen Übertrag vorzuführen —
+            // eine Schonung würde genau das Vorzuführende wegnehmen.
             const schwelle = block.uebertrag.testModus
               ? Math.min(block.startProzent + UEBERTRAG_TEST_AUFSCHLAG_PUNKTE, UEBERTRAG_SCHWELLE_PROZENT)
-              : UEBERTRAG_SCHWELLE_PROZENT
+              : schwelleNachLieferung(UEBERTRAG_SCHWELLE_PROZENT, block.meldungen)
             if (prozent >= schwelle) {
               block.uebertragPhase = 'angefordert'
               const band = kontextBand(messTokens, fenster)
@@ -2379,7 +2447,8 @@ export function starteLaufMotor(optionen) {
                 text: texte.ticker.uebertragAngefordert(band.von, band.bis)
               })
               abfrage?.interrupt().catch(() => {})
-            }
+            } else if (!block.uebertrag.testModus)
+              schonungMelden(prozent, UEBERTRAG_SCHWELLE_PROZENT, schwelle)
           }
         }
 
@@ -2607,6 +2676,9 @@ export function starteLaufMotor(optionen) {
           uebertragPhase: null,
           startProzent: null,
           uebertragBand: null,
+          // Schonung nach abgegebener Lieferung (0.51.4): Die erklärende
+          // Ticker-Zeile gilt einmal je Block, nicht je Nachricht.
+          schonungGemeldet: false,
           // Lokal-Wächter (0.51.1): geschätzter Füllstand des Block-Agenten in
           // Zeichen. Startwert setzt der Hook, sobald der Auftrag eingesetzt
           // ist (Auftrag + Systemtext); startZeichen bleibt für die

@@ -74,6 +74,47 @@ describe('0.51.1 · Marke „[Request interrupted by user …]"', () => {
     })
     expect(urteil?.fehlerArt).toBe('werkzeug-abbruch')
   })
+
+  // 0.51.4 — nachgemessen am Life-OS-Lauf 21.08.2026: Der alte Text schob den
+  // Abbruch auf eine überlastete Ollama-Instanz und riet, das Modell zu
+  // verkleinern. Das Serverlog zeigte das Gegenteil: alle 17 Anfragen mit
+  // Status 200, durchgehend 19,8 Tokens/s, keine Auslagerung. Georg hätte
+  // nach diesem Text sein Fenster verkleinert — also genau das Falsche getan.
+  it('schiebt es NICHT mehr auf eine überlastete Grafikkarte', () => {
+    const urteil = rohenCliFehlerUebersetzen('[Request interrupted by user for tool use]', {
+      ...lokalInfo,
+      geduldMinuten: 30,
+      nurGanzerText: true
+    })
+    expect(urteil.fehlertext).not.toMatch(/zu groß/)
+    expect(urteil.fehlertext).not.toMatch(/unter Last/)
+    // Stattdessen der gemessene Vorgang und der Hebel dagegen.
+    expect(urteil.fehlertext).toMatch(/kein Text ankommt/)
+    expect(urteil.fehlertext).toMatch(/Werkzeugaufruf/)
+    expect(urteil.fehlertext).toMatch(/30 Minuten/)
+    expect(urteil.fehlertext).toMatch(/Wartezeit auf Antworten der lokalen KI/)
+  })
+
+  it('nennt die Wartezeit nur, wenn sie bekannt ist', () => {
+    const ohne = rohenCliFehlerUebersetzen('[Request interrupted by user for tool use]', {
+      ...lokalInfo,
+      nurGanzerText: true
+    })
+    expect(ohne.fehlertext).not.toMatch(/eingestellte Wartezeit/)
+    expect(ohne.fehlertext).toMatch(/ollama-zweitrechner/)
+  })
+
+  it('reicht die Wartezeit durch fehlerAusErgebnis mit', () => {
+    // Ohne diese Kette stünde die Zahl nur in der reinen Funktion und nie im
+    // Bericht — genau der Weg, den der Motor im Fehlerfall nimmt.
+    const urteil = fehlerAusErgebnis(
+      { is_error: true, result: '[Request interrupted by user for tool use]' },
+      '',
+      { fenster: 131_072, adresse: 'http://192.0.2.7:11434', geduldMinuten: 15 }
+    )
+    expect(urteil.fehlerArt).toBe('werkzeug-abbruch')
+    expect(urteil.fehlertext).toMatch(/15 Minuten/)
+  })
 })
 
 describe('0.51.1 · Ein Agent, der über den Fehler REDET, ist kein Fehler', () => {

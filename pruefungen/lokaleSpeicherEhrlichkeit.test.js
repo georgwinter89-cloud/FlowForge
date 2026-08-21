@@ -181,19 +181,42 @@ describe('0.51.3 · Warnzeile im Ticker', () => {
 })
 
 describe('0.51.3 · Geduld der Werkzeug-Schicht als Einstellung', () => {
-  it('kennt Standard und drei verlängerte Stufen', () => {
-    expect(LOKAL_GEDULD_WAHL).toEqual([0, 900000, 1800000, 3600000])
-    expect(LOKAL_GEDULD_STANDARD).toBe(0)
-    expect(texte.einstellungen.lokaleGeduldWahl(0)).toContain('Standard')
+  // 0.51.4: Die Stufe 0 („gar nicht setzen") ist raus, Standard sind 30
+  // Minuten. Gemessen am Life-OS-Lauf 21.08.2026: Ohne gesetzte Wartezeit
+  // schneidet der Motor eine laufende Antwort nach 9 min 59 s ab, obwohl der
+  // Ollama-Server ununterbrochen weiterrechnet — die Grenze zählt Stille, und
+  // ein großer Werkzeugaufruf entsteht am Stück.
+  it('kennt drei Stufen — „gar nicht setzen" gibt es nicht mehr', () => {
+    expect(LOKAL_GEDULD_WAHL).toEqual([900000, 1800000, 3600000])
+    expect(LOKAL_GEDULD_WAHL).not.toContain(0)
+    expect(LOKAL_GEDULD_STANDARD).toBe(1800000)
+    expect(texte.einstellungen.lokaleGeduldWahl(900000)).toBe('15 Minuten')
     expect(texte.einstellungen.lokaleGeduldWahl(1800000)).toBe('30 Minuten')
   })
 
   it('nimmt nur bekannte Stufen an, alles andere ist Standard', () => {
     expect(lokaleGeduldBereinigen(900000)).toBe(900000)
     expect(lokaleGeduldBereinigen('1800000')).toBe(1800000)
-    expect(lokaleGeduldBereinigen(12345)).toBe(0)
-    expect(lokaleGeduldBereinigen(undefined)).toBe(0)
-    expect(lokaleGeduldBereinigen('viel Geduld')).toBe(0)
+    expect(lokaleGeduldBereinigen(12345)).toBe(LOKAL_GEDULD_STANDARD)
+    expect(lokaleGeduldBereinigen(undefined)).toBe(LOKAL_GEDULD_STANDARD)
+    expect(lokaleGeduldBereinigen('viel Geduld')).toBe(LOKAL_GEDULD_STANDARD)
+  })
+
+  it('eine aus 0.51.3 gespeicherte 0 wandert von selbst auf den neuen Standard', () => {
+    // Ohne diese Wanderung bliebe genau der Fallstrick stehen, gegen den der
+    // neue Standard gebaut ist: 0.51.3 hat 0 als Vorgabe in die Datei
+    // geschrieben, ohne dass Georg das je gewählt hätte.
+    expect(lokaleGeduldBereinigen(0)).toBe(1800000)
+    // Und die Wanderung sitzt beim LADEN, nicht erst beim nächsten Speichern —
+    // sonst zeigte der Dialog eine Stufe, die es nicht mehr gibt, während der
+    // Motor längst mit dem neuen Standard liefe.
+    const quelle = fs.readFileSync(
+      path.join(hier, '..', 'src', 'main', 'einstellungen.js'),
+      'utf8'
+    )
+    expect(quelle).toMatch(
+      /daten\.lokaleAntwortGeduldMs = lokaleGeduldBereinigen\(daten\.lokaleAntwortGeduldMs\)/
+    )
   })
 
   it('speichert die Wahl — und verliert sie NICHT, wenn ein Aufrufer das Feld nicht kennt', () => {
@@ -210,7 +233,7 @@ describe('0.51.3 · Geduld der Werkzeug-Schicht als Einstellung', () => {
     expect(
       einstellungenSpeichern({ ...BASIS, lokaleAntwortGeduldMs: 42 }).einstellungen
         .lokaleAntwortGeduldMs
-    ).toBe(0)
+    ).toBe(LOKAL_GEDULD_STANDARD)
   })
 })
 

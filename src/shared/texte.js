@@ -2787,29 +2787,38 @@ export const texte = {
     lokaleHelferKontextWahl: (kontext) => `${Math.round(kontext / 1024)}k Token`,
     lokaleHelferKontextHinweis:
       'Wie viel die lokale KI auf einmal im Kopf behält. Mit dem Fenster wachsen auch ihre ' +
-      'Portionen (Zeilen je Lesen, Suchtreffer, Runden). Faustregel fürs Grafikspeicher-Budget: ' +
-      'Das Arbeitsgedächtnis kostet zusätzlich zu den Modell-Gewichten grob 250 KB je Token bei ' +
-      'einem 27B-Modell — 64k ≈ 16 GB, 96k ≈ 24 GB, 128k ≈ 32 GB. Passt es nicht mehr in die ' +
+      'Portionen (Zeilen je Lesen, Suchtreffer, Runden). Was das Arbeitsgedächtnis an ' +
+      'Grafikspeicher kostet, hängt nicht an der Größe des Modells, sondern an seiner Bauart — ' +
+      'eine Faustregel „so viel je Milliarde Parameter" gibt es nicht. Zwei gemessene ' +
+      'Eckpunkte: Ein klassisch gebautes 27B-Modell kommt leicht auf mehrere hundert KB je ' +
+      'Token; ein Modell der neueren Hybrid-Bauart (Qwen3.5/3.8, wo nur jede vierte Schicht ' +
+      'echte Aufmerksamkeit fährt) liegt bei 64 KB je Token — dort kostet 128k rund 8 GB und ' +
+      'passt bequem neben ein 4-bit-Modell auf 32 GB. Passt es nicht mehr in die ' +
       'Karte, lagert Ollama still in den Arbeitsspeicher aus, alles wird sehr langsam, und ' +
       'irgendwann bricht der Block mit einer Zeitüberschreitung ab. Voreingestellt ist 64k — ' +
-      'das ist auch auf kleineren Karten sicher. Hast du ein 27B-Modell auf einer 32-GB-Karte, ' +
-      'ist 96k der bessere Mittelweg: Bei 64k bleiben dem Block-Agenten nach dem Startauftrag ' +
-      'nur rund 28.000 Tokens Arbeitsraum. Raten musst du nicht: FlowForge misst kurz nach dem Blockstart ' +
-      'nach, wie viel wirklich in der Karte liegt, und schreibt eine Warnzeile in den Ticker, ' +
-      'wenn etwas ausgelagert wurde. ' +
+      'das ist auch auf kleineren Karten sicher. Raten musst du nicht: FlowForge misst kurz ' +
+      'nach dem Blockstart nach, wie viel wirklich in der Karte liegt, und schreibt eine ' +
+      'Warnzeile in den Ticker, wenn etwas ausgelagert wurde. Erst wenn die Warnzeile ' +
+      'ausbleibt, ist das größere Fenster belegt — vorher ist es eine Vermutung. ' +
       'Mehr Fenster in dieselbe Karte bekommst du mit der Zwischenspeicher-Kompression: Setz ' +
-      'auf dem Ollama-Rechner die Benutzervariablen OLLAMA_FLASH_ATTENTION=1 und ' +
-      'OLLAMA_KV_CACHE_TYPE=q8_0 und starte Ollama neu — das halbiert den Bedarf grob, dann ' +
-      'passen voraussichtlich auch 128k. Das sind Einstellungen von Ollama, nicht von ' +
-      'FlowForge; ob sie bei dir wirken, sagt dir dieselbe Warnzeile (bzw. ihr Ausbleiben).',
+      'auf dem Ollama-Rechner die SYSTEMvariablen (nicht Benutzervariablen — ein Dienst erbt ' +
+      'die nicht) OLLAMA_FLASH_ATTENTION=1 und OLLAMA_KV_CACHE_TYPE=q8_0 und starte Ollama ' +
+      'danach wirklich neu. Gemessen hat das bei Georgs 27B rund ein Drittel gespart. Das ' +
+      'sind Einstellungen von Ollama, nicht von FlowForge, und Ollama fällt bei Modellen, die ' +
+      'es nicht unterstützt, ohne Fehlermeldung auf unkomprimiert zurück — ob sie bei dir ' +
+      'wirken, siehst du daran, dass weniger Grafikspeicher belegt wird.',
     // Geduld der Werkzeug-Schicht (0.51.3, Entscheidung Georg): ehrlich als
     // Notnagel benannt, nicht als Lösung — die Lösung ist ein passendes Fenster.
     lokaleGeduld: 'Wartezeit auf Antworten der lokalen KI',
-    lokaleGeduldWahl: (ms) =>
-      Number(ms) === 0 ? 'Standard (Vorgabe des Motors)' : `${Math.round(Number(ms) / 60000)} Minuten`,
+    lokaleGeduldWahl: (ms) => `${Math.round(Number(ms) / 60000)} Minuten`,
     lokaleGeduldHinweis:
       'Wie lange der Motor auf eine einzelne Antwort deiner lokalen KI wartet, bevor er den ' +
-      'Block abbricht. Ehrlich gesagt: Mehr Geduld verhindert den Abbruch, macht aus einem ' +
+      'Block abbricht. Gezählt wird dabei nicht die Dauer, sondern die Stille: Solange Text ' +
+      'eintrifft, darf eine Antwort beliebig lange laufen. Ein großer Werkzeugaufruf entsteht ' +
+      'aber am Stück — 9.000 Tokens sind bei einer lokalen KI gut siebeneinhalb Minuten, in ' +
+      'denen nichts ankommt. Deshalb sind 30 Minuten voreingestellt: Ein gemessener Lauf ist ' +
+      'genau daran gestorben, weil ohne diese Einstellung nach knapp 10 Minuten abgebrochen ' +
+      'wurde. Ehrlich gesagt: Mehr Geduld verhindert den Abbruch, macht aus einem ' +
       'Speicherproblem aber nur einen kriechenden Lauf statt eines abgebrochenen — die ' +
       'eigentliche Lösung ist ein Kontextfenster, das ganz in die Grafikkarte passt (siehe ' +
       'die Warnzeile oben im Ticker). Gilt nur für Blöcke der Modellklasse „lokal"; ' +
@@ -3140,10 +3149,22 @@ export const texte = {
       ' fasst. FlowForge bricht solche Blöcke künftig vorher mit einem Übertrag ab; prüfe außerdem, ob das eingestellte Kontextfenster zu deiner Grafikkarte passt.',
     werkzeugAbbruch:
       'Die Werkzeug-Schicht hat die Anfrage abgebrochen — das kam nicht von dir. Der Block ist stehen geblieben; ein neuer Anlauf ist der übliche Weg.',
-    werkzeugAbbruchLokal: (adresse = '') =>
-      'Die Werkzeug-Schicht hat die Anfrage abgebrochen — das kam nicht von dir. Bei der lokalen KI' +
+    // 0.51.4 — an einem echten Fall nachgemessen (Life-OS-Lauf 21.08.2026):
+    // Hier stand vorher „passiert das, wenn Ollama unter Last nicht
+    // rechtzeitig antwortet … hilft das nicht, ist das Modell für diese
+    // Grafikkarte zu groß." Davon war nichts wahr. Das Ollama-Log zeigte alle
+    // 17 Anfragen mit Status 200, durchgehend 19,8 Tokens/s, keine
+    // Auslagerung — der Server rechnete zum Abbruchzeitpunkt seit acht
+    // Minuten ununterbrochen weiter. Aufgelegt hat die Werkzeug-Schicht.
+    // Der Text hätte Georg dazu gebracht, sein Modell zu verkleinern, also
+    // genau das Falsche. Jetzt benennt er den Vorgang und zeigt auf die
+    // Einstellung, die ihn abstellt.
+    werkzeugAbbruchLokal: (adresse = '', minuten = 0) =>
+      'Die Werkzeug-Schicht hat die Anfrage abgebrochen — das kam nicht von dir, und es heißt nicht, dass deine lokale KI' +
       (adresse ? ` unter ${adresse}` : '') +
-      ' passiert das, wenn Ollama unter Last nicht rechtzeitig antwortet. Ein neuer Anlauf ist der übliche Weg; hilft das nicht, ist das Modell für diese Grafikkarte zu groß.'
+      ' überlastet wäre. Der Motor legt auf, wenn zu lange kein Text ankommt' +
+      (minuten > 0 ? ` (eingestellte Wartezeit: ${minuten} Minuten)` : '') +
+      '. Bei einer lokalen KI reicht dafür ein einziger großer Werkzeugaufruf: Der entsteht am Stück, und solange er entsteht, kommt beim Motor nichts an. Ein neuer Anlauf ist der übliche Weg; wiederholt es sich, erhöhe in den Einstellungen die „Wartezeit auf Antworten der lokalen KI".'
   },
   rechteFrage: {
     ueberschrift: 'Der Agent bittet um Erlaubnis',
@@ -3956,11 +3977,13 @@ export const texte = {
     // wäre ein Fehlalarm, der Georg das richtige Fenster verstellen ließe.
     lokalSpeicherKnapp: (prozent, kontext) =>
       `Achtung: Deine lokale KI liegt nur zu ${prozent} % in der Grafikkarte — der Rest rechnet im Arbeitsspeicher. Grund ist fast immer ein zu großes Kontextfenster (eingestellt: ${Math.round(kontext).toLocaleString('de-DE')} Tokens): Das Arbeitsgedächtnis passt nicht mehr neben die Modell-Gewichte. Folge, wenn es so bleibt: Der Block kriecht und läuft irgendwann in eine Zeitüberschreitung. Stell in den Einstellungen ein kleineres Kontextfenster ein — oder schalte auf dem Ollama-Rechner die Zwischenspeicher-Kompression ein (Hinweis in den Einstellungen).`,
-    // Geduld der Werkzeug-Schicht (0.51.3): Steht sie nicht auf Standard,
-    // gehört das sichtbar an den Laufanfang — sie verändert, wie lange ein
-    // hängender lokaler Block Zeit bekommt, bevor FlowForge ihn abbricht.
+    // Geduld der Werkzeug-Schicht (0.51.3, Text 0.51.4): Seit die Stufe
+    // „gar nicht setzen" raus ist, gilt immer ein Wert — also gehört er auch
+    // immer an den Laufanfang, nicht nur bei einer Abweichung. Die alte
+    // Fassung sagte „statt der Vorgabe des Motors (deine Einstellung)"; das
+    // wäre jetzt bei der Vorgabe von FlowForge schlicht gelogen.
     lokalGeduldGesetzt: (minuten) =>
-      `Wartezeit auf Antworten der lokalen KI: ${minuten} Minuten statt der Vorgabe des Motors (deine Einstellung). Das verhindert frühe Abbrüche — schnell macht es einen überlasteten Grafikspeicher nicht.`,
+      `Wartezeit auf Antworten der lokalen KI: ${minuten} Minuten. So lange darf eine einzelne Antwort ohne eintreffenden Text brauchen, bevor FlowForge den Block abbricht — bei einem großen Werkzeugaufruf ist genau das normal. Schnell macht mehr Geduld nichts, sie verhindert nur den Abbruch mittendrin.`,
     lokalWaechterUebertrag: (geschaetzt, fenster) =>
       `Das Arbeitsgedächtnis des lokalen Blocks ist fast voll (~${Math.round(geschaetzt).toLocaleString('de-DE')} von ${Math.round(fenster).toLocaleString('de-DE')} Tokens, von FlowForge geschätzt) — FlowForge übergibt an einen frischen Anlauf, bevor die lokale KI still vergisst.`,
     uebertragAngefordert: (von, bis) =>
@@ -3969,6 +3992,9 @@ export const texte = {
       `Übergabe angekommen — eine frische Session macht nahtlos weiter (Übertrag ${nummer}${grenze != null ? ' von höchstens ' + grenze : ''}).`,
     uebertragGrenzeErreicht: (grenze) =>
       `Die Übertragsgrenze (${grenze}) ist erreicht — dieser Block läuft ohne weiteren Übertrag zu Ende.`,
+    // Schonung nach abgegebener Lieferung (0.51.4).
+    uebertragNachLieferungGeschont: (name) =>
+      `„${name}" ist über der Übertrags-Marke, hat seine Lieferung aber schon abgegeben — FlowForge lässt ihn sein Fazit zu Ende schreiben, statt ihn neu anfangen zu lassen. Wird es wirklich eng, übergibt FlowForge trotzdem.`,
     kontingentPause:
       'Dein Abo-Kontingent ist im Moment aufgebraucht — der Lauf pausiert und probiert es alle 10 Minuten von selbst wieder.',
     serverPause:

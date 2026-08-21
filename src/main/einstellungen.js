@@ -163,6 +163,13 @@ export function einstellungenLaden() {
       : [daten.lokaleHelferAdresse]
   )
   daten.lokaleHelferAdresse = daten.lokaleHelferAdressen[0]
+  // Migration Geduld (0.51.4) — an derselben Stelle wie die beiden darüber:
+  // Die Stufe 0 („gar nicht setzen") gibt es nicht mehr. Eine gespeicherte 0
+  // stammt aus 0.51.3 und war nie Georgs Wahl, sondern die damalige Vorgabe —
+  // sie fällt auf den neuen Standard. Ohne diese Zeile stünde der Dialog vor
+  // einem Wert, zu dem es keinen Auswahl-Eintrag mehr gibt, und die Wartezeit
+  // im Motor wiche von der angezeigten ab.
+  daten.lokaleAntwortGeduldMs = lokaleGeduldBereinigen(daten.lokaleAntwortGeduldMs)
   return {
     ok: true,
     einstellungen: daten,
@@ -210,10 +217,30 @@ export function extraKostenBestaetigen() {
   return { ok: true }
 }
 
+// Der Rename ist der atomare Teil: Entweder steht die alte Datei da oder die
+// neue, nie eine halbe. Auf Windows kann er aber vorübergehend mit EPERM
+// scheitern, wenn jemand anders die Zieldatei gerade offen hat — Virenscanner
+// und Suchindex tun das im Sekundentakt (in den Prüfungen 21.08.2026
+// reproduziert, dort durch parallel laufende Prüf-Arbeiter). Ein einzelner
+// Fehlschlag würde Georgs Einstellung still verwerfen, obwohl nichts kaputt
+// ist. Deshalb drei kurze Anläufe; hält die Sperre länger, fliegt der Fehler
+// weiter nach oben — ein stilles Schlucken wäre schlimmer.
+const SCHREIB_ANLAEUFE = 3
 function dateiSchreiben(daten) {
   const tmp = dateiPfad() + '.tmp'
   fs.writeFileSync(tmp, JSON.stringify(daten, null, 2), 'utf8')
-  fs.renameSync(tmp, dateiPfad())
+  for (let anlauf = 1; ; anlauf++) {
+    try {
+      fs.renameSync(tmp, dateiPfad())
+      return
+    } catch (fehler) {
+      const kurzfristig = fehler?.code === 'EPERM' || fehler?.code === 'EACCES'
+      if (!kurzfristig || anlauf >= SCHREIB_ANLAEUFE) throw fehler
+      // Kurz blockierend warten: Diese Funktion hat keinen asynchronen Weg,
+      // und es geht um Millisekunden, nicht um eine Wartezeit, die man sieht.
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20 * anlauf)
+    }
+  }
 }
 
 export function einstellungenSpeichern(neu) {

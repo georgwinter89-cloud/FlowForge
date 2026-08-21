@@ -14,10 +14,13 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
   LOKAL_WAECHTER_PROZENT,
+  WAECHTER_NOTBREMSE_PROZENT,
   ZEICHEN_JE_TOKEN,
   blockAgentZeichen,
-  lokaleKontextSchaetzung
+  lokaleKontextSchaetzung,
+  schwelleNachLieferung
 } from '../src/main/motor/claudeCodeMotor.js'
+import { texte } from '../src/shared/texte.js'
 
 const hier = path.dirname(fileURLToPath(import.meta.url))
 const motorQuelle = fs.readFileSync(
@@ -213,7 +216,11 @@ describe('Nacharbeit Prüfer 1 · Sofortprüfung und Selbst-Kalibrierung', () =>
     // Die Schwelle wird nach JEDER Nachricht geprüft — ein Rücksprung nur für
     // Nicht-Assistent-Nachrichten stünde ZWISCHEN Summierung und Schwelle.
     expect(waechter).not.toMatch(/if \(nachricht\.type !== 'assistant'\) return/)
-    expect(waechter).toMatch(/geschaetzt < \(fenster \* LOKAL_WAECHTER_PROZENT\) \/ 100/)
+    // 0.51.4: Die Marke heißt jetzt `schwelle` — sie kommt aus
+    // schwelleNachLieferung(LOKAL_WAECHTER_PROZENT, …) und ist ohne Lieferung
+    // unverändert LOKAL_WAECHTER_PROZENT.
+    expect(waechter).toMatch(/geschaetzt < \(fenster \* schwelle\) \/ 100/)
+    expect(waechter).toMatch(/schwelleNachLieferung\(LOKAL_WAECHTER_PROZENT, block\.meldungen\)/)
   })
 
   it('Start-Prompt-Zeile bleibt an die erste Assistent-Nachricht gebunden', () => {
@@ -223,5 +230,70 @@ describe('Nacharbeit Prüfer 1 · Sofortprüfung und Selbst-Kalibrierung', () =>
   it('Selbst-Kalibrierung: Aufschlag nur bei ehrlicher Erstmeldung unter 90 % des Fensters', () => {
     expect(waechter).toMatch(/gemeldet > geschaetztStart && gemeldet < fensterJetzt \* 0\.9/)
     expect(waechter).toMatch(/\(gemeldet - geschaetztStart\) \* ZEICHEN_JE_TOKEN/)
+  })
+})
+
+// ── Schonung nach abgegebener Lieferung (0.51.4) ─────────────────────────────
+// Rot-vor-Grün: Vor diesem Zwischenschritt gab es schwelleNachLieferung und
+// WAECHTER_NOTBREMSE_PROZENT nicht (Import rot), und der Wächter fragte den
+// Lieferschein nie — genau daran ist der Life-OS-Lauf vom 21.08.2026
+// gestorben: Der Block „Angreifer" gab um 08:23:15Z seine fertige
+// Angriffsliste ab, in derselben Sekunde schlug die 80-%-Marke zu, die fertige
+// Session wurde weggeworfen, und der frische Anlauf wiederholte 43 Minuten
+// Arbeit, bevor er starb. Der Lauf endete bei Block 2 von 5.
+describe('0.51.4 · Wer schon geliefert hat, wird nicht mehr weggeworfen', () => {
+  const meldung = { etikett: 'Angriffsliste', art: 'angriffsliste', fazit: 'acht Funde' }
+
+  it('lässt die normale Marke unangetastet, solange nichts geliefert ist', () => {
+    expect(schwelleNachLieferung(LOKAL_WAECHTER_PROZENT, [])).toBe(LOKAL_WAECHTER_PROZENT)
+    expect(schwelleNachLieferung(LOKAL_WAECHTER_PROZENT, null)).toBe(LOKAL_WAECHTER_PROZENT)
+    expect(schwelleNachLieferung(85, undefined)).toBe(85)
+  })
+
+  it('hebt die Marke, sobald eine Lieferung angekommen ist', () => {
+    expect(schwelleNachLieferung(LOKAL_WAECHTER_PROZENT, [meldung])).toBe(
+      WAECHTER_NOTBREMSE_PROZENT
+    )
+    expect(schwelleNachLieferung(85, [meldung])).toBe(WAECHTER_NOTBREMSE_PROZENT)
+  })
+
+  it('hebt den Schutz nicht auf — die Notbremse liegt unter der Fensterkante', () => {
+    expect(WAECHTER_NOTBREMSE_PROZENT).toBeGreaterThan(LOKAL_WAECHTER_PROZENT)
+    expect(WAECHTER_NOTBREMSE_PROZENT).toBeLessThan(100)
+  })
+
+  it('senkt eine ohnehin höhere Marke nicht ab', () => {
+    // Eine Notbremse, die unter der normalen Marke läge, wäre keine.
+    expect(schwelleNachLieferung(99, [meldung])).toBe(99)
+  })
+
+  it('rechnet für den gemessenen Fall: 105.406 von 131.072 hätten gereicht', () => {
+    const fenster = 131_072
+    const gemessen = 105_406
+    // So war es: über 80 % → Übertrag, fertige Arbeit weg.
+    expect(gemessen).toBeGreaterThanOrEqual((fenster * LOKAL_WAECHTER_PROZENT) / 100)
+    // So ist es jetzt: die Lieferung lag vor, also läuft der Block zu Ende.
+    const schwelle = schwelleNachLieferung(LOKAL_WAECHTER_PROZENT, [meldung])
+    expect(gemessen).toBeLessThan((fenster * schwelle) / 100)
+  })
+
+  it('gilt genauso für die Schwelle des Koordinators — nur nicht im Übertrags-Test', () => {
+    // Der Testmodus existiert, um einen Übertrag vorzuführen; eine Schonung
+    // nähme ihm genau das Vorzuführende.
+    expect(motorQuelle).toMatch(
+      /: schwelleNachLieferung\(UEBERTRAG_SCHWELLE_PROZENT, block\.meldungen\)/
+    )
+    expect(motorQuelle).toMatch(/block\.uebertrag\.testModus\s*\n?\s*\?\s*Math\.min\(/)
+    expect(motorQuelle).toMatch(/else if \(!block\.uebertrag\.testModus\)/)
+  })
+
+  it('sagt einmal je Block, warum es oberhalb der Marke ruhig bleibt', () => {
+    const zeile = texte.ticker.uebertragNachLieferungGeschont('Angreifer')
+    expect(zeile).toMatch(/Angreifer/)
+    expect(zeile).toMatch(/schon abgegeben/)
+    // Und verspricht nicht, dass gar nichts mehr passieren kann.
+    expect(zeile).toMatch(/übergibt FlowForge trotzdem/)
+    expect(motorQuelle).toMatch(/if \(!block \|\| block\.schonungGemeldet\) return/)
+    expect(motorQuelle).toMatch(/schonungGemeldet: false/)
   })
 })

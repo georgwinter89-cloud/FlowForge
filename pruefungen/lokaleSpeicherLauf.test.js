@@ -234,7 +234,7 @@ describe('0.51.3 · eine Adresse, zwei lokale Blöcke: gemessen wird genau einma
     expect(lauf.motor.start('s').geduldMs).toBeNull()
   })
 
-  it('sagt am Laufanfang einmal, dass nicht die Vorgabe des Motors gilt', () => {
+  it('sagt am Laufanfang einmal, welche Wartezeit gilt', () => {
     const zeilen = lauf.sicht.ticker()
     const zeile = texte.ticker.lokalGeduldGesetzt(30)
     expect(zeilen.filter((z) => z === zeile)).toHaveLength(1)
@@ -246,7 +246,8 @@ describe('0.51.3 · zwei Adressen: jede wird für sich gemessen', () => {
   beforeAll(async () => {
     steuerung.einstellungenZusatz = {
       lokaleHelferAdressen: [ADRESSE_1, ADRESSE_2]
-      // Kein Geduld-Feld: Standard, also die Vorgabe des Motors.
+      // Kein Geduld-Feld: Standard — seit 0.51.4 sind das 30 Minuten, nicht
+      // mehr „gar nicht setzen".
     }
     steuerung.pruefen = () => ({ erreichbar: true, modellDa: true })
     lauf = laufAufbauen('zwei-adressen', BLOECKE_ZWEI_LOKAL, PFEILE_ZWEI_LOKAL)
@@ -265,9 +266,16 @@ describe('0.51.3 · zwei Adressen: jede wird für sich gemessen', () => {
     expect(lokale.every((g) => g.darfMessen === true)).toBe(true)
   })
 
-  it('setzt ohne Georgs Wahl keine Geduld — und tickert dann auch nichts', () => {
-    expect(lauf.motor.gestartet.filter((g) => g.adresse).every((g) => g.geduldMs === 0)).toBe(true)
+  // 0.51.4 — umgedreht: Vorher hieß dieser Fall „gar keine Geduld setzen, und
+  // dann auch nichts tickern". Genau das hat den Life-OS-Lauf vom 21.08.2026
+  // getötet (Abbruch nach 9 min 59 s bei laufendem Server), und im Ticker
+  // stand nichts, was darauf gezeigt hätte. Ohne Wahl gilt jetzt der
+  // FlowForge-Standard — und er steht sichtbar am Laufanfang.
+  it('setzt ohne Georgs Wahl den Standard von 30 Minuten — und sagt es', () => {
+    expect(
+      lauf.motor.gestartet.filter((g) => g.adresse).every((g) => g.geduldMs === 1800000)
+    ).toBe(true)
     const zeilen = lauf.sicht.ticker()
-    expect(zeilen.some((z) => z.includes('Wartezeit auf Antworten der lokalen KI'))).toBe(false)
+    expect(zeilen.filter((z) => z === texte.ticker.lokalGeduldGesetzt(30))).toHaveLength(1)
   })
 })

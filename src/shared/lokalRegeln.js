@@ -223,20 +223,42 @@ export function lokalFeinVorlageErkennen(fein) {
 // den Standard zurückdreht. lokaleHelfer.js reicht die beiden Namen weiter,
 // damit alle bisherigen Lesestellen gültig bleiben.
 // 96k ist die Zwischenstufe (0.51.3): Bei 64k bleiben nach dem gemessenen
-// Start-Prompt (~23,5k) nur ~28k Arbeitsraum bis zur Wächter-Marke, 128k
-// sprengt unkomprimiert die 32-GB-Karte.
+// Start-Prompt (~23,5k) nur ~28k Arbeitsraum bis zur Wächter-Marke.
+// KORREKTUR 0.51.4 (an Georgs Ollama gemessen, 21.08.2026): Hier stand
+// „128k sprengt unkomprimiert die 32-GB-Karte". Das war falsch — die
+// Schätzung dahinter (~250 KB KV je Token) lag um den Faktor vier daneben,
+// weil sie die Hybrid-Bauart nicht kannte: Qwen3.5/3.8 fährt nur JEDE VIERTE
+// Schicht mit echter Aufmerksamkeit (16 von 64), die übrigen 48 sind Gated
+// DeltaNet ohne KV-Cache. Gemessen sind es 64,00 KiB je Token bei f16, also
+// 8,00 GiB für 128k — 25,0 von 32 GB belegt, zu 100 % auf den Karten.
+// 128k passt damit AUCH OHNE Kompression. Die Zahl je Token ist keine
+// Konstante dieser Datei: Sie hängt an der Bauart des Modells
+// (Aufmerksamkeits-Schichten × KV-Köpfe × Schlüssel+Wert-Länge).
 export const LOKAL_KONTEXT_STANDARD = 65536
 export const LOKAL_KONTEXT_WAHL = [32768, 65536, 98304, 131072]
 
 // Geduld der Werkzeug-Schicht (Entscheidung Georg, 20.08.2026): Wie lange der
 // Motor auf eine Antwort der lokalen KI wartet, bevor er den Block abbricht
 // (API_TIMEOUT_MS, gesetzt NUR in der Umgebung lokaler Motor-Instanzen).
-// 0 heißt „gar nicht setzen" — dann gilt die Vorgabe der Motor-Software.
 // Ehrlich: Mehr Geduld verhindert den Abbruch, macht aus einem Speicherproblem
 // aber nur kriechende Läufe. Die eigentliche Lösung ist ein Fenster, das in
 // die Karte passt — dafür gibt es die VRAM-Passt-Prüfung unten.
-export const LOKAL_GEDULD_STANDARD = 0
-export const LOKAL_GEDULD_WAHL = [0, 900000, 1800000, 3600000]
+//
+// 0.51.4: Die Stufe 0 („gar nicht setzen, Vorgabe der Motor-Software") ist
+// RAUS, und der Standard sind 30 Minuten. Grund ist eine Messung am Life-OS-
+// Lauf vom 21.08.2026: Der Motor hat eine laufende Antwort nach 9 min 59 s
+// abgeschnitten (einzige `cancel task`-Zeile im Ollama-Log; der Server lieferte
+// zu dem Zeitpunkt seit 8 Minuten ununterbrochen). Entscheidend ist, dass die
+// Grenze STILLE zählt, nicht Dauer: Eine 13-min-Antwort davor lief durch, weil
+// sie fortlaufend Text schickte. Ein großer Werkzeugaufruf wird aber am Stück
+// erzeugt — 9.000 Tokens bei ~20 Tokens/s sind siebeneinhalb Minuten, in denen
+// beim Motor nichts ankommt. Damit ist die ungesetzte Vorgabe für lokale
+// Blöcke keine neutrale Wahl, sondern ein Fallstrick ohne Gegenwert; wer
+// weniger will, nimmt 15 Minuten. Nebenwirkung mit Absicht: Ein gespeichertes
+// 0 aus 0.51.3 ist keine gültige Stufe mehr und fällt beim Bereinigen auf den
+// neuen Standard — genau die Wanderung, die wir wollen.
+export const LOKAL_GEDULD_STANDARD = 1800000
+export const LOKAL_GEDULD_WAHL = [900000, 1800000, 3600000]
 
 export function lokaleGeduldBereinigen(roh) {
   const wert = Number(roh)
