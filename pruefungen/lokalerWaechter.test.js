@@ -18,7 +18,8 @@ import {
   ZEICHEN_JE_TOKEN,
   blockAgentZeichen,
   lokaleKontextSchaetzung,
-  schwelleNachLieferung
+  schwelleNachLieferung,
+  lokaleRestluftZeichen
 } from '../src/main/motor/claudeCodeMotor.js'
 import { texte } from '../src/shared/texte.js'
 
@@ -295,5 +296,57 @@ describe('0.51.4 · Wer schon geliefert hat, wird nicht mehr weggeworfen', () =>
     expect(zeile).toMatch(/übergibt FlowForge trotzdem/)
     expect(motorQuelle).toMatch(/if \(!block \|\| block\.schonungGemeldet\) return/)
     expect(motorQuelle).toMatch(/schonungGemeldet: false/)
+  })
+})
+
+// ── Restluft der Websuche folgt der geltenden Marke (0.51.5) ─────────────────
+// Rot-vor-Grün: Bis 0.51.4 rechnete der Werkzeug-Aufbau der Websuche mit der
+// FESTEN Marke von 80 % (`(fenster * LOKAL_WAECHTER_PROZENT) / 100`), während
+// der Wächter selbst seit der Schonung bis 95 % laufen lässt. Ein Block, der
+// seinen Lieferschein abgegeben hatte und zwischen beiden Marken weiterarbeitete,
+// bekam damit eine NEGATIVE Restluft — und webWerkzeuge.js brach jede Suche mit
+// „kein Platz mehr" ab, obwohl 15 Prozentpunkte frei waren. Die Funktion
+// lokaleRestluftZeichen gab es nicht (Import rot).
+describe('0.51.5 · Die Websuche eines Blocks, der geliefert hat', () => {
+  const meldung = { etikett: 'Angriffsliste', art: 'angriffsliste', fazit: 'acht Funde' }
+  const fenster = 131_072
+  // Füllstand zwischen beiden Marken: über 80 %, unter 95 %.
+  const zwischenBeiden = Math.round(fenster * 0.87) * ZEICHEN_JE_TOKEN
+
+  it('ohne Lieferung bleibt die 80-%-Marke die Grenze', () => {
+    expect(lokaleRestluftZeichen(fenster, Math.round(fenster * 0.5) * ZEICHEN_JE_TOKEN, [])).toBeGreaterThan(0)
+    // Über der Marke ist die Restluft negativ — das ist die Sperre, so gewollt.
+    expect(lokaleRestluftZeichen(fenster, zwischenBeiden, [])).toBeLessThan(0)
+  })
+
+  it('mit abgegebener Lieferung ist zwischen den Marken wieder Platz', () => {
+    // Genau der Fall, der vorher „kein Platz mehr" meldete.
+    expect(lokaleRestluftZeichen(fenster, zwischenBeiden, [meldung])).toBeGreaterThan(0)
+  })
+
+  it('hebt den Schutz nicht auf — oberhalb der Notbremse ist Schluss', () => {
+    const ueberNotbremse = Math.round(fenster * 0.97) * ZEICHEN_JE_TOKEN
+    expect(lokaleRestluftZeichen(fenster, ueberNotbremse, [meldung])).toBeLessThan(0)
+  })
+
+  it('der Abstand zwischen beiden Marken ist genau die Schonung', () => {
+    // Was die Lieferung an Platz freigibt, sind die Prozentpunkte zwischen
+    // normaler Marke und Notbremse — in Zeichen gerechnet.
+    const ohne = lokaleRestluftZeichen(fenster, zwischenBeiden, [])
+    const mit = lokaleRestluftZeichen(fenster, zwischenBeiden, [meldung])
+    const erwartet =
+      ((fenster * (WAECHTER_NOTBREMSE_PROZENT - LOKAL_WAECHTER_PROZENT)) / 100) * ZEICHEN_JE_TOKEN
+    // Bis auf die Rundung eines Tokens — die Schätzung rundet bewusst auf.
+    expect(Math.abs(mit - ohne - erwartet)).toBeLessThan(ZEICHEN_JE_TOKEN)
+  })
+
+  it('die feste Marke steht nicht mehr im Werkzeug-Aufbau', () => {
+    // umgebungBereinigen kommt im Motor mehrfach vor — ab dem Werkzeug-Aufbau
+    // suchen, sonst liegt das Ende vor dem Anfang und der Ausschnitt ist leer.
+    const von = motorQuelle.indexOf('const webServer = lokal')
+    const aufbau = motorQuelle.slice(von, motorQuelle.indexOf('const umgebung = umgebungBereinigen(', von))
+    expect(aufbau.length).toBeGreaterThan(0)
+    expect(aufbau).not.toMatch(/fenster \* LOKAL_WAECHTER_PROZENT/)
+    expect(aufbau).toMatch(/lokaleRestluftZeichen\(/)
   })
 })

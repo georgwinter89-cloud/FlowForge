@@ -1520,6 +1520,9 @@ Lokal-Wächters** (§2) gedeckelt: Die Trefferliste verliert dann Treffer von hi
 Treffer ist die kleinste brauchbare Einheit — eine halbe Adresse taugt für kein
 `webseite_lesen`), und ist gar kein Platz mehr da, kommt statt Text bzw. Treffern der
 Klartext „kein Platz mehr im Arbeitsgedächtnis", ohne die Quelle überhaupt zu fragen.
+Gemessen wird gegen die **geltende** Marke des Wächters, nicht gegen eine feste: Hat der
+Block seinen Lieferschein abgegeben, gilt auch für die Suche die Schonung auf 95 % (§5) —
+sonst meldete FlowForge „kein Platz mehr", während der Block noch arbeiten darf.
 **Ehrlich statt „gelesen":** Eine HTTP-Fehlerseite (404, 500, 403 …) gilt nicht als gelesene
 Seite, sondern nennt den Code; 429 heißt „drosselt gerade"; eine Seite ohne lesbaren Text
 (im Browser zusammengebaut) sagt genau das. **Adress-Sperre:** nur `http`/`https`; dieser Rechner und das eigene

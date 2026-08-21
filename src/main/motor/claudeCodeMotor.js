@@ -1128,6 +1128,21 @@ export function lokaleKontextSchaetzung(zeichen) {
   return Math.ceil(zahl / ZEICHEN_JE_TOKEN)
 }
 
+// Platz im Arbeitsgedächtnis bis zur geltenden Wächter-Marke, in ZEICHEN — der
+// Deckel, an dem die Websuche (0.51.2) ihre Treffer und Seitentexte misst.
+// Eigene Funktion seit 0.51.5, weil die Rechnung vorher als feste 80 % im
+// Werkzeug-Aufbau steckte und die Schonung nach abgegebener Lieferung (0.51.4)
+// nicht kannte: Ein Block, der geliefert hat und deshalb bis 95 % weiterarbeitet,
+// bekam eine NEGATIVE Restluft, und webWerkzeuge brach jede Suche mit „kein
+// Platz mehr" ab — obwohl 15 Prozentpunkte frei waren. Die Rechnung muss der
+// Bremse folgen, nicht umgekehrt; hier steht sie einmal und ist prüfbar.
+// Negativ ist ein gültiges Ergebnis: Es heißt „über der Marke, nichts geht mehr".
+export function lokaleRestluftZeichen(fenster, schaetzZeichen, meldungen) {
+  const schwelle = schwelleNachLieferung(LOKAL_WAECHTER_PROZENT, meldungen)
+  const schwelleTokens = (Number(fenster) * schwelle) / 100
+  return Math.floor((schwelleTokens - lokaleKontextSchaetzung(schaetzZeichen)) * ZEICHEN_JE_TOKEN)
+}
+
 // Zeichen EINER SDK-Nachricht, die im Arbeitsgedächtnis des Block-Agenten
 // landen — 0 für alles andere. Der Motor sieht mit forwardSubagentText die
 // volle Unteragenten-Konversation: assistant-Nachrichten (Text, Denken,
@@ -1998,12 +2013,16 @@ export function starteLaufMotor(optionen) {
           // Übertragsgrenze des Laufs erschöpft, zählt der Wächter zwar weiter,
           // bremst aber nicht mehr; dann ist dieser Deckel die einzige Bremse.
           // null heißt „unbekannt" — dann gilt der Standard-Deckel.
+          // Gerechnet wird in lokaleRestluftZeichen — dieselbe Marke, gegen die
+          // der Lokal-Wächter oben misst, samt der Schonung nach abgegebener
+          // Lieferung (0.51.4/0.51.5).
           holeLuft: () => {
             if (!block) return null
-            const fenster = bekanntesFenster || KONTEXT_FENSTER_STANDARD
-            const schwelleTokens = (fenster * LOKAL_WAECHTER_PROZENT) / 100
-            const restTokens = schwelleTokens - lokaleKontextSchaetzung(block.schaetzZeichen)
-            return Math.floor(restTokens * ZEICHEN_JE_TOKEN)
+            return lokaleRestluftZeichen(
+              bekanntesFenster || KONTEXT_FENSTER_STANDARD,
+              block.schaetzZeichen,
+              block.meldungen
+            )
           }
         })
       : null
