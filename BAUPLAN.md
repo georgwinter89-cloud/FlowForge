@@ -1222,6 +1222,19 @@ Kaliber fürs Nachschlagen) und für zwei schlanke Werkzeuge mit wählbarer Quel
 das Lesen eines Treffers, und das Ergebnis stimmt. Ohne erreichbare Quelle steht eine
 ehrliche Fehlzeile im Ticker statt stillen Ratens. Trägt er seine SearXNG-Adresse ein,
 zeigt der Live-Status grün und die Suche läuft darüber.
+**Gebaut, und was dabei gemessen wurde (21.08.2026)** — für die nächsten Schritte wichtig:
+Die eingebaute Quelle ist **schwächer als beim Planen angenommen**: schon die dritte Suche
+hintereinander lief in die Sperre, und die hielt in einer Messung über 96 Minuten trotz
+Funkstille. Sie trägt Gelegenheits-Nachschlagen; für Dauerrecherche ist die eigene
+SearXNG-Instanz keine Kür, sondern Voraussetzung — und die liefert im Auslieferungszustand
+**kein JSON** (`settings.yml`, `search: formats: [html, json]`). Zwei Fallen, die erst die
+Prüfer fanden und die für jedes künftige Fremdtext-Werkzeug gelten: (a) Das Entkernen von
+HTML mit fauler Regex-Wiederholung ist quadratisch und blockiert den **ganzen**
+Electron-Hauptprozess — gemessen 232 s bei 1 MB, dabei läuft kein Timer, also hilft kein
+Zeitlimit; jetzt lineare Helfer (4 ms). (b) Ein Deckel, der nur auf einem Feld sitzt, ist
+kein Deckel: Titel und Adresse eines Treffers waren ungedeckelt (481.553 Zeichen in einer
+Suche). Ehrliche Grenze, unverändert offen: kein Lauf gegen Georgs qwen3.8-davidau:27b und
+keine echte SearXNG-Instanz mit JSON — der Alltagsweg selbst ist damit ungeprüft.
 
 ### Zwischenschritt 0.51.3 — Speicher-Ehrlichkeit der lokalen KI
 (Wunsch Georg, 20.08.2026; Reihenfolge-Entscheidung Georg: NACH der Websuche [0.51.2],
