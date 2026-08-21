@@ -1288,6 +1288,32 @@ Warnzeile mit dem In-der-Karte-Anteil im Ticker; mit passendem Fenster (bzw. dan
 KV-Kompression) keine Warnzeile. In der Fensterwahl gibt es 96k. Die neue
 Geduld-Einstellung steht in den Einstellungen mit ehrlichem Hinweis und wirkt
 nur auf lokale Blöcke.
+**Gebaut, und was dabei entschieden wurde (21.08.2026)** — für die nächsten Schritte
+wichtig: (a) Die Stufenliste des Kontextfensters stand an **drei** Stellen
+(Hauptprozess-Einstellungen, Helfer-Grenzen, Auswahlfeld im Dialog); eine neue Stufe an
+nur zwei davon hieße „der Dialog bietet 96k an, das Speichern dreht es still auf 64k
+zurück". Sie hat jetzt genau einen Wohnort (`src/shared/lokalRegeln.js`) — dieselbe Falle
+lauert bei jeder künftigen Auswahl, die Renderer und Hauptprozess beide kennen müssen.
+(b) Die 96k-Runden bekamen eine **eigene** Stufe (80): 96k fiel sonst in die 64k-Stufe und
+hätte ein Drittel mehr Fenster ohne einen einzigen Zug mehr bekommen. (c) Die Geduld wird
+nach dem Muster der SearXNG-Adresse gespeichert (`undefined` → Wert aus der Datei halten),
+nicht nach dem des Kontextfensters — ein Aufrufer, der das Feld nicht kennt, holte sonst
+genau den Abbruch zurück, gegen den die Einstellung gebaut ist (gemessen als
+Rot-vor-Grün-Fall). (d) Die VRAM-Prüfung schweigt, wenn sie **nicht messen kann**
+(Prozessliste weg, Modell nicht in der Liste, Ollama-Fassung ohne `size`/`size_vram`):
+Eine Warnung aus einer misslungenen Messung wäre ein Fehlalarm, der Georg genau das
+Fenster verstellen ließe, das richtig war. **Gemessen** (21.08.2026, echte HTTP-Runde gegen
+einen nachgebauten Ollama in Antwortform von `/api/ps`): halb ausgelagert (18,3 von 30,5 GB)
+→ Warnung mit „59 %", ganz in der Karte → still, stummer Server → nach 4 Sekunden still,
+ohne den Hauptprozess aufzuhalten. Der Dialog wurde in der gebauten App ferngesteuert
+geprüft (Fensterwahl bietet 32k/64k/96k/128k, die Geduld-Stufen stehen mit ehrlichem
+Hinweis, beide Werte überleben Speichern und Neuladen). Ehrliche Grenzen, unverändert
+offen: kein Lauf gegen Georgs echten Ollama mit halb ausgelagertem 27B-Modell;
+die 99-%-Schwelle und die drei Geduld-Stufen
+(15/30/60 min) sind gesetzte Werte, keine Messung; und die Vorgabe der Motor-Software für
+`API_TIMEOUT_MS` ist nicht dokumentiert — deshalb heißt die Stufe „Standard (Vorgabe des
+Motors)" und nennt keine Zahl. Ob die KV-Kompression auf dem Gaming-PC wirklich 128k in
+die Karte bringt, beantwortet erst Georgs erster Lauf — die Warnzeile ist genau dafür da.
 
 ## Reihenfolge-Begründung (Paket 40–48)
 Im Paket 40–48 bestimmt die Angriffsliste die Reihenfolge, nicht der Nutzen: Die

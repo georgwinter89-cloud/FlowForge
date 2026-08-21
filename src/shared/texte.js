@@ -2781,16 +2781,39 @@ export const texte = {
       `Ollama läuft, aber das Modell „${modell}" ist nicht heruntergeladen.`,
     lokaleHelferStatusVorhandene: (modelle) => `Vorhanden: ${modelle.join(', ')}.`,
     lokaleHelferStatusAus: 'Ollama ist unter dieser Adresse gerade nicht erreichbar.',
-    // Kontext-Fenster (seit 0.46.3): 32k / 64k / 128k, Werkzeug-Deckel wachsen mit.
+    // Kontext-Fenster (seit 0.46.3): 32k / 64k / 96k / 128k, Werkzeug-Deckel
+    // wachsen mit. Die 96k-Stufe und der Kompressions-Hinweis seit 0.51.3.
     lokaleHelferKontext: 'Kontextfenster der lokalen KI',
     lokaleHelferKontextWahl: (kontext) => `${Math.round(kontext / 1024)}k Token`,
     lokaleHelferKontextHinweis:
       'Wie viel die lokale KI auf einmal im Kopf behält. Mit dem Fenster wachsen auch ihre ' +
       'Portionen (Zeilen je Lesen, Suchtreffer, Runden). Faustregel fürs Grafikspeicher-Budget: ' +
       'Das Arbeitsgedächtnis kostet zusätzlich zu den Modell-Gewichten grob 250 KB je Token bei ' +
-      'einem 27B-Modell — 64k ≈ 16 GB, 128k ≈ 32 GB. Passt es nicht mehr in die Karte, ' +
-      'lagert Ollama still in den Arbeitsspeicher aus und alles wird sehr langsam. Empfehlung: ' +
-      '64k; 128k nur, wenn Ollama beim Laufen (ollama ps) noch „100 % GPU" zeigt.',
+      'einem 27B-Modell — 64k ≈ 16 GB, 96k ≈ 24 GB, 128k ≈ 32 GB. Passt es nicht mehr in die ' +
+      'Karte, lagert Ollama still in den Arbeitsspeicher aus, alles wird sehr langsam, und ' +
+      'irgendwann bricht der Block mit einer Zeitüberschreitung ab. Voreingestellt ist 64k — ' +
+      'das ist auch auf kleineren Karten sicher. Hast du ein 27B-Modell auf einer 32-GB-Karte, ' +
+      'ist 96k der bessere Mittelweg: Bei 64k bleiben dem Block-Agenten nach dem Startauftrag ' +
+      'nur rund 28.000 Tokens Arbeitsraum. Raten musst du nicht: FlowForge misst kurz nach dem Blockstart ' +
+      'nach, wie viel wirklich in der Karte liegt, und schreibt eine Warnzeile in den Ticker, ' +
+      'wenn etwas ausgelagert wurde. ' +
+      'Mehr Fenster in dieselbe Karte bekommst du mit der Zwischenspeicher-Kompression: Setz ' +
+      'auf dem Ollama-Rechner die Benutzervariablen OLLAMA_FLASH_ATTENTION=1 und ' +
+      'OLLAMA_KV_CACHE_TYPE=q8_0 und starte Ollama neu — das halbiert den Bedarf grob, dann ' +
+      'passen voraussichtlich auch 128k. Das sind Einstellungen von Ollama, nicht von ' +
+      'FlowForge; ob sie bei dir wirken, sagt dir dieselbe Warnzeile (bzw. ihr Ausbleiben).',
+    // Geduld der Werkzeug-Schicht (0.51.3, Entscheidung Georg): ehrlich als
+    // Notnagel benannt, nicht als Lösung — die Lösung ist ein passendes Fenster.
+    lokaleGeduld: 'Wartezeit auf Antworten der lokalen KI',
+    lokaleGeduldWahl: (ms) =>
+      Number(ms) === 0 ? 'Standard (Vorgabe des Motors)' : `${Math.round(Number(ms) / 60000)} Minuten`,
+    lokaleGeduldHinweis:
+      'Wie lange der Motor auf eine einzelne Antwort deiner lokalen KI wartet, bevor er den ' +
+      'Block abbricht. Ehrlich gesagt: Mehr Geduld verhindert den Abbruch, macht aus einem ' +
+      'Speicherproblem aber nur einen kriechenden Lauf statt eines abgebrochenen — die ' +
+      'eigentliche Lösung ist ein Kontextfenster, das ganz in die Grafikkarte passt (siehe ' +
+      'die Warnzeile oben im Ticker). Gilt nur für Blöcke der Modellklasse „lokal"; ' +
+      'Claude-Blöcke und die Helfer-KI oben bleiben unberührt.',
     // Lokale KI als Block-Agent (BAUPLAN 49): Georgs lokale KI darf ganze
     // Blöcke übernehmen (Modellklasse „lokal" an der Karte). Läuft über
     // Ollamas Anthropic-Schnittstelle in einer eigenen Motor-Instanz. Die
@@ -3925,6 +3948,19 @@ export const texte = {
     // Arbeitsgedächtnis. Gewarnt, nicht gesperrt (Rückfrage-statt-Sperre).
     lokalFensterKnapp: (kontext) =>
       `Achtung: Das Kontextfenster der lokalen KI (${Math.round(kontext).toLocaleString('de-DE')} Tokens) ist für lokale Block-Agenten zu knapp — der Motor reserviert davon rund 33.000 Tokens für Antwort und Zusammenfassung, und allein der Start-Auftrag wiegt gut 20.000. Auch nachgeschlagene Seitentexte brauchen genau diesen Platz: Jede gelesene Webseite füllt das Arbeitsgedächtnis weiter. Stell in den Einstellungen 64k oder mehr ein, sonst läuft der Block sofort über.`,
+    // VRAM-Passt-Prüfung (0.51.3): Kurz nach dem Blockstart gemessen, was
+    // wirklich in der Grafikkarte liegt — Warnung, keine Sperre. Die Zahl ist
+    // abgerundet, damit hier nie „100 %" neben einer Warnung steht. Gibt es
+    // keine Messung (alte Ollama-Fassung, Prozessliste nicht erreichbar),
+    // bleibt der Ticker still: eine Warnung aus einer misslungenen Messung
+    // wäre ein Fehlalarm, der Georg das richtige Fenster verstellen ließe.
+    lokalSpeicherKnapp: (prozent, kontext) =>
+      `Achtung: Deine lokale KI liegt nur zu ${prozent} % in der Grafikkarte — der Rest rechnet im Arbeitsspeicher. Grund ist fast immer ein zu großes Kontextfenster (eingestellt: ${Math.round(kontext).toLocaleString('de-DE')} Tokens): Das Arbeitsgedächtnis passt nicht mehr neben die Modell-Gewichte. Folge, wenn es so bleibt: Der Block kriecht und läuft irgendwann in eine Zeitüberschreitung. Stell in den Einstellungen ein kleineres Kontextfenster ein — oder schalte auf dem Ollama-Rechner die Zwischenspeicher-Kompression ein (Hinweis in den Einstellungen).`,
+    // Geduld der Werkzeug-Schicht (0.51.3): Steht sie nicht auf Standard,
+    // gehört das sichtbar an den Laufanfang — sie verändert, wie lange ein
+    // hängender lokaler Block Zeit bekommt, bevor FlowForge ihn abbricht.
+    lokalGeduldGesetzt: (minuten) =>
+      `Wartezeit auf Antworten der lokalen KI: ${minuten} Minuten statt der Vorgabe des Motors (deine Einstellung). Das verhindert frühe Abbrüche — schnell macht es einen überlasteten Grafikspeicher nicht.`,
     lokalWaechterUebertrag: (geschaetzt, fenster) =>
       `Das Arbeitsgedächtnis des lokalen Blocks ist fast voll (~${Math.round(geschaetzt).toLocaleString('de-DE')} von ${Math.round(fenster).toLocaleString('de-DE')} Tokens, von FlowForge geschätzt) — FlowForge übergibt an einen frischen Anlauf, bevor die lokale KI still vergisst.`,
     uebertragAngefordert: (von, bis) =>

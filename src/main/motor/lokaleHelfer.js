@@ -64,6 +64,7 @@ import { texte } from '../../shared/texte.js'
 // Liste" wie die Schreibsperre des Motors — kein eigener Abgleicher hier,
 // sonst sperrte die lokale KI eine Datei, die der Bauer schreiben darf.
 import { stehtInDateiliste } from '../dateilistenPfade.js'
+import { LOKAL_KONTEXT_STANDARD, LOKAL_KONTEXT_WAHL } from '../../shared/lokalRegeln.js'
 
 // Standard-Adresse: Ollama auf diesem Rechner. Über die Einstellungen ist auch
 // ein anderer Rechner im Heimnetz möglich (z.B. ein Gaming-PC mit richtiger
@@ -72,25 +73,41 @@ const STANDARD_ADRESSE = 'http://127.0.0.1:11434'
 
 // Kontext-Fenster der lokalen KI (Einstellung `lokaleHelferKontext`, seit
 // 0.46.3 — Wunsch Georg 18.08.2026 für ein 27B-Modell auf einer 32-GB-Karte):
-// 32k, 64k oder 128k Token; num_ctx wird je Anfrage mitgeschickt und
+// 32k, 64k, 96k oder 128k Token (die 96k als Mittelweg seit 0.51.3);
+// num_ctx wird je Anfrage mitgeschickt und
 // überstimmt die Ollama-Einstellung. Ehrliche Grenze, die in der Einstellung
 // steht: Das Arbeitsgedächtnis (KV-Cache) wächst mit dem Fenster — bei einem
-// 27B-Modell grob 250 KB je Token, also ~16 GB bei 64k und ~32 GB bei 128k
-// zusätzlich zu den Gewichten. Passt es nicht in die Karte, lagert Ollama still
-// auf die CPU aus und alles kriecht; kleine Modelle verlieren in Riesen-
-// Kontexten außerdem den Faden. Deshalb Standard 64k, nicht 128k.
+// 27B-Modell grob 250 KB je Token, also ~16 GB bei 64k, ~24 GB bei 96k und
+// ~32 GB bei 128k zusätzlich zu den Gewichten. Passt es nicht in die Karte,
+// lagert Ollama still auf die CPU aus und alles kriecht; kleine Modelle
+// verlieren in Riesen-Kontexten außerdem den Faden. Deshalb Standard 64k,
+// nicht 128k. Ob es wirklich passt, ist seit 0.51.3 keine Faustregel mehr,
+// sondern gemessen: Die VRAM-Passt-Prüfung (lokalerSpeicher.js) fragt nach dem
+// ersten Turn Ollamas Prozessliste und warnt im Ticker, wenn das Modell nicht
+// (nahezu) vollständig in der Karte liegt.
 //
 // Die Werkzeug-Deckel (Zeilen je Lesen, Zeichen je Antwort, Suchtreffer,
 // Ordnereinträge) und der Runden-Deckel wachsen mit dem Fenster mit — sonst
 // bekäme ein 128k-Modell dieselben Häppchen wie ein 32k-Modell und bräuchte
 // nur mehr Runden. Bezugsgröße sind die 32k-Werte (400 / 24.000 / 60 / 300 /
 // 48 Runden — die 48 statt 32 seit 18.08.2026, weil die lokale KI auch
-// mittelgroße Aufträge bekommt); bei 64k das Doppelte, bei 128k das Vierfache
-// (Runden: 48 / 64 / 96 — Runden hängen an der Aufgabentiefe, nicht linear
-// am Fenster). Alle Deckel liegen in `grenzen`, gesetzt über
+// mittelgroße Aufträge bekommt); bei 64k das Doppelte, bei 96k das Dreifache,
+// bei 128k das Vierfache (Runden: 48 / 64 / 80 / 96 — Runden hängen an der
+// Aufgabentiefe, nicht linear am Fenster). Alle Deckel liegen in `grenzen`, gesetzt über
 // lokaleHelferKontextSetzen — einmal je Laufstart aus den Einstellungen.
-export const KONTEXT_FENSTER_STANDARD = 65536
-export const KONTEXT_FENSTER_WAHL = [32768, 65536, 131072]
+// Wohnort der beiden Konstanten ist seit 0.51.3 src/shared/lokalRegeln.js —
+// die Stufenliste stand vorher an drei Stellen (hier, in den Einstellungen des
+// Hauptprozesses und im Auswahlfeld des Dialogs), und eine neue Stufe an nur
+// zwei davon hieße: Der Dialog bietet sie an, das Speichern dreht sie still auf
+// den Standard zurück. Weitergereicht statt umbenannt, damit alle bisherigen
+// Lesestellen (Motor, Lauf, Prüfungen) gültig bleiben.
+export const KONTEXT_FENSTER_STANDARD = LOKAL_KONTEXT_STANDARD
+export const KONTEXT_FENSTER_WAHL = LOKAL_KONTEXT_WAHL
+// Die Helfer-KI behält ihr eigenes 5-Minuten-Limit: Die Geduld-Einstellung aus
+// 0.51.3 wirkt ausschließlich auf die Werkzeug-Schicht des Motors bei lokalen
+// BLÖCKEN. Ein Helfer-Kreislauf ist eine einzelne kurze Frage — würde er
+// stundenlang offen gehalten, hinge der Block-Agent daran, statt die Arbeit
+// selbst zu erledigen (gemessen 20.08.2026: 48 Timeouts à 5 Minuten).
 const ANTWORT_ZEITLIMIT_MS = 5 * 60 * 1000
 
 export function grenzenFuer(kontext) {
@@ -100,7 +117,12 @@ export function grenzenFuer(kontext) {
   const faktor = fenster / 32768
   return {
     kontext: fenster,
-    runden: fenster >= 131072 ? 96 : fenster >= 65536 ? 64 : 48,
+    // Runden hängen an der Aufgabentiefe, nicht linear am Fenster: 48 / 64 /
+    // 80 / 96. Die 80 für 96k ist die bewusst geprüfte Stufe aus 0.51.3 — 96k
+    // fiel vorher in die 64k-Stufe und hätte ein Drittel mehr Fenster ohne
+    // einen einzigen Zug mehr bekommen; die volle 128k-Stufe wiederum wäre für
+    // ein Fenster, das drei Viertel davon misst, zu großzügig.
+    runden: fenster >= 131072 ? 96 : fenster >= 98304 ? 80 : fenster >= 65536 ? 64 : 48,
     zeilenJeLesen: 400 * faktor,
     zeichenJeAntwort: 24000 * faktor,
     trefferJeSuche: 60 * faktor,

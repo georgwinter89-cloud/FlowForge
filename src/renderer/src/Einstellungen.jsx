@@ -3,6 +3,10 @@ import { texte } from '../../shared/texte.js'
 import {
   LOKAL_FEIN_FELDER,
   LOKAL_FEIN_VORLAGEN,
+  LOKAL_GEDULD_STANDARD,
+  LOKAL_GEDULD_WAHL,
+  LOKAL_KONTEXT_STANDARD,
+  LOKAL_KONTEXT_WAHL,
   adresseBereinigen,
   lokalFeinBereinigen,
   lokalFeinVorlageErkennen,
@@ -67,7 +71,9 @@ export default function Einstellungen({ onSchliessen }) {
   // Adress-Liste (BAUPLAN 51): mehrere Ollama-Rechner/GPUs, Zeile je Adresse.
   // Die erste Adresse ist der Anker für Helfer-KI und Vorreparatur.
   const [lokaleHelferAdressen, setLokaleHelferAdressen] = useState([''])
-  const [lokaleHelferKontext, setLokaleHelferKontext] = useState(65536)
+  const [lokaleHelferKontext, setLokaleHelferKontext] = useState(LOKAL_KONTEXT_STANDARD)
+  // Geduld der Werkzeug-Schicht (0.51.3): 0 = Vorgabe der Motor-Software.
+  const [lokaleAntwortGeduldMs, setLokaleAntwortGeduldMs] = useState(LOKAL_GEDULD_STANDARD)
   // Lokale KI als Block-Agent (BAUPLAN 49): Häkchen + Feineinstellungen (als
   // Text je Feld, damit sich halb getippte Zahlen nicht sofort wegrunden).
   const [lokalBlockAgent, setLokalBlockAgent] = useState(false)
@@ -109,7 +115,12 @@ export default function Einstellungen({ onSchliessen }) {
           ? e.einstellungen.lokaleHelferAdressen
           : [e.einstellungen.lokaleHelferAdresse ?? '']
       )
-      setLokaleHelferKontext(Number(e.einstellungen.lokaleHelferKontext) || 65536)
+      setLokaleHelferKontext(Number(e.einstellungen.lokaleHelferKontext) || LOKAL_KONTEXT_STANDARD)
+      setLokaleAntwortGeduldMs(
+        LOKAL_GEDULD_WAHL.includes(Number(e.einstellungen.lokaleAntwortGeduldMs))
+          ? Number(e.einstellungen.lokaleAntwortGeduldMs)
+          : LOKAL_GEDULD_STANDARD
+      )
       setLokalBlockAgent(Boolean(e.einstellungen.lokalBlockAgent))
       setLokalFeinText(feinAlsText(lokalFeinBereinigen(e.einstellungen.lokalFein)))
       setSearxngAdresse(e.einstellungen.searxngAdresse ?? '')
@@ -219,6 +230,10 @@ export default function Einstellungen({ onSchliessen }) {
       // Adresse selbst.
       lokaleHelferAdressen,
       lokaleHelferKontext,
+      // Geduld der Werkzeug-Schicht (0.51.3): Fehlte das Feld hier, hielte der
+      // Hauptprozess zwar den gespeicherten Wert (undefined = aus der Datei),
+      // aber Georg könnte ihn nie ändern.
+      lokaleAntwortGeduldMs,
       lokalBlockAgent,
       lokalFein: lokalFeinBereinigt,
       // Websuche der lokalen Blöcke (0.51.2): Diese Liste ist handgeschrieben —
@@ -451,21 +466,41 @@ export default function Einstellungen({ onSchliessen }) {
                   onChange={(e) => setLokaleHelferModell(e.target.value)}
                 />
               </label>
-              {/* Kontext-Fenster (seit 0.46.3): 32k / 64k / 128k — die
-                  Werkzeug-Deckel der lokalen KI wachsen mit. */}
+              {/* Kontext-Fenster (seit 0.46.3): 32k / 64k / 96k / 128k — die
+                  Werkzeug-Deckel der lokalen KI wachsen mit. Die Stufenliste
+                  kommt seit 0.51.3 aus lokalRegeln.js: Stünde sie hier noch
+                  einmal von Hand, böte der Dialog eine Stufe an, die das
+                  Speichern still auf den Standard zurückdreht. */}
               <label className="feld">
                 <span>{t.lokaleHelferKontext}</span>
                 <select
                   value={lokaleHelferKontext}
                   onChange={(e) => setLokaleHelferKontext(Number(e.target.value))}
                 >
-                  {[32768, 65536, 131072].map((k) => (
+                  {LOKAL_KONTEXT_WAHL.map((k) => (
                     <option key={k} value={k}>
                       {t.lokaleHelferKontextWahl(k)}
                     </option>
                   ))}
                 </select>
                 <span className="feld-hinweis">{t.lokaleHelferKontextHinweis}</span>
+              </label>
+              {/* Geduld der Werkzeug-Schicht (0.51.3): ehrlich als Notnagel
+                  benannt — sie verhindert den Abbruch, macht aus einem
+                  Speicherproblem aber nur kriechende Läufe. */}
+              <label className="feld">
+                <span>{t.lokaleGeduld}</span>
+                <select
+                  value={lokaleAntwortGeduldMs}
+                  onChange={(e) => setLokaleAntwortGeduldMs(Number(e.target.value))}
+                >
+                  {LOKAL_GEDULD_WAHL.map((ms) => (
+                    <option key={ms} value={ms}>
+                      {t.lokaleGeduldWahl(ms)}
+                    </option>
+                  ))}
+                </select>
+                <span className="feld-hinweis">{t.lokaleGeduldHinweis}</span>
               </label>
               {/* Websuche der lokalen Blöcke (0.51.2): ein Feld. Leer =
                   eingebaute Quelle, gefüllt = eigene SearXNG-Instanz.

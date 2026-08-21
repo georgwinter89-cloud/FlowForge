@@ -5,7 +5,10 @@ import path from 'node:path'
 import { texte } from '../shared/texte.js'
 import {
   LOKAL_FEIN_VORLAGEN,
+  LOKAL_GEDULD_STANDARD,
+  LOKAL_KONTEXT_WAHL,
   lokalFeinBereinigen,
+  lokaleGeduldBereinigen,
   adresseBereinigen,
   searxngAdresseBereinigen
 } from '../shared/lokalRegeln.js'
@@ -68,11 +71,19 @@ const STANDARD = {
   // wird als Spiegel adressen[0] weitergeführt — Alt-Lesestellen und Tests
   // bleiben gültig.
   lokaleHelferAdressen: ['http://127.0.0.1:11434'],
-  // Kontext-Fenster der lokalen KI in Token (32k / 64k / 128k; Wunsch Georg
-  // 18.08.2026 für ein 27B-Modell auf einer 32-GB-Karte). Die Werkzeug-Deckel
-  // der lokalen KI wachsen mit (lokaleHelfer.js). Standard 64k: passt bei 27B
-  // samt Gewichten in 32 GB; 128k nur, wenn die Karte es wirklich hergibt.
+  // Kontext-Fenster der lokalen KI in Token (32k / 64k / 96k / 128k; Wunsch
+  // Georg 18.08.2026 für ein 27B-Modell auf einer 32-GB-Karte, die 96k als
+  // Mittelweg seit 0.51.3). Die Werkzeug-Deckel der lokalen KI wachsen mit
+  // (lokaleHelfer.js). Standard 64k: passt bei 27B samt Gewichten in 32 GB;
+  // 128k nur, wenn die Karte es wirklich hergibt — was die VRAM-Passt-Prüfung
+  // seit 0.51.3 im Ticker beantwortet statt es der Faustregel zu überlassen.
   lokaleHelferKontext: 65536,
+  // Geduld der Werkzeug-Schicht (0.51.3, Entscheidung Georg): Wie lange der
+  // Motor auf eine Antwort der lokalen KI wartet, bevor er den Block abbricht.
+  // 0 = gar nicht setzen, dann gilt die Vorgabe der Motor-Software. Wirkt NUR
+  // in der Umgebung lokaler Motor-Instanzen; die Helfer-KI behält ihr eigenes
+  // 5-Minuten-Limit, Claude-Blöcke bleiben unberührt.
+  lokaleAntwortGeduldMs: LOKAL_GEDULD_STANDARD,
   // Lokale KI als Block-Agent (BAUPLAN 49): Häkchen „als Block-Agent erlaubt".
   // Nur wirksam, wenn lokaleHelferAktiv an ist. Ohne dieses Häkchen lehnt der
   // Start einen Block der Klasse „lokal" mit Klartext ab — kein stiller
@@ -97,7 +108,11 @@ const STANDARD = {
   extraKostenBestaetigt: false
 }
 
-const KONTEXT_WAHL = [32768, 65536, 131072]
+// Die Stufenliste hat seit 0.51.3 genau einen Wohnort (src/shared/lokalRegeln.js) —
+// vorher stand sie hier, in lokaleHelfer.js und im Auswahlfeld des Dialogs,
+// und eine neue Stufe an nur zwei Stellen hieße: Der Dialog bietet 96k an,
+// das Speichern dreht es still auf 64k zurück.
+const KONTEXT_WAHL = LOKAL_KONTEXT_WAHL
 
 // Die Adress-Liste säubern (BAUPLAN 51): je Eintrag dieselbe Regel wie bisher
 // beim Einzelfeld, Ungültige verwerfen, exakte String-Duplikate entfernen —
@@ -288,6 +303,18 @@ export function einstellungenSpeichern(neu) {
     lokaleHelferKontext: KONTEXT_WAHL.includes(Number(neu.lokaleHelferKontext))
       ? Number(neu.lokaleHelferKontext)
       : STANDARD.lokaleHelferKontext,
+    // Geduld der Werkzeug-Schicht (0.51.3) — nach dem Muster der SearXNG-
+    // Adresse und NICHT nach dem des Kontextfensters: Ein Aufrufer, der das
+    // Feld gar nicht kennt, darf Georgs Wahl nicht still auf „Standard"
+    // zurückdrehen. Genau dieser stille Verlust war der Befund von Prüfer 1 in
+    // Bausession 51 (Adress-Liste) — und hier wöge er schwerer, weil der
+    // zurückgedrehte Wert genau den Abbruch zurückholt, gegen den die
+    // Einstellung gebaut ist. undefined → Wert aus der Datei halten;
+    // alles andere → bereinigen (unbekannte Stufe = Standard).
+    lokaleAntwortGeduldMs:
+      neu.lokaleAntwortGeduldMs === undefined
+        ? lokaleGeduldBereinigen(einstellungenLaden().einstellungen.lokaleAntwortGeduldMs)
+        : lokaleGeduldBereinigen(neu.lokaleAntwortGeduldMs),
     // Lokale KI als Block-Agent (BAUPLAN 49): Häkchen und Feineinstellungen.
     // Fehlt lokalFein (ältere Aufrufer), bleibt alles Ollama-Standard.
     lokalBlockAgent: Boolean(neu.lokalBlockAgent),

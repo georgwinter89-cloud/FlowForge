@@ -25,6 +25,8 @@ import {
 import { kartenWerkzeugServer } from './kartenWerkzeuge.js'
 import { helferWerkzeugServer } from './helferWerkzeuge.js'
 import { webWerkzeugServer } from './webWerkzeuge.js'
+import { ollamaSpeicherStand } from './lokalerSpeicher.js'
+import { vramProzent } from '../../shared/lokalRegeln.js'
 import { menschWerkzeugServer } from './menschWerkzeuge.js'
 import { kontextFensterFuerModell, kontextFensterMerken } from './motorWissen.js'
 import { startWerkzeugServer } from './startWerkzeuge.js'
@@ -1294,6 +1296,12 @@ export function starteLaufMotor(optionen) {
     // Obergrenze bräche lokale Läufe ab), Fenster fest aus den Einstellungen
     // (die CLI meldet 200000), Kosten verworfen (0). Sperren, Lieferschein,
     // Hooks, Rechte-Rückfragen, Übertrag, Sicherungspunkte: unverändert.
+    // Seit 0.51.3 zusätzlich { geduldMs, speicherPruefen }: `geduldMs` ist
+    // Georgs Einstellung „Wartezeit auf Antworten der lokalen KI" (0 = Vorgabe
+    // der Motor-Software; gesetzt als API_TIMEOUT_MS ausschließlich in DIESER
+    // Umgebung), `speicherPruefen` liefert genau einmal je Adresse und Lauf
+    // true — der Zähler gehört dem Lauf, nicht dieser je Block neu gebauten
+    // Instanz.
     lokal = null,
     // Websuche lokaler Blöcke (0.51.2): { searxngAdresse } — leer heißt
     // eingebaute Quelle. Die zwei Werkzeuge hängen an `lokal`, nicht an dieser
@@ -1516,6 +1524,38 @@ export function starteLaufMotor(optionen) {
     aufEreignis({ art: 'verbrauch', verbrauch: blockVerbrauch() })
   }
 
+  // VRAM-Passt-Prüfung (0.51.3): Liegt das abgeleitete Modell nicht (nahezu)
+  // vollständig in der Grafikkarte, steht das als Warnzeile im Ticker und
+  // damit im Laufbericht — Warnung, keine Sperre (Rückfrage-statt-Sperre).
+  //
+  // Anlass (Wiederholungslauf Life OS, 20.08.2026): Der lokale Bauer starb
+  // nach 72 Minuten am Zeitlimit der Werkzeug-Schicht. Der Lokal-Wächter
+  // feuerte korrekt nicht — es war kein Kontext-Überlauf, sondern
+  // Speicherdruck: Das 128k-Fenster sprengte mit seinem Zwischenspeicher die
+  // 32-GB-Karte, Ollama lagerte in den Arbeitsspeicher aus (7,5 → 42 GB), und
+  // jeder Gesprächswechsel rechnete das volle Gespräch im RAM-Kriechgang neu.
+  // Genau das konnte FlowForge bis dahin nicht sehen.
+  //
+  // Je Adresse einmal je Lauf: Den Zähler führt der Lauf (lokal.speicherPruefen
+  // liefert genau einmal true je Adresse) — nicht dieser Motor, denn er
+  // existiert je Block, und dieselbe Adresse trägt nacheinander mehrere Blöcke
+  // und jeden Übertrags-Anlauf.
+  async function speicherPruefungMelden() {
+    try {
+      if (!lokal?.speicherPruefen || !lokal.speicherPruefen()) return
+      const stand = await ollamaSpeicherStand({ adresse: lokal.adresse, modell: lokal.modell })
+      // Nicht messbar ist NICHT „passt nicht": kein Fehlalarm aus einer
+      // misslungenen Messung (siehe lokalerSpeicher.js).
+      if (!stand.ok || stand.passt) return
+      aufEreignis({
+        art: 'ticker',
+        text: texte.ticker.lokalSpeicherKnapp(vramProzent(stand.anteil), bekanntesFenster)
+      })
+    } catch {
+      // Ein Hinweis, der nicht zustande kommt, darf keinen Block umbringen.
+    }
+  }
+
   // Lokal-Wächter (0.51.1) — NUR für lokale Motoren; Claude-Sessions bleiben
   // exakt beim bisherigen Verhalten (dort misst die CLI ehrlich, und die
   // Übertrags-Schwelle unten am Koordinator-Faden bleibt die einzige).
@@ -1553,6 +1593,12 @@ export function starteLaufMotor(optionen) {
         art: 'ticker',
         text: texte.ticker.lokalStartPrompt(gemeldet, geschaetztStart, fensterJetzt)
       })
+      // VRAM-Passt-Prüfung (0.51.3): DERSELBE Einmal-Moment — der erste Turn
+      // ist durch, das Modell liegt also sicher geladen in Ollamas
+      // Prozessliste. Läuft absichtlich NEBEN dem Block (kein await): Der
+      // Wächter hier verarbeitet gerade eine Nachricht, und ein hängendes
+      // Ollama darf ihn nicht aufhalten. Wirft nie.
+      speicherPruefungMelden()
       // Selbst-Kalibrierung (Befund Prüfer 1): Die Startschätzung kennt nur
       // Auftrag + Systemtext — Werkzeug-Definitionen und CLI-Vorspann fehlen
       // ihr (~gleich groß wie der gezählte Teil). Beim ersten Turn ist Ollamas
@@ -1924,6 +1970,13 @@ export function starteLaufMotor(optionen) {
       umgebung.ANTHROPIC_SMALL_FAST_MODEL = lokal.modell
       umgebung.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = '1'
       umgebung.CLAUDE_CODE_MAX_CONTEXT_TOKENS = String(bekanntesFenster)
+      // Geduld der Werkzeug-Schicht (0.51.3, Einstellung „Wartezeit auf
+      // Antworten der lokalen KI"): NUR hier, also nur in der Umgebung einer
+      // lokalen Motor-Instanz. umgebungBereinigen wirft API_TIMEOUT_MS als
+      // GEERBTEN Wert weiter raus (0.51.1) — was FlowForge selbst setzen will,
+      // kommt danach dazu, wie die Ollama-Adresse darüber. 0 heißt „gar nicht
+      // setzen": dann gilt die Vorgabe der Motor-Software.
+      if (Number(lokal.geduldMs) > 0) umgebung.API_TIMEOUT_MS = String(Number(lokal.geduldMs))
     } else if (modus === 'api') umgebung.ANTHROPIC_API_KEY = apiSchluessel
 
     // Block-Agenten-Definitionen: je Denktiefe eine (0.48.1). Lokal (BAUPLAN

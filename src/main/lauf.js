@@ -92,6 +92,7 @@ import {
   karteThemaSetzen
 } from './projekte.js'
 import { vorhandeneThemen } from '../shared/kartenRegeln.js'
+import { lokaleGeduldBereinigen } from '../shared/lokalRegeln.js'
 import {
   pruefkartenOrdner,
   pruefkarteEinlegen,
@@ -1810,6 +1811,10 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
   let lokalPool = []
   let lokalAusgefallene = []
   let lokalFehler = null
+  // VRAM-Passt-Prüfung (0.51.3): welche Adressen in DIESEM Lauf schon gemessen
+  // wurden. Der Zähler gehört dem Lauf, nicht dem Motor — der wird je Block neu
+  // gebaut, und dieselbe Adresse trägt nacheinander mehrere Blöcke.
+  const lokalSpeicherGeprueft = new Set()
   if (kette.some((e) => klasseIstLokal(blockModellKlasse(defVon(e.blockId), e)))) {
     const kontext = Number(einstellungen.lokaleHelferKontext) > 0
       ? Number(einstellungen.lokaleHelferKontext)
@@ -1920,6 +1925,14 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     // ein einziger Start-Prompt samt Reserve.
     if (lokalPool[0].kontext < 49152)
       tickern(texte.ticker.lokalFensterKnapp(lokalPool[0].kontext))
+    // Geduld der Werkzeug-Schicht (0.51.3): Steht sie nicht auf Standard,
+    // gehört das an den Laufanfang — genau wie „Befehle trotz nur-lesen" und
+    // die sparsamen Unteraufgaben. Sie verändert, wie lange ein hängender
+    // lokaler Block Zeit bekommt, bevor FlowForge ihn abbricht.
+    {
+      const geduldMs = lokaleGeduldBereinigen(einstellungen.lokaleAntwortGeduldMs)
+      if (geduldMs > 0) tickern(texte.ticker.lokalGeduldGesetzt(Math.round(geduldMs / 60000)))
+    }
   } else if (lokalFehler) tickern(lokalFehler)
   // Lokaler Prüfer ohne Claude-Abnahme (BAUPLAN 50): Hinweis, keine Sperre
   // („Rückfrage statt Sperre") — steht im Ticker und damit im Laufbericht,
@@ -2824,7 +2837,24 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         // im ganzen Motor gibt es dafür null Fundstellen).
         ...(lokalOption
           ? {
-              lokal: { adresse: lokalOption.adresse, modell: lokalOption.modell, kontext: lokalOption.kontext },
+              lokal: {
+                adresse: lokalOption.adresse,
+                modell: lokalOption.modell,
+                kontext: lokalOption.kontext,
+                // Geduld der Werkzeug-Schicht (0.51.3): Georgs Einstellung,
+                // beim Laufstart eingefroren wie jede andere. 0 = Vorgabe der
+                // Motor-Software.
+                geduldMs: lokaleGeduldBereinigen(einstellungen.lokaleAntwortGeduldMs),
+                // VRAM-Passt-Prüfung (0.51.3): genau einmal je Adresse und
+                // Lauf. Der Motor lebt je Block; dieselbe Adresse trägt
+                // nacheinander mehrere Blöcke und jeden Übertrags-Anlauf, und
+                // ohne diesen Zähler stünde die Warnzeile bei jedem davon neu.
+                speicherPruefen: () => {
+                  if (lokalSpeicherGeprueft.has(lokalOption.adresse)) return false
+                  lokalSpeicherGeprueft.add(lokalOption.adresse)
+                  return true
+                }
+              },
               // Websuche der lokalen Blöcke (0.51.2): nur lokale Motoren
               // bekommen die zwei Nachschlage-Werkzeuge — Claude-Motoren haben
               // WebSearch/WebFetch der CLI. Leere Adresse heißt eingebaute

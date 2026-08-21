@@ -25,8 +25,11 @@ afterEach(() => {
 })
 
 describe('0.46.3 · Kontext-Fenster der lokalen KI', () => {
-  it('kennt genau drei Fenster und 64k als Standard', () => {
-    expect(KONTEXT_FENSTER_WAHL).toEqual([32768, 65536, 131072])
+  // 0.51.3: 96k als Mittelweg dazu — bei 64k bleiben nach dem gemessenen
+  // Start-Prompt (~23,5k) nur ~28k Arbeitsraum bis zur Wächter-Marke, 128k
+  // sprengt unkomprimiert die 32-GB-Karte.
+  it('kennt genau vier Fenster (mit der 96k-Stufe) und 64k als Standard', () => {
+    expect(KONTEXT_FENSTER_WAHL).toEqual([32768, 65536, 98304, 131072])
     expect(KONTEXT_FENSTER_STANDARD).toBe(65536)
   })
 
@@ -43,6 +46,17 @@ describe('0.46.3 · Kontext-Fenster der lokalen KI', () => {
       eintraegeJeOrdner: 300
     })
     expect(mittel).toMatchObject({ kontext: 65536, runden: 64, zeilenJeLesen: 800, trefferJeSuche: 120 })
+    // 0.51.3: 96k ist das Dreifache der 32k-Bezugsgröße; die Runden bekommen
+    // eine EIGENE Stufe (80) — vorher fiel 96k in die 64k-Stufe und hätte ein
+    // Drittel mehr Fenster ohne einen einzigen Zug mehr bekommen.
+    expect(grenzenFuer(98304)).toMatchObject({
+      kontext: 98304,
+      runden: 80,
+      zeilenJeLesen: 1200,
+      zeichenJeAntwort: 72000,
+      trefferJeSuche: 180,
+      eintraegeJeOrdner: 900
+    })
     expect(gross).toMatchObject({
       kontext: 131072,
       runden: 96,
@@ -89,9 +103,12 @@ describe('0.46.3 · Kontext-Fenster der lokalen KI', () => {
     expect(lesen.function.description).toContain('1600')
   })
 
-  it('speichert nur die drei bekannten Fenster in den Einstellungen', () => {
+  it('speichert nur die vier bekannten Fenster in den Einstellungen', () => {
     const basis = { motorModus: 'abo', apiSchluessel: '', ausgabenObergrenzeUsd: 5 }
     expect(einstellungenSpeichern({ ...basis, lokaleHelferKontext: 131072 }).einstellungen.lokaleHelferKontext).toBe(131072)
+    // 0.51.3 — genau die Falle, gegen die die Stufenliste einen einzigen
+    // Wohnort bekam: Der Dialog bot 96k an, das Speichern drehte es zurück.
+    expect(einstellungenSpeichern({ ...basis, lokaleHelferKontext: 98304 }).einstellungen.lokaleHelferKontext).toBe(98304)
     expect(einstellungenSpeichern({ ...basis, lokaleHelferKontext: 12345 }).einstellungen.lokaleHelferKontext).toBe(65536)
     expect(einstellungenSpeichern({ ...basis }).einstellungen.lokaleHelferKontext).toBe(65536)
     expect(einstellungenLaden().einstellungen.lokaleHelferKontext).toBe(65536)

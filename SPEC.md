@@ -1,6 +1,6 @@
 # FlowForge — Produkt-Spezifikation V1
 
-Stand: 19.08.2026 (Zwischenschritt 0.48.1) · Ursprung: Grilling-Session vom 07.08.2026 (von Georg freigegeben) ·
+Stand: 21.08.2026 (Zwischenschritt 0.51.3) · Ursprung: Grilling-Session vom 07.08.2026 (von Georg freigegeben) ·
 fortlaufend gepflegt — dieses Dokument beschreibt die Gegenwart, Verhaltensänderungen
 werden hier nachgezogen (Historie liefert git).
 
@@ -165,7 +165,34 @@ Sitzungen hinweg Software entsteht — ohne dass dem Agenten der Kontext überl�
     Arbeitsgedächtnis, „[Request interrupted by user for tool use]" als Abbruch der
     Werkzeug-Schicht — ohne Nutzer-Beschuldigung, denn der Nutzer hat nichts unterbrochen.
     Ein Block mit einer solchen Marke als Ergebnis gilt als **fehlgeschlagen**, nicht als
-    Erfolg mit englischem Ergebnistext. **Abgeleitetes Modell:** Weil die CLI
+    Erfolg mit englischem Ergebnistext.
+    **Speicher-Grenze sichtbar** (seit 0.51.3; Anlass: Wiederholungslauf vom 20.08.2026, in dem
+    ein lokaler Bauer nach 72 Minuten am Zeitlimit der Werkzeug-Schicht starb — kein
+    Kontext-Überlauf, der Füllstands-Wächter feuerte korrekt nicht, sondern Speicherdruck:
+    Das 128k-Fenster sprengt mit seinem Zwischenspeicher die 32-GB-Karte, Ollama lagert still
+    in den Arbeitsspeicher aus (gemessen 7,5 → 42 GB), jeder Gesprächswechsel rechnet das volle
+    Gespräch im RAM-Kriechgang neu durch, und ab der Zeitlimit-Kante wird „langsam" zu „tot"):
+    Nach dem ersten Turn des ersten lokalen Blocks je Adresse — derselbe Einmal-Moment wie die
+    Start-Prompt-Zeile, das Modell ist dann sicher geladen — fragt FlowForge **Ollamas
+    Prozessliste** ab (`GET /api/ps`, `size` gegen `size_vram` des abgeleiteten Modells). Liegt
+    das Modell nicht zu mindestens 99 % in der Grafikkarte, steht eine **Warnzeile** in Ticker
+    und Laufbericht: Anteil in der Karte, Ursache (Fenster zu groß für den Grafikspeicher),
+    Folge (der Block kriecht und läuft in eine Zeitüberschreitung) und die zwei Wege heraus
+    (kleineres Fenster, oder Zwischenspeicher-Kompression auf dem Ollama-Rechner, §9).
+    **Warnung, keine Sperre** (Rückfrage statt Sperre), und **je Adresse einmal je Lauf** —
+    dieselbe Adresse trägt nacheinander mehrere Blöcke und jeden Übertrags-Anlauf. Ist die
+    Frage nicht beantwortbar (Prozessliste nicht erreichbar, Modell nicht in der Liste, eine
+    Ollama-Fassung ohne die Felder), bleibt der Ticker **still**: Eine Warnung aus einer
+    misslungenen Messung wäre ein Fehlalarm, der Georg genau das Fenster verstellen ließe, das
+    richtig war. **Geduld der Werkzeug-Schicht** (seit 0.51.3, Einstellung, §9): Wie lange der
+    Motor auf eine einzelne Antwort der lokalen KI wartet, bevor er den Block abbricht
+    (`API_TIMEOUT_MS`, gesetzt **nur** in der Umgebung lokaler Motor-Instanzen und **nach** der
+    Bereinigung — geerbte Werte fliegen weiter raus; die Helfer-KI behält ihr eigenes
+    5-Minuten-Limit, Claude-Blöcke bleiben unberührt). Ehrlich benannt als Notnagel: Mehr Geduld
+    verhindert den Abbruch, macht aus einem Speicherproblem aber nur einen kriechenden Lauf —
+    die Lösung ist ein Fenster, das in die Karte passt. Steht sie nicht auf „Standard", sagt
+    das eine Zeile am Laufanfang.
+    **Abgeleitetes Modell:** Weil die CLI
     keine Sampling-Optionen mitschickt, legt FlowForge vor dem Lauf per Ollama-API ein
     Modell `flowforge-<basis>` an (Kontextfenster + Feineinstellungen als
     Modell-Standardwerte: Temperatur, Top-p, Top-k, Min-p, Wiederholungsstrafe,
@@ -313,7 +340,10 @@ als „Modell: nicht vermerkt". Seit 0.48.1 steht darunter je Block die **gewäh
 Klasse und Denktiefe** („Klasse: Extra (Fable 5) · Denktiefe: xhigh (wirksam: xhigh)") —
 die Wahl an der Karte neben dem, was der Motor gemeldet hat; bei Klassen ohne Denktiefe
 (Haiku, lokal) steht „Denktiefe: gilt hier nicht". Bei einem lokalen Block (Bauschritt 49)
-ersetzt „Kosten: keine — lief auf deiner lokalen KI" die theoretischen API-Kosten. Seit
+ersetzt „Kosten: keine — lief auf deiner lokalen KI" die theoretischen API-Kosten. Der Ticker
+des Laufs steht vollständig im Bericht — dort finden sich seit 0.51.3 auch die **Warnzeile der
+VRAM-Passt-Prüfung** (Anteil des lokalen Modells in der Grafikkarte, §2) und, falls die Geduld
+der Werkzeug-Schicht nicht auf „Standard" steht, die Zeile dazu vom Laufanfang. Seit
 Bauschritt 50 stehen bei einem **lokalen Prüfer** sein eigenes Urteil und das Ergebnis des
 Tor-Ankers nebeneinander („Urteil des lokalen Prüfers: bestanden · Tor ohne KI: grün / rot —
 mechanisch gedreht / kein Prüfbefehl"), dazu die Zeile der **Abnahme** („Abnahme durch ‚Prüfer ·
@@ -1319,13 +1349,17 @@ nur die Antworten des Modells selbst bleiben unverändert im Verlauf (fehlt ihne
 Rolle, ergänzt FlowForge `assistant`). Grund: Manche lokalen Modelle bzw. Chat-Vorlagen kommen mit
 system- und tool-Rollen nicht zurecht — eine einheitliche Nutzer-Rolle läuft mit
 jeder Vorlage. **Kontext-Fenster einstellbar** (seit 0.46.3, Einstellungen: 32k / 64k /
-128k Token, Standard 64k — für ein 27B-Modell auf einer 32-GB-Karte; FlowForge schickt
+96k / 128k Token — die 96k-Stufe seit 0.51.3 —, Standard 64k, für ein 27B-Modell auf einer
+32-GB-Karte; FlowForge schickt
 `num_ctx` je Anfrage mit): Mit dem Fenster wachsen die Portionen der lokalen KI —
-Zeilen je Lesen (400 / 800 / 1.600), Zeichen je Werkzeug-Antwort (24.000 / 48.000 /
-96.000), Suchtreffer (60 / 120 / 240), Ordnereinträge (300 / 600 / 1.200) und der
-Runden-Deckel eines Kreislaufs (48 / 64 / 96 Werkzeug-Runden). Die Einstellung sagt
-ehrlich, was das Fenster an Grafikspeicher kostet (grob 250 KB je Token bei 27B); der
-Ticker nennt beim Laufstart Modell und Fenster. Denk-Modelle (z.B. gpt-oss), die ihre Antwort leer lassen und alles ins
+Zeilen je Lesen (400 / 800 / 1.200 / 1.600), Zeichen je Werkzeug-Antwort (24.000 / 48.000 /
+72.000 / 96.000), Suchtreffer (60 / 120 / 180 / 240), Ordnereinträge (300 / 600 / 900 / 1.200)
+und der Runden-Deckel eines Kreislaufs (48 / 64 / 80 / 96 Werkzeug-Runden — Runden hängen an
+der Aufgabentiefe, nicht linear am Fenster). Die Einstellung sagt
+ehrlich, was das Fenster an Grafikspeicher kostet (grob 250 KB je Token bei 27B) und nennt die
+Zwischenspeicher-Kompression als Weg zu 128k (§9); der
+Ticker nennt beim Laufstart Modell und Fenster, und bei lokalen Blöcken sagt die
+VRAM-Passt-Prüfung (§2), ob das Fenster wirklich in die Karte passt. Denk-Modelle (z.B. gpt-oss), die ihre Antwort leer lassen und alles ins
 Denkfeld schreiben, werden einmal nachgehakt, bevor ein Fehlschlag gemeldet wird.
 Modelle, die Werkzeugaufrufe als bloßen JSON-Text in die Antwort schreiben statt
 ins Werkzeug-Format (Befund 14.08.2026: qwen2.5-coder), fängt FlowForge selbst
@@ -2330,7 +2364,21 @@ Block-Agenten als Hinweis daneben (§6).
   Ungültige verworfen, exakte Duplikate entfernt, eine leere Liste durch den Standard
   ersetzt; ältere Dateien mit dem Einzelfeld werden beim Laden zur Ein-Element-Liste
   migriert, und das alte Feld bleibt als Spiegel der ersten Adresse erhalten. Modell mit
-  Live-Status, Kontextfenster, §4.3) · **Lokale KI als Block-Agent**
+  Live-Status; **Kontextfenster** — seit 0.51.3 vier Stufen **32k / 64k / 96k / 128k** (die
+  96k als Mittelweg: bei 64k bleiben dem Block-Agenten nach dem gemessenen Start-Prompt nur
+  rund 28.000 Tokens Arbeitsraum, 128k sprengt unkomprimiert die 32-GB-Karte). Die Stufenliste
+  hat genau einen Wohnort im Code, damit der Dialog nie eine Stufe anbietet, die das Speichern
+  still zurückdreht; die Werkzeug-Deckel der lokalen KI wachsen mit (96k: das Dreifache der
+  32k-Werte, 80 Runden). Der Hinweistext nennt das Grafikspeicher-Budget (bei 27B grob
+  64k ≈ 16 GB, 96k ≈ 24 GB, 128k ≈ 32 GB zusätzlich zu den Gewichten) und den dokumentierten
+  Weg zu 128k: **Zwischenspeicher-Kompression** auf dem Ollama-Rechner
+  (`OLLAMA_FLASH_ATTENTION=1`, `OLLAMA_KV_CACHE_TYPE=q8_0`, Ollama neu starten — halbiert den
+  Bedarf grob). Das sind **Ollama-Servervariablen, keine FlowForge-Einstellung**: FlowForge kann
+  fremde Server-Umgebungen nicht setzen; ob sie wirken, beantwortet die VRAM-Passt-Prüfung (§2).
+  Darunter **„Wartezeit auf Antworten der lokalen KI"** (seit 0.51.3): Standard (Vorgabe des
+  Motors) / 15 / 30 / 60 Minuten, mit ehrlichem Hinweis, dass mehr Geduld den Abbruch verhindert,
+  aber aus einem Speicherproblem nur einen kriechenden Lauf macht — die Lösung ist ein passendes
+  Fenster. Wirkt ausschließlich auf Blöcke der Klasse „lokal" (§2, §4.3) · **Lokale KI als Block-Agent**
   (seit Bauschritt 49, §2): Häkchen „Lokale KI darf ganze Blöcke übernehmen" — nur
   bedienbar, wenn die Helfer-KI an ist (Modell, Adresse, Kontext sind dieselben); darunter
   der Name des abgeleiteten Modells `flowforge-<basis>`, die **Feineinstellungen** als

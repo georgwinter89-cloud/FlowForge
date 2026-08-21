@@ -203,3 +203,89 @@ export function lokalFeinVorlageErkennen(fein) {
   }
   return null
 }
+
+// ---------------------------------------------------------------------------
+// Speicher-Ehrlichkeit der lokalen KI (0.51.3)
+// ---------------------------------------------------------------------------
+// Anlass (Wiederholungslauf Life OS, 20.08.2026): Der lokale Bauer starb nach
+// 72 Minuten am Zeitlimit der Werkzeug-Schicht. Nicht das Arbeitsgedächtnis
+// war übergelaufen — der Lokal-Wächter feuerte korrekt nicht —, sondern das
+// Kontextfenster stand auf 128k, dessen Zwischenspeicher (KV-Cache) beim
+// 27B-Modell rund 30 GB braucht und die 32-GB-Karte sprengt. Ollama lagert
+// dann still in den Arbeitsspeicher aus (Georg gemessen: 7,5 → 42 GB), jeder
+// Gesprächswechsel rechnet das volle Gespräch im RAM-Kriechgang neu durch, und
+// ab der Zeitlimit-Kante wird „langsam" zu „tot".
+//
+// Das Kontextfenster der lokalen KI. Wohnort seit 0.51.3 hier statt in
+// lokaleHelfer.js: Die Liste stand an DREI Stellen (Hauptprozess-Einstellungen,
+// Helfer-Grenzen, Auswahlfeld im Dialog) — eine neue Stufe an nur zwei davon
+// hätte bedeutet, dass der Dialog sie anbietet und das Speichern sie still auf
+// den Standard zurückdreht. lokaleHelfer.js reicht die beiden Namen weiter,
+// damit alle bisherigen Lesestellen gültig bleiben.
+// 96k ist die Zwischenstufe (0.51.3): Bei 64k bleiben nach dem gemessenen
+// Start-Prompt (~23,5k) nur ~28k Arbeitsraum bis zur Wächter-Marke, 128k
+// sprengt unkomprimiert die 32-GB-Karte.
+export const LOKAL_KONTEXT_STANDARD = 65536
+export const LOKAL_KONTEXT_WAHL = [32768, 65536, 98304, 131072]
+
+// Geduld der Werkzeug-Schicht (Entscheidung Georg, 20.08.2026): Wie lange der
+// Motor auf eine Antwort der lokalen KI wartet, bevor er den Block abbricht
+// (API_TIMEOUT_MS, gesetzt NUR in der Umgebung lokaler Motor-Instanzen).
+// 0 heißt „gar nicht setzen" — dann gilt die Vorgabe der Motor-Software.
+// Ehrlich: Mehr Geduld verhindert den Abbruch, macht aus einem Speicherproblem
+// aber nur kriechende Läufe. Die eigentliche Lösung ist ein Fenster, das in
+// die Karte passt — dafür gibt es die VRAM-Passt-Prüfung unten.
+export const LOKAL_GEDULD_STANDARD = 0
+export const LOKAL_GEDULD_WAHL = [0, 900000, 1800000, 3600000]
+
+export function lokaleGeduldBereinigen(roh) {
+  const wert = Number(roh)
+  return LOKAL_GEDULD_WAHL.includes(wert) ? wert : LOKAL_GEDULD_STANDARD
+}
+
+// Ab welchem Anteil in der Grafikkarte gilt „passt"? Ollama zeigt in `ollama
+// ps` „100 % GPU", wenn size_vram === size. Ein Prozentpunkt Luft fängt
+// Rundungen der Ollama-Fassung ab, ohne echtes Auslagern zu übersehen.
+export const VRAM_PASST_ANTEIL = 0.99
+
+// Auswertung von Ollamas Prozessliste (`GET /api/ps`): Liegt das abgeleitete
+// Modell (nahezu) vollständig in der Grafikkarte?
+//
+// Liefert null, wenn die Frage NICHT beantwortbar ist — das Modell steht nicht
+// in der Liste, oder diese Ollama-Fassung meldet `size`/`size_vram` nicht.
+// Bewusst null statt „passt nicht": Eine Warnung aus einem fehlenden Feld wäre
+// ein Fehlalarm, und ein Fehlalarm an dieser Stelle würde Georg genau die
+// Einstellung verstellen lassen, die richtig war.
+export function vramBefundAus(modelle, modell) {
+  const gesucht = String(modell ?? '')
+    .trim()
+    .toLowerCase()
+  if (!gesucht) return null
+  for (const eintrag of Array.isArray(modelle) ? modelle : []) {
+    // Ollama führt denselben Eintrag als `name` und `model`, und ein Modell
+    // ohne Tag heißt in der Liste „…:latest" (dieselbe Toleranz wie beim
+    // Modell-Vorhandensein in lokaleHelfer.js).
+    const namen = [eintrag?.name, eintrag?.model]
+      .map((n) => String(n ?? '').trim().toLowerCase())
+      .filter(Boolean)
+    const trifft = namen.some(
+      (n) => n === gesucht || n === gesucht + ':latest' || gesucht === n + ':latest'
+    )
+    if (!trifft) continue
+    const gesamt = Number(eintrag?.size)
+    const imVram = Number(eintrag?.size_vram)
+    if (!Number.isFinite(gesamt) || gesamt <= 0) return null
+    if (!Number.isFinite(imVram) || imVram < 0) return null
+    const anteil = Math.min(1, imVram / gesamt)
+    return { gesamt, imVram, anteil, passt: anteil >= VRAM_PASST_ANTEIL }
+  }
+  return null
+}
+
+// Anteil als ganze Prozent für die Warnzeile — abgerundet, damit eine Warnung
+// nie „100 %" behauptet (99,4 % sind eben nicht ganz drin).
+export function vramProzent(anteil) {
+  const zahl = Number(anteil)
+  if (!Number.isFinite(zahl)) return 0
+  return Math.max(0, Math.min(100, Math.floor(zahl * 100)))
+}
