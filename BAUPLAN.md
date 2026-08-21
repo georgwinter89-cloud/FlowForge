@@ -1315,6 +1315,136 @@ die 99-%-Schwelle und die drei Geduld-Stufen
 Motors)" und nennt keine Zahl. Ob die KV-Kompression auf dem Gaming-PC wirklich 128k in
 die Karte bringt, beantwortet erst Georgs erster Lauf — die Warnzeile ist genau dafür da.
 
+### Zwischenschritt 0.51.4 — Ein Block, der geliefert hat, wird nicht mehr weggeworfen
+(gebaut 21.08.2026, Anlass: Life-OS-Lauf `2026-08-21T06-52-05-704Z`, der nach 2 h 15 min
+bei Block 2 von 5 starb, ohne dass etwas gebaut wurde.)
+- **Schonung nach abgegebener Lieferung:** Hat ein Block seinen Lieferschein abgegeben,
+  steigt die Übertrags-Marke von 80 auf 95 % (`schwelleNachLieferung`, beide Schwellen,
+  Testmodus ausgenommen). Der Angreifer hatte seine fertige Angriffsliste in derselben
+  Sekunde abgegeben, in der die 80-%-Marke zuschlug — die fertige Session wurde verworfen,
+  der frische Anlauf wiederholte 43 Minuten Arbeit und starb dabei.
+- **Wartezeit auf lokale Antworten: 30 Minuten als Standard**, Stufe „gar nicht setzen"
+  entfallen samt Wanderung beim Laden. Gemessen: Abbruch nach 9 min 59 s bei laufendem
+  Server; die Grenze zählt **Stille**, nicht Dauer.
+- **Abbruch-Klartext ehrlich gemacht** — er behauptet nicht mehr, Ollama sei überlastet.
+- **Widerlegte Speicher-Faustregel raus** (nicht 250 KB je Token, sondern gemessene
+  64 KiB bei Hybrid-Bauart; 128k passt unkomprimiert), Systemvariablen statt
+  Benutzervariablen im KV-Hinweis, EPERM-Wiederholung beim Schreiben der Einstellungen.
+- Ergebnis: Der Wiederholungslauf lief mit 3 h 23 min über **alle fünf Blöcke** durch,
+  Prüfer bestanden, 4,88 Mio. Tokens, 0 $, null Überträge.
+
+## Paket 52–53: Projektgedächtnis, das sich selbst bedient
+
+(Gespräch mit Georg, 21.08.2026: „Ich weiß nie so richtig, welche Karten ich einem Lauf
+mitgeben soll. Die Karten wurden ja alle automatisch in den Läufen erstellt und nie von
+mir." Dasselbe bei den Prüfkarten: „Habe ich noch nie gemacht. Alleine schon weil ich
+nicht einschätzen kann, wann welche Prüfung nötig wäre.")
+
+**Die gemeinsame Wurzel:** FlowForge fragt Georg an mehreren Stellen nach **Relevanz** —
+welches Wissen ein Lauf braucht, welche alte Prüfung nötig ist. Relevanz ist aber genau
+das, was er nicht beurteilen kann: Die Karten haben Agenten geschrieben, er kennt sie
+nicht, und mit wachsendem Bestand sinkt seine Trefferquote, während die eines Agenten mit
+Index steigt. Seine Entscheidungen sind *was gebaut wird* und *ob es gut genug ist* —
+nicht, welche Datei dafür gelesen werden muss.
+
+**Messgrundlage** (Projekt „Erweiterung Life OS", 21.08.2026, 69 Karten): Volltext aller
+Karten 8.253 Tokens = 6,3 % eines 128k-Fensters; davon Wissen 2.887, Aufgaben 2.379,
+Entscheidungen 1.731, Prüfungen 1.147, Status 110. Reiner Index (Titel, Thema, Sorte)
+**1.544 Tokens** — 22 je Karte gegen 120 im Volltext. Wachstum: 64 Karten beim
+Projektstart, danach **~5 je erfolgreichem Lauf**, davon 2 dauerhafte.
+
+### Zwischenschritt 0.51.5 — Kartenauswahl: nur noch die Aufgabe wählen
+- **Die Auswahl zeigt nur offene Aufgaben-Karten.** Wissen, Entscheidungen und die
+  Status-Karte kommen automatisch mit (heute 4.728 Tokens = 3,6 % des Fensters);
+  Prüfkarten und erledigte Aufgaben bleiben draußen (heute 18 von 69 Karten, also 26 %
+  totes Gewicht, das nur Kontext kostet).
+- **Rückfall bei nicht zugeteilten Blöcken** wird „nur Status-Karte" statt wie bisher
+  „volle Kartenauswahl". Bisher harmlos, weil Georg die Auswahl klein hält — nach der
+  Umstellung landeten sonst Tausende Tokens bei einem Block, der sie nie brauchte.
+- Der Vorschlag des Sessionende schrumpft damit auf das, was er ist: **ein Satz
+  Empfehlung**, welche Aufgabe dran wäre. Die Karten-Chips daneben entfallen.
+- **Alltagstest:** Lauf starten — in der Auswahl stehen nur offene Aufgaben. Eine
+  anhaken, starten. Der Bauer kennt trotzdem die Entscheidungs-Karten des Projekts.
+- **Ehrliche Grenze:** trägt bis etwa 150 Karten. Danach greift Schritt 53.
+
+### Zwischenschritt 0.51.6 — Die leere Prüfmappe erklärt sich
+(Befund Georg: „Mir ist aufgefallen, dass sich die Agents oft darüber wundern, dass dort
+keine Prüfungen sind." Beleg im Ticker vom 21.08.2026, 06:58:02: Block 1 meldet „ein
+fehlendes `pruefung/`-Verzeichnis" als Fund; der Angreifer sieht um 07:27:38 eigens nach.)
+- **Nur 3 von 24 Blocksorten** bekommen heute die Erklärung, dass die Mappe am Laufstart
+  geleert wird (Bauer, Prüfer, Gesamtprüfung) — ausgerechnet die umsehenden Blöcke
+  **Paket schneiden, Angreifer, Diagnose, Audit** nicht.
+- Der Satz, den der Bauer schon hat, kommt in deren Aufträge, ergänzt um den Halbsatz:
+  *das Gedächtnis der Prüfungen steckt in den Prüfkarten, nicht im Ordner.*
+- **Gürtel und Hosenträger:** FlowForge lässt beim Leeren eine kurze `LIESMICH.md` in der
+  Mappe zurück (von der Prüfmappen-Ansicht und der Dateizählung ausgenommen). Dann findet
+  auch ein Block die Erklärung, dessen Auftrag den Satz nicht trägt.
+- **Alltagstest:** Lauf starten, im Ticker nachsehen — kein Block meldet die leere Mappe
+  mehr als Fund.
+
+### 52 — Prüfkarten laufen von selbst
+(Georgs Entwurf, 21.08.2026: „Was ist, wenn der Prüfer nur entscheidet, welche Karte
+relevant ist, und das FlowForge meldet, und FlowForge die Tests dann deterministisch
+laufen lässt?" — im Gespräch verschärft zu: FlowForge entscheidet auch das selbst.)
+
+**Das Problem:** Der Prüfbefehl ist ein Gedächtnis von **genau einem Lauf Tiefe** — er
+läuft am Tor und einmal als Baseline beim nächsten Laufstart. Die Prüfkarten sind das
+volle Archiv (bei Georg 9 Prüfungen, 1,3 MB), werden aber nur benutzt, wenn Georg eine
+Karte auf einen Prüfer zieht. Das hat er nie getan. Zwischen Lauf N und Lauf N+2 prüft
+also niemand mehr, ob das Alte noch hält.
+
+- **Dateiliste an der Prüfkarte:** Beim Anlegen stempelt FlowForge die Prüfkarte mit der
+  Dateiliste des Pakets, das damals geprüft wurde — die kennt es bereits, sie ist der
+  Datenvertrag aus dem Zuschnitt und wird schon als Schreibsperre durchgesetzt. Kein
+  neues Agentenfeld nötig.
+- **Optionales Feld im Prüfbeleg** für Dateien, die der Prüfer über sein Paket hinaus
+  geprüft hat („alte Wege antworten unverändert" stand so in seinem Beleg vom 21.08.).
+- **FlowForge schneidet die Listen selbst** — Dateien des neuen Pakets gegen Dateien jeder
+  Prüfkarte — und führt die Treffer **deterministisch aus, ohne KI, null Tokens**, am
+  Tor-Anker. Dieselbe Mechanik läuft heute schon für den Prüfbefehl: im Lauf vom 21.08.
+  zwei Sekunden, ausdrücklich „0 Tokens" im Ticker.
+- **Bei Rot** bekommt der Prüfer nur die Fehlerausgabe, nicht die Datei, und trennt echte
+  Regression von veralteter Prüfung. Passt er sie an, ersetzt die angepasste Fassung die
+  aufbewahrte (das kann die Mechanik heute schon).
+- **Ausbaustufe:** dieselbe Messung auch am Laufanfang, wie beim Prüfbefehl. Dann trennt
+  sich „vorher schon rot" von „neu kaputt" von selbst, Altlasten werden zur Aufgaben-Karte
+  statt eine Reparatur-Runde zu verbrennen — und die in SPEC §4.3 als ehrliche Grenze
+  genannte Lücke („Prüfdateien gezogener Prüfkarten kommen erst nach der Messung in die
+  Mappe und zählen nicht mit") ist zu.
+- **Ziehen per Hand bleibt**, für den Fall, dass Georg gezielt etwas wiederholen will.
+- **Warum nicht der Agent entscheidet:** Der Zugsimulator-Befund (12.08.2026) zeigt, dass
+  eine Bitte im Auftrag nicht hält — „Die Prüfmappe wuchert weiter TROTZ Auftrags-Verbot …
+  Der Auftrag bittet, nichts erzwingt". Lehre daraus: konkrete Wenn-dann-Regeln wirken,
+  Appelle nicht. Ein Listenschnitt in FlowForge ist eine Regel, kein Appell.
+- **Alltagstest:** Ein Paket bauen lassen, das eine Datei anfasst, die eine ältere
+  Prüfkarte nennt. Im Ticker muss stehen, dass FlowForge diese Prüfung mitlaufen ließ.
+- **Ehrliche Grenze:** Der Stempel ist eine Näherung — ein Prüfer prüft manchmal über sein
+  Paket hinaus. Deshalb das optionale Feld; vollständig ist die Zuordnung nie.
+
+### 53 — Karten-Index statt Volltext
+(Auslöser, nicht Termin: wenn `karten_uebersicht` die **15.000 Tokens** reißt — bei
+Georgs Tempo grob 125 Karten, also etwa elf weitere Läufe.)
+
+**Der Befund:** `karten_uebersicht` liefert heute den **Volltext** aller Karten
+(`kartenZeile` = `[sorte] titel: text`). Ein einziger Aufruf holt den kompletten Bestand
+ins Fenster. Ein Index-Werkzeug gibt es nicht.
+
+- `karten_uebersicht` liefert künftig nur `id · [sorte] titel · thema` (22 statt 120
+  Tokens je Karte) — plus die Dateiliste bei Prüfkarten, die Schritt 52 anlegt.
+- **Neu `karten_lesen(ids)`** holt den Volltext bestimmter Karten.
+- **Beide Werkzeugbeschreibungen müssen sagen, dass der Text fehlt** — sonst merkt der
+  Agent es nicht und schlägt blind Korrekturen vor.
+- **Blockauftrag:** Index von allem plus Volltext der zugeteilten Karten.
+- **Anweisung an die Auftragsquellen-Blöcke** (Paket schneiden, Diagnose): Index ansehen,
+  passende lesen, dann `karten_zuteilen`. Sie sind der Engpass — sie müssen alles sehen,
+  laufen lokal mit 131k, und „Paket schneiden" ist ohnehin der schwerste Block
+  (21.08.: 1.941 s, 943.000 Tokens).
+- **Der Karten-Prüfer bleibt unverändert.** Er läuft auf `sparsam` (Sonnet, ~200k Fenster);
+  23.000 Tokens Karten wären dort 11 %. Wird er je auf `lokal` gestellt, kommt der
+  Portionsbetrieb doch — deshalb bewusst auf `sparsam` lassen.
+- **Alltagstest:** Bei über 125 Karten einen Lauf starten und die Start-Prompt-Zeile im
+  Ticker vergleichen — sie muss deutlich kleiner sein als vorher.
+
 ## Reihenfolge-Begründung (Paket 40–48)
 Im Paket 40–48 bestimmt die Angriffsliste die Reihenfolge, nicht der Nutzen: Die
 Kanten müssen verlustfrei sein (40), bevor ein Auftrag verspricht, wohin eine
