@@ -1333,7 +1333,11 @@ bei Block 2 von 5 starb, ohne dass etwas gebaut wurde.)
 - Ergebnis: Der Wiederholungslauf lief mit 3 h 23 min über **alle fünf Blöcke** durch,
   Prüfer bestanden, 4,88 Mio. Tokens, 0 $, null Überträge.
 
-## Paket 52–53: Projektgedächtnis, das sich selbst bedient
+## Paket 53 + 52: Projektgedächtnis, das sich selbst bedient
+**Reihenfolge: erst 53, dann 52.** 52 stempelt Dateilisten an Prüfkarten; die
+Karten-Übersicht muss vorher auf den Index umgestellt sein, damit dieser Stempel gar nicht
+erst in einen Volltext wandert. Davor liegen die beiden Zwischenschritte 0.51.5 (ein
+Fehler in ausgeliefertem Code) und 0.51.6.
 
 (Gespräch mit Georg, 21.08.2026: „Ich weiß nie so richtig, welche Karten ich einem Lauf
 mitgeben soll. Die Karten wurden ja alle automatisch in den Läufen erstellt und nie von
@@ -1348,90 +1352,80 @@ Index steigt. Seine Entscheidungen sind *was gebaut wird* und *ob es gut genug i
 nicht, welche Datei dafür gelesen werden muss.
 
 **Messgrundlage** (Projekt „Erweiterung Life OS", 21.08.2026, 69 Karten): Volltext aller
-Karten 8.253 Tokens = 6,3 % eines 128k-Fensters; davon Wissen 2.887, Aufgaben 2.379,
-Entscheidungen 1.731, Prüfungen 1.147, Status 110. Reiner Index (Titel, Thema, Sorte)
-**1.544 Tokens** — 22 je Karte gegen 120 im Volltext. Wachstum: 64 Karten beim
+Karten 8.254 Tokens = 6,3 % eines 128k-Fensters; davon Wissen 2.887, Aufgaben 2.379,
+Entscheidungen 1.731, Prüfungen 1.147, Status 110. Reiner Index (Titel, Thema, Sorte —
+**ohne** Kennungen, siehe 53) **1.544 Tokens** — 22 je Karte gegen 120 im Volltext.
+Prüfkarten-Archiv desselben Projekts: 9 Karten, 402 KB. Wachstum: 64 Karten beim
 Projektstart, danach **~5 je erfolgreichem Lauf**, davon 2 dauerhafte.
 
-### Zwischenschritt 0.51.5 — Kartenauswahl: nur noch die Aufgabe wählen
-- **Die Auswahl zeigt nur offene Aufgaben-Karten.** Wissen, Entscheidungen und die
-  Status-Karte kommen automatisch mit (heute 4.728 Tokens = 3,6 % des Fensters);
-  Prüfkarten und erledigte Aufgaben bleiben draußen (heute 18 von 69 Karten, also 26 %
-  totes Gewicht, das nur Kontext kostet).
-- **Rückfall bei nicht zugeteilten Blöcken** wird „nur Status-Karte" statt wie bisher
-  „volle Kartenauswahl". Bisher harmlos, weil Georg die Auswahl klein hält — nach der
-  Umstellung landeten sonst Tausende Tokens bei einem Block, der sie nie brauchte.
-- Der Vorschlag des Sessionende schrumpft damit auf das, was er ist: **ein Satz
-  Empfehlung**, welche Aufgabe dran wäre. Die Karten-Chips daneben entfallen.
-- **Alltagstest:** Lauf starten — in der Auswahl stehen nur offene Aufgaben. Eine
-  anhaken, starten. Der Bauer kennt trotzdem die Entscheidungs-Karten des Projekts.
-- **Ehrliche Grenze:** trägt bis etwa 150 Karten. Danach greift Schritt 53.
+### Zwischenschritt 0.51.5 — Die Websuche eines Blocks, der geliefert hat
+(Fehler in **ausgeliefertem** Code — gefunden am 21.08.2026, am 22.08.2026 selbst am Code
+nachgemessen. Er stammt aus 0.51.4 und steckt in Georgs installierter Fassung.)
 
+- **Der Fehler:** `claudeCodeMotor.js:2004` rechnet die Restluft für die Websuche mit der
+  festen Marke von 80 % (`LOKAL_WAECHTER_PROZENT`), während die Schonung aus 0.51.4 an
+  beiden anderen Stellen (`:1665` und `:2440`) über `schwelleNachLieferung` auf 95 % geht.
+- **Die Wirkung:** Ein lokaler Block, der seinen Lieferschein abgegeben hat und dank der
+  Schonung zwischen 80 % und 95 % weiterarbeitet, bekommt eine **negative** Restluft;
+  `webWerkzeuge.js:154` bricht dann jede Suche mit „kein Platz mehr" ab, obwohl
+  15 Prozentpunkte frei sind. Betroffen ist jeder lokale Block, der nach seiner Lieferung
+  noch etwas nachschlägt.
+- **Die Behebung:** dieselbe Rechnung wie an den anderen beiden Stellen —
+  `schwelleNachLieferung(LOKAL_WAECHTER_PROZENT, block.meldungen)`. Eine Zeile.
+- **Dazu eine Prüfung**, die genau das festhält: Block mit gemeldetem Lieferschein, Stand
+  zwischen beiden Marken → Restluft größer als null.
+- **Richtigstellung im Bauplan-Text von 0.51.4:** Dort steht „von 80 auf 95 %" für beide
+  Schwellen. Der Lokal-Wächter steht bei 80 (`claudeCodeMotor.js:1092`), die
+  Koordinator-Schwelle aber bei 85 (`blockKatalog.js:53`). „Beide Schwellen steigen auf 95"
+  stimmt, die 80 gilt nur für eine davon.
+- **Alltagstest:** Einen Lauf mit einem lokalen Block starten, der nach seiner Lieferung
+  noch etwas im Netz nachschlägt. Im Ticker muss eine Web-Zeile stehen statt „kein Platz
+  mehr für eine Suche".
 ### Zwischenschritt 0.51.6 — Die leere Prüfmappe erklärt sich
 (Befund Georg: „Mir ist aufgefallen, dass sich die Agents oft darüber wundern, dass dort
 keine Prüfungen sind." Beleg im Ticker vom 21.08.2026, 06:58:02: Block 1 meldet „ein
 fehlendes `pruefung/`-Verzeichnis" als Fund; der Angreifer sieht um 07:27:38 eigens nach.)
-- **Nur 3 von 24 Blocksorten** bekommen heute die Erklärung, dass die Mappe am Laufstart
-  geleert wird (Bauer, Prüfer, Gesamtprüfung) — ausgerechnet die umsehenden Blöcke
-  **Paket schneiden, Angreifer, Diagnose, Audit** nicht.
+- **Nur 3 von 20 Blocksorten** bekommen heute die Erklärung, dass die Mappe am Laufstart
+  geleert wird (Bauer, Prüfer, Gesamtprüfung). Nachgezählt: `BLOCK_KATALOG` hat **20**
+  Einträge, die vier `VORLAGEN` dahinter sind Workflow-Vorlagen, keine Blocksorten.
+- Es fehlt bei mehr Blöcken als gedacht — nachgesehen, nicht geschätzt: **Paket schneiden,
+  Angreifer, Diagnose, Audit**, dazu **Späher, Kontext laden, Integrator (Recherche),
+  Karten-Prüfer und Sessionende**.
 - Der Satz, den der Bauer schon hat, kommt in deren Aufträge, ergänzt um den Halbsatz:
   *das Gedächtnis der Prüfungen steckt in den Prüfkarten, nicht im Ordner.*
 - **Gürtel und Hosenträger:** FlowForge lässt beim Leeren eine kurze `LIESMICH.md` in der
-  Mappe zurück (von der Prüfmappen-Ansicht und der Dateizählung ausgenommen). Dann findet
-  auch ein Block die Erklärung, dessen Auftrag den Satz nicht trägt.
+  Mappe zurück. Drei Stellen müssen sie ausnehmen, nicht eine: die Prüfmappen-Ansicht
+  (`projekte.js:391`), die Baseline-Vorprüfung (`lauf.js:1094 pruefmappeHatDateien` —
+  „ohne eigenen Ordner zählt die ganze Mappe") und das Archivieren
+  (`pruefkarten.js:88-99` — ohne Prüfordner zählen „allein die losen Dateien direkt in der
+  Mappe"). Sonst gälte eine Mappe, in der nur die Erklärung liegt, als „hat Prüfungen" —
+  und die Erklärung selbst würde als einzige „Prüfung" hinter einer Prüfkarte archiviert.
+- **Zeitpunkt:** Die `LIESMICH.md` muss **vor** dem Sicherungspunkt „Stand vor Lauf"
+  geschrieben werden. `sicherungspunkte.js:866` nimmt `pruefung` nur vom **Diff** aus, nicht
+  vom Sicherungspunkt (`AUSGESCHLOSSEN`, `:33`, kennt die Mappe nicht) — sonst verschwände
+  die Erklärung bei einem Rollback mitten im Lauf.
 - **Alltagstest:** Lauf starten, im Ticker nachsehen — kein Block meldet die leere Mappe
   mehr als Fund.
 
-### 52 — Prüfkarten laufen von selbst
-(Georgs Entwurf, 21.08.2026: „Was ist, wenn der Prüfer nur entscheidet, welche Karte
-relevant ist, und das FlowForge meldet, und FlowForge die Tests dann deterministisch
-laufen lässt?" — im Gespräch verschärft zu: FlowForge entscheidet auch das selbst.)
+### 53 — Karten-Index statt Volltext, und die Auswahl wählt nur noch die Aufgabe
+(Entscheidung Georg, 21.08.2026: kein Auslöser „ab 125 Karten", sondern gleich die
+tragende Fassung — „Ich baue FlowForge ja nicht nur für dieses eine Projekt, sondern auch
+für die Zukunft." Der frühere Zwischenschritt 0.51.5 „Wissen und Entscheidungen kommen
+automatisch im **Volltext** mit" ist hier aufgegangen: Er hätte einen Mechanismus gebaut,
+den dieser Schritt sofort wieder abschafft.)
 
-**Das Problem:** Der Prüfbefehl ist ein Gedächtnis von **genau einem Lauf Tiefe** — er
-läuft am Tor und einmal als Baseline beim nächsten Laufstart. Die Prüfkarten sind das
-volle Archiv (bei Georg 9 Prüfungen, 1,3 MB), werden aber nur benutzt, wenn Georg eine
-Karte auf einen Prüfer zieht. Das hat er nie getan. Zwischen Lauf N und Lauf N+2 prüft
-also niemand mehr, ob das Alte noch hält.
+**Der Befund:** `karten_uebersicht` liefert den **Volltext** aller Karten. Ein einziger
+Aufruf holt den kompletten Bestand ins Fenster; ein Index-Werkzeug gibt es nicht.
+Nachgemessen: `kartenWerkzeuge.js:33` baut `[sorte · offen/erledigt · Thema] titel: text`,
+und `:64` stellt bereits `- id <uuid> · ` voran. Der Index ist also **kein neues Format** —
+es fällt nur der Text weg.
 
-- **Dateiliste an der Prüfkarte:** Beim Anlegen stempelt FlowForge die Prüfkarte mit der
-  Dateiliste des Pakets, das damals geprüft wurde — die kennt es bereits, sie ist der
-  Datenvertrag aus dem Zuschnitt und wird schon als Schreibsperre durchgesetzt. Kein
-  neues Agentenfeld nötig.
-- **Optionales Feld im Prüfbeleg** für Dateien, die der Prüfer über sein Paket hinaus
-  geprüft hat („alte Wege antworten unverändert" stand so in seinem Beleg vom 21.08.).
-- **FlowForge schneidet die Listen selbst** — Dateien des neuen Pakets gegen Dateien jeder
-  Prüfkarte — und führt die Treffer **deterministisch aus, ohne KI, null Tokens**, am
-  Tor-Anker. Dieselbe Mechanik läuft heute schon für den Prüfbefehl: im Lauf vom 21.08.
-  zwei Sekunden, ausdrücklich „0 Tokens" im Ticker.
-- **Bei Rot** bekommt der Prüfer nur die Fehlerausgabe, nicht die Datei, und trennt echte
-  Regression von veralteter Prüfung. Passt er sie an, ersetzt die angepasste Fassung die
-  aufbewahrte (das kann die Mechanik heute schon).
-- **Ausbaustufe:** dieselbe Messung auch am Laufanfang, wie beim Prüfbefehl. Dann trennt
-  sich „vorher schon rot" von „neu kaputt" von selbst, Altlasten werden zur Aufgaben-Karte
-  statt eine Reparatur-Runde zu verbrennen — und die in SPEC §4.3 als ehrliche Grenze
-  genannte Lücke („Prüfdateien gezogener Prüfkarten kommen erst nach der Messung in die
-  Mappe und zählen nicht mit") ist zu.
-- **Ziehen per Hand bleibt**, für den Fall, dass Georg gezielt etwas wiederholen will.
-- **Warum nicht der Agent entscheidet:** Der Zugsimulator-Befund (12.08.2026) zeigt, dass
-  eine Bitte im Auftrag nicht hält — „Die Prüfmappe wuchert weiter TROTZ Auftrags-Verbot …
-  Der Auftrag bittet, nichts erzwingt". Lehre daraus: konkrete Wenn-dann-Regeln wirken,
-  Appelle nicht. Ein Listenschnitt in FlowForge ist eine Regel, kein Appell.
-- **Alltagstest:** Ein Paket bauen lassen, das eine Datei anfasst, die eine ältere
-  Prüfkarte nennt. Im Ticker muss stehen, dass FlowForge diese Prüfung mitlaufen ließ.
-- **Ehrliche Grenze:** Der Stempel ist eine Näherung — ein Prüfer prüft manchmal über sein
-  Paket hinaus. Deshalb das optionale Feld; vollständig ist die Zuordnung nie.
+**Zwei Darstellungen, nicht eine:** `kartenZeile` hat zwei weitere Abnehmer, die den
+Volltext brauchen und behalten — den Blockauftrag (`lauf.js:1046`) und das Projektwissen
+der lokalen Helfer-KI (`lauf.js:1065`). Nur die Übersicht bekommt die kurze Zeile.
 
-### 53 — Karten-Index statt Volltext
-(Auslöser, nicht Termin: wenn `karten_uebersicht` die **15.000 Tokens** reißt — bei
-Georgs Tempo grob 125 Karten, also etwa elf weitere Läufe.)
-
-**Der Befund:** `karten_uebersicht` liefert heute den **Volltext** aller Karten
-(`kartenZeile` = `[sorte] titel: text`). Ein einziger Aufruf holt den kompletten Bestand
-ins Fenster. Ein Index-Werkzeug gibt es nicht.
-
-- `karten_uebersicht` liefert künftig nur `id · [sorte] titel · thema` (22 statt 120
-  Tokens je Karte) — plus die Dateiliste bei Prüfkarten, die Schritt 52 anlegt.
-- **Neu `karten_lesen(ids)`** holt den Volltext bestimmter Karten.
+- `karten_uebersicht` liefert künftig `Kennung · [sorte] titel · thema` (22 statt 120
+  Tokens je Karte). **Neu `karten_lesen(ids)`** holt den Volltext bestimmter Karten.
 - **Beide Werkzeugbeschreibungen müssen sagen, dass der Text fehlt** — sonst merkt der
   Agent es nicht und schlägt blind Korrekturen vor.
 - **Blockauftrag:** Index von allem plus Volltext der zugeteilten Karten.
@@ -1439,11 +1433,240 @@ ins Fenster. Ein Index-Werkzeug gibt es nicht.
   passende lesen, dann `karten_zuteilen`. Sie sind der Engpass — sie müssen alles sehen,
   laufen lokal mit 131k, und „Paket schneiden" ist ohnehin der schwerste Block
   (21.08.: 1.941 s, 943.000 Tokens).
-- **Der Karten-Prüfer bleibt unverändert.** Er läuft auf `sparsam` (Sonnet, ~200k Fenster);
-  23.000 Tokens Karten wären dort 11 %. Wird er je auf `lokal` gestellt, kommt der
-  Portionsbetrieb doch — deshalb bewusst auf `sparsam` lassen.
-- **Alltagstest:** Bei über 125 Karten einen Lauf starten und die Start-Prompt-Zeile im
-  Ticker vergleichen — sie muss deutlich kleiner sein als vorher.
+
+**Zwei mechanische Blocker, die vor allem anderen fallen müssen:**
+- **`karten_lesen` wäre unter „darf nur lesen" hart gesperrt.**
+  `claudeCodeMotor.js:154` ist eine einzelne Zeichenkette
+  (`KARTEN_NUR_LESEN = 'mcp__karten__karten_uebersicht'`), und `:697-703` macht aus allem
+  anderen ein hartes Nein ohne Rückfrage. Paket schneiden, Diagnose, Angreifer, Audit,
+  Karten-Prüfer und Späher tragen `nurLesen: true` — der Schritt scheiterte sofort im
+  Betrieb. Aus der Zeichenkette wird ein **Satz** (Übersicht **und** Lesen), dazu die
+  Ticker-Zeile bei `claudeCodeMotor.js:948`.
+- **Fünf Aufträge nennen `karten_uebersicht` beim Namen** (selbst nachgemessen, es sind
+  mehr als in der Angriffsliste stand): Kontext laden (`blockKatalog.js:261`), Karten-Prüfer
+  (`:998`), Sessionende (`:1087`/`:1097`), Karten-Probe (`:1219`) und der Themen-Sortierer
+  (`texte.js:4181`). Alle müssen mit — sonst arbeiten sie ab dem Umbau auf Titeln statt auf
+  Inhalten.
+- **Der Karten-Prüfer ist NICHT unverändert.** Sein Auftrag lautet „Prüfe dann Karte für
+  Karte gegen den echten Stand", der Themen-Sortierer (derselbe Block, anderer Modus)
+  „die Kartentexte reichen". Beide brauchen den Volltext und lesen ihn künftig **in
+  Portionen** über `karten_lesen`. Er läuft auf `sparsam` (Sonnet, ~200k) — der
+  Portionsbetrieb ist Vorsorge, nicht Not.
+
+**Die Auswahl zeigt nur noch offene Aufgaben-Karten** (der Teil aus dem aufgelösten
+0.51.5, jetzt in seiner tragenden Form):
+- Georg wählt die **Aufgabe**, sonst nichts. Wissen, Entscheidungen und die Status-Karte
+  kommen automatisch mit — **als Index**, nicht als Volltext. Das ist der ganze
+  Unterschied zur kurzlebigen Zwischenfassung: Der Bauer sieht, dass es die
+  Entscheidungs-Karte gibt, und liest sie, wenn er sie braucht.
+- **Der Rückfall muss zwei Fälle unterscheiden.** Heute gilt
+  `kartenFuerBlock = (instanzId) => kartenZuteilung.get(instanzId) ?? ausgewaehlt`
+  (`lauf.js:2213`, benutzt in `:3385`) — ein einziger Rückfall für beides. Nötig sind:
+  „es gab überhaupt keine Zuteilung" → volle Auswahl (wie bisher), und „es gab eine, dieser
+  Block stand nicht darin" → nur die Status-Karte. Sonst trifft es ausgerechnet die
+  **Auftragsquelle selbst**: „Paket schneiden" ist nie sein eigener Nachfahre, kann sich
+  nichts zuteilen und bekäme genau eine Karte — obwohl der Startprüfer (`lauf.js:1174-1195`)
+  den Lauf nur zulässt, weil offene Aufgaben in der Auswahl stehen
+  (`oderOffeneAufgaben` an `blockKatalog.js:378` und `:511`).
+- **`karten_zuteilen` weist ab, was nicht in der Auswahl steht**
+  (`kartenZuteilungWerkzeuge.js:60-61`, dasselbe bei `paketMeldungPruefen`, `:102`).
+  Karten, die automatisch mitkommen, müssen deshalb trotzdem in den `kartenIds` des
+  Laufstarts landen — sonst kann die Auftragsquelle sie keinem Bauer zuteilen.
+- **An der Oberfläche hängt mehr daran, als eine Zeile:** `kartenIds` ist Pflichtfeld im
+  Schema (`laufVorschlagWerkzeuge.js:53-55`), steht im Sessionende-Auftrag
+  (`blockKatalog.js:1096-1098`), in `naechster-lauf.json`, im Renderer
+  (`Leinwand.jsx:1809`) und in SPEC §5. „Alle Karten hinzufügen" und „Standard-Auswahl"
+  (`Leinwand.jsx:1837/1846`) werden durch die neue Regel sinnlos und fallen weg.
+- **Richtigstellung:** Der frühere Satz „26 % totes Gewicht in der Auswahl" stimmt nicht.
+  Prüfkarten und erledigte Aufgaben sind heute schon draußen (SPEC §5,
+  `Leinwand.jsx:1780-1786`, `:1837`) — die 18 von 69 Karten belasten `karten_uebersicht`,
+  nicht die Auswahl. Der Gewinn dieses Schritts liegt beim Werkzeug, nicht beim Dialog.
+
+**Messgrundlage, ehrlich gemacht:** Der gemessene Index von **1.544 Tokens** (22 je Karte
+gegen 120 im Volltext) enthält die **Kennungen nicht** — gemessen wurde „Titel, Thema,
+Sorte". Karten-IDs sind UUIDs mit 36 Zeichen (`projekte.js:251 crypto.randomUUID()`), bei
+69 Karten also rund 2.500 ungezählte Zeichen. Deshalb bekommt der Index eine **kurze
+Anzeige-Kennung** statt der vollen UUID; die Werkzeuge nehmen beide an.
+
+**Was dieser Schritt NICHT trägt:** Die Dateiliste, die Schritt 52 an Prüfkarten stempelt,
+steht **nicht** im Index — sie liegt neben dem Archiv (`pruefkarten/<Projekt>/stempel.json`).
+Sonst träfe genau hier zusammen, was 53 abschafft: eine Liste ohne Anzahl-Grenze
+(SPEC §4.3) in einer Übersicht, die schlank werden soll.
+
+**Alltagstest:** Den Karten-Prüfer als Ein-Block-Lauf starten — einmal vor dem Umbau,
+einmal danach — und im Laufbericht die Tokens dieses Blocks vergleichen. (Nicht die
+Start-Prompt-Zeile im Ticker: die gibt es nur bei Modellklasse „lokal", und sie zeigt den
+**Auftrag**, nicht die Ausgabe von `karten_uebersicht`.) Zweiter Teil: einen Bau-Lauf
+starten — in der Auswahl stehen nur offene Aufgaben; der Bauer nennt trotzdem die
+Entscheidungs-Karte des Projekts, weil er sie im Index sieht und nachliest.
+
+**Ehrliche Grenze:** Der Index kostet einen zweiten Werkzeugaufruf. Ein Agent, der ihn
+nicht macht, urteilt über Titel — deshalb steht der Hinweis in **beiden**
+Werkzeugbeschreibungen und nicht nur im Auftrag: Ein Appell im Auftragstext hält nicht
+(Zugsimulator-Befund, 12.08.2026).
+
+### 52 — Prüfkarten laufen von selbst
+(Georgs Entwurf, 21.08.2026: „Was ist, wenn der Prüfer nur entscheidet, welche Karte
+relevant ist, und das FlowForge meldet, und FlowForge die Tests dann deterministisch
+laufen lässt?" — im Gespräch verschärft zu: FlowForge entscheidet auch das selbst, ohne
+Agent. Und auf Georgs Einwand hin nach **Relevanz**, nicht nach Laufzeit: „Was bringt es,
+wenn 100 Prüfungen innerhalb der Zeit laufen, die aber irgendwas prüfen, was schon ewig
+nicht mehr angefasst wurde?")
+
+**Das Problem:** Der Prüfbefehl ist ein Gedächtnis von **genau einem Lauf Tiefe** — er
+läuft am Tor und einmal als Baseline beim nächsten Laufstart. Die Prüfkarten sind das
+volle Archiv (bei Georg 9 Karten mit 402 KB im Life-OS-Projekt, im Zugsimulator schon 17),
+werden aber nur benutzt, wenn Georg eine Karte auf einen Prüfer zieht. Das hat er nie
+getan — er kann nicht beurteilen, welche Prüfung wann nötig wäre. Zwischen Lauf N und
+Lauf N+2 prüft also niemand mehr, ob das Alte noch hält.
+
+**Drei Messungen am Code und am echten Archiv (21.08.2026) — sie bestimmen die Bauart:**
+
+1. **Das Archiv hat keinen Startbefehl.** `pruefkarten.js:88` bewahrt **Dateien** auf; der
+   Prüfbefehl liegt getrennt je Prüf-Instanz (`pruefbefehl.js:45/132`) und wird bei jeder
+   bestandenen Prüfung überschrieben. Und es gibt nichts zu raten: Die echten Befehle
+   lauten `node pruefung/pruefer-6c746d22/pruefe.mjs` — ein **Sammel-Skript**, kein
+   Ordnerlauf (SPEC §4.3 schreibt genau das vor). Die 38 archivierten Karten haben keinen
+   einheitlichen Einstieg: mal `alle.mjs`, mal `sammel.mjs`, mal `pruefe.mjs`, mal zwei
+   gleichrangige `pruefe_*.js` nebeneinander.
+2. **Die Ordnertiefe entscheidet über Grün und Rot.** 80 von 135 archivierten Prüfdateien
+   rechnen sich den Projektordner über feste Aufwärts-Schritte aus
+   (`resolve(HIER, "..", "..")`). Geschrieben wurden sie in `pruefung/pruefer-<Kennung>/`,
+   zwei Ebenen unter dem Projekt. FlowForge legt eine gezogene Prüfkarte heute aber nach
+   `pruefung/pruefer-<Kennung>/pruefkarte-…/` zurück (`pruefkarten.js:33`) — **eine Ebene
+   tiefer**; jeder dieser Pfade zeigt dann auf `pruefung/` statt aufs Projekt.
+   **Folge: Die Wiederholungsprüfung per Hand ist heute schon für die Mehrzahl der Karten
+   kaputt.** Sie wurde nie benutzt, deshalb ist es nie aufgefallen. Das zu reparieren ist
+   keine Zugabe von 52, sondern seine Voraussetzung.
+3. **Der Listenschnitt ist eine Heuristik, kein Beweis.** Die Schreibsperre des
+   Datenvertrags (SPEC §7) greift an Schreib-Werkzeugen und `>`-Umleitungen und nur bei
+   umsetzenden Blöcken — nicht bei Umbenennen, Verschieben, Löschen, nicht bei sonst
+   ausgeführten Befehlen (`npm run build` schreibt, wohin es will), nicht bei Prüfern, und
+   „keine Dateiliste heißt keine Sperre". Der Schnitt bleibt richtig; der Bauplan darf ihn
+   nur nicht als Beweis verkaufen. Die Gegenprobe dazu ist die Rotation (unten).
+
+**Der Stempel — beim Anlegen, aus dem, was FlowForge ohnehin hat:**
+- Beim Anlegen der Prüfkarte (`lauf.js:4670`) merkt sich FlowForge drei Dinge:
+  **Dateiliste** des Pakets, das damals geprüft wurde, **Prüfbefehl** der Prüf-Instanz und
+  den **Ordnernamen**, auf den er zeigte.
+- Der Stempel steht **neben dem Archiv im verwalteten Bereich**, nicht an der Karte:
+  `pruefkarten/<Projekt>/stempel.json`. Damit kein neues Agentenfeld, kein Kartentext, der
+  wächst, und kein Ballast im Karten-Index, den Schritt 53 gerade schlank macht (die
+  Dateiliste hat bewusst keine Anzahl-Grenze, SPEC §4.3 — an der Karte wäre sie ein Fass
+  ohne Boden). Löschen einer Karte räumt ihren Stempel mit weg.
+- Für den Prüfer rechnet `dateiListeFuer` heute **nichts** (`lauf.js:4042`, früher
+  Rückgabewert bei `prueft`). Gebraucht wird eine zweite Funktion ohne diesen Ausstieg:
+  die Vereinigung der Pakete, die beim Prüfer angekommen sind — dieselbe Auswahlregel
+  (`uebergabenAuswahl` + `zuschnittRouting`), nur ohne die Sperr-Absicht.
+
+**Ausführen — an der richtigen Tiefe, mit dem mitgestempelten Befehl:**
+- FlowForge legt die aufbewahrten Dateien nach `pruefung/pruefkarte-<kurz>/` — **auf die
+  Ebene, auf der sie geschrieben wurden**, nicht in den Prüfordner hinein.
+- Im gestempelten Befehl wird der alte Ordnername durch den neuen ersetzt
+  (`pruefung/pruefer-6c746d22` → `pruefung/pruefkarte-0049e5aa`). Abgespielt wird mit
+  derselben Mechanik wie das Tor (`befehlAbspielen`): ohne KI, **0 Tokens**, mit
+  Zeitlimit, mit eigener Prozessgruppe und Aufräumen danach.
+- **Enthält der gestempelte Befehl den Ordnernamen nicht** (`npm test` liest ein Skript
+  aus `package.json`), ist die Karte nicht allein abspielbar. Dann sagt der Ticker das —
+  kein stilles Überspringen, keine erfundene Ersatzregel.
+- **Port-Schutz wie beim Rauchtest:** Live-Prüfungen binden feste Ports (Georgs Prüfungen
+  laufen gegen `127.0.0.1:3888`). Vor dem Abspielen greift dieselbe Besitzer-Prüfung wie
+  in `torProzess.js` (`portBesitzer`/`aufPortFreiWarten`): eigene Reste werden abgeräumt,
+  ein **fremder** Besitzer (Georgs eigener Server, der App-Tab) führt zu „nicht gemessen"
+  statt zu einem falschen Rot.
+
+**Die Auswahl — eine Regel, kein Appell:**
+- **Relevanz = Schnittmenge:** Dateiliste des laufenden Pakets ∩ gestempelte Dateiliste
+  der Karte ≠ leer.
+- **Im Zweifel ausführen.** Karten ohne Stempel (alle heutigen), Läufe ohne Dateiliste,
+  jede Unklarheit → die Prüfung läuft. Übersprungen wird nur, was nachweislich nichts mit
+  dem Paket zu tun hat — dieselbe Haltung wie bei der VRAM-Prüfung, die lieber schweigt,
+  als aus einer misslungenen Messung zu warnen. **Entscheidung Georg 21.08.2026:** Die
+  9 stempellosen Altkarten laufen wie gestempelte mit, nicht in einem Schonprogramm.
+- **Rotation als Gegenprobe** (Entscheidung Georg 21.08.2026): Zusätzlich laufen je Lauf
+  die **zwei am längsten nicht gelaufenen** Karten mit, auch wenn sie nicht betroffen
+  sind. Das deckt die indirekten Fälle ab, die ein Listenschnitt strukturell nicht sieht,
+  und ist zugleich die eingebaute Kontrolle: Findet eine Rotationskarte etwas, das die
+  Auswahl übersehen hat, ist die Auswahl zu eng — gemessen statt vermutet. Über die Läufe
+  kommt jede Karte dran, ohne dass je alles auf einmal läuft.
+- **Warum kein Agent entscheidet:** Der Zugsimulator-Befund (12.08.2026) zeigt, dass eine
+  Bitte im Auftrag nicht hält — „Die Prüfmappe wuchert weiter TROTZ Auftrags-Verbot … Der
+  Auftrag bittet, nichts erzwingt". Ein Listenschnitt in FlowForge ist eine Regel. Ein
+  Agent, der eine Prüfdatei überfliegt und schätzt, was sie abdeckt, wäre eine Vermutung
+  im Gewand einer Antwort.
+
+**Wann — vor und nach jedem schreibenden Block** (Entscheidung Georg 21.08.2026):
+- **Vorher-Messung statt Nebenordner:** Die ausgewählten Prüfungen laufen **direkt bevor**
+  ein schreibender Block startet und **direkt nachdem** er fertig ist — im echten
+  Projektordner. Damit trennt sich „vorher schon rot" von „neu kaputt" von selbst, und die
+  Zuordnung ist so scharf wie möglich: Es war genau dieser Bauer. Ein Sicherungspunkt in
+  einem Nebenordner (`git worktree`) entfällt damit — und mit ihm die beiden Stolpersteine,
+  die dort gedroht hätten: fehlende Fremdpakete im frischen Worktree (`node_modules` steht
+  in `.gitignore`; ein Verzeichnis-Link statt einer Kopie hat schon einmal still einen
+  Installer zerschossen) und ein zweiter Server auf demselben Port.
+- **Nicht, während ein anderer Schreiber läuft.** Dieselbe Regel, die die SPEC für
+  Sicherungspunkte schon kennt („würde dessen halbfertige Änderungen einfrieren"). In
+  einer Welle (Bauschritt 46) misst FlowForge erst, wenn der Ordner wieder still ist.
+- **Zeit-Notbremse, die nie etwas weglässt:** Jede ausgewählte Karte läuft **mindestens
+  einmal je Lauf**. Reißt die Summe der Messungen den Deckel je Messpunkt (Vorschlag:
+  10 Minuten, in den Einstellungen verstellbar), rutschen die
+  langsamsten Karten von „je schreibendem Block" auf „einmal je Lauf" — und der Ticker
+  nennt sie namentlich. Das ist kein Zeitbudget für die Relevanz (das hat Georg zu Recht
+  verworfen): Es ändert nur, wie **oft** eine Prüfung läuft, nie **ob**.
+- **Melden, nicht urteilen:** FlowForge merkt sich das Ergebnis je Block und gibt es dem
+  Prüfer in den Auftrag — genau wie heute die Baseline („vorher schon rot: …",
+  `lauf.js:3246`). Eine Reparatur-Runde löst es **nicht** aus: Zwischen Bauer 1 und
+  Bauer 2 kann Rot legitim sein.
+- **Bei Rot bekommt der Prüfer die Fehlerausgabe und den Ordner** der Karte und trennt
+  echte Regression von veralteter Prüfung. Passt er sie an, ersetzt die angepasste Fassung
+  die aufbewahrte (`pruefkartenArchivAuffrischen`, gibt es schon). Dafür muss die
+  Prüfmappen-Sperre die Kartenordner für Prüfer freigeben — heute darf ein Prüfer nur in
+  seinen eigenen Ordner schreiben (SPEC §4.3, Bauschritt 41).
+
+**Was FlowForge ausdrücklich NICHT tut:**
+- **Keine Karte automatisch löschen, keine automatisch in eine Aufgaben-Karte verwandeln.**
+  Der frühere Entwurf wollte das für Karten, deren gestempelte Dateien es nicht mehr gibt.
+  Das trägt nicht: `erlaubteDateien` nennt ausdrücklich „auch die, die erst entstehen", und
+  Dateilisten werden „als Pfade **und Ordner**" genannt — eine erlaubte, nie angelegte
+  Datei macht die Prüfung nicht wertlos. Dazu SPEC §3.1: „**Der Nutzer** kann Prüfkarten
+  bearbeiten und löschen." Der Stempel entscheidet, **ob gemessen wird**, nie, **ob
+  gelöscht wird**.
+- **Die Gesamtprüfung spielt nichts ab.** Georgs Entscheidung vom 13.08.2026 bleibt: „du
+  schreibst dir deine Prüfungen frisch, statt alte abzuspielen" (SPEC §4.3,
+  `blockKatalog.js:881`). Die Gegenprobe leistet die Rotation, innerhalb derselben
+  Mechanik.
+- **Ziehen per Hand bleibt** — für den Fall, dass Georg gezielt etwas wiederholen will.
+  Auch die von Hand gezogene Karte landet künftig auf der richtigen Ebene; damit ist der
+  zweite Messbefund oben mitrepariert. Dieselbe Karte an zwei Prüfern bekommt dann **eine**
+  Kopie statt zweier (FlowForge führt sie aus, nicht der Prüfer) — die bisherige Regel
+  „gewinnt die zuletzt bestandene Fassung" bleibt gültig.
+
+**Kein stilles Weglassen:** Eine Ticker-Zeile je Messpunkt nennt, wie viele archivierte
+Prüfungen ausgeführt wurden, wie viele als nicht betroffen übersprungen wurden, wie viele
+als nicht abspielbar galten und welche aus der Rotation dabei waren.
+
+**Ehrliche Grenzen — bewusst nicht gelöst:**
+- **Sicherheit, ausdrücklich benannt:** Heute laufen alte, von Agenten geschriebene
+  Prüfdateien nur, wenn Georg eine Karte zieht. Ab 52 führt FlowForge sie **von selbst**
+  aus, ohne Rechte-Rückfrage. Die kurze Leine des Prüfbefehls (SPEC §4.3: genau ein
+  Test-Werkzeug, keine Verkettung, keine Umleitung) gilt dem **Befehl**, nicht dem, was die
+  gestartete Datei tut. Das ist eine echte Ausweitung. Sie ist vertretbar, weil die Dateien
+  aus dem eigenen Projekt stammen und beim Anlegen einmal grün gelaufen sind — sie gehört
+  aber sichtbar in die SPEC, nicht in eine Fußnote.
+- **Der Stempel kennt nur, was das damalige Paket geschrieben hat.** Eine Live-Prüfung, die
+  über HTTP den halben Server durchmisst, deckt mehr ab als ihre Dateiliste. Eine statisch
+  geparste Import-Hülle scheiterte daran ebenfalls — die Prüfdatei importiert nichts, sie
+  macht eine HTTP-Anfrage. Deshalb bleibt der Stempel das Hauptsignal und die Rotation die
+  Gegenprobe.
+- **Der Prüfer darf alte Prüfungen anpassen.** Auf Dauer kann er sie damit auch aufweichen.
+  Gegengewicht: Er passt nur an, was rot ist, und jede angepasste Karte steht namentlich im
+  Ticker.
+
+**Alltagstest:** Ein Paket bauen lassen, das eine Datei anfasst, die eine ältere Prüfkarte
+gestempelt hat. Im Ticker muss stehen: dass FlowForge diese Prüfung vor dem Bauer und nach
+dem Bauer gemessen hat, wie viele es als nicht betroffen übersprungen hat und welche zwei
+Karten aus der Rotation mitgelaufen sind. Danach im Laufbericht nachsehen, ob das Ergebnis
+im Auftrag des Prüfers steht — und dass keine Reparatur-Runde davon ausgelöst wurde.
 
 ## Reihenfolge-Begründung (Paket 40–48)
 Im Paket 40–48 bestimmt die Angriffsliste die Reihenfolge, nicht der Nutzen: Die
