@@ -100,6 +100,7 @@ import {
   pruefkartenArchivAuffrischen,
   pruefungenArchivieren
 } from './pruefkarten.js'
+import { mappenErklaerungSchreiben, pruefmappeHatDateien } from './pruefmappe.js'
 import { starteLaufMotor } from './motor/claudeCodeMotor.js'
 import { lokalesModellBereitstellen } from './motor/lokalesModell.js'
 import {
@@ -1088,20 +1089,6 @@ const TOR_BEANSTANDUNGEN_MAX = 8
 // Protokoll steht ohnehin daneben.
 const TOR_BEANSTANDUNG_ZEILE_MAX = 400
 
-// Hat der Prüfordner dieser Instanz überhaupt Dateien? Ohne sie misst ein
-// aufbewahrter Prüfbefehl nichts Sinnvolles (die Baseline bliebe ein
-// Scheinbefund). Ohne eigenen Ordner (Übungs-Prüfer) zählt die ganze Mappe.
-function pruefmappeHatDateien(projektPfad, pruefOrdner = '') {
-  try {
-    return (
-      fs.readdirSync(path.join(projektPfad, 'pruefung', ...(pruefOrdner ? [pruefOrdner] : [])))
-        .length > 0
-    )
-  } catch {
-    return false
-  }
-}
-
 // fortsetzung (BAUPLAN 11): gespeicherter Laufstand einer Unterbrechung — die
 // dort fertigen Blöcke laufen nicht erneut, ihre Lieferungen sind wieder da.
 // Kommt nur über laufFortsetzen() herein.
@@ -1383,6 +1370,14 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       // Eine klemmende Datei darf den Start nicht verhindern — der Prüfer
       // arbeitet dann eben mit dem, was liegen blieb.
     }
+    // Die leere Mappe erklärt sich selbst (0.51.6): Blöcke meldeten den
+    // leeren — und beim allerersten Lauf gar nicht vorhandenen — Ordner
+    // regelmäßig als Fund. Auch ohne Leerung geschrieben, damit die
+    // Erklärung genau dann dasteht, wenn sie am nötigsten ist. Der
+    // Zeitpunkt ist VOR dem Sicherungspunkt „Stand vor Lauf": Die Prüfmappe
+    // ist nur vom Diff der Reparatur-Runden ausgenommen, nicht vom
+    // Sicherungspunkt — ein Rollback mitten im Lauf nähme sie sonst wieder weg.
+    mappenErklaerungSchreiben(projektPfad)
   }
 
   // Prüfkarten (SPEC §4.3, BAUPLAN 18): NACH der Leerung legt FlowForge die

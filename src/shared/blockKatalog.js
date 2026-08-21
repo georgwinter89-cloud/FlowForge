@@ -232,6 +232,18 @@ export function unterModellFuer(def, klasse, einstellung) {
   return SDK_MODELL.sparsam
 }
 
+// Die leere Prüfmappe erklärt sich (0.51.6): pruefung/ ist beim Laufstart
+// geleert — Blöcke meldeten den leeren (oder beim allerersten Lauf gar nicht
+// vorhandenen) Ordner regelmäßig als Fund. Derselbe Satz in jedem Auftrag,
+// dessen Block in den Projektordner sieht oder das Projektgedächtnis
+// nachmisst; Bauer, Prüfer und Gesamtprüfung sagen es an ihrer eigenen
+// Stelle bereits in ihrer eigenen Sprache. Gegenstück in der Mappe selbst:
+// src/main/pruefmappe.js legt dort eine LIESMICH.md ab.
+export const PRUEFMAPPE_HINWEIS =
+  'Der Ordner pruefung/ ist beim Laufstart geleert — ein leerer oder fehlender Prüfordner ' +
+  'ist deshalb kein Fund und kein Mangel: Das Gedächtnis der Prüfungen steckt in den ' +
+  'Prüfkarten, nicht im Ordner. '
+
 export const BLOCK_KATALOG = [
   {
     // Seit 12.08.2026 (Entscheidung Georg) nicht mehr Teil der Vorlagen: Jeder
@@ -258,7 +270,9 @@ export const BLOCK_KATALOG = [
       'Du bist der erste Block eines Workflows und lädst den Kontext. Antworte auf Deutsch. ' +
       'Verschaffe dir einen gründlichen Überblick über dieses Projekt: Sieh dir die Dateien im ' +
       'Projektordner an (Aufbau und die wichtigsten Inhalte) und lies alle Projektkarten mit ' +
-      'karten_uebersicht. Du darfst nichts verändern — nur lesen: Rein lesende Befehle ' +
+      'karten_uebersicht. ' +
+      PRUEFMAPPE_HINWEIS +
+      'Du darfst nichts verändern — nur lesen: Rein lesende Befehle ' +
       '(Ordner auflisten, suchen, Dateien ansehen) laufen durch; Programme oder Tests ' +
       'auszuführen ist für diesen Block gesperrt — versuche es gar nicht erst. ' +
       'Ins Feld inhalt deiner Meldung gehört der ' +
@@ -389,6 +403,7 @@ export const BLOCK_KATALOG = [
       'zusammengehörige Aufgaben darfst du zu einem Paket bündeln. ' +
       'Prüfe durch eigenes Lesen im Projektordner (liegt dir ein Projekt-Überblick vor, nutze ' +
       'ihn als Abkürzung), wie sich dieser Wunsch in Arbeitspakete fassen lässt. ' +
+      PRUEFMAPPE_HINWEIS +
       'Miss die Paketgröße NICHT an der Sitzungslänge: Läuft der Kontext eines ' +
       'Blocks voll, übergibt FlowForge automatisch an einen frischen Anlauf, der nahtlos ' +
       'weitermacht — jeder eigene Lauf kostet dagegen eigenen Grundaufwand. Schneide ' +
@@ -468,6 +483,7 @@ export const BLOCK_KATALOG = [
       'Suche an diesen Stellen gezielt nach: Annahmen im Arbeitspaket, die nicht stimmen; ' +
       'Stellen, die mitgeändert werden müssen, aber nicht genannt sind; versteckten ' +
       'Abhängigkeiten; Rand- und Fehlerfällen; Konflikten mit bestehendem Verhalten. ' +
+      PRUEFMAPPE_HINWEIS +
       'Deine Meldung ist die Angriffsliste: je Fund ein Eintrag mit ein bis zwei ' +
       'Sätzen, Schwere und Fundort (Datei), nach Gefahr sortiert. Findest du nach gründlicher ' +
       'Suche nichts, melde ehrlich eine leere Fundliste — erfinde keine Funde.'
@@ -531,6 +547,7 @@ export const BLOCK_KATALOG = [
       'entsteht. Prüfe ehrlich, ob eine andere Erklärung ebenso gut passt — wenn ja, benenne ' +
       'beide und was sie unterscheiden würde. Rate nicht: Kannst du die Ursache nicht belegen, ' +
       'schreibe das offen und benenne, welche Information fehlt. ' +
+      PRUEFMAPPE_HINWEIS +
       // Zuschnitt je benanntem Ziel (BAUPLAN 44): dieselbe Sprache wie bei
       // Paket schneiden — die Adressen hängt lauf.js als Zusatz an.
       'Deine Meldung sind die Arbeitspakete — für JEDES benannte Ziel hinter dir (die Blöcke, ' +
@@ -753,6 +770,7 @@ export const BLOCK_KATALOG = [
       'aus den gelieferten Überblicken — im Projekt selbst liest du höchstens einzelne Stellen ' +
       'nach, die einen Widerspruch klären, und nichts auf Vorrat. Projektkarten sind nicht dein ' +
       'Gegenstand: FlowForge pflegt sie über eigene Blöcke — du fasst sie nicht an. ' +
+      PRUEFMAPPE_HINWEIS +
       'Ins Feld inhalt deiner Meldung gehört der zusammengeführte Projekt-Überblick, kompakt ' +
       '(höchstens etwa 40 Zeilen), nach denselben Punkten gegliedert wie die gelieferten ' +
       'Überblicke: Aufbau, womit gebaut/getestet/gestartet wird, was die Karten sagen, ' +
@@ -950,6 +968,7 @@ export const BLOCK_KATALOG = [
       'tot oder so gewachsen, dass niemand mehr durchblickt? ' +
       '3. Sicherheit & Datenverlust — wo können Daten verloren gehen oder überschrieben ' +
       'werden, wo fehlen Absicherungen gegen Fehlbedienung und kaputte Eingaben? ' +
+      PRUEFMAPPE_HINWEIS +
       'Für zusätzliche eigene Vorarbeit delegierst du Einlesen und Suchen wie üblich ' +
       '(bevorzugt lokal_recherchieren, falls es bereitsteht — sonst das Agent-Werkzeug). ' +
       'Danach bündelst du die Funde: Dubletten zusammenführen, ehrlich gewichten — nicht ' +
@@ -1013,6 +1032,7 @@ export const BLOCK_KATALOG = [
       '(mit thema — bevorzugt ein vorhandenes). ' +
       'PRÜFKARTEN pflegt FlowForge — zu ihnen machst du keine Vorschläge; fällt dir eine ' +
       'offensichtlich veraltete auf, erwähne sie nur im Bericht. ' +
+      PRUEFMAPPE_HINWEIS +
       'Jeder Vorschlag trägt eine kurze Begründung mit Beleg. Mache einen Vorschlag nur, ' +
       'wenn du den Unterschied belegen kannst — eine wahre Karte bekommt keinen ' +
       'Vorschlag, und du erfindest keine Abweichungen. ' +
@@ -1100,6 +1120,7 @@ export const BLOCK_KATALOG = [
       'Vorlage nennen, z.B. „als Nächstes ‚Bug jagen‘"), und begruendung: kurz, warum genau ' +
       'diese Karten. Das ist nur eine Einladung an den Nutzer — FlowForge baut nichts um und ' +
       'startet nichts. ' +
+      PRUEFMAPPE_HINWEIS +
       'In deine Meldung gehört: welche Karten du geändert oder angelegt hast und warum ' +
       '(Feld getan), was du für den nächsten Lauf vorgeschlagen hast (Feld inhalt) und was ' +
       'am Projektgedächtnis offen bleibt (Feld offen).'
@@ -1120,6 +1141,7 @@ export const BLOCK_KATALOG = [
       'Sieh dich im Projektordner um (Dateien und deren Inhalte) und fasse auf Deutsch ' +
       'in drei bis fünf Sätzen zusammen, was in diesem Projekt liegt — die Zusammenfassung ' +
       'gehört ins Feld inhalt deiner Meldung. ' +
+      PRUEFMAPPE_HINWEIS +
       'Du darfst nichts verändern — nur lesen.'
   },
   {

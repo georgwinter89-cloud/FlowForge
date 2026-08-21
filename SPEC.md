@@ -1553,6 +1553,17 @@ Prüfmappe höchstens einmal ganz am Ende laufen lassen, nicht als Dauerschleife
 gehört zum Lauf, nicht zum Projekt — beim Start eines neuen Laufs leert FlowForge
 sie automatisch (vor dem Sicherungspunkt „Stand vor Lauf"; die Wiederaufnahme eines
 unterbrochenen Laufs leert nicht). Wuchern ist damit strukturell unmöglich.
+**Die leere Mappe erklärt sich selbst** (seit 0.51.6): Beim Leeren legt FlowForge eine
+kurze `LIESMICH.md` in die Mappe — auch dann, wenn es `pruefung/` noch gar nicht gab.
+Sie sagt, dass der leere Ordner kein Fund ist und dass das Gedächtnis der Prüfungen in
+den Prüfkarten steckt; Blöcke meldeten die leere Mappe sonst regelmäßig als Mangel.
+Geschrieben wird sie **vor** dem Sicherungspunkt „Stand vor Lauf" (die Prüfmappe ist nur
+vom Diff der Reparatur-Runden ausgenommen, nicht vom Sicherungspunkt — ein Rückroll
+mitten im Lauf nähme sie sonst weg). Die Erklärung ist **keine Prüfung**: Sie zählt weder
+in der Prüfmappen-Ansicht noch bei der Baseline-Vorprüfung mit und wandert nie hinter
+eine Prüfkarte. Dasselbe sagen die Aufträge von Kontext laden, Paket schneiden,
+Angreifer, Diagnose, Integrator (Recherche), Audit, Karten-Prüfer, Sessionende und
+Späher vorher an; Bauer, Prüfer und Gesamtprüfung sagen es an ihrer eigenen Stelle.
 **Gezielte Wiederholungsprüfung über Prüfkarten** (seit Bauschritt 18): Der Nutzer
 zieht Prüfkarten (§3.1) auf eine Prüf-Blockkarte im Schaubild — sie hängen dort
 sichtbar an (abnehmbar per ×). Beim Lauf-Start legt FlowForge — **nach** der

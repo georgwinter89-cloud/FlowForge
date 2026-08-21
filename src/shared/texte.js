@@ -1654,7 +1654,23 @@ export const texte = {
       'Dein Prüfbefehl muss genau diesen Ordner ausführen (z.B. „npx vitest run pruefung/' +
       ordner +
       '"). Nur was in deinem Ordner liegt, bewahrt FlowForge nach bestandener Prüfung hinter ' +
-      'deiner Prüfkarte auf.'
+      'deiner Prüfkarte auf.',
+    // Die Erklärung, die beim Leeren in der Prüfmappe zurückbleibt (0.51.6,
+    // src/main/pruefmappe.js). Kurz halten: Sie landet im Kontext jedes
+    // Blocks, der die Mappe ansieht.
+    erklaerung:
+      '# Dieser Ordner ist absichtlich leer\n' +
+      '\n' +
+      'FlowForge leert `pruefung/` beim Start jedes Laufs. Ein leerer Ordner ist hier kein ' +
+      'Fund und kein Mangel: Die Prüfungen dieses Laufs entstehen erst währenddessen — ' +
+      'geschrieben von den Prüf-Blöcken des Workflows.\n' +
+      '\n' +
+      'Das Gedächtnis der Prüfungen steckt in den Prüfkarten des Projekts, nicht in diesem ' +
+      'Ordner: Was eine Prüfung bestanden hat, bewahrt FlowForge hinter ihrer Prüfkarte auf ' +
+      'und legt es beim nächsten Lauf wieder hier ab — sobald diese Karte auf einen ' +
+      'Prüf-Block gezogen wurde.\n' +
+      '\n' +
+      'Diese Datei ist die Erklärung, keine Prüfung: FlowForge zählt sie nirgends mit.\n'
   },
   agentenPruefkarten: {
     einleitung:

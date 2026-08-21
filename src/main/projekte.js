@@ -18,6 +18,7 @@ import {
 } from '../shared/kartenRegeln.js'
 import { sicherungspunktAnlegen } from './sicherungspunkte.js'
 import { pruefkartenArchivLoeschen } from './pruefkarten.js'
+import { istMappenErklaerung } from './pruefmappe.js'
 
 const PROJEKT_DATEI = 'projekt.json'
 const KARTEN_DATEI = 'karten.json'
@@ -388,6 +389,9 @@ export function pruefkarteAnlegen(projektPfad, { titel, text }, herkunft = { que
 // Prüfer. Gezählt werden Prüf-Dateien, nicht einzelne Testfälle darin.
 // unterordner (BAUPLAN 41): der Prüfordner dieser Instanz — jede Prüferkarte
 // zeigt ihre eigene Mappe, nicht die der anderen.
+// Die Erklärung, die FlowForge beim Leeren zurücklässt (0.51.6), ist keine
+// Prüfung und bleibt draußen — sonst zeigte die Ansicht „1 Prüfung", wo der
+// Lauf keine einzige hinterlassen hat, und der Leer-Hinweis erschiene nie.
 export function pruefmappeUebersicht(projektPfad, unterordner = '') {
   if (!istBekanntesProjekt(projektPfad) || !fs.existsSync(projektPfad))
     return { ok: false, fehler: texte.fehler.projektNichtGefunden }
@@ -409,10 +413,14 @@ export function pruefmappeUebersicht(projektPfad, unterordner = '') {
         sammle(voll)
         continue
       }
+      const name = path.relative(mappe, voll).replaceAll(path.sep, '/')
+      // Der Prüfmappen-Pfad zählt vom Wurzelordner an: Zeigt die Ansicht
+      // einen Prüfordner, ist die Erklärung ohnehin nicht darin.
+      if (istMappenErklaerung(eigen ? eigen + '/' + name : name)) continue
       try {
         const info = fs.statSync(voll)
         dateien.push({
-          name: path.relative(mappe, voll).replaceAll(path.sep, '/'),
+          name,
           bytes: info.size,
           geaendertAm: info.mtime.toISOString()
         })

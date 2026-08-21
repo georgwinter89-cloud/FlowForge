@@ -8,6 +8,7 @@ import { app } from 'electron'
 import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'node:crypto'
+import { istMappenErklaerung } from './pruefmappe.js'
 
 const PRUEFMAPPE = 'pruefung'
 
@@ -84,7 +85,10 @@ export function pruefkartenArchivAuffrischen(projektPfad, kartenId, pruefOrdner 
 // mit ins Archiv, und die Wiederholungsprüfung fuhr fremde Zweige mit.
 // Ausgenommen bleiben die Unterordner eingelegter Prüfkarten (sie haben ihr
 // eigenes Archiv). Ohne Prüfordner (nur-lesende Übungs-Prüfer, Altbestand)
-// zählen allein die losen Dateien direkt in der Mappe.
+// zählen allein die losen Dateien direkt in der Mappe — ohne die Erklärung,
+// die FlowForge beim Leeren dort zurücklässt (0.51.6): Sie ist keine Prüfung
+// und würde sonst als einzige „Prüfung" hinter der Karte aufbewahrt und beim
+// nächsten Lauf wieder eingelegt.
 export function pruefungenArchivieren(projektPfad, kartenId, pruefOrdner = '') {
   const mappe = mappenPfad(projektPfad, pruefOrdner)
   let eintraege = []
@@ -94,7 +98,9 @@ export function pruefungenArchivieren(projektPfad, kartenId, pruefOrdner = '') {
     return
   }
   const eigene = eintraege.filter((e) =>
-    e.isDirectory() ? Boolean(pruefOrdner) && !e.name.startsWith('pruefkarte-') : true
+    e.isDirectory()
+      ? Boolean(pruefOrdner) && !e.name.startsWith('pruefkarte-')
+      : !istMappenErklaerung(pruefOrdner ? pruefOrdner + '/' + e.name : e.name)
   )
   if (eigene.length === 0) return
   const ziel = archivPfad(projektPfad, kartenId)
