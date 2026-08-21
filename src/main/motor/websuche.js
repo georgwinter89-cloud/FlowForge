@@ -33,7 +33,14 @@
 // „entdeckt", verliert einen halben Tag — er liefert für Sachfragen nichts.
 import dns from 'node:dns'
 import { texte } from '../../shared/texte.js'
-import { adresseBereinigen } from '../../shared/lokalRegeln.js'
+// Dieselbe Regel wie im Einstellungen-Dialog (Nacharbeit 0.51.2): die
+// NACHSICHTIGE Fassung, die ein fehlendes Schema ergänzt. Der Dialog schreibt
+// zwar nur noch normalisierte Adressen in die Datei — aber eine von Hand
+// eingetragene „gaming-pc:8080" wäre mit der strengen Fassung hier still
+// wirkungslos geblieben (Ausnahme greift nicht, Suche scheitert), und zwei
+// verschiedene Regeln für dasselbe Feld sind genau die Falle, die Bauschritt 51
+// schon einmal gekostet hat.
+import { searxngAdresseBereinigen } from '../../shared/lokalRegeln.js'
 
 const w = texte.agentenWebsuche
 
@@ -568,7 +575,7 @@ function gesperrterName(hostname) {
 // Verglichen wird der Ursprung und nicht die ganze Zeichenkette, weil die
 // Abfrage auf <adresse>/search geht.
 function ausnahmeUrsprung(ausnahme) {
-  const sauber = adresseBereinigen(ausnahme)
+  const sauber = searxngAdresseBereinigen(ausnahme)
   if (!sauber) return null
   try {
     return new URL(sauber).origin.toLowerCase()
@@ -883,7 +890,7 @@ async function eingebauteSuche(begriff, frist) {
 // SearXNG geht an der Drossel vorbei: Es ist Georgs eigene Instanz, sie
 // braucht keinen Schutz vor Georgs eigenen Blöcken.
 async function searxngSuche(begriff, adresse, frist) {
-  const basis = adresseBereinigen(adresse)
+  const basis = searxngAdresseBereinigen(adresse)
   if (!basis) return { ok: false, treffer: [], grund: w.grund.unlesbar }
   const zeitlimitMs = restFrist(frist, WEB_DECKEL.sucheZeitlimitMs)
   if (zeitlimitMs <= 0) return { ok: false, treffer: [], grund: w.grund.zeit }
@@ -1156,7 +1163,7 @@ function statusText(status, seitentext) {
 // während jede Suche scheitert. /healthz taugt nur als Vorabprobe (text/plain
 // „OK") und darf NIE durch den JSON-Parser.
 export async function searxngStatus(adresse) {
-  const basis = adresseBereinigen(adresse)
+  const basis = searxngAdresseBereinigen(adresse)
   if (!basis) return { erreichbar: false, jsonDa: false, gedrosselt: false }
   try {
     const antwort = await holen(basis + '/search?q=flowforge&format=json', {

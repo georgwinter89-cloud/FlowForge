@@ -1470,9 +1470,16 @@ stiller Wechsel (Entscheidung Georg). **Harte Deckel** (absolut, nicht am Kontex
 skaliert): 6 Treffer je Suche, ~200 Zeichen Kurztext je Treffer, 6.000 Zeichen Seitentext,
 1.000.000 Bytes am rohen Rumpf (schon während des Ladens abgeschnitten — eine große
 Wikipedia-Seite liefert über zwei Millionen Zeichen), 10 s Zeitlimit für die Suche, 20 s
-fürs Lesen. Der Seitentext wird zusätzlich an der **Restluft des Lokal-Wächters** (§2)
-gedeckelt; ist keine mehr da, kommt statt Text der Klartext „kein Platz mehr im
-Arbeitsgedächtnis". **Adress-Sperre:** nur `http`/`https`; dieser Rechner und das eigene
+fürs Lesen; ein **Gesamtbudget von 25 s je Werkzeugaufruf** deckelt außerdem die Summe über
+alle Weiterleitungen und Anläufe — sonst schwiege der Block bei einer Sprungkette bis zu zwei
+Minuten. Seitentext **und** Trefferliste werden zusätzlich an der **Restluft des
+Lokal-Wächters** (§2) gedeckelt: Die Trefferliste verliert dann Treffer von hinten (ein
+Treffer ist die kleinste brauchbare Einheit — eine halbe Adresse taugt für kein
+`webseite_lesen`), und ist gar kein Platz mehr da, kommt statt Text bzw. Treffern der
+Klartext „kein Platz mehr im Arbeitsgedächtnis", ohne die Quelle überhaupt zu fragen.
+**Ehrlich statt „gelesen":** Eine HTTP-Fehlerseite (404, 500, 403 …) gilt nicht als gelesene
+Seite, sondern nennt den Code; 429 heißt „drosselt gerade"; eine Seite ohne lesbaren Text
+(im Browser zusammengebaut) sagt genau das. **Adress-Sperre:** nur `http`/`https`; dieser Rechner und das eigene
 Netz (127.0.0.0/8, ::1, 10./172.16–31./192.168./169.254., fc00::/7, fe80::) sind hart
 gesperrt — geprüft an der Adresse **und** an der Namensauflösung, und bei **jedem**
 Weiterleitungssprung neu, denn eine harmlos aussehende Seite kann per Weiterleitung auf
@@ -2336,7 +2343,15 @@ Block-Agenten als Hinweis daneben (§6).
   Grenzen wird beim Speichern mit Klartext abgelehnt statt still geklemmt ·
   **Websuche der lokalen Blöcke** (seit 0.51.2, §4.3): ein Feld **„SearXNG-Adresse"** —
   **leer heißt eingebaute Quelle**, es gibt bewusst kein zweites Feld für die Quellenwahl
-  (ein Feld weniger, das beim Speichern verlorengehen kann). Live-Status wie bei den
+  (ein Feld weniger, das beim Speichern verlorengehen kann). Ein **fehlendes Schema wird
+  ergänzt** statt die Eingabe still zu verwerfen (`gaming-pc:8080` → `http://gaming-pc:8080`;
+  Rechner im eigenen Netz und Adressen mit Port bekommen `http`, ein Name mit Punkt ohne Port
+  `https`), und der Dialog zeigt beim Tippen mit, **als was gespeichert wird**. Was sich nicht
+  retten lässt (`file:`, `data:`, `ftp:`, Unlesbares), lehnt das Speichern mit Klartext ab —
+  wie bei den Feineinstellungen; still verschluckt wird nichts. Das Feld ist auch ohne das
+  Häkchen „Lokale KI darf ganze Blöcke übernehmen" sichtbar und prüfbar, sagt dann aber
+  ausdrücklich, dass es erst mit diesem Häkchen wirkt (nur Blöcke der Klasse „lokal" bekommen
+  die Nachschlage-Werkzeuge). Live-Status wie bei den
   Ollama-Adressen, aber mit drei ehrlich getrennten Zuständen, die an der **Antwort selbst**
   gemessen werden: „nicht erreichbar" · „erreichbar, liefert aber kein JSON" — mit dem
   konkreten Handgriff, denn eine Standard-SearXNG-Installation liefert **kein** JSON, das

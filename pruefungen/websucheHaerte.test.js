@@ -20,6 +20,7 @@
 import { describe, it, expect, afterEach } from 'vitest'
 import {
   WEB_DECKEL,
+  adresseErlaubt,
   htmlZuText,
   ddgZustand,
   ddgLiteTreffer,
@@ -554,5 +555,32 @@ describe('0.51.2 · Ein schon wartender Aufruf belastet die sperrende Quelle nic
       // Prüfungen dieser Datei hineinreicht.
       await new Promise((fertig) => setTimeout(fertig, 250))
     })
+  })
+})
+
+// Nacharbeit des Integrators (21.08.2026): websuche.js putzte die
+// SearXNG-Adresse mit der STRENGEN Regel (adresseBereinigen), der Dialog seit
+// Nacharbeit B mit der nachsichtigen (searxngAdresseBereinigen, ergänzt ein
+// fehlendes Schema). Zwei Regeln für dasselbe Feld — genau die Falle aus
+// Bauschritt 51. Wirksam wurde sie bei einer von Hand in die
+// einstellungen.json geschriebenen Adresse: Die Ausnahme griff dann nicht,
+// und der eigene SearXNG-Rechner galt als gesperrte Heimnetz-Adresse.
+// Rot vor Grün gemessen: mit der strengen Fassung liefert der erste Fall
+// { ok: false, grund: "sie zeigt auf diesen Rechner oder ins eigene Netz" }.
+describe("Die SearXNG-Ausnahme kennt dieselbe Adress-Regel wie der Dialog", () => {
+  it("eine von Hand eingetragene Adresse ohne Schema gilt trotzdem als Ausnahme", () => {
+    const urteil = adresseErlaubt("http://10.0.0.50:8080/search", "10.0.0.50:8080")
+    expect(urteil.ok, urteil.grund).toBe(true)
+  })
+
+  it("auch mit großgeschriebenem Schema und Schrägstrich am Ende", () => {
+    const urteil = adresseErlaubt("http://10.0.0.50:8080/search", "HTTP://10.0.0.50:8080/")
+    expect(urteil.ok, urteil.grund).toBe(true)
+  })
+
+  it("und die Ausnahme öffnet weiterhin nur GENAU diesen Ursprung", () => {
+    expect(adresseErlaubt("http://10.0.0.51:8080/search", "10.0.0.50:8080").ok).toBe(false)
+    expect(adresseErlaubt("http://10.0.0.50:9090/search", "10.0.0.50:8080").ok).toBe(false)
+    expect(adresseErlaubt("http://127.0.0.1:8080/search", "10.0.0.50:8080").ok).toBe(false)
   })
 })
