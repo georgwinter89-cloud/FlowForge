@@ -2876,19 +2876,48 @@ export const texte = {
     // zweite Auswahl (Entscheidung Georg, 20.08.2026).
     websucheUeberschrift: 'Websuche der lokalen Blöcke',
     searxngAdresse: 'SearXNG-Adresse (leer = eingebaute Quelle)',
+    // Sperrdauer ehrlich (Nacharbeit Befund 4): Hier stand „sperrt sie für ein
+    // bis zwei Minuten". Gemessen 20./21.08.2026 war schon die dritte Suche
+    // dicht, und die Sperre hielt in einer Messung über 18, in einer zweiten
+    // über 96 Minuten an — davon eine belegte 50-Minuten-Strecke völliger
+    // Funkstille. Georg hätte nach zwei Minuten nachgesehen und die Quelle
+    // immer noch dicht gefunden, ohne Anhaltspunkt, wie lange er warten muss.
+    // Der Wortlaut ist mit SPEC §4.3 abgeglichen.
     searxngHinweis:
       'Lokale Blöcke können im Internet nachschlagen: suchen und eine Seite lesen — rein ' +
       'lesend, in der Menge hart gedeckelt, und jeder Zugriff steht im Ticker. Leer heißt: ' +
       'FlowForge nutzt eine eingebaute, kostenlose Quelle ohne Konto. Die ist geduldet, ' +
-      'nicht garantiert — bei zu vielen Abfragen kurz hintereinander sperrt sie für ein bis ' +
-      'zwei Minuten; FlowForge sagt das dann ehrlich im Ticker, statt „nichts gefunden" zu ' +
-      'behaupten. Trägst du hier die Adresse einer eigenen SearXNG-Instanz ein (z.B. ' +
-      'http://192.168.x.x:8080), läuft jede Suche darüber. Achtung: Webseiten sind ' +
+      'nicht garantiert — bei zu vielen Abfragen kurz hintereinander sperrt sie zeitweise: ' +
+      'meist Minuten, gemessen auch über eine Stunde, und das lässt sich nicht ' +
+      'vorhersagen. FlowForge sagt das dann ehrlich im Ticker, statt „nichts gefunden" zu ' +
+      'behaupten. Sie trägt Gelegenheits-Nachschlagen, keine Dauerrecherche: Wer regelmäßig ' +
+      'nachschlagen lassen will, trägt hier die Adresse einer eigenen SearXNG-Instanz ein ' +
+      '(z.B. gaming-pc:8080 oder 192.168.x.x:8080 — fehlt http://, ergänzt FlowForge es und ' +
+      'zeigt dir gleich darunter, wie die Adresse gespeichert wird). Achtung: Webseiten sind ' +
       'Fremdtext an einer KI, die schreiben darf — Anweisungen auf einer Seite können ' +
       'versuchen, deinen Block umzulenken. Die harten Sperren (Projektgrenze, ' +
       'Verwaltungsdateien, Größendeckel) gelten unabhängig davon; Paket-Installationen und ' +
       'Skriptläufe sind davon nicht gedeckt. Eine geänderte Adresse wirkt erst beim ' +
       'nächsten Laufstart.',
+    // Ehrlich statt verstecken (Nacharbeit Befund 6, Hausgeist „Rückfrage statt
+    // Sperre"): Das Feld steht im Zweig der Helfer-KI, wirkt aber nur für
+    // Blöcke der Klasse „lokal" — die es zusätzlich braucht, dass die lokale KI
+    // ganze Blöcke übernehmen darf. Gemessen 20.08.2026 richtete sich in dieser
+    // Stellung alles ein, zeigte Grün, und keine einzige Suche fand je statt.
+    // Wegnehmen wäre schlechter: Dann könnte Georg die Adresse gar nicht erst
+    // vorbereiten und wüsste nicht, dass es sie gibt.
+    websucheNurMitBlockAgent:
+      'Wirkt erst, wenn weiter unten „Lokale KI darf ganze Blöcke übernehmen" angehakt ist: ' +
+      'Nur solche Blöcke bekommen die Nachschlage-Werkzeuge. Du kannst die Adresse hier ' +
+      'trotzdem schon eintragen und prüfen.',
+    // Ergänztes Schema sichtbar machen (Nacharbeit Befund 3): Was gespeichert
+    // wird, soll dastehen, bevor gespeichert wird — sonst wäre die Ergänzung
+    // nur eine andere Art, still etwas anderes zu tun als das Getippte.
+    searxngErgaenzt: (adresse) => `Wird gespeichert als: ${adresse}`,
+    fehlerSearxngAdresse:
+      'Die SearXNG-Adresse versteht FlowForge nicht. Trag sie so ein, wie du sie im Browser ' +
+      'aufrufst (z.B. gaming-pc:8080) — oder leere das Feld, dann sucht FlowForge über die ' +
+      'eingebaute Quelle.',
     searxngStatusBereit: 'Deine Such-Instanz antwortet mit JSON — die Suche läuft darüber.',
     // Der Auslieferungszustand von SearXNG erlaubt unter search: nur
     // `formats: - html`; jede JSON-Anfrage endet dann in 403. Das ist genau die
@@ -3393,6 +3422,13 @@ export const texte = {
     websucheQuelleEingebaut: 'die eingebaute Suchquelle',
     websucheQuelleEigene: (adresse) => `deine eigene Such-Instanz (${adresse})`,
     websucheTreffer: (anzahl, quelle) => `${anzahl} Treffer über ${quelle}.`,
+    // Die Trefferliste wird an der Restluft des Lokal-Wächters gedeckelt
+    // (Nacharbeit Befund 12) — dann stimmt „6 Treffer" nicht mehr, und Georg
+    // soll den Grund sehen statt eine unerklärt kleine Zahl.
+    websucheTrefferGedeckelt: (anzahl, quelle) =>
+      `${anzahl} Treffer über ${quelle} — auf den Platz im Arbeitsgedächtnis des lokalen Blocks gekürzt.`,
+    websucheKeinPlatz:
+      'Kein Platz mehr im Arbeitsgedächtnis des lokalen Blocks — nicht gesucht; der Block soll jetzt zusammenfassen.',
     websucheNichts: (begriff) =>
       `Nichts gefunden zu „${begriff}" — die Quelle hat geantwortet, sie kennt dazu nichts.`,
     websucheGesperrt:
@@ -3411,12 +3447,33 @@ export const texte = {
       `Webseite gelesen: ${adresse} (${Math.round(zeichen).toLocaleString('de-DE')} Zeichen).`,
     webseiteGekuerzt: (adresse, zeichen) =>
       `Webseite gelesen: ${adresse} (auf ${Math.round(zeichen).toLocaleString('de-DE')} Zeichen gekürzt).`,
-    webseiteAbgelehnt: (adresse) =>
-      `Seitenabruf gestoppt: ${adresse} — erlaubt sind nur öffentliche Seiten im Internet (http/https), nicht dieser Rechner und nicht das eigene Netz.`,
+    // Der KURZE Grund kommt aus dem Rückgabeobjekt von webseiteLesen und wird
+    // hier eingesetzt, statt ihn zu erfinden (Nacharbeit Befund 1). Bis dahin
+    // stand hier fest verdrahtet „dieser Rechner / eigenes Netz" — bei einer
+    // Weiterleitungsschleife auf einer glasklar öffentlichen https-Adresse las
+    // Georg im Ticker UND dauerhaft im Laufbericht, seine KI habe ins Heimnetz
+    // gegriffen, während der Agent daneben korrekt „zu viele Weiterleitungen
+    // hintereinander" bekam (gemessen 20.08.2026 an httpbin.org/redirect/10).
+    // Der Rückfall ist der alte Satz — er gilt genau dann, wenn wirklich kein
+    // Grund mitkommt.
+    webseiteAbgelehnt: (adresse, grund = '') =>
+      `Seitenabruf gestoppt: ${adresse} — ${grund || 'erlaubt sind nur öffentliche Seiten im Internet (http/https), nicht dieser Rechner und nicht das eigene Netz'}.`,
     webseiteKeineTextseite: (adresse) =>
       `Keine Textseite: ${adresse} — daraus lässt sich kein Text lesen (z.B. PDF oder Bild).`,
     webseiteZeitlimit: (adresse) => `${adresse} hat nicht rechtzeitig geantwortet — abgebrochen.`,
-    webseiteNichtErreichbar: (adresse) => `Nicht erreichbar: ${adresse}.`,
+    webseiteNichtErreichbar: (adresse, grund = '') =>
+      grund ? `Nicht erreichbar: ${adresse} — ${grund}.` : `Nicht erreichbar: ${adresse}.`,
+    // HTTP-Fehlerseiten und leere Seiten haben eigene Zeilen (Nacharbeit Befund
+    // 10): Beide fielen sonst in den Rückfall „Nicht erreichbar" — gemessen
+    // stand bei einem 404 im Ticker „Nicht erreichbar", während der Agent
+    // korrekt „Der Server hat den Fehler 404 gemeldet" las. Erreichbar war die
+    // Seite ja gerade, sie hat nur etwas anderes geliefert als eine Antwort.
+    webseiteStatusFehler: (adresse, code) =>
+      `Fehlerseite statt Inhalt: ${adresse} — der Server hat den Fehler ${code} gemeldet.`,
+    webseiteGedrosselt: (adresse, code) =>
+      `Seite drosselt gerade (${code}): ${adresse} — kein Text geladen.`,
+    webseiteLeer: (adresse) =>
+      `Kein lesbarer Text: ${adresse} — die Seite baut ihren Inhalt vermutlich erst im Browser zusammen.`,
     webseiteKeinPlatz:
       'Kein Platz mehr im Arbeitsgedächtnis des lokalen Blocks — kein Seitentext geladen; der Block soll jetzt zusammenfassen.',
     // Eine Zeile je Laufstart, nicht je Block: Welche Quelle gilt überhaupt?
@@ -3434,6 +3491,14 @@ export const texte = {
     nurLesenGesperrt: 'Schreib-Versuch gestoppt — dieser Block darf nur lesen.',
     nurLesenBefehlGesperrt:
       'Befehl gestoppt — dieser Block darf nur lesen (rein lesende Befehle laufen durch).',
+    // WebSearch/WebFetch der CLI (Nacharbeit Befund 7): Ein Lesezugriff ist
+    // kein Schreib-Versuch. Gemessen 20.08.2026 meldete der Ticker genau das —
+    // „Schreib-Versuch gestoppt" —, während der Text an den Agenten seit
+    // 0.51.2 ehrlich von „freien Internetzugriffen" spricht. Ticker-Zeile und
+    // Werkzeug-Text tragen jetzt denselben Grund; die Einstufung selbst
+    // (gesperrt) ändert sich nicht.
+    nurLesenInternetGesperrt:
+      'Internet-Zugriff gestoppt — dieser Block darf nur lesen; freie Internetzugriffe sind hier gesperrt.',
     nurLesenBefehleAktiv:
       'Einstellung aktiv: Nur-lesende Blöcke dürfen Befehle ausführen (auf eigene Gefahr).',
     pruefmappeGesperrt:

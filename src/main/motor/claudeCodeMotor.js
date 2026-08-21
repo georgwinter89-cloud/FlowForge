@@ -141,6 +141,11 @@ const NUR_LESEN_ERLAUBT = new Set([
   'ExitPlanMode'
 ])
 
+// Der freie Internet-Zugriff der CLI. Er bleibt unter „darf nur lesen"
+// gesperrt (ungedeckelter Fremdtext an einem Agenten), verdient dort aber eine
+// wahre Ticker-Zeile — siehe pruefeWerkzeug (Nacharbeit Befund 7).
+const INTERNET_WERKZEUGE = new Set(['WebSearch', 'WebFetch'])
+
 // Karten-Werkzeuge (BAUPLAN 7): in-Prozess-Werkzeuge des „karten"-Servers.
 // Sie setzen die harten Kartenregeln selbst durch — keine Rückfrage nötig.
 const KARTEN_PRAEFIX = 'mcp__karten__'
@@ -708,6 +713,19 @@ export function pruefeWerkzeug(name, eingabe, projektPfad, nurLesen, darfPruefen
       tickerText: texte.ticker.nurLesenBefehlGesperrt
     }
   }
+  // Der freie Internet-Zugriff der CLI (WebSearch/WebFetch) bleibt unter „darf
+  // nur lesen" gesperrt — die EINSTUFUNG ändert sich nicht, nur die Zeile für
+  // Georg (Nacharbeit Befund 7): Gemessen 20.08.2026 stand im Ticker und damit
+  // dauerhaft im Laufbericht „Schreib-Versuch gestoppt", obwohl ein
+  // Lesezugriff versucht wurde. Der Text an den Agenten ist seit 0.51.2
+  // ehrlich („freie Internetzugriffe"), die Ticker-Zeile war es als einzige in
+  // dieser Familie nicht. Die gedeckelten Nachschlage-Werkzeuge lokaler Blöcke
+  // (WEB_PRAEFIX, oben) sind davon unberührt.
+  if (nurLesen && INTERNET_WERKZEUGE.has(name))
+    return {
+      gesperrt: texte.rechteFrage.nurLesenGesperrtFuerAgent,
+      tickerText: texte.ticker.nurLesenInternetGesperrt
+    }
   if (nurLesen && name !== 'Bash' && name !== 'PowerShell' && !NUR_LESEN_ERLAUBT.has(name))
     return { gesperrt: texte.rechteFrage.nurLesenGesperrtFuerAgent, tickerText: texte.ticker.nurLesenGesperrt }
   if (OHNE_RUECKFRAGE.has(name)) return { erlaubt: true }

@@ -1456,8 +1456,12 @@ qwen3.8-davidau:27b): Erkennt das Modell eine Wissenslücke, greift es von selbs
 Suchwerkzeug; es fehlte nur der Stecker. **Quelle wählbar, ohne Umbau:** Standard ist
 eine **eingebaute, kostenlose** Abfrage ohne Konto (DuckDuckGo); trägt der Nutzer in den
 Einstellungen (§9) eine **SearXNG-Adresse** ein, läuft die Suche darüber. Die eingebaute
-Quelle ist geduldet, nicht garantiert: Bei zu vielen Abfragen in kurzer Zeit sperrt sie
-(gemessen: nach 2–7 Abfragen, Erholung 45–241 s) — FlowForge erkennt das **am Seiteninhalt**
+Quelle ist geduldet, nicht garantiert: Bei zu vielen Abfragen in kurzer Zeit sperrt sie —
+gemessen am 20./21.08.2026 schon nach **zwei bis drei** Suchen, und die Sperre hält
+**unvorhersehbar lange**: meist Minuten, nach einem harten Ausbruch auch über eine Stunde
+völliger Funkstille hinweg. Sie trägt Gelegenheits-Nachschlagen, keine Dauerrecherche — wer
+regelmäßig nachschlagen lassen will, braucht die eigene SearXNG-Instanz. FlowForge erkennt
+die Sperre **am Seiteninhalt**
 (die Sperrseite meldet HTTP-„alles in Ordnung") und sagt „Quelle sperrt gerade" statt
 „nichts gefunden"; eine eigene Drossel hält die Abfragen auseinander, einen automatischen
 Wiederholversuch gibt es nicht. Ist eine SearXNG-Adresse eingetragen, antwortet aber nicht

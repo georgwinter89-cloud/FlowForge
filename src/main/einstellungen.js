@@ -3,7 +3,12 @@ import { app } from 'electron'
 import fs from 'node:fs'
 import path from 'node:path'
 import { texte } from '../shared/texte.js'
-import { LOKAL_FEIN_VORLAGEN, lokalFeinBereinigen, adresseBereinigen } from '../shared/lokalRegeln.js'
+import {
+  LOKAL_FEIN_VORLAGEN,
+  lokalFeinBereinigen,
+  adresseBereinigen,
+  searxngAdresseBereinigen
+} from '../shared/lokalRegeln.js'
 
 // Abo-Regel (SPEC §2, neu seit 0.46.4 — Entscheidung Georg, 19.08.2026): Der
 // Abo-Modus bleibt auch in veröffentlichten Versionen an. Anthropic sagt seit
@@ -231,9 +236,17 @@ export function einstellungenSpeichern(neu) {
   // löschte es sonst still. Deshalb drei Fälle, jeder eine bewusste Aussage:
   //   undefined → der Aufrufer kennt das Feld nicht: Wert aus der DATEI halten;
   //   Leerstring → Georg hat das Feld geleert: eingebaute Quelle;
-  //   sonst      → bereinigen; Ungültiges verwirft die Hausregel der
-  //                Adress-Liste, dann bleibt die alte Adresse stehen (kein
-  //                Fehler, der das ganze Speichern abbräche).
+  //   sonst      → bereinigen; nur ein wirklich unbrauchbarer Wert (file:,
+  //                data:, Unparsbares) lässt die alte Adresse stehen — kein
+  //                Fehler, der das ganze Speichern abbräche, der Dialog sagt es
+  //                daneben in Klartext.
+  //
+  // Gesäubert wird mit searxngAdresseBereinigen und NICHT mit der strengen
+  // Regel der Ollama-Liste (Nacharbeit Befund 3): „gaming-pc:8080" — genau die
+  // Schreibweise, die Georg im Browser tippt — wurde gemessen 20.08.2026 still
+  // verworfen; er sah keinen Fehler, und jede Suche lief weiter über die
+  // eingebaute Quelle. Das fehlende Schema wird jetzt ergänzt, genau wie
+  // webseite_lesen es mit „www.electronjs.org" tut.
   let searxng
   if (neu.searxngAdresse === undefined) {
     const { einstellungen: bisher } = einstellungenLaden()
@@ -241,7 +254,7 @@ export function einstellungenSpeichern(neu) {
   } else if (String(neu.searxngAdresse).trim() === '') {
     searxng = ''
   } else {
-    const sauber = adresseBereinigen(neu.searxngAdresse)
+    const sauber = searxngAdresseBereinigen(neu.searxngAdresse)
     if (sauber) searxng = sauber
     else {
       const { einstellungen: bisher } = einstellungenLaden()

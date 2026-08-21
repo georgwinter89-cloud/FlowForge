@@ -55,6 +55,37 @@ function quelleName(quelle, searxngAdresse) {
     : texte.ticker.websucheQuelleEingebaut
 }
 
+// Der Rahmen um die Trefferliste (Fremdtext-Hinweis + „Zum Weiterlesen …")
+// kostet konstant so viele Zeichen — gemessen 21.08.2026: 148. Wer weniger
+// Restluft hat als diesen Rahmen, kann selbst mit null Treffern nichts mehr
+// aufnehmen; dann wird gar nicht erst gefragt.
+const TREFFER_RAHMEN = w.treffer([]).length
+
+// Trefferliste an der Restluft des Lokal-Wächters deckeln (Nacharbeit Befund
+// 12). Gemessen wird am FERTIGEN Text (Rahmen inbegriffen), nicht an einer
+// Schätzung — nur der fertige Text landet im Arbeitsgedächtnis.
+//
+// Reihenfolge mit Absicht: ERST Treffer weglassen, und zwar von hinten. Ein
+// Treffer ist die kleinste brauchbare Einheit — Titel, Adresse, Kurztext
+// gehören zusammen, und eine halbe Adresse ist für webseite_lesen wertlos
+// (denselben Grund nennt trefferBauen in websuche.js für Übergrößen-Adressen).
+// Der letzte Treffer ist der schwächste, beide Quellen liefern nach Relevanz
+// sortiert. ERST wenn nicht einmal der erste Treffer passt, wird sein Kurztext
+// gekürzt: Titel und Adresse bleiben dann ganz, sonst bliebe ein Treffer
+// übrig, mit dem der Block nichts anfangen kann.
+function trefferAnLuft(treffer, platz) {
+  if (platz === null || w.treffer(treffer).length <= platz)
+    return { liste: treffer, gedeckelt: false }
+  for (let anzahl = treffer.length - 1; anzahl >= 1; anzahl--) {
+    const liste = treffer.slice(0, anzahl)
+    if (w.treffer(liste).length <= platz) return { liste, gedeckelt: true }
+  }
+  const erster = treffer[0]
+  const rest = platz - w.treffer([{ ...erster, kurztext: '' }]).length
+  if (rest <= 0) return { liste: [], gedeckelt: true }
+  return { liste: [{ ...erster, kurztext: erster.kurztext.slice(0, rest) }], gedeckelt: true }
+}
+
 // Ticker-Zeile zum Ausgang einer Suche — je Fehlerart eine eigene, damit
 // „Quelle sperrt gerade" nie wie „nichts gefunden" aussieht (genau das Raten
 // soll dieser Schritt abschaffen).
@@ -64,11 +95,28 @@ function sucheFehlerZeile(fehlerArt) {
   return texte.ticker.websucheNichtErreichbar
 }
 
-function seiteFehlerZeile(fehlerArt, adresse) {
-  if (fehlerArt === 'abgelehnt') return texte.ticker.webseiteAbgelehnt(adresse)
+// Ticker-Zeile zum Ausgang eines Seitenabrufs. Der KURZE Grund und der
+// HTTP-Code kommen aus dem Rückgabeobjekt von webseiteLesen — hier wird nichts
+// mehr erfunden (Nacharbeit Befund 1): Bei einer Weiterleitungsschleife auf
+// httpbin.org stand im Ticker gemessen „nicht dieser Rechner und nicht das
+// eigene Netz", während der Agent daneben „zu viele Weiterleitungen
+// hintereinander" las — und über lauf.js landete die falsche Zeile dauerhaft
+// im Laufbericht. Ticker-Zeile und Werkzeug-Text tragen jetzt denselben Grund.
+//
+// statusFehler und leereSeite sind eigene Ausgänge (Nacharbeit Befund 10):
+// Beide fielen bis hierher in den Rückfall „Nicht erreichbar" — erreichbar war
+// die Seite aber gerade, sie hat nur eine Fehlerseite oder gar keinen Text
+// geliefert.
+function seiteFehlerZeile(fehlerArt, adresse, grund = '', status = 0) {
+  if (fehlerArt === 'abgelehnt') return texte.ticker.webseiteAbgelehnt(adresse, grund)
   if (fehlerArt === 'keineTextseite') return texte.ticker.webseiteKeineTextseite(adresse)
   if (fehlerArt === 'zeitlimit') return texte.ticker.webseiteZeitlimit(adresse)
-  return texte.ticker.webseiteNichtErreichbar(adresse)
+  if (fehlerArt === 'statusFehler')
+    return status === 429
+      ? texte.ticker.webseiteGedrosselt(adresse, status)
+      : texte.ticker.webseiteStatusFehler(adresse, status)
+  if (fehlerArt === 'leereSeite') return texte.ticker.webseiteLeer(adresse)
+  return texte.ticker.webseiteNichtErreichbar(adresse, grund)
 }
 
 // searxngAdresse: leer = eingebaute Quelle (Entscheidung Georg: kein eigenes
@@ -91,6 +139,21 @@ export async function webWerkzeugServer({ searxngAdresse = '', aufEreignis, hole
       if (!gesucht) {
         aufEreignis({ art: 'ticker', text: texte.ticker.websucheOhneBegriff })
         return { content: [{ type: 'text', text: w.begriffFehlt }], isError: true }
+      }
+      // Platz im Arbeitsgedächtnis — dieselbe Bremse wie bei webseite_lesen
+      // (Nacharbeit Befund 12). Bis dahin kannte nur der Lesepfad den
+      // Lokal-Wächter: Bei aufgebrauchter Übertragsgrenze durfte der Block
+      // keine Seite mehr lesen, suchte aber munter weiter und schob je Aufruf
+      // 400-600 Token nach (gemessen: 10 Suchen = 7.146 Token in 0,1 s, Faktor
+      // 24 gegenüber demselben Lauf mit webseite_lesen). Geprüft wird VOR dem
+      // Netzabruf: Eine Suche, die ohnehin nicht mehr ankommt, soll die Quelle
+      // nicht belasten — die eingebaute sperrt bei Häufung. Die Schwelle ist
+      // deshalb nicht 0, sondern der konstante Rahmen um die Trefferliste:
+      // Darunter passt selbst eine leere Liste nicht mehr hinein.
+      const luft = luftJetzt(holeLuft)
+      if (luft !== null && luft <= TREFFER_RAHMEN) {
+        aufEreignis({ art: 'ticker', text: texte.ticker.websucheKeinPlatz })
+        return { content: [{ type: 'text', text: w.keinPlatzMehr }], isError: true }
       }
       const ergebnis = await websucheDurchfuehren({
         suchbegriff: gesucht,
@@ -116,15 +179,31 @@ export async function webWerkzeugServer({ searxngAdresse = '', aufEreignis, hole
         aufEreignis({ art: 'ticker', text: texte.ticker.websucheNichts(gesucht) })
         return { content: [{ type: 'text', text: ausweichHinweis + w.keineTreffer(gesucht) }] }
       }
+      // Der Ausweich-Hinweis ist eine Tatsache und bleibt — er zählt deshalb
+      // gegen die Restluft, statt sie zu überziehen.
+      const platz = luft === null ? null : luft - ausweichHinweis.length
+      const { liste, gedeckelt } = trefferAnLuft(ergebnis.treffer, platz)
+      if (!liste.length) {
+        aufEreignis({ art: 'ticker', text: texte.ticker.websucheKeinPlatz })
+        return {
+          content: [{ type: 'text', text: ausweichHinweis + w.keinPlatzMehr }],
+          isError: true
+        }
+      }
       aufEreignis({
         art: 'ticker',
-        text: texte.ticker.websucheTreffer(
-          ergebnis.treffer.length,
-          quelleName(ergebnis.quelle, searxngAdresse)
-        )
+        text: gedeckelt
+          ? texte.ticker.websucheTrefferGedeckelt(
+              liste.length,
+              quelleName(ergebnis.quelle, searxngAdresse)
+            )
+          : texte.ticker.websucheTreffer(
+              liste.length,
+              quelleName(ergebnis.quelle, searxngAdresse)
+            )
       })
       return {
-        content: [{ type: 'text', text: ausweichHinweis + w.treffer(ergebnis.treffer) }]
+        content: [{ type: 'text', text: ausweichHinweis + w.treffer(liste) }]
       }
     },
     { alwaysLoad: true }
@@ -164,7 +243,12 @@ export async function webWerkzeugServer({ searxngAdresse = '', aufEreignis, hole
       if (!ergebnis.ok) {
         aufEreignis({
           art: 'ticker',
-          text: seiteFehlerZeile(ergebnis.fehlerArt, ergebnis.adresse || ziel)
+          text: seiteFehlerZeile(
+            ergebnis.fehlerArt,
+            ergebnis.adresse || ziel,
+            ergebnis.grund,
+            ergebnis.status
+          )
         })
         return { content: [{ type: 'text', text: ergebnis.fehlertext }], isError: true }
       }

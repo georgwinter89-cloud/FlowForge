@@ -78,15 +78,20 @@ describe('0.51.2 · SearXNG-Adresse: Speichern', () => {
     expect(ausDatei().searxngAdresse).toBe('')
   })
 
-  it('eine ungültige Eingabe lässt die alte Adresse stehen — ohne Fehler', () => {
+  // Diese zwei Prüfungen hielten bis zur Nacharbeit B genau das fest, was der
+  // Prüfer als Befund meldete: „gaming-pc:8080" wurde still verworfen. Das war
+  // eine Bauer-Entscheidung, keine Vorgabe — sie ist jetzt umgedreht (Befund 3,
+  // Prüfungen dazu weiter unten). Übrig bleibt die Zusage für das, was
+  // FlowForge wirklich nicht retten kann.
+  it('eine unbrauchbare Eingabe lässt die alte Adresse stehen — ohne Fehler', () => {
     schreiben({ searxngAdresse: 'http://gaming-pc:8080' })
-    const e = einstellungenSpeichern({ ...basis, searxngAdresse: 'gaming-pc:8080' })
+    const e = einstellungenSpeichern({ ...basis, searxngAdresse: 'file:///C:/geheim' })
     expect(e.ok).toBe(true)
     expect(e.einstellungen.searxngAdresse).toBe('http://gaming-pc:8080')
   })
 
-  it('eine ungültige Eingabe ohne gespeicherte Adresse bleibt leer', () => {
-    const e = einstellungenSpeichern({ ...basis, searxngAdresse: 'quatsch' })
+  it('eine unbrauchbare Eingabe ohne gespeicherte Adresse bleibt leer', () => {
+    const e = einstellungenSpeichern({ ...basis, searxngAdresse: 'data:text/plain,geheim' })
     expect(e.ok).toBe(true)
     expect(e.einstellungen.searxngAdresse).toBe('')
   })
@@ -151,5 +156,158 @@ describe('0.51.2 · Der Einstellungen-Dialog schickt das Feld wirklich mit', () 
     expect(texte.einstellungen.searxngStatusKeinJson).toMatch(
       'docs.searxng.org/admin/installation-docker.html'
     )
+  })
+})
+
+// ——— Nacharbeit B ——————————————————————————————————————————————————————————
+
+const { adresseBereinigen, searxngAdresseBereinigen } = await import(
+  '../src/shared/lokalRegeln.js'
+)
+const { texte } = await import('../src/shared/texte.js')
+
+const projektWurzel = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+const lesen = (datei) => fs.readFileSync(path.join(projektWurzel, datei), 'utf8')
+
+// ROT VOR GRÜN, gemessen 21.08.2026: Die Quelldateien dieser Nacharbeit wurden
+// weggenommen (git stash über src/) und genau diese Prüfdatei gegen die alte
+// Fassung gefahren. Ergebnis: 13 der 14 neuen Prüfungen rot — der Reihen-Test
+// meldete für jede der fünf Schreibweisen „http://ALT:1" statt der ergänzten
+// Adresse, die Großschreibungs-Prüfung dasselbe, searxngAdresseBereinigen gab
+// es nicht, der Hinweistext trug noch „für ein bis zwei Minuten", und im
+// Dialog fehlten sowohl die Zeile „Wird gespeichert als" als auch der Hinweis
+// zum Block-Agenten. GRÜN war genau eine: die SPEC-Prüfung — der Integrator
+// hatte §4.3 schon korrigiert, und dieser Abschnitt zieht den Einstellungstext
+// nach. (Die zwei umgeschriebenen Prüfungen oben — file:// und data: — waren
+// vorher wie nachher grün.)
+describe('Nacharbeit B · Eine Adresse ohne Schema verschwindet nicht mehr still (Befund 3)', () => {
+  // Nachstellweg des Prüfers, Hauptprozess-Hälfte: einstellungenSpeichern mit
+  // genau der Schreibweise, die Georg im Browser tippt. Gemessen 20.08.2026
+  // blieb der alte Wert stehen, ok=true, fehler=null — und ohne alten Wert
+  // stand in der Datei "" ; jede Suche lief ab da still über die eingebaute
+  // Quelle.
+  it('„gaming-pc:8080" wird angenommen und mit http:// gespeichert', () => {
+    schreiben({ searxngAdresse: 'http://ALT:1' })
+    const e = einstellungenSpeichern({ ...basis, searxngAdresse: 'gaming-pc:8080' })
+    expect(e.ok).toBe(true)
+    expect(e.einstellungen.searxngAdresse).toBe('http://gaming-pc:8080')
+    expect(ausDatei().searxngAdresse).toBe('http://gaming-pc:8080')
+  })
+
+  it('der frische Fall: ohne gespeicherte Adresse bleibt das Feld nicht mehr leer', () => {
+    const e = einstellungenSpeichern({ ...basis, searxngAdresse: 'gaming-pc:8080' })
+    expect(e.einstellungen.searxngAdresse).toBe('http://gaming-pc:8080')
+    expect(einstellungenLaden().einstellungen.searxngAdresse).toBe('http://gaming-pc:8080')
+  })
+
+  // Die Reihenmessung des Prüfers: fünf Schreibweisen, alle fielen still auf
+  // „http://ALT:1" zurück.
+  it('die Reihenmessung des Prüfers kommt jetzt vollständig durch', () => {
+    const erwartet = {
+      'gaming-pc:8080': 'http://gaming-pc:8080',
+      '10.0.0.50:8080': 'http://10.0.0.50:8080',
+      'localhost:8080': 'http://localhost:8080',
+      '//gaming-pc:8080': 'http://gaming-pc:8080',
+      'gaming-pc': 'http://gaming-pc'
+    }
+    for (const [eingabe, ziel] of Object.entries(erwartet)) {
+      schreiben({ searxngAdresse: 'http://ALT:1' })
+      const e = einstellungenSpeichern({ ...basis, searxngAdresse: eingabe })
+      expect(e.einstellungen.searxngAdresse, eingabe).toBe(ziel)
+    }
+  })
+
+  // Präzisierung (b) des Prüfers: Auch die Großschreibung fiel durch, weil die
+  // Hausregel case-sensitive war.
+  it('die Großschreibung des Schemas fällt nicht mehr durch', () => {
+    for (const eingabe of ['HTTP://gaming-pc:8080', 'Http://gaming-pc:8080']) {
+      schreiben({ searxngAdresse: 'http://ALT:1' })
+      const e = einstellungenSpeichern({ ...basis, searxngAdresse: eingabe })
+      expect(e.einstellungen.searxngAdresse, eingabe).toBe('http://gaming-pc:8080')
+    }
+  })
+
+  it('eine öffentliche Instanz ohne Port bekommt https, ein Rechner im Netz http', () => {
+    expect(searxngAdresseBereinigen('searx.example')).toBe('https://searx.example')
+    expect(searxngAdresseBereinigen('searx.example/suche')).toBe('https://searx.example/suche')
+    expect(searxngAdresseBereinigen('10.0.0.50')).toBe('http://10.0.0.50')
+    expect(searxngAdresseBereinigen('gaming-pc:8080/searx')).toBe('http://gaming-pc:8080/searx')
+  })
+
+  it('was FlowForge nicht will, wird auch nicht ergänzt — file:, data:, ftp: bleiben ungültig', () => {
+    for (const eingabe of ['file:///C:/geheim', 'data:text/plain,geheim', 'ftp://x', '   '])
+      expect(searxngAdresseBereinigen(eingabe), eingabe).toBeNull()
+  })
+
+  it('die Ollama-Adressliste verwirft Unsinn weiter — nur die Schreibweise des Schemas ist egal', () => {
+    // Die Liste darf NICHT mitziehen: Dort wäre eine still ergänzte
+    // Fantasieadresse ein Fehler, der erst einen Lauf später auffällt
+    // (Zusicherungen in einstellungenAdressen.test.js).
+    expect(adresseBereinigen('quatsch')).toBeNull()
+    expect(adresseBereinigen('gaming-pc:11434')).toBeNull()
+    expect(adresseBereinigen('HTTP://gaming-pc:11434')).toBe('http://gaming-pc:11434')
+  })
+
+  it('der Dialog rechnet mit derselben Regel und verweigert Unbrauchbares mit Klartext', () => {
+    const quelle = lesen('src/renderer/src/Einstellungen.jsx')
+    // Live-Status und Speichern müssen dieselbe Adresse meinen — sonst fragt
+    // der Status eine andere ab als die, die gespeichert wird.
+    expect(quelle).toMatch(/searxngAdresseBereinigen\(searxngAdresse\)/)
+    expect(quelle).toContain('t.fehlerSearxngAdresse')
+    expect(quelle).toContain('t.searxngErgaenzt')
+  })
+})
+
+describe('Nacharbeit B · Der Einstellungstext verspricht keine zu kurze Sperre mehr (Befund 4)', () => {
+  // Gemessen 20./21.08.2026: Der Text sagte „sperrt sie für ein bis zwei
+  // Minuten". Schon die dritte Suche war dicht; in einer Messung hielt die
+  // Sperre über 18 Minuten, in einer zweiten über 96 Minuten an — davon eine
+  // belegte 50-Minuten-Strecke völliger Funkstille. Georg hätte nach zwei
+  // Minuten nachgesehen und die Quelle immer noch dicht gefunden.
+  const hinweis = () => texte.einstellungen.searxngHinweis
+
+  it('die widerlegte Zusage „ein bis zwei Minuten" steht nicht mehr da', () => {
+    expect(hinweis()).not.toMatch(/ein bis\s+zwei Minuten/)
+    expect(hinweis()).not.toMatch(/zwei Minuten/)
+  })
+
+  it('stattdessen steht dort, was gemessen ist: zeitweise, meist Minuten, auch über eine Stunde', () => {
+    expect(hinweis()).toContain('zeitweise')
+    expect(hinweis()).toContain('Minuten')
+    expect(hinweis()).toContain('Stunde')
+  })
+
+  it('und der Ausweg steht dabei: Ticker statt „nichts gefunden", eigene Instanz für Dauerbetrieb', () => {
+    expect(hinweis()).toContain('Ticker')
+    expect(hinweis()).toContain('nichts gefunden')
+    expect(hinweis()).toMatch(/regelmäßig/)
+    expect(hinweis()).toContain('SearXNG')
+  })
+
+  it('SPEC und Einstellungstext widersprechen sich nicht mehr', () => {
+    const spec = lesen('SPEC.md')
+    const abschnitt = spec.slice(spec.indexOf('**Websuche der lokalen Blöcke**'))
+    expect(abschnitt.slice(0, 3000)).toContain('über eine Stunde')
+    expect(abschnitt.slice(0, 3000)).not.toMatch(/45–241 s/)
+  })
+})
+
+describe('Nacharbeit B · Das SearXNG-Feld sagt, wann es wirkt (Befund 6)', () => {
+  // Gemessen 20.08.2026 in der gebauten App: Bei eingeschalteter Helfer-KI und
+  // ausgeschaltetem Block-Agenten war der Abschnitt sichtbar, fragte die
+  // Adresse wirklich ab (1 HTTP-Anfrage am Zählserver) und zeigte Grün — aber
+  // keine einzige Suche konnte je stattfinden, weil es gar keine lokalen
+  // Blöcke gab. Entschieden im Hausgeist „Rückfrage statt Sperre": sichtbar
+  // lassen, ehrlich dazuschreiben.
+  it('der Dialog zeigt den Hinweis genau dann, wenn der Block-Agent aus ist', () => {
+    const quelle = lesen('src/renderer/src/Einstellungen.jsx')
+    expect(quelle).toContain('t.websucheNurMitBlockAgent')
+    expect(quelle).toMatch(/!lokalBlockAgent && \(/)
+  })
+
+  it('der Hinweis nennt das Häkchen beim Namen und nimmt das Feld nicht weg', () => {
+    const text = texte.einstellungen.websucheNurMitBlockAgent
+    expect(text).toContain('Lokale KI darf ganze Blöcke übernehmen')
+    expect(text).toMatch(/trotzdem/)
   })
 })

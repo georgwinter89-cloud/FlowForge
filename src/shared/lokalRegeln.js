@@ -22,11 +22,70 @@
 // gespeichert wurde, und der doppelte Schrägstrich landete wörtlich beim
 // fremden Rechner. Renderer und Hauptprozess rechnen jetzt mit derselben
 // Regel.
+// Groß-/Kleinschreibung des Schemas zählt nicht mehr (Nacharbeit Befund 3,
+// 21.08.2026): „HTTP://gaming-pc:11434" fiel bis dahin still durch, weil die
+// Regel case-sensitive war. Das Schema wird dabei kleingeschrieben — sonst
+// stünden „HTTP://a" und „http://a" als zwei verschiedene Adressen in der
+// Ollama-Liste, obwohl es derselbe Rechner ist.
 export function adresseBereinigen(roh) {
   const wert = String(roh ?? '')
     .trim()
     .replace(/\/+$/, '')
-  return /^https?:\/\/.+/.test(wert) ? wert : null
+  const treffer = /^(https?):\/\/(.+)$/i.exec(wert)
+  return treffer ? treffer[1].toLowerCase() + '://' + treffer[2] : null
+}
+
+// Sieht dieser Rechnername nach „bei mir im Netz" aus? Dann gilt http.
+// Maßgeblich sind Port (jedes selbstgehostete SearXNG hat einen), fehlender
+// Punkt (kurzer Rechnername wie „gaming-pc") und literale IP-Adressen.
+function eigenesNetzMuster(wert) {
+  const ohnePfad = String(wert).split(/[/?#]/)[0]
+  const rechner = ohnePfad.split('@').pop()
+  if (/:\d+$/.test(rechner)) return true
+  if (rechner.startsWith('[')) return true
+  if (/^\d+\.\d+\.\d+\.\d+$/.test(rechner)) return true
+  return !rechner.includes('.')
+}
+
+// SearXNG-Adresse säubern (Nacharbeit Befund 3, gemessen 20.08.2026): Georg
+// tippte „gaming-pc:8080" — genau so, wie er die Adresse im Browser aufruft.
+// Das Feld nahm den Wert nicht an, sagte aber nichts: keine Statuszeile, kein
+// Fehler, der Dialog schloss normal, und jede Suche lief weiter still über die
+// eingebaute Quelle.
+//
+// Bewusst eine EIGENE Regel und nicht adresseBereinigen: Die Ollama-Liste
+// verwirft ein „quatsch" weiter (dort ist ein Tippfehler ein Tippfehler und
+// eine still ergänzte Fantasieadresse würde nur einen Lauf später scheitern) —
+// hier gibt es genau ein Feld, einen Live-Status daneben und eine Hinweiszeile
+// im Dialog, die die ergänzte Fassung zeigt.
+//
+// Vorbild ist das Haus selbst: websuche.js (adresseErlaubt) ergänzt ein
+// fehlendes Schema, statt zu scheitern. Ein Schema, das FlowForge NICHT will
+// (file:, ftp:, data:), wird auch hier nicht ergänzt — es bleibt ungültig, und
+// der Dialog sagt das in Klartext.
+//
+// http oder https? Rechner im eigenen Netz sprechen http (der Platzhalter des
+// Feldes lautet http://192.168.x.x:8080, und ein SearXNG im Docker-Container
+// hat kein Zertifikat); ein Name mit Punkt und ohne Port ist eine öffentliche
+// Instanz und bekommt https.
+export function searxngAdresseBereinigen(roh) {
+  const wert = String(roh ?? '')
+    .trim()
+    .replace(/\/+$/, '')
+  if (!wert) return null
+  const hatHttp = /^https?:\/\//i.test(wert)
+  // Irgendein anderes Schema: nicht ergänzen, nicht retten.
+  if (!hatHttp && /^[a-z][a-z0-9+.-]*:\/\//i.test(wert)) return null
+  const mitSchema = hatHttp ? wert : (eigenesNetzMuster(wert) ? 'http://' : 'https://') + wert
+  let url
+  try {
+    url = new URL(mitSchema)
+  } catch {
+    return null
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return null
+  if (!url.hostname) return null
+  return url.toString().replace(/\/+$/, '')
 }
 
 export const LOKAL_FEIN_FELDER = [

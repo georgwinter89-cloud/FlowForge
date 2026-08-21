@@ -6,7 +6,8 @@ import {
   adresseBereinigen,
   lokalFeinBereinigen,
   lokalFeinVorlageErkennen,
-  lokalesModellName
+  lokalesModellName,
+  searxngAdresseBereinigen
 } from '../../shared/lokalRegeln.js'
 
 const t = texte.einstellungen
@@ -148,8 +149,13 @@ export default function Einstellungen({ onSchliessen }) {
   // Abschnitt überhaupt zeigt): Ein Tastendruck im Ollama-Modellfeld darf hier
   // keine Anfrage auslösen, und ein leeres Feld heißt „eingebaute Quelle" —
   // dann wird gar nicht erst geprüft.
+  //
+  // Gesäubert wird mit searxngAdresseBereinigen, derselben Regel wie im
+  // Hauptprozess (Nacharbeit Befund 3): Mit der strengen Ollama-Regel
+  // verschwand bei „gaming-pc:8080" gemessen sogar die Statuszeile — Georg sah
+  // NICHTS, weder Status noch Fehler, und speicherte ins Leere.
   useEffect(() => {
-    const adresse = adresseBereinigen(searxngAdresse)
+    const adresse = searxngAdresseBereinigen(searxngAdresse)
     if (!lokaleHelferAktiv || !adresse) return setSearxngZustand(null)
     let aktuell = true
     const uhr = setTimeout(() => {
@@ -169,6 +175,14 @@ export default function Einstellungen({ onSchliessen }) {
   const lokalFeinBereinigt = lokalFeinBereinigen(lokalFein)
   const aktiveVorlage = lokalFeinVorlageErkennen(lokalFeinBereinigt)
 
+  // SearXNG-Adresse: die Fassung, die wirklich gespeichert wird (Nacharbeit
+  // Befund 3). Weicht sie vom Getippten ab, steht sie im Dialog — eine still
+  // ergänzte Adresse wäre nur eine andere Art, etwas anderes zu tun als das,
+  // was dasteht. null heißt „nicht zu retten" (file:, data:, Unparsbares).
+  const searxngRoh = searxngAdresse.trim()
+  const searxngSauber = searxngAdresseBereinigen(searxngAdresse)
+  const searxngUnbrauchbar = Boolean(searxngRoh) && searxngSauber === null
+
   function vorlageSetzen(schluessel) {
     setLokalFeinText(feinAlsText(LOKAL_FEIN_VORLAGEN[schluessel]))
   }
@@ -184,6 +198,11 @@ export default function Einstellungen({ onSchliessen }) {
       if (lokalFein[feld] != null && lokalFeinBereinigt[feld] == null)
         return setFehler(t.fehlerLokalFein(t.lokalBlockFeinFelder[feld]))
     }
+    // Dasselbe Muster für die SearXNG-Adresse (Nacharbeit Befund 3): Was
+    // FlowForge retten kann, ergänzt es (fehlendes http://); was es nicht
+    // versteht, sagt es — statt den Wert wortlos fallen zu lassen und weiter
+    // über die eingebaute Quelle zu suchen.
+    if (searxngUnbrauchbar) return setFehler(t.fehlerSearxngAdresse)
     const ergebnis = await window.flowforge.einstellungenSpeichern({
       motorModus: modus,
       apiSchluessel,
@@ -449,18 +468,30 @@ export default function Einstellungen({ onSchliessen }) {
                 <span className="feld-hinweis">{t.lokaleHelferKontextHinweis}</span>
               </label>
               {/* Websuche der lokalen Blöcke (0.51.2): ein Feld. Leer =
-                  eingebaute Quelle, gefüllt = eigene SearXNG-Instanz. */}
+                  eingebaute Quelle, gefüllt = eigene SearXNG-Instanz.
+                  Der Abschnitt bleibt auch dann sichtbar, wenn der Block-Agent
+                  noch aus ist — dann sagt eine Zeile ehrlich, wann er wirkt
+                  (Nacharbeit Befund 6, Hausgeist „Rückfrage statt Sperre"). */}
               <div className="feld">
                 <span>{t.websucheUeberschrift}</span>
+                {!lokalBlockAgent && (
+                  <span className="feld-hinweis">{t.websucheNurMitBlockAgent}</span>
+                )}
                 <label className="feld">
                   <span>{t.searxngAdresse}</span>
                   <input
                     type="text"
-                    placeholder="http://192.168.x.x:8080"
+                    placeholder="gaming-pc:8080"
                     value={searxngAdresse}
                     onChange={(e) => setSearxngAdresse(e.target.value)}
                   />
                 </label>
+                {searxngUnbrauchbar && (
+                  <span className="feld-hinweis">{t.fehlerSearxngAdresse}</span>
+                )}
+                {searxngSauber && searxngSauber !== searxngRoh && (
+                  <span className="feld-hinweis">{t.searxngErgaenzt(searxngSauber)}</span>
+                )}
                 {searxngZustand && (
                   <span className="feld-hinweis">
                     {!searxngZustand.erreichbar
