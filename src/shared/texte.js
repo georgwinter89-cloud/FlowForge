@@ -3103,7 +3103,7 @@ export const texte = {
       'vorhersagen. FlowForge sagt das dann ehrlich im Ticker, statt „nichts gefunden" zu ' +
       'behaupten. Sie trägt Gelegenheits-Nachschlagen, keine Dauerrecherche: Wer regelmäßig ' +
       'nachschlagen lassen will, trägt hier die Adresse einer eigenen SearXNG-Instanz ein ' +
-      '(z.B. gaming-pc:8080 oder 192.168.x.x:8080 — fehlt http://, ergänzt FlowForge es und ' +
+      '(z.B. mein-rechner:8080 oder 192.168.x.x:8080 — fehlt http://, ergänzt FlowForge es und ' +
       'zeigt dir gleich darunter, wie die Adresse gespeichert wird). Achtung: Webseiten sind ' +
       'Fremdtext an einer KI, die schreiben darf — Anweisungen auf einer Seite können ' +
       'versuchen, deinen Block umzulenken. Die harten Sperren (Projektgrenze, ' +
@@ -3127,7 +3127,7 @@ export const texte = {
     searxngErgaenzt: (adresse) => `Wird gespeichert als: ${adresse}`,
     fehlerSearxngAdresse:
       'Die SearXNG-Adresse versteht FlowForge nicht. Trag sie so ein, wie du sie im Browser ' +
-      'aufrufst (z.B. gaming-pc:8080) — oder leere das Feld, dann sucht FlowForge über die ' +
+      'aufrufst (z.B. mein-rechner:8080) — oder leere das Feld, dann sucht FlowForge über die ' +
       'eingebaute Quelle.',
     searxngStatusBereit: 'Deine Such-Instanz antwortet mit JSON — die Suche läuft darüber.',
     // Der Auslieferungszustand von SearXNG erlaubt unter search: nur

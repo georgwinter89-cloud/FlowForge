@@ -188,7 +188,7 @@ export default function Einstellungen({ onSchliessen }) {
   //
   // Gesäubert wird mit searxngAdresseBereinigen, derselben Regel wie im
   // Hauptprozess (Nacharbeit Befund 3): Mit der strengen Ollama-Regel
-  // verschwand bei „gaming-pc:8080" gemessen sogar die Statuszeile — Georg sah
+  // verschwand bei „mein-rechner:8080" gemessen sogar die Statuszeile — Georg sah
   // NICHTS, weder Status noch Fehler, und speicherte ins Leere.
   useEffect(() => {
     const adresse = searxngAdresseBereinigen(searxngAdresse)
@@ -546,7 +546,7 @@ export default function Einstellungen({ onSchliessen }) {
                   <span>{t.searxngAdresse}</span>
                   <input
                     type="text"
-                    placeholder="gaming-pc:8080"
+                    placeholder="mein-rechner:8080"
                     value={searxngAdresse}
                     onChange={(e) => setSearxngAdresse(e.target.value)}
                   />

@@ -118,10 +118,10 @@ describe('0.51.3 · Abfrage von /api/ps', () => {
       }
     })
     const stand = await ollamaSpeicherStand({
-      adresse: 'http://gaming-pc:11434/',
+      adresse: 'http://mein-rechner:11434/',
       modell: 'flowforge-m'
     })
-    expect(gefragt).toBe('http://gaming-pc:11434/api/ps')
+    expect(gefragt).toBe('http://mein-rechner:11434/api/ps')
     expect(stand).toMatchObject({ ok: true, passt: false })
     expect(vramProzent(stand.anteil)).toBe(50)
   })

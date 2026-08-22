@@ -335,14 +335,14 @@ async function ketteFahren(name, searxngAdresse) {
 describe('0.51.2 · Die SearXNG-Adresse kommt wirklich am lokalen Motor an', () => {
   let lauf
   beforeAll(async () => {
-    lauf = await ketteFahren('searxng', 'http://gaming-pc:8080')
+    lauf = await ketteFahren('searxng', 'http://mein-rechner:8080')
   }, 60000)
 
   it('reicht sie jedem lokalen Motor als websuche-Option durch', () => {
     for (const id of ['a', 'b']) {
       const start = lauf.motor.start(id)
       expect(start.lokal).toMatchObject({ adresse: 'http://127.0.0.1:11434' })
-      expect(start.websuche).toEqual({ searxngAdresse: 'http://gaming-pc:8080' })
+      expect(start.websuche).toEqual({ searxngAdresse: 'http://mein-rechner:8080' })
     }
   })
 
@@ -353,7 +353,7 @@ describe('0.51.2 · Die SearXNG-Adresse kommt wirklich am lokalen Motor an', () 
   })
 
   it('nennt die eigene Such-Instanz genau EINMAL im Ticker — nicht je Block', () => {
-    const zeile = texte.ticker.websucheQuelleAmStartEigene('http://gaming-pc:8080')
+    const zeile = texte.ticker.websucheQuelleAmStartEigene('http://mein-rechner:8080')
     const zeilen = lauf.sicht.ticker()
     expect(zeilen.filter((z) => z === zeile)).toHaveLength(1)
     expect(zeilen).not.toContain(texte.ticker.websucheQuelleAmStartEingebaut)

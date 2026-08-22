@@ -2617,7 +2617,7 @@ Block-Agenten als Hinweis daneben (§6).
   **Websuche der lokalen Blöcke** (seit 0.51.2, §4.3): ein Feld **„SearXNG-Adresse"** —
   **leer heißt eingebaute Quelle**, es gibt bewusst kein zweites Feld für die Quellenwahl
   (ein Feld weniger, das beim Speichern verlorengehen kann). Ein **fehlendes Schema wird
-  ergänzt** statt die Eingabe still zu verwerfen (`gaming-pc:8080` → `http://gaming-pc:8080`;
+  ergänzt** statt die Eingabe still zu verwerfen (`mein-rechner:8080` → `http://mein-rechner:8080`;
   Rechner im eigenen Netz und Adressen mit Port bekommen `http`, ein Name mit Punkt ohne Port
   `https`), und der Dialog zeigt beim Tippen mit, **als was gespeichert wird**. Was sich nicht
   retten lässt (`file:`, `data:`, `ftp:`, Unlesbares), lehnt das Speichern mit Klartext ab —

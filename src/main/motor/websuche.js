@@ -36,7 +36,7 @@ import { texte } from '../../shared/texte.js'
 // Dieselbe Regel wie im Einstellungen-Dialog (Nacharbeit 0.51.2): die
 // NACHSICHTIGE Fassung, die ein fehlendes Schema ergänzt. Der Dialog schreibt
 // zwar nur noch normalisierte Adressen in die Datei — aber eine von Hand
-// eingetragene „gaming-pc:8080" wäre mit der strengen Fassung hier still
+// eingetragene „mein-rechner:8080" wäre mit der strengen Fassung hier still
 // wirkungslos geblieben (Ausnahme greift nicht, Suche scheitert), und zwei
 // verschiedene Regeln für dasselbe Feld sind genau die Falle, die Bauschritt 51
 // schon einmal gekostet hat.

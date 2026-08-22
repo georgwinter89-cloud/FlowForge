@@ -18,12 +18,12 @@
 // Wohnort seit 0.51.2 hier statt im Hauptprozess: Der Einstellungen-Dialog
 // putzte Adressen bisher selbst (roh.trim()) und kam damit auf einen anderen
 // Wert als die gespeicherte Normalform — gemessen 20.08.2026 fragte der
-// Live-Status „http://gaming-pc:8080/" ab, während „http://gaming-pc:8080"
+// Live-Status „http://mein-rechner:8080/" ab, während „http://mein-rechner:8080"
 // gespeichert wurde, und der doppelte Schrägstrich landete wörtlich beim
 // fremden Rechner. Renderer und Hauptprozess rechnen jetzt mit derselben
 // Regel.
 // Groß-/Kleinschreibung des Schemas zählt nicht mehr (Nacharbeit Befund 3,
-// 21.08.2026): „HTTP://gaming-pc:11434" fiel bis dahin still durch, weil die
+// 21.08.2026): „HTTP://mein-rechner:11434" fiel bis dahin still durch, weil die
 // Regel case-sensitive war. Das Schema wird dabei kleingeschrieben — sonst
 // stünden „HTTP://a" und „http://a" als zwei verschiedene Adressen in der
 // Ollama-Liste, obwohl es derselbe Rechner ist.
@@ -37,7 +37,7 @@ export function adresseBereinigen(roh) {
 
 // Sieht dieser Rechnername nach „bei mir im Netz" aus? Dann gilt http.
 // Maßgeblich sind Port (jedes selbstgehostete SearXNG hat einen), fehlender
-// Punkt (kurzer Rechnername wie „gaming-pc") und literale IP-Adressen.
+// Punkt (kurzer Rechnername wie „mein-rechner") und literale IP-Adressen.
 function eigenesNetzMuster(wert) {
   const ohnePfad = String(wert).split(/[/?#]/)[0]
   const rechner = ohnePfad.split('@').pop()
@@ -48,7 +48,7 @@ function eigenesNetzMuster(wert) {
 }
 
 // SearXNG-Adresse säubern (Nacharbeit Befund 3, gemessen 20.08.2026): Georg
-// tippte „gaming-pc:8080" — genau so, wie er die Adresse im Browser aufruft.
+// tippte „mein-rechner:8080" — genau so, wie er die Adresse im Browser aufruft.
 // Das Feld nahm den Wert nicht an, sagte aber nichts: keine Statuszeile, kein
 // Fehler, der Dialog schloss normal, und jede Suche lief weiter still über die
 // eingebaute Quelle.

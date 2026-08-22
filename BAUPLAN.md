@@ -1067,8 +1067,8 @@ Metriken weisen den lokalen Anteil des Laufs aus.
 
 ### Zwischenschritt 0.51.1 — Lokale Blöcke überleben lange Arbeit
 (Geplant 20.08.2026 aus der Analyse von Georgs erstem fast-komplett-lokalen Lauf
-[Life OS, Laufbericht `D:\Projekte\Erweiterung Life OS\laufberichte\2026-08-20T05-54-58-099Z.json`,
-Denk-Export `C:\Users\Patro\Downloads\Lokal Thinking.JSON`]. Befund: 4h13m, fehlgeschlagen;
+[Laufbericht `2026-08-20T05-54-58-099Z.json` samt Denk-Export desselben Laufs].
+Befund: 4h13m, fehlgeschlagen;
 Bauer 3 starb nach 87 min mit rohem „Prompt is too long" [410k Eingabe gegen 128k-Fenster,
 `uebertraege: []`, `zusammenfassungen: []`], Bauer 4 nach 109 min mit „[Request interrupted
 by user for tool use]" als Fehlertext, obwohl Georg nichts unterbrochen hat [11 min Stille

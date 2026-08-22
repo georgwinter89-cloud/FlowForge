@@ -114,21 +114,21 @@ describe('BAUPLAN 51 · einstellungenSpeichern mit Adress-Liste', () => {
   // gespeicherte Zwei-GPU-Liste — der eine warf sie auf den Standard, der
   // andere auf ein Ein-Element-Array. Beides verlor Georgs Konfiguration still.
   it('Speichern ganz ohne Adressfelder übernimmt die Liste aus der Datei', () => {
-    schreiben({ lokaleHelferAdressen: ['http://gaming-pc:11434', 'http://ollama-zweitrechner:11434'] })
+    schreiben({ lokaleHelferAdressen: ['http://mein-rechner:11434', 'http://ollama-zweitrechner:11434'] })
     const e = einstellungenSpeichern({ ...basis })
     expect(e.einstellungen.lokaleHelferAdressen).toEqual([
-      'http://gaming-pc:11434',
+      'http://mein-rechner:11434',
       'http://ollama-zweitrechner:11434'
     ])
     const datei = JSON.parse(fs.readFileSync(dateiPfad, 'utf8'))
     expect(datei.lokaleHelferAdressen).toEqual([
-      'http://gaming-pc:11434',
+      'http://mein-rechner:11434',
       'http://ollama-zweitrechner:11434'
     ])
   })
 
   it('Speichern nur mit Einzelfeld ersetzt den Anker, die weiteren Adressen bleiben', () => {
-    schreiben({ lokaleHelferAdressen: ['http://gaming-pc:11434', 'http://ollama-zweitrechner:11434'] })
+    schreiben({ lokaleHelferAdressen: ['http://mein-rechner:11434', 'http://ollama-zweitrechner:11434'] })
     const e = einstellungenSpeichern({ ...basis, lokaleHelferAdresse: 'http://neuer-anker:11434' })
     expect(e.einstellungen.lokaleHelferAdressen).toEqual([
       'http://neuer-anker:11434',
@@ -138,10 +138,10 @@ describe('BAUPLAN 51 · einstellungenSpeichern mit Adress-Liste', () => {
   })
 
   it('ein ungültiges Einzelfeld ohne Array lässt die Datei-Liste unangetastet', () => {
-    schreiben({ lokaleHelferAdressen: ['http://gaming-pc:11434', 'http://ollama-zweitrechner:11434'] })
+    schreiben({ lokaleHelferAdressen: ['http://mein-rechner:11434', 'http://ollama-zweitrechner:11434'] })
     const e = einstellungenSpeichern({ ...basis, lokaleHelferAdresse: 'quatsch' })
     expect(e.einstellungen.lokaleHelferAdressen).toEqual([
-      'http://gaming-pc:11434',
+      'http://mein-rechner:11434',
       'http://ollama-zweitrechner:11434'
     ])
   })

@@ -55,39 +55,39 @@ describe('0.51.2 · SearXNG-Adresse: Standard', () => {
 
 describe('0.51.2 · SearXNG-Adresse: Speichern', () => {
   it('eine eingetragene Adresse überlebt das Speichern — bereinigt', () => {
-    const e = einstellungenSpeichern({ ...basis, searxngAdresse: ' http://gaming-pc:8080/ ' })
+    const e = einstellungenSpeichern({ ...basis, searxngAdresse: ' http://mein-rechner:8080/ ' })
     expect(e.ok).toBe(true)
-    expect(e.einstellungen.searxngAdresse).toBe('http://gaming-pc:8080')
-    expect(ausDatei().searxngAdresse).toBe('http://gaming-pc:8080')
-    expect(einstellungenLaden().einstellungen.searxngAdresse).toBe('http://gaming-pc:8080')
+    expect(e.einstellungen.searxngAdresse).toBe('http://mein-rechner:8080')
+    expect(ausDatei().searxngAdresse).toBe('http://mein-rechner:8080')
+    expect(einstellungenLaden().einstellungen.searxngAdresse).toBe('http://mein-rechner:8080')
   })
 
   // DER Nachstellweg (Fund 4): Jeder Dialog, der das Feld nicht kennt, würde
   // Georgs Adresse sonst beim nächsten Öffnen/Schließen still löschen.
   it('Speichern OHNE das Feld übernimmt die Adresse aus der Datei', () => {
-    schreiben({ searxngAdresse: 'http://gaming-pc:8080' })
+    schreiben({ searxngAdresse: 'http://mein-rechner:8080' })
     const e = einstellungenSpeichern({ ...basis })
-    expect(e.einstellungen.searxngAdresse).toBe('http://gaming-pc:8080')
-    expect(ausDatei().searxngAdresse).toBe('http://gaming-pc:8080')
+    expect(e.einstellungen.searxngAdresse).toBe('http://mein-rechner:8080')
+    expect(ausDatei().searxngAdresse).toBe('http://mein-rechner:8080')
   })
 
   it('Speichern mit Leerstring leert bewusst — zurück zur eingebauten Quelle', () => {
-    schreiben({ searxngAdresse: 'http://gaming-pc:8080' })
+    schreiben({ searxngAdresse: 'http://mein-rechner:8080' })
     const e = einstellungenSpeichern({ ...basis, searxngAdresse: '' })
     expect(e.einstellungen.searxngAdresse).toBe('')
     expect(ausDatei().searxngAdresse).toBe('')
   })
 
   // Diese zwei Prüfungen hielten bis zur Nacharbeit B genau das fest, was der
-  // Prüfer als Befund meldete: „gaming-pc:8080" wurde still verworfen. Das war
+  // Prüfer als Befund meldete: „mein-rechner:8080" wurde still verworfen. Das war
   // eine Bauer-Entscheidung, keine Vorgabe — sie ist jetzt umgedreht (Befund 3,
   // Prüfungen dazu weiter unten). Übrig bleibt die Zusage für das, was
   // FlowForge wirklich nicht retten kann.
   it('eine unbrauchbare Eingabe lässt die alte Adresse stehen — ohne Fehler', () => {
-    schreiben({ searxngAdresse: 'http://gaming-pc:8080' })
+    schreiben({ searxngAdresse: 'http://mein-rechner:8080' })
     const e = einstellungenSpeichern({ ...basis, searxngAdresse: 'file:///C:/geheim' })
     expect(e.ok).toBe(true)
-    expect(e.einstellungen.searxngAdresse).toBe('http://gaming-pc:8080')
+    expect(e.einstellungen.searxngAdresse).toBe('http://mein-rechner:8080')
   })
 
   it('eine unbrauchbare Eingabe ohne gespeicherte Adresse bleibt leer', () => {
@@ -97,17 +97,17 @@ describe('0.51.2 · SearXNG-Adresse: Speichern', () => {
   })
 
   it('Laden → Speichern des kompletten Satzes verliert die Adresse nicht (Erststart-Muster)', () => {
-    schreiben({ searxngAdresse: 'http://gaming-pc:8080' })
+    schreiben({ searxngAdresse: 'http://mein-rechner:8080' })
     const geladen = einstellungenLaden().einstellungen
     const e = einstellungenSpeichern({ ...geladen, motorModus: 'abo' })
-    expect(e.einstellungen.searxngAdresse).toBe('http://gaming-pc:8080')
+    expect(e.einstellungen.searxngAdresse).toBe('http://mein-rechner:8080')
   })
 
   it('das Feld überlebt auch mehrere Speichervorgänge hintereinander', () => {
-    einstellungenSpeichern({ ...basis, searxngAdresse: 'http://gaming-pc:8080' })
+    einstellungenSpeichern({ ...basis, searxngAdresse: 'http://mein-rechner:8080' })
     einstellungenSpeichern({ ...basis, lokaleHelferAktiv: true })
     einstellungenSpeichern({ ...basis, uebertragTest: true })
-    expect(einstellungenLaden().einstellungen.searxngAdresse).toBe('http://gaming-pc:8080')
+    expect(einstellungenLaden().einstellungen.searxngAdresse).toBe('http://mein-rechner:8080')
   })
 })
 
@@ -186,29 +186,29 @@ describe('Nacharbeit B · Eine Adresse ohne Schema verschwindet nicht mehr still
   // blieb der alte Wert stehen, ok=true, fehler=null — und ohne alten Wert
   // stand in der Datei "" ; jede Suche lief ab da still über die eingebaute
   // Quelle.
-  it('„gaming-pc:8080" wird angenommen und mit http:// gespeichert', () => {
+  it('„mein-rechner:8080" wird angenommen und mit http:// gespeichert', () => {
     schreiben({ searxngAdresse: 'http://ALT:1' })
-    const e = einstellungenSpeichern({ ...basis, searxngAdresse: 'gaming-pc:8080' })
+    const e = einstellungenSpeichern({ ...basis, searxngAdresse: 'mein-rechner:8080' })
     expect(e.ok).toBe(true)
-    expect(e.einstellungen.searxngAdresse).toBe('http://gaming-pc:8080')
-    expect(ausDatei().searxngAdresse).toBe('http://gaming-pc:8080')
+    expect(e.einstellungen.searxngAdresse).toBe('http://mein-rechner:8080')
+    expect(ausDatei().searxngAdresse).toBe('http://mein-rechner:8080')
   })
 
   it('der frische Fall: ohne gespeicherte Adresse bleibt das Feld nicht mehr leer', () => {
-    const e = einstellungenSpeichern({ ...basis, searxngAdresse: 'gaming-pc:8080' })
-    expect(e.einstellungen.searxngAdresse).toBe('http://gaming-pc:8080')
-    expect(einstellungenLaden().einstellungen.searxngAdresse).toBe('http://gaming-pc:8080')
+    const e = einstellungenSpeichern({ ...basis, searxngAdresse: 'mein-rechner:8080' })
+    expect(e.einstellungen.searxngAdresse).toBe('http://mein-rechner:8080')
+    expect(einstellungenLaden().einstellungen.searxngAdresse).toBe('http://mein-rechner:8080')
   })
 
   // Die Reihenmessung des Prüfers: fünf Schreibweisen, alle fielen still auf
   // „http://ALT:1" zurück.
   it('die Reihenmessung des Prüfers kommt jetzt vollständig durch', () => {
     const erwartet = {
-      'gaming-pc:8080': 'http://gaming-pc:8080',
+      'mein-rechner:8080': 'http://mein-rechner:8080',
       '10.0.0.50:8080': 'http://10.0.0.50:8080',
       'localhost:8080': 'http://localhost:8080',
-      '//gaming-pc:8080': 'http://gaming-pc:8080',
-      'gaming-pc': 'http://gaming-pc'
+      '//mein-rechner:8080': 'http://mein-rechner:8080',
+      'mein-rechner': 'http://mein-rechner'
     }
     for (const [eingabe, ziel] of Object.entries(erwartet)) {
       schreiben({ searxngAdresse: 'http://ALT:1' })
@@ -220,10 +220,10 @@ describe('Nacharbeit B · Eine Adresse ohne Schema verschwindet nicht mehr still
   // Präzisierung (b) des Prüfers: Auch die Großschreibung fiel durch, weil die
   // Hausregel case-sensitive war.
   it('die Großschreibung des Schemas fällt nicht mehr durch', () => {
-    for (const eingabe of ['HTTP://gaming-pc:8080', 'Http://gaming-pc:8080']) {
+    for (const eingabe of ['HTTP://mein-rechner:8080', 'Http://mein-rechner:8080']) {
       schreiben({ searxngAdresse: 'http://ALT:1' })
       const e = einstellungenSpeichern({ ...basis, searxngAdresse: eingabe })
-      expect(e.einstellungen.searxngAdresse, eingabe).toBe('http://gaming-pc:8080')
+      expect(e.einstellungen.searxngAdresse, eingabe).toBe('http://mein-rechner:8080')
     }
   })
 
@@ -231,7 +231,7 @@ describe('Nacharbeit B · Eine Adresse ohne Schema verschwindet nicht mehr still
     expect(searxngAdresseBereinigen('searx.example')).toBe('https://searx.example')
     expect(searxngAdresseBereinigen('searx.example/suche')).toBe('https://searx.example/suche')
     expect(searxngAdresseBereinigen('10.0.0.50')).toBe('http://10.0.0.50')
-    expect(searxngAdresseBereinigen('gaming-pc:8080/searx')).toBe('http://gaming-pc:8080/searx')
+    expect(searxngAdresseBereinigen('mein-rechner:8080/searx')).toBe('http://mein-rechner:8080/searx')
   })
 
   it('was FlowForge nicht will, wird auch nicht ergänzt — file:, data:, ftp: bleiben ungültig', () => {
@@ -244,8 +244,8 @@ describe('Nacharbeit B · Eine Adresse ohne Schema verschwindet nicht mehr still
     // Fantasieadresse ein Fehler, der erst einen Lauf später auffällt
     // (Zusicherungen in einstellungenAdressen.test.js).
     expect(adresseBereinigen('quatsch')).toBeNull()
-    expect(adresseBereinigen('gaming-pc:11434')).toBeNull()
-    expect(adresseBereinigen('HTTP://gaming-pc:11434')).toBe('http://gaming-pc:11434')
+    expect(adresseBereinigen('mein-rechner:11434')).toBeNull()
+    expect(adresseBereinigen('HTTP://mein-rechner:11434')).toBe('http://mein-rechner:11434')
   })
 
   it('der Dialog rechnet mit derselben Regel und verweigert Unbrauchbares mit Klartext', () => {

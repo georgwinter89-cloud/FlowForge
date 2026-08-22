@@ -306,7 +306,7 @@ export function einstellungenSpeichern(neu) {
   //                daneben in Klartext.
   //
   // Gesäubert wird mit searxngAdresseBereinigen und NICHT mit der strengen
-  // Regel der Ollama-Liste (Nacharbeit Befund 3): „gaming-pc:8080" — genau die
+  // Regel der Ollama-Liste (Nacharbeit Befund 3): „mein-rechner:8080" — genau die
   // Schreibweise, die Georg im Browser tippt — wurde gemessen 20.08.2026 still
   // verworfen; er sah keinen Fehler, und jede Suche lief weiter über die
   // eingebaute Quelle. Das fehlende Schema wird jetzt ergänzt, genau wie
