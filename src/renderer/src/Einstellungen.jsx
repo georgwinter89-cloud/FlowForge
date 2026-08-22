@@ -13,6 +13,12 @@ import {
   lokalesModellName,
   searxngAdresseBereinigen
 } from '../../shared/lokalRegeln.js'
+import {
+  PRUEFKARTEN_DECKEL_MESSPUNKT_WAHL,
+  PRUEFKARTEN_DECKEL_MESSPUNKT_STANDARD,
+  PRUEFKARTEN_DECKEL_LAUF_WAHL,
+  PRUEFKARTEN_DECKEL_LAUF_STANDARD
+} from '../../shared/pruefkartenRegeln.js'
 
 const t = texte.einstellungen
 
@@ -65,6 +71,13 @@ export default function Einstellungen({ onSchliessen }) {
   const [nurLesenBefehle, setNurLesenBefehle] = useState(false)
   const [unteraufgabenModell, setUnteraufgabenModell] = useState('sparsam')
   const [uebertragTest, setUebertragTest] = useState(false)
+  // Prüfkarten laufen von selbst (BAUPLAN 52): zwei Zeitgrenzen fürs
+  // Abspielen alter Prüfungen — beide aus derselben Stufenliste, die auch der
+  // Hauptprozess beim Speichern anwendet.
+  const [deckelMesspunktMs, setDeckelMesspunktMs] = useState(
+    PRUEFKARTEN_DECKEL_MESSPUNKT_STANDARD
+  )
+  const [deckelLaufMs, setDeckelLaufMs] = useState(PRUEFKARTEN_DECKEL_LAUF_STANDARD)
   const [lokaleHelferAktiv, setLokaleHelferAktiv] = useState(false)
   const [lokaleHelferQuote, setLokaleHelferQuote] = useState(true)
   const [lokaleHelferModell, setLokaleHelferModell] = useState('')
@@ -104,6 +117,18 @@ export default function Einstellungen({ onSchliessen }) {
         e.einstellungen.unteraufgabenModell === 'wieBlock' ? 'wieBlock' : 'sparsam'
       )
       setUebertragTest(Boolean(e.einstellungen.uebertragTest))
+      setDeckelMesspunktMs(
+        PRUEFKARTEN_DECKEL_MESSPUNKT_WAHL.includes(
+          Number(e.einstellungen.pruefkartenDeckelMesspunktMs)
+        )
+          ? Number(e.einstellungen.pruefkartenDeckelMesspunktMs)
+          : PRUEFKARTEN_DECKEL_MESSPUNKT_STANDARD
+      )
+      setDeckelLaufMs(
+        PRUEFKARTEN_DECKEL_LAUF_WAHL.includes(Number(e.einstellungen.pruefkartenDeckelLaufMs))
+          ? Number(e.einstellungen.pruefkartenDeckelLaufMs)
+          : PRUEFKARTEN_DECKEL_LAUF_STANDARD
+      )
       setLokaleHelferAktiv(Boolean(e.einstellungen.lokaleHelferAktiv))
       setLokaleHelferQuote(e.einstellungen.lokaleHelferQuote !== false)
       setLokaleHelferModell(e.einstellungen.lokaleHelferModell ?? '')
@@ -222,6 +247,11 @@ export default function Einstellungen({ onSchliessen }) {
       nurLesenBefehle,
       unteraufgabenModell,
       uebertragTest,
+      // Prüfkarten-Deckel (BAUPLAN 52): Diese Liste ist handgeschrieben — ein
+      // hier vergessenes Feld ließe sich im Dialog verstellen und stünde beim
+      // nächsten Öffnen wieder auf dem alten Wert.
+      pruefkartenDeckelMesspunktMs: deckelMesspunktMs,
+      pruefkartenDeckelLaufMs: deckelLaufMs,
       lokaleHelferAktiv,
       lokaleHelferQuote,
       lokaleHelferModell,
@@ -612,6 +642,38 @@ export default function Einstellungen({ onSchliessen }) {
               <span className="feld-hinweis">{t.lokalBlockDenkenHinweis}</span>
             </>
           )}
+        </div>
+        {/* Prüfkarten laufen von selbst (BAUPLAN 52): Beide Grenzen ändern
+            nur, wie OFT eine alte Prüfung läuft — nie, OB sie läuft. Genau das
+            sagen auch die Hinweistexte, damit die Zahl nicht wie ein
+            Sparprogramm für Prüfungen aussieht. */}
+        <p className="bericht-abschnitt">{t.pruefkartenUeberschrift}</p>
+        <div className="feld">
+          <label className="feld">
+            <span>{t.pruefkartenDeckelMesspunkt}</span>
+            <select
+              value={deckelMesspunktMs}
+              onChange={(e) => setDeckelMesspunktMs(Number(e.target.value))}
+            >
+              {PRUEFKARTEN_DECKEL_MESSPUNKT_WAHL.map((ms) => (
+                <option key={ms} value={ms}>
+                  {t.pruefkartenDeckelMesspunktWahl(ms)}
+                </option>
+              ))}
+            </select>
+            <span className="feld-hinweis">{t.pruefkartenDeckelMesspunktHinweis}</span>
+          </label>
+          <label className="feld">
+            <span>{t.pruefkartenDeckelLauf}</span>
+            <select value={deckelLaufMs} onChange={(e) => setDeckelLaufMs(Number(e.target.value))}>
+              {PRUEFKARTEN_DECKEL_LAUF_WAHL.map((ms) => (
+                <option key={ms} value={ms}>
+                  {t.pruefkartenDeckelLaufWahl(ms)}
+                </option>
+              ))}
+            </select>
+            <span className="feld-hinweis">{t.pruefkartenDeckelLaufHinweis}</span>
+          </label>
         </div>
         <p className="bericht-abschnitt">{t.uebertragUeberschrift}</p>
         <div className="feld">

@@ -260,8 +260,15 @@ wurde, woran „in Ordnung" erkennbar ist); fehlen sie, setzt FlowForge einen
 Ersatztext ein. Dahinter
 bewahrt FlowForge die Prüfdateien dieses Laufs im verwalteten Bereich **außerhalb des
 Projektordners** auf (wie die Sicherungspunkte) — kein Agent sieht das Archiv, es kostet
-keinen Lauf Kontext. Der Nutzer kann Prüfkarten bearbeiten und löschen; **Löschen räumt
-die aufbewahrten Prüfdateien mit weg.** Agenten können Prüfkarten weder anlegen noch
+keinen Lauf Kontext. Daneben — nicht an der Karte — merkt sich FlowForge beim Anlegen einen
+**Stempel** (seit Bauschritt 52): die Dateiliste des damals geprüften Pakets, den Prüfbefehl
+der Prüf-Instanz und den Ordnernamen, auf den er zeigte. Daraus entscheidet FlowForge später
+selbst, wann diese Prüfung wieder laufen muss (§4.3). Der Stempel steht im verwalteten
+Bereich (`pruefkarten/<Projekt>/stempel.json`) und **nicht** im Kartentext: An der Karte
+wüchse die Dateiliste unbegrenzt und stünde in jedem Karten-Index (Bauschritt 53).
+Der Nutzer kann Prüfkarten bearbeiten und löschen; **Löschen räumt die aufbewahrten
+Prüfdateien und den Stempel mit weg** — eine gelöschte Karte spielt FlowForge nie wieder ab.
+Agenten können Prüfkarten weder anlegen noch
 ändern (die Übersicht listet sie mit). Wiederholungsprüfung per Ziehen auf den Prüfer: §4.3.
 
 **Ordnung in der Karten-Seitenleiste** (seit Bauschritt 30): Die Karten stehen in vier
@@ -1232,8 +1239,19 @@ Wiederholungsprüfung fuhr fremde Zweige mit. Der Ordnername kommt aus der
 Aufbewahrt wird nach bestandener Prüfung nur der eigene Ordner; die
 Prüfmappen-Ansicht an der Prüferkarte zeigt entsprechend nur ihn. Nur-lesende
 Prüf-Blöcke (die Übungs-Prüfer) schreiben nichts und bekommen keinen Ordner.
-Ehrliche Grenze: Die Sperre greift an den Schreib-Werkzeugen, nicht an
-ausgeführten Befehlen.
+**Eine benannte Ausnahme** (seit Bauschritt 52): Ist eine alte Prüfung rot, gibt FlowForge
+genau dem Prüfer, dem sie gemeldet wurde, genau deren Kartenordner
+(`pruefung/pruefkarte-…/`) zum Schreiben frei — als **Liste von Ordnernamen**, nicht als
+Muster, und dieselbe Karte immer nur einem Prüfer. Ohne diese Freigabe könnte er die
+Prüfung nicht anpassen, zu der ihn sein Auftrag auffordert. Alles übrige unter `pruefung/`
+bleibt gesperrt, und für alle nicht prüfenden Blöcke ändert sich nichts.
+Ehrliche Grenze: Die Sperre greift an den Schreib-Werkzeugen und — seit
+Bauschritt 52 — auch an den **Umleitungszielen** ausgeführter Befehle
+(`… > pruefung/…`). **Nicht** gedeckt ist ein verändernder Befehl ohne
+Umleitung (`rm`, `mv`, `cp`): Welchen Ordner er trifft, steht in einem
+Befehlstext nicht verlässlich; er bleibt ein Rückfrage-Fall (§7) — im Automodus
+also ein Ja. Deshalb sagt der Auftrag des Prüfers es zusätzlich als Regel:
+in fremden Prüf- und Kartenordnern nichts schreiben, löschen oder verschieben.
 
 **Prüfbefehl — Pflicht-Artefakt des Prüfers** (seit Bauschritt 35; gilt auch für
 die Gesamtprüfung): Neben seinen Tests hinterlegt der Prüfer über das Werkzeug
@@ -1581,7 +1599,13 @@ Geschrieben wird sie **vor** dem Sicherungspunkt „Stand vor Lauf" (die Prüfma
 vom Diff der Reparatur-Runden ausgenommen, nicht vom Sicherungspunkt — ein Rückroll
 mitten im Lauf nähme sie sonst weg). Die Erklärung ist **keine Prüfung**: Sie zählt weder
 in der Prüfmappen-Ansicht noch bei der Baseline-Vorprüfung mit und wandert nie hinter
-eine Prüfkarte. Dasselbe sagen die Aufträge von Kontext laden, Paket schneiden,
+eine Prüfkarte. **Dasselbe gilt seit Bauschritt 52 für die Kartenordner**
+`pruefung/pruefkarte-…/`, die FlowForge zum Abspielen alter Prüfungen auslegt: Sie sind
+alte, aufbewahrte Dateien, keine Prüfung *dieses* Laufs — sonst gälte eine Mappe, in der
+nur sie liegen, als „hat Prüfungen", und die Baseline-Vorprüfung schaltete eine Messung
+scharf, die nichts misst. Die `LIESMICH.md` erklärt daher beide Sorten Unterordner
+(`pruefer-…` = Arbeit dieses Laufs, `pruefkarte-…` = von FlowForge ausgelegt).
+Dasselbe sagen die Aufträge von Kontext laden, Paket schneiden,
 Angreifer, Diagnose, Integrator (Recherche), Audit, Karten-Prüfer, Sessionende und
 Späher vorher an; Bauer, Prüfer und Gesamtprüfung sagen es an ihrer eigenen Stelle.
 **Gezielte Wiederholungsprüfung über Prüfkarten** (seit Bauschritt 18): Der Nutzer
@@ -1589,12 +1613,83 @@ zieht Prüfkarten (§3.1) auf eine Prüf-Blockkarte im Schaubild — sie hängen
 sichtbar an (abnehmbar per ×). Beim Lauf-Start legt FlowForge — **nach** der
 automatischen Leerung, noch vor dem Sicherungspunkt „Stand vor Lauf" — die
 aufbewahrten Prüfdateien der gezogenen Karten in die Prüfmappe (je Karte ein eigener
-Unterordner `pruefkarte-…/`), und der Prüfer führt sie zusätzlich zu seinen
-Paket-Prüfungen aus. Die Mappe ist damit nur die Werkbank des Laufs; das Gedächtnis
+Unterordner `pruefung/pruefkarte-…/`), und der Prüfer führt sie zusätzlich zu seinen
+Paket-Prüfungen aus. **Ebene** (seit Bauschritt 52): Der Kartenordner liegt **direkt in
+der Mappe**, nicht mehr im Prüfordner der Instanz. Grund, gemessen am echten Archiv:
+Die aufbewahrten Dateien wurden in `pruefung/pruefer-<Kennung>/` geschrieben und rechnen
+sich den Projektordner über feste Aufwärts-Schritte aus; eine Ebene tiefer zeigten diese
+Pfade auf `pruefung/` statt aufs Projekt — die Wiederholungsprüfung war damit für die
+Mehrzahl der Karten kaputt, nur nie aufgefallen, weil sie nie benutzt wurde. Folge:
+Dieselbe Karte an zwei Prüfern bekommt jetzt **eine** Kopie statt zweier; die Regel
+„gewinnt die zuletzt bestandene Fassung" bleibt.
+Die Mappe ist damit nur die Werkbank des Laufs; das Gedächtnis
 ist das Archiv hinter den Prüfkarten, das die Leerung nie berührt. Passt eine alte
 Prüfung nicht mehr zum heutigen Code, passt der Prüfer sie in ihrem Unterordner an —
 nach bestandener Prüfung ersetzt die angepasste Fassung die aufbewahrte, die Karte
-veraltet nicht.
+veraltet nicht. Damit das geht, gibt FlowForge dem Prüfer genau die Kartenordner frei,
+die ihn betreffen (namentlich, als Liste — kein Muster); alle übrigen Stellen unter
+`pruefung/` bleiben für ihn gesperrt wie bisher.
+
+**Alte Prüfungen laufen von selbst mit** (seit Bauschritt 52 — Georgs Befund,
+21.08.2026: „Habe ich noch nie gemacht. Alleine schon weil ich nicht einschätzen kann,
+wann welche Prüfung nötig wäre."): FlowForge zieht die Prüfkarten nicht mehr nur auf
+Zuruf heran, sondern spielt sie **selbst** ab — **ohne KI, 0 Tokens**, mit derselben
+Mechanik wie das Tor (§4.3), im echten Projektordner.
+- **Wann:** direkt **vor** und direkt **nach** jedem schreibenden Block, je Anlauf.
+  So trennt sich „vorher schon rot" von „neu kaputt" von selbst. Gemessen wird nur,
+  wenn kein anderer Schreiber Revier belegt und sich der Stand seit der letzten
+  Messung überhaupt geändert hat; sonst sagt der Ticker genau das. Prüf-Blöcke bekommen
+  keinen Messpunkt — sie haben mit dem Tor bereits ihre eigene mechanische Messung.
+- **Welche:** **Relevanz = Schnittmenge** — Dateiliste des laufenden Pakets ∩ gestempelte
+  Dateiliste der Karte. **Im Zweifel läuft die Prüfung**: kein Paket, keine gestempelte
+  Liste, jede Unklarheit → sie läuft. Übersprungen wird nur, was nachweislich nichts mit
+  dem Paket zu tun hat. Dazu laufen je Messpunkt die **zwei am längsten nicht gelaufenen**
+  Karten als **Rotation** mit — die eingebaute Gegenprobe für die indirekten Fälle, die
+  ein Listenschnitt strukturell nicht sieht. Von Hand gezogene Karten bleiben liegen:
+  Sie laufen beim Prüfer.
+- **Wie:** Die aufbewahrten Dateien werden ausgelegt, der **gestempelte** Prüfbefehl wird
+  auf den Kartenordner umgeschrieben und abgespielt — je Karte mit eigener Prozessgruppe,
+  eigenem Zeitlimit und Aufräumen danach.
+- **Melden, nicht urteilen:** Das Ergebnis geht in den Auftrag des Prüfers, dessen
+  Lieferkette den gemessenen Block enthält — wie heute die Baseline. Eine **Reparatur-Runde
+  löst es nicht aus**: Zwischen zwei Bau-Runden darf Rot legitim sein. Rote Karten kommen
+  mit ihrer Fehlerausgabe und ihrem Ordner; grüne stehen im Ticker und im Laufbericht.
+  Der Auftrag führt rote Karten in **zwei Gruppen**, weil eine Karte immer nur einem
+  Prüfer freigegeben ist: die ihm freigegebenen (**„passe sie an, wenn sie nur veraltet
+  ist"**) und die eines anderen Prüfers (**„beurteile nur, ob das eine echte Regression
+  ist"** — ihr Ordner ist für ihn gesperrt). Den Befund bekommen beide; nur die
+  Aufforderung ist verschieden. Ohne diese Trennung liefe der zweite Prüfer in eine harte
+  Sperre, die FlowForge selbst aufgestellt hat.
+- **Zeit-Notbremse:** Zwei Deckel (je Messpunkt und je Lauf, §9). Reißen sie, rutschen die
+  langsamsten Karten von „je Block" auf „einmal je Lauf" — **nie** fällt eine ganz weg,
+  und der Ticker nennt sie namentlich. Der Deckel ändert nur, wie **oft** gemessen wird,
+  nie **ob**.
+- **Kein stilles Weglassen:** **Zwei** Ticker-Zeilen je Messpunkt. Vorher die **Plan-Zeile**:
+  wie viele ausgewählt sind, davon wie viele reihum, und wie viele übersprungen wurden —
+  getrennt nach nicht betroffen, von Hand gezogen, beim Prüfer liegend und in diesem Lauf
+  schon gelaufen — dazu die nicht abspielbaren. Danach die **Ergebnis-Zeile**: wie viele
+  abgespielt wurden, davon rot, wie viele ohne Urteil blieben und wie viele zurückgestellt
+  wurden. Die Ergebnis-Zeile kommt auch bei Abbruch, belegtem Port und Zeitüberschreitung —
+  eine Zahl, die erst nach dem Messen feststeht, darf nicht vor dem Messen behauptet werden.
+  Jeder Ausfall steht zusätzlich namentlich da, mit seinem Grund in Alltagssprache.
+- **Ehrliche Grenzen.** (1) Abgespielt werden nur **gestempelte** Karten. Ältere Karten
+  haben keinen Stempel — ihr damaliger Prüfbefehl ist nicht mehr zuordenbar, und ein
+  Einstieg lässt sich nicht raten (gemessen am echten Archiv: mal `pruefe.mjs`, mal
+  `sammel.mjs`, mal mehrere gleichrangige Skripte). Sie heißen „ohne Stempel — nicht
+  abspielbar" und bekommen im Ticker eine **eigene Zahl**, getrennt von „nicht betroffen".
+  Ein Stempel entsteht ab jetzt bei jeder neu angelegten Prüfkarte. (2) Nennt der
+  gestempelte Befehl den Ordner nicht (`npm test` liest ein Skript aus `package.json`),
+  ist die Karte nicht allein abspielbar — auch das sagt der Ticker. (3) Zeitlimit,
+  belegter Port, laufende App im App-Tab und ein Testlauf, der gar keinen Test ausführt,
+  ergeben **„nicht gemessen"**, nie ein Rot. (4) Fehlt die Vorher-Hälfte (weil nebenan
+  geschrieben wurde), gilt das Ergebnis als **„nicht vergleichbar"** statt als Regression
+  — in einer Welle mit mehreren Schreibern ist das der Regelfall. (5) Der Stempel kennt
+  nur, was das damalige Paket geschrieben hat; eine Live-Prüfung deckt mehr ab als ihre
+  Dateiliste. Deshalb ist der Stempel das Hauptsignal und die Rotation die Gegenprobe.
+  (6) Der Prüfer darf alte Prüfungen anpassen und kann sie damit auf Dauer aufweichen —
+  Gegengewicht: Er passt nur an, was rot ist, und jede angepasste Karte steht namentlich
+  im Ticker. Die **Gesamtprüfung** spielt weiterhin nichts ab (Entscheidung Georg,
+  13.08.2026: „du schreibst dir deine Prüfungen frisch").
 **Bilddateien sind in der Prüfmappe verboten** (hartes Nein, auch für Prüf-Blöcke).
 An jeder Prüf-Blockkarte auf der Leinwand hängt ein aufklappbarer Bereich
 **„Prüfmappe"** (Wunsch Georg, 13.08.2026): je Prüfdatei Name, Größe und
@@ -1999,12 +2094,18 @@ umstellbar wie jede Karte.
   Stand ist (Nachlauf, unten) — ein überschneidender Nachbar wartet so lange. Für die Blöcke
   in einer Welle werden sonst rückfragefreie Befehle zur Rückfrage, und die lokale Helfer-KI
   bekommt die Dateiliste als Tabu-Liste (§7).
-  **Nachlauf-Phase — der Rauchtest wartet, bis die Welle steht:** Der Rauchtest (§8) läuft
+  **Nachlauf-Phase — was auf die stille Welle wartet:** Der Rauchtest (§8) läuft
   nicht mehr im Moment, in dem ein Bauer fertig wird, wenn nebenan ein anderer Bauer noch
   schreibt (oder die lokale Vorreparatur gerade schreibt) — er misste einen Zwischenstand.
   Der Block geht dann in den **Nachlauf** („Rauchtest von „Bauer · UI" wartet, bis die Welle
   steht"), und FlowForge holt den Test nach, sobald kein Bauer mehr läuft — **bevor** es
-  Neues startet — **einmal für die ganze Welle** (seit 0.46.2, §8): Bei Rot bekommt genau
+  Neues startet — **einmal für die ganze Welle** (seit 0.46.2, §8).
+  **Seit Bauschritt 52 wartet dort jeder schreibende Block**, nicht nur der mit
+  Startanleitungs-Pflicht: Auch die Nachher-Messung der alten Prüfungen (§4.3) braucht
+  einen stillen Ordner, und Integrator (Code) oder Sessionende maßen sonst den Halbstand
+  des Nachbarn und bekämen ihn zugeschrieben. Der Rauchtest selbst bleibt auf die Blöcke
+  mit Startanleitungs-Pflicht beschränkt — wartet keiner von ihnen, entfällt er wortlos.
+  Bei Rot bekommt genau
   ein Bauer die Nachbesserungs-Runde (wer die Startanleitung zuletzt gesetzt hat), die
   übrigen bleiben „erledigt". **Startanleitung in der Welle** (seit 0.46.2): Die
   Startanleitung ist eine Projektdatei, kein Teil des Datenvertrags — jeder Bauer darf sie
@@ -2182,6 +2283,22 @@ Automodus werden Rechte-Rückfragen ohne Nachfrage erlaubt und im Liveticker
 sowie im Laufbericht als „automatisch erlaubt" vermerkt. Die harten Sperren
 (Git, Verwaltungsdateien, „darf nur lesen") gelten unverändert — der Automodus
 betrifft nur die Rückfrage-Fälle.
+
+**Was FlowForge selbst ausführt** (seit Bauschritt 52): Die Tabelle oben regelt die Rechte
+des **Agenten**. FlowForge führt darüber hinaus **selbst** Befehle im Projektordner aus —
+ohne Agent, ohne Rückfrage: den **Prüfbefehl** am Tor und als Baseline (§4.3), den
+**Rauchtest** der Startanleitung (§8) und seit Bauschritt 52 die **aufbewahrten Prüfungen
+hinter den Prüfkarten** (§4.3). Das ist eine echte Ausweitung und steht deshalb hier und
+nicht in einer Fußnote: Bis Bauschritt 52 liefen alte, von Agenten geschriebene Prüfdateien
+nur, wenn der Nutzer eine Karte auf einen Prüfer zog. Vertretbar ist sie, weil diese Dateien
+aus dem eigenen Projekt stammen, beim Anlegen der Karte einmal grün gelaufen sind und
+deterministisch ohne KI abgespielt werden. Die kurze Leine des Prüfbefehls (§4.3: genau ein
+Test-Werkzeug, keine Verkettung, keine Umleitung) gilt dem **Befehl**, nicht dem, was die
+gestartete Datei tut — gemessen am echten Archiv startet rund ein Viertel der aufbewahrten
+Prüfdateien einen eigenen Prozess (Testserver, unsichtbarer Browser). Deshalb: **jede**
+Messung steht namentlich im Liveticker und damit im Laufbericht; läuft die App gerade im
+App-Tab oder gehört der Port der Startanleitung einem fremden Prozess, misst FlowForge gar
+nicht, statt ihn abzuräumen; und zwei Zeitdeckel (§9) begrenzen, wie lange gemessen wird.
 
 **Nachschlagen im Internet** (seit 0.51.2, Entscheidung Georg, 20.08.2026): Die zwei
 Web-Werkzeuge lokaler Blöcke (`web_suche`, `webseite_lesen`, §4.3) sind **rein lesend
@@ -2447,7 +2564,13 @@ Block-Agenten als Hinweis daneben (§6).
   Einstellungen trifft, sieht ihn nicht mehr.
 - **Einstellungen-Dialog** (Knopf in der Titelleiste; scrollt, seit Bauschritt 49):
   Abschnitte **KI-Motor** (Abo/API, Schlüssel, Obergrenze, §2) · **Rechte-Rückfragen**
-  (§7) · **Modell der Unteraufgaben** (§2) · **Lokale Helfer-KI** (Schalter, Trefferquote,
+  (§7) · **Modell der Unteraufgaben** (§2) · **Alte Prüfungen automatisch mitlaufen lassen**
+  (seit Bauschritt 52): zwei Zeitdeckel für die Messpunkte aus §4.3 — **je Messpunkt**
+  (5 / 10 / 20 Minuten, Standard 10) und **je Lauf** (15 / 30 / 60 Minuten, Standard 30).
+  Beide Stufenlisten haben genau einen Wohnort im Code. Der Hinweistext sagt die Zusage
+  wörtlich: Der Deckel ändert nur, wie **oft** eine alte Prüfung läuft, nie **ob** — jede
+  ausgewählte Karte läuft mindestens einmal je Lauf, und was zurückgestellt wurde, steht
+  namentlich im Ticker · **Lokale Helfer-KI** (Schalter, Trefferquote,
   **Adress-Liste** statt Einzelfeld seit Bauschritt 51 — Zeile je Ollama-Adresse mit
   Live-Status und Entfernen-Knopf, „Adresse hinzufügen"; die letzte Zeile ist nicht
   entfernbar, die Liste ist nie leer. Die erste Adresse bleibt der Anker für Helfer-KI und

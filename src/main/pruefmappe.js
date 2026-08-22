@@ -12,6 +12,10 @@
 // „hat Prüfungen" (Baseline-Scheinbefund, Prüfmappen-Ansicht), und sie selbst
 // würde als einzige „Prüfung" hinter einer Prüfkarte archiviert. Deshalb steht
 // die Ausnahme genau einmal hier und wird von allen drei Zählstellen benutzt.
+//
+// Seit BAUPLAN 52 gibt es eine ZWEITE Ausnahme derselben Art an denselben drei
+// Stellen: die Ordner der Prüfkarten, die FlowForge selbst zur Messung auslegt
+// (istKartenOrdner). Auch sie sind keine Prüfungen dieses Laufs.
 import fs from 'node:fs'
 import path from 'node:path'
 import { texte } from '../shared/texte.js'
@@ -27,6 +31,21 @@ export const MAPPEN_ERKLAERUNG = 'LIESMICH.md'
 // nicht, ein Verzeichnis-Eintrag kann also 'liesmich.md' heißen.
 export function istMappenErklaerung(pfadInDerMappe) {
   return String(pfadInDerMappe ?? '').toLowerCase() === MAPPEN_ERKLAERUNG.toLowerCase()
+}
+
+// Ist dieser Wurzel-Eintrag ein Ordner, den FlowForge selbst mit einer
+// abgespielten Prüfkarte gefüllt hat (BAUPLAN 52)? Erwartet — wie
+// istMappenErklaerung — den Pfad RELATIV zur Prüfmappe: Nur ein Ordner direkt
+// in pruefung/ stammt von FlowForge; was ein Prüf-Block in seinem eigenen
+// Ordner so nennt, ist seine Sache und zählt.
+//
+// Diese Ordner sind KEINE Prüfungen dieses Laufs: Sie enthalten alte, von
+// FlowForge zur Messung ausgelegte Dateien. Gälten sie als Prüfungen, schaltete
+// die Baseline-Schranke eine Messung scharf, die nichts über den laufenden Lauf
+// aussagt — genau der Scheinbefund, den 0.51.6 beseitigt hat, nur mit anderem
+// Auslöser.
+export function istKartenOrdner(pfadInDerMappe) {
+  return /^pruefkarte-/i.test(String(pfadInDerMappe ?? ''))
 }
 
 // Beim Laufstart: die Erklärung in die frisch geleerte Mappe legen — und auch
@@ -55,13 +74,20 @@ export function mappenErklaerungSchreiben(projektPfad) {
 // Hat der Prüfordner dieser Instanz überhaupt Prüfungen? Ohne sie misst ein
 // aufbewahrter Prüfbefehl nichts Sinnvolles (die Baseline bliebe ein
 // Scheinbefund). Ohne eigenen Ordner (Übungs-Prüfer) zählt die ganze Mappe —
-// und dort liegt die Erklärung, die nicht mitzählt.
+// und dort liegen die Erklärung und, seit BAUPLAN 52, die Ordner der von
+// FlowForge abgespielten Prüfkarten. Beide zählen nicht mit: Eine Mappe, in der
+// nur FlowForges eigene ausgelegte Karten liegen, hat keine Prüfung dieses
+// Laufs, und die Baseline-Schranke schaltete sonst eine Messung scharf, die
+// nichts misst.
 export function pruefmappeHatDateien(projektPfad, pruefOrdner = '') {
   try {
     const eintraege = fs.readdirSync(
       path.join(projektPfad, PRUEFMAPPE, ...(pruefOrdner ? [pruefOrdner] : []))
     )
-    return eintraege.some((name) => !istMappenErklaerung(pruefOrdner ? pruefOrdner + '/' + name : name))
+    return eintraege.some((name) => {
+      const inDerMappe = pruefOrdner ? pruefOrdner + '/' + name : name
+      return !istMappenErklaerung(inDerMappe) && !istKartenOrdner(inDerMappe)
+    })
   } catch {
     return false
   }

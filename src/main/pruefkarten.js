@@ -8,13 +8,19 @@ import { app } from 'electron'
 import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'node:crypto'
-import { istMappenErklaerung } from './pruefmappe.js'
+import { istMappenErklaerung, istKartenOrdner } from './pruefmappe.js'
+import { kartenOrdnerName } from '../shared/pruefkartenRegeln.js'
 
 const PRUEFMAPPE = 'pruefung'
 
 // Gleicher Schlüssel-Mechanismus wie bei den Sicherungspunkten: ein kurzer,
 // stabiler Ordnername je Projektpfad.
-function projektSchluessel(projektPfad) {
+// Exportiert seit BAUPLAN 52: Der Stempel der Prüfkarten (pruefkartenStempel.js)
+// wohnt im selben Projektordner des verwalteten Bereichs. Die Rechnung wird von
+// dort IMPORTIERT statt kopiert — zwei Fassungen desselben Schlüssels wären
+// genau die Sorte Fehler, die erst auffällt, wenn ein Archiv nicht mehr
+// gefunden wird.
+export function projektSchluessel(projektPfad) {
   return crypto
     .createHash('sha1')
     .update(path.resolve(projektPfad).toLowerCase())
@@ -29,12 +35,26 @@ function archivPfad(projektPfad, kartenId) {
 // Unterordner in der Prüfmappe, in dem die Dateien einer eingelegten Prüfkarte
 // liegen — je Karte ein eigener, damit nichts kollidiert und die (evtl. vom
 // Prüfer angepasste) Fassung nach dem Lauf eindeutig zurück ins Archiv wandert.
-// Seit BAUPLAN 41 liegt er im Prüfordner der Instanz, auf die der Nutzer die
-// Karte gezogen hat: Dieselbe Karte darf an zwei Prüfern hängen, und jeder
-// arbeitet dann mit seiner eigenen Kopie.
-export function pruefkartenOrdner(kartenId, pruefOrdner = '') {
-  const eigen = 'pruefkarte-' + kartenId.slice(0, 8)
-  return pruefOrdner ? pruefOrdner + '/' + eigen : eigen
+//
+// Seit BAUPLAN 52 OHNE Prüfordner, direkt in der Mappe. Von BAUPLAN 41 bis
+// dahin lag er IM Prüfordner der Instanz — eine Ebene tiefer, als die Dateien
+// geschrieben worden waren. Gemessen am echten Archiv (22.08.2026): 89 von 135
+// aufbewahrten Prüfdateien rechnen sich den Projektordner über feste
+// Aufwärts-Schritte aus (resolve(HIER, "..", "..")); für sie alle zeigte er
+// damit auf pruefung/ statt aufs Projekt. Die Wiederholungsprüfung war also für
+// die Mehrzahl der Karten schon kaputt — nur nie aufgefallen, weil sie nie
+// benutzt wurde.
+//
+// Der Grund von damals fällt mit weg: Dieselbe Karte an zwei Prüfern braucht
+// keine zwei Kopien mehr, weil FlowForge die Karte seit BAUPLAN 52 selbst
+// ausführt, statt sie einem Agenten hinzulegen. Die Regel „gewinnt die zuletzt
+// bestandene Fassung" bleibt.
+//
+// Der Name selbst wird in src/shared/pruefkartenRegeln.js gerechnet: Die
+// Laufzeit muss denselben Ordnernamen bilden können, ohne diese Datei (und mit
+// ihr Electron) zu laden.
+export function pruefkartenOrdner(kartenId) {
+  return kartenOrdnerName(kartenId)
 }
 
 function mappenPfad(projektPfad, unterordner) {
@@ -57,10 +77,15 @@ export function pruefkartenArchivHatDateien(projektPfad, kartenId) {
 
 // Beim Laufstart (nach der automatischen Leerung): die aufbewahrten Dateien
 // einer gezogenen Prüfkarte in den Prüfordner ihres Prüfers legen.
-export function pruefkarteEinlegen(projektPfad, kartenId, pruefOrdner = '') {
+export function pruefkarteEinlegen(projektPfad, kartenId) {
+  // Ohne Kartenkennung gibt es keinen Kartenordner (kartenOrdnerName liefert
+  // dann einen leeren Namen). Der Pfad zeigte sonst auf die ganze Prüfmappe —
+  // und das Archiv landete lose zwischen den Prüfungen dieses Laufs.
+  const ordner = pruefkartenOrdner(kartenId)
+  if (!ordner) return false
   const quelle = archivPfad(projektPfad, kartenId)
   if (!hatDateien(quelle)) return false
-  const ziel = mappenPfad(projektPfad, pruefkartenOrdner(kartenId, pruefOrdner))
+  const ziel = mappenPfad(projektPfad, ordner)
   fs.mkdirSync(ziel, { recursive: true })
   fs.cpSync(quelle, ziel, { recursive: true })
   return true
@@ -70,8 +95,12 @@ export function pruefkarteEinlegen(projektPfad, kartenId, pruefOrdner = '') {
 // aufbewahrte — die Karte veraltet nicht. Ist der Unterordner leer oder weg,
 // bleibt das Archiv unangetastet. Hängt dieselbe Karte an zwei Prüfern, gewinnt
 // die zuletzt bestandene Fassung — ehrliche Grenze, dafür nie ein Mischmasch.
-export function pruefkartenArchivAuffrischen(projektPfad, kartenId, pruefOrdner = '') {
-  const quelle = mappenPfad(projektPfad, pruefkartenOrdner(kartenId, pruefOrdner))
+export function pruefkartenArchivAuffrischen(projektPfad, kartenId) {
+  // Wie beim Einlegen: Ohne Kartenkennung gibt es keinen Ordner. Hier wöge der
+  // Fehler schwerer — die ganze Prüfmappe wanderte hinter die Karte ins Archiv.
+  const ordner = pruefkartenOrdner(kartenId)
+  if (!ordner) return
+  const quelle = mappenPfad(projektPfad, ordner)
   if (!hatDateien(quelle)) return
   const ziel = archivPfad(projektPfad, kartenId)
   fs.rmSync(ziel, { recursive: true, force: true })
@@ -89,6 +118,14 @@ export function pruefkartenArchivAuffrischen(projektPfad, kartenId, pruefOrdner 
 // die FlowForge beim Leeren dort zurücklässt (0.51.6): Sie ist keine Prüfung
 // und würde sonst als einzige „Prüfung" hinter der Karte aufbewahrt und beim
 // nächsten Lauf wieder eingelegt.
+//
+// Seit BAUPLAN 52 liegen die Ordner eingelegter Prüfkarten in der WURZEL der
+// Mappe, nicht mehr im Prüfordner. Der Verzeichnis-Zweig deckt beides ab: Ohne
+// Prüfordner zählen ohnehin nur lose Dateien (jeder Ordner in der Wurzel bleibt
+// draußen — also auch pruefkarte-*), mit Prüfordner bleibt die Ausnahme als
+// Gürtel-und-Hosenträger stehen, falls dort doch je einer auftaucht. Sonst
+// wanderten FlowForges eigene abgespielte Karten hinter die frische Prüfkarte
+// und würden beim nächsten Lauf als „Prüfung dieses Laufs" wieder eingelegt.
 export function pruefungenArchivieren(projektPfad, kartenId, pruefOrdner = '') {
   const mappe = mappenPfad(projektPfad, pruefOrdner)
   let eintraege = []
@@ -99,7 +136,7 @@ export function pruefungenArchivieren(projektPfad, kartenId, pruefOrdner = '') {
   }
   const eigene = eintraege.filter((e) =>
     e.isDirectory()
-      ? Boolean(pruefOrdner) && !e.name.startsWith('pruefkarte-')
+      ? Boolean(pruefOrdner) && !istKartenOrdner(e.name)
       : !istMappenErklaerung(pruefOrdner ? pruefOrdner + '/' + e.name : e.name)
   )
   if (eigene.length === 0) return

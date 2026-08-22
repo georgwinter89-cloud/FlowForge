@@ -101,6 +101,15 @@ import {
   pruefungenArchivieren
 } from './pruefkarten.js'
 import { mappenErklaerungSchreiben, pruefmappeHatDateien } from './pruefmappe.js'
+// Prüfkarten laufen von selbst (BAUPLAN 52).
+import { kartenOrdnerName } from '../shared/pruefkartenRegeln.js'
+import { stempelSetzen, stempelAufraeumen } from './pruefkartenStempel.js'
+import {
+  kartenMesspunkt,
+  kartenOrdnerAbraeumen,
+  phaseText,
+  KARTE_AUSGABE_MAX
+} from './pruefkartenLauf.js'
 import { starteLaufMotor } from './motor/claudeCodeMotor.js'
 import { lokalesModellBereitstellen } from './motor/lokalesModell.js'
 import {
@@ -225,6 +234,103 @@ export function geschuetzteBereicheVon(eigeneInstanzId, andere) {
     bereiche.push(...(wirkbereichVon(eintrag.def, eintrag.pruefOrdner, eintrag.dateiListe) ?? []))
   }
   return [...new Set(bereiche)]
+}
+
+// ——— Prüfkarten laufen von selbst (BAUPLAN 52) ————————————————————————————
+// Die Entscheidungen rund um die Messpunkte stehen hier oben als reine
+// Rechnungen, aus demselben Grund wie die Wellen-Regeln darunter: Der
+// Ablaufplaner lässt sich in einer Prüfung nicht fahren, und eine Zusicherung,
+// die nur den Quelltext abklopft, bliebe grün, während FlowForge einem Prüfer
+// ein Rot meldet, das gar keins ist.
+
+// Geht dieser Block in den NACHLAUF? Bis BAUPLAN 51 hing das allein an der
+// Startanleitungs-Pflicht (rauchtestSteht). Seit BAUPLAN 52 wartet JEDER
+// schreibende Block dort, weil die Nachher-Messung erst laufen darf, wenn die
+// Welle steht — sonst misst sie den Halbstand des Nachbarn (Fund 13).
+// Wer davon einen RAUCHTEST bekommt, entscheidet unverändert die
+// Startanleitungs-Pflicht — die Filterung sitzt jetzt beim Aufruf von
+// nachlaufFuerWelle, weil der Status dort schon 'nachlauf' ist.
+export function nachlaufNoetig(def, status, gestoppt) {
+  if (gestoppt) return false
+  if (status !== 'fertig') return false
+  return Boolean(def?.startanleitungPflicht) || (!def?.nurLesen && !def?.prueft)
+}
+
+// Vorher-Messung: messen oder ehrlich sagen, warum nicht?
+//   keinSchreiber → nur-lesende Blöcke ändern nichts, und ein Prüfer hat mit
+//                   dem Tor schon seine eigene mechanische Messung (Fund 16);
+//                   liefe hier noch eine, liefe alles doppelt.
+//   welle         → nebenan schreibt noch jemand. Die Unschärfe wird BENANNT,
+//                   nicht wegdefiniert (Vertrag G5): Ein Urteil über einen
+//                   halb geschriebenen Ordner ist keins.
+//   unveraendert  → seit der letzten Messung hat sich am Stand nichts geändert;
+//                   das Ergebnis von vorhin gilt weiter (Fund 16).
+export function vorherMesspunktRegel({ def, andererSchreibt, standGeaendert }) {
+  if (def?.nurLesen || def?.prueft) return { messen: false, grund: 'keinSchreiber' }
+  if (andererSchreibt) return { messen: false, grund: 'welle' }
+  if (!standGeaendert) return { messen: false, grund: 'unveraendert' }
+  return { messen: true, grund: '' }
+}
+
+// Was ein „nachher" bedeutet, gemessen an seinem „vorher" DERSELBEN Runde
+// (Vertrag G7). Der wichtigste Fall ist der unscheinbarste: Ohne Vorher-Wert
+// gibt es keinen Vergleich — dann heißt das Ergebnis „nicht vergleichbar" und
+// NIE „rot". Sonst läse der Prüfer jede Notbremse (Welle, Zeitlimit, App läuft)
+// als Regression und schickte den Bauer in eine Reparatur, die nichts repariert.
+// vorher: 'gruen'|'rot'|'nichtGemessen'|null (null = gar keine Messung)
+// → 'gruen' | 'neuRot' | 'schonVorherRot' | 'nichtVergleichbar' | 'nichtGemessen'
+export function kartenPaarAusgang(vorher, nachher) {
+  if (nachher !== 'rot') return nachher === 'gruen' ? 'gruen' : 'nichtGemessen'
+  if (vorher === 'rot') return 'schonVorherRot'
+  if (vorher === 'gruen') return 'neuRot'
+  return 'nichtVergleichbar'
+}
+
+// Was von den roten Karten in den Auftrag passt. Der Deckel ist derselbe wie
+// bei der Baseline (BASELINE_MAX): Prozess-Ausgaben sind keine Übergaben und
+// bleiben gedeckelt, sonst flutet eine kaputte alte Suite den Kontext des
+// Prüfers. Was nicht mehr passt, wird GEZÄHLT zurückgegeben — der Aufrufer
+// sagt es im Ticker, statt es still fallen zu lassen.
+export function kartenFuerAuftrag(eintraege, gesamtMax) {
+  const genommen = []
+  let summe = 0
+  for (const e of eintraege ?? []) {
+    const laenge = String(e.ausgabe ?? '').length
+    if (genommen.length > 0 && summe + laenge > gesamtMax) break
+    summe += laenge
+    genommen.push(e)
+  }
+  return { eintraege: genommen, weggelassen: (eintraege ?? []).length - genommen.length }
+}
+
+// Welche ausgelegten Karten gehören gerade einem Prüfer? Genau die dürfen die
+// Messpunkte nicht mehr anfassen: Ihr Ordner enthält die Fassung, an der der
+// Prüfer arbeitet, und ihre Freigabe steht schon.
+// Gemessen am 22.08.2026: Ohne diese Liste legte der nächste Messpunkt die
+// Archivfassung über die Anpassung des Prüfers, ließ seine Notiz verwaist
+// stehen und setzte die Freigabe zurück — danach konnte dieselbe Karte einem
+// ZWEITEN Prüfer freigegeben werden.
+// ausgelegt: Map<kartenId, { instanzId, rot }> → string[] (kartenIds)
+export function kartenBeimPruefer(ausgelegt) {
+  return [...(ausgelegt ?? new Map())]
+    .filter(([, eintrag]) => Boolean(eintrag?.instanzId))
+    .map(([kartenId]) => kartenId)
+}
+
+// Liegt im Kartenordner dieser Karte gerade etwas? Die Frage entscheidet, ob
+// „aufgefrischt" oder „nichts zu holen" im Ticker steht — pruefkartenArchivAuffrischen
+// selbst kehrt bei leerer Quelle wortlos um (Fund 7). Der catch beantwortet die
+// Frage („kein Ordner"), er verschluckt keinen Ausfall.
+function pruefmappeHatKartenordner(projektPfad, kartenId) {
+  // Ohne Kartenkennung gibt es keinen Ordner — der Pfad zeigte sonst auf die
+  // ganze Prüfmappe, und die ist so gut wie nie leer.
+  const ordner = kartenOrdnerName(kartenId)
+  if (!ordner) return false
+  try {
+    return fs.readdirSync(path.join(projektPfad, PRUEFMAPPE, ordner)).length > 0
+  } catch {
+    return false
+  }
 }
 
 // ——— Welle: mehrere Schreiber gleichzeitig (BAUPLAN 46) —————————————————————
@@ -1455,12 +1561,25 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         ? geladeneKarten.karten.filter((k) => k.sorte === 'pruefung').map((k) => [k.id, k])
         : []
     )
-    // Je Prüfordner einmal einlegen (BAUPLAN 41): Dieselbe Prüfkarte darf an
-    // zwei Prüfern hängen — dann bekommt jeder seine eigene Kopie.
+    // Verwaiste Stempel wegräumen (BAUPLAN 52): Wurde eine Prüfkarte gelöscht,
+    // während die App aus war, bliebe ihr gemerkter Startbefehl sonst für immer
+    // stehen und ginge in jede Rotation ein — einmal je Laufstart genügt.
+    if (geladeneKarten.ok)
+      stempelAufraeumen(
+        projektPfad,
+        geladeneKarten.karten.map((karte) => karte.id)
+      )
+    // Seit BAUPLAN 52 liegt der Kartenordner NICHT mehr im Prüfordner, sondern
+    // eine Ebene höher in pruefung/pruefkarte-<kurz>/ — auf genau der Ebene, auf
+    // der die Prüfdateien seinerzeit geschrieben wurden. Gemessen: 80 von 135
+    // archivierten Prüfdateien rechnen sich den Projektordner über feste
+    // Aufwärts-Schritte aus (resolve(HIER, "..", "..")); eine Ebene tiefer
+    // zeigten die alle auf pruefung/ statt aufs Projekt. Damit bekommt dieselbe
+    // Karte an zwei Prüfern jetzt EINE Kopie statt zweier — FlowForge führt sie
+    // ohnehin selbst aus, nicht der Prüfer.
     const schonEingelegt = new Set()
     for (const eintrag of kette) {
       if (!defVon(eintrag.blockId)?.prueft) continue
-      const pruefOrdner = ordnerVon(eintrag)
       const liste = []
       for (const kartenId of eintrag.pruefKarten ?? []) {
         const karte = pruefkartenNachId.get(kartenId)
@@ -1469,14 +1588,13 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           id: kartenId,
           titel: karte.titel,
           text: karte.text,
-          ordner: pruefkartenOrdner(kartenId, pruefOrdner),
+          ordner: pruefkartenOrdner(kartenId),
           dateien: pruefkartenArchivHatDateien(projektPfad, kartenId)
         }
-        const schluessel = kartenId + '@' + pruefOrdner
-        if (!fortsetzung && anhang.dateien && !schonEingelegt.has(schluessel)) {
-          schonEingelegt.add(schluessel)
+        if (!fortsetzung && anhang.dateien && !schonEingelegt.has(kartenId)) {
+          schonEingelegt.add(kartenId)
           try {
-            if (pruefkarteEinlegen(projektPfad, kartenId, pruefOrdner)) pruefkartenEingelegt++
+            if (pruefkarteEinlegen(projektPfad, kartenId)) pruefkartenEingelegt++
           } catch {
             // Eine klemmende Kopie verhindert den Start nicht — der Prüfer
             // bekommt die Karte dann ohne Dateien genannt.
@@ -1488,6 +1606,53 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       if (liste.length) pruefkartenVonInstanz.set(eintrag.instanzId, liste)
     }
   }
+  // Von Hand gezogene Karten (BAUPLAN 52): Sie laufen über ihren Prüfer und
+  // werden von den Messpunkten ausdrücklich NICHT abgespielt — sonst
+  // überkopierte ein Messpunkt die (evtl. schon angepasste) Fassung, an der
+  // der Prüfer gerade arbeitet.
+  const gezogeneKarten = [
+    ...new Set([...pruefkartenVonInstanz.values()].flat().map((anhang) => anhang.id))
+  ]
+  // Wer eine gezogene Karte anpassen DARF. Bis BAUPLAN 51 lag sie im eigenen
+  // Prüfordner, und die Schreibsperre erlaubte sie damit automatisch; seit die
+  // Karte eine Ebene höher liegt (siehe oben), muss die Freigabe ausdrücklich
+  // erteilt werden — sonst verspricht der Auftrag „passe sie an", und der Motor
+  // lehnt jeden Schreibversuch ab. Hängt dieselbe Karte an zwei Prüfern,
+  // bekommt sie GENAU EINER (der erste in Kettenreihenfolge): Es gibt nur noch
+  // eine Kopie, und zwei Schreiber darauf ergäben einen Mischmasch.
+  const gezogeneKartenBesitzer = new Map()
+  for (const eintrag of kette)
+    for (const anhang of pruefkartenVonInstanz.get(eintrag.instanzId) ?? [])
+      if (anhang.dateien && !gezogeneKartenBesitzer.has(anhang.id))
+        gezogeneKartenBesitzer.set(anhang.id, eintrag.instanzId)
+  // Der Zustand der Messpunkte über den ganzen Lauf (BAUPLAN 52):
+  //   kartenAusgelegt   — kartenId → { instanzId, rot }: welcher Kartenordner
+  //                       gerade in der Prüfmappe liegt und wem er freigegeben
+  //                       ist. Geht in die geschützten Bereiche (4.5), sonst
+  //                       nähme der Rollback einer Reparatur-Runde die laufende
+  //                       Messung mitten im Lauf weg — unsichtbar, weil
+  //                       pruefung/ vom Diff ausgenommen ist.
+  //   kartenSchonGelaufen — die Zusage „mindestens einmal je Lauf". Sie wandert
+  //                       in den Laufstand; die laufÜBERGREIFENDE Rotationsmarke
+  //                       steht dagegen allein im Stempel und wird hier NICHT
+  //                       gespiegelt (zwei Wahrheiten wären eine zu viel).
+  //   kartenMessungen   — instanzId → Runde → Phase → Ergebnisse.
+  const kartenAusgelegt = new Map()
+  // Die gezogenen Karten liegen von Anfang an in der Mappe und gehören damit
+  // zu den ausgelegten: Sonst nähme der Rollback eines Nachbarn die Anpassung
+  // des Prüfers mit — unsichtbar, weil pruefung/ vom Diff ausgenommen ist.
+  for (const [kartenId, besitzer] of gezogeneKartenBesitzer)
+    kartenAusgelegt.set(kartenId, { instanzId: besitzer, rot: false })
+  const kartenSchonGelaufen = new Set(
+    Array.isArray(fortsetzung?.kartenSchonGelaufen) ? fortsetzung.kartenSchonGelaufen : []
+  )
+  let kartenDeckelVerbrauchtMs = Number(fortsetzung?.kartenDeckelVerbrauchtMs) || 0
+  const kartenMessungen = new Map()
+  const kartenDeckelMesspunktMs = einstellungen.pruefkartenDeckelMesspunktMs
+  const kartenDeckelLaufMs = einstellungen.pruefkartenDeckelLaufMs
+  // Aufhol-Messpunkt beim sanften Stopp: ein eigener kleiner Deckel, damit ein
+  // „Lauf sanft anhalten" nicht doch noch zehn Minuten dauert.
+  const KARTEN_AUFHOL_DECKEL_MS = 2 * 60 * 1000
 
   // Sicherheitsnetz vor dem Lauf: der Stand von jetzt ist immer wiederholbar —
   // und die Folgen-Frage kann genau hierauf zurücksetzen.
@@ -2146,6 +2311,21 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           // lokalen Reparatur-Versuchs — das Urteil fällt erst in der Nachprüfung.
           lokaleReparaturSchritte: 0,
           lokaleReparaturBlock: null,
+          // Prüfkarten laufen von selbst (BAUPLAN 52):
+          // messRunde — die Anlauf-Nummer, die „vorher" und „nachher" zu EINEM
+          //   Paar macht; ohne sie wäre jedes Nachher mit jedem Vorher
+          //   vergleichbar, und die Notbremse läse sich wie eine Regression.
+          // messVeraltet — nach einer Kontingent- oder Server-Pause gilt die
+          //   Vorher-Messung als überholt und wird im nächsten Anlauf neu
+          //   genommen, auch wenn sich am Stand nichts geändert hat (Fund 14).
+          // messStand — der Sicherungspunkt, auf dem die letzte Vorher-Messung
+          //   stand.
+          // freieKartenOrdner — Ordner roter Kartenprüfungen, die GENAU DIESER
+          //   Prüfer anpassen darf (Namen, kein Muster).
+          messRunde: 0,
+          messVeraltet: false,
+          messStand: null,
+          freieKartenOrdner: [],
           // Kanten-Ehrlichkeit (BAUPLAN 34):
           // diffBasis — Sicherungspunkt, ab dem „das hast du bisher geändert"
           //   gerechnet wird (beim ersten Start des Blocks gemerkt; beim Prüfer
@@ -2566,6 +2746,13 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           .filter((id) => knoten.get(id).nachpruefungBeanstandungen.length > 0)
           .map((id) => [id, knoten.get(id).nachpruefungBeanstandungen]),
         nachforderungen: kettenIds.filter((id) => knoten.get(id).startanleitungNachforderung),
+        // Prüfkarten laufen von selbst (BAUPLAN 52): Welche Karten in diesem
+        // Lauf schon gelaufen sind und wie viel vom Lauf-Deckel verbraucht ist.
+        // Die laufÜBERGREIFENDE Rotationsmarke steht dagegen allein im Stempel
+        // und wird hier bewusst NICHT gespiegelt (Fund 18) — zwei Wahrheiten
+        // wären eine zu viel, und nach einem Absturz gewönne die falsche.
+        kartenSchonGelaufen: [...kartenSchonGelaufen],
+        kartenDeckelVerbrauchtMs,
         // Kanten-Ehrlichkeit (BAUPLAN 34): Diff-Basis und Vor-Fazit wandern mit
         // — sonst stünde der Bauer nach einem App-Neustart wieder ohne sie da.
         // Der Diff-TEXT selbst nicht: Er wird beim nächsten Anlauf ohnehin
@@ -3226,6 +3413,11 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           darfPruefen: Boolean(k.def.prueft),
           // Und jeder Prüfer nur seinen eigenen Unterordner (BAUPLAN 41).
           pruefOrdner: k.pruefOrdner,
+          // Prüfkarten laufen von selbst (BAUPLAN 52): zusätzlich freigegebene
+          // Kartenordner — eine Liste von NAMEN, kein Muster. Jede rote Karte
+          // gehört höchstens einem Prüfer; wer sie hat, entscheidet der
+          // Auftragsbau oben, nicht der Motor.
+          freieKartenOrdner: [...k.freieKartenOrdner],
           // Audit (BAUPLAN 25): nur-lesend für Dateien und Befehle, darf aber
           // Karten anlegen — Befunde werden Aufgaben-Karten.
           darfKartenAnlegen: Boolean(k.def.darfKartenAnlegen),
@@ -3368,7 +3560,54 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     // Führt einen Block vollständig aus: Auftrag bauen, Motor laufen lassen,
     // Überträge und Kontingent-/Server-Pausen durchstehen — bis ein endgültiges
     // Ergebnis da ist. Läuft für parallele Blöcke gleichzeitig.
+    // Die Vorher-Messung (BAUPLAN 52) — HIER am Anlauf des Blocks, nicht im
+    // Planer: Ein `await` in bereiteStarten hielte die ganze Planer-Schleife
+    // minutenlang an, `Promise.race` würde nicht bedient, und die Wellen-Urteile
+    // der schon geprüften Kandidaten derselben Runde veralteten währenddessen
+    // (Vertrag G4).
+    async function kartenVorherMessen(k) {
+      if (lauf.hart || endZustand) return
+      // Erst die billigen Fragen: Ein nur-lesender Block und ein Prüfer sind
+      // hier sofort fertig — für sie darf kein Sicherungspunkt gelesen und
+      // schon gar nicht der ganze Ordner durchgesehen werden.
+      if (!vorherMesspunktRegel({ def: k.def, andererSchreibt: false, standGeaendert: true }).messen)
+        return
+      // Die Runden-Nummer macht „vorher" und „nachher" zu EINEM Paar (Fund 15);
+      // sie zählt bei JEDEM Anlauf hoch, auch wenn gleich nicht gemessen wird —
+      // sonst gälte ein altes Vorher für eine neue Runde.
+      k.messRunde = (k.messRunde ?? 0) + 1
+      const was = phaseText('vor', k.messRunde)
+      const punkt = await letzterPunktId(projektPfad, k.strang ?? null)
+      // Die teure Frage (standWeichtAb liest den ganzen Ordner) kommt zuletzt
+      // und nur, wenn alles Billigere „unverändert" sagt.
+      const standGeaendert =
+        k.messVeraltet ||
+        k.messStand === null ||
+        punkt !== k.messStand ||
+        (await standWeichtAb(projektPfad, k.strang ?? null))
+      const regel = vorherMesspunktRegel({
+        def: k.def,
+        andererSchreibt: andererSchreiberLaeuft(k),
+        standGeaendert
+      })
+      if (!regel.messen) {
+        if (regel.grund === 'welle') {
+          tickern(texte.ticker.kartenWelleUnschaerfe(k.name, was))
+          // Als Paar-Hälfte festgehalten: Ein „nachher" ohne dieses „vorher"
+          // wird später nicht als Rot gemeldet, sondern als nicht vergleichbar.
+          kartenMessungMerken(k.eintrag.instanzId, k.messRunde, 'vor', [], true)
+        } else if (regel.grund === 'unveraendert') {
+          tickern(texte.ticker.kartenUnveraendert(k.name, was))
+        }
+        return
+      }
+      k.messVeraltet = false
+      k.messStand = punkt
+      await kartenMesspunktFahren(k, 'vor')
+    }
+
     async function knotenAusfuehren(k) {
+      await kartenVorherMessen(k)
       // Punkt-Strang je Schreiber (BAUPLAN 45): VOR allem anderen — ab hier
       // laufen alle Sicherungspunkte dieses Blocks auf seinen Strang, und der
       // Diff unten braucht seinen Wirkbereich.
@@ -3506,7 +3745,24 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         // Prüfordner je Prüf-Instanz (BAUPLAN 41): Der Auftrag nennt ihn — die
         // Sperre am Werkzeugaufruf setzt ihn durch, und der Prüfbefehl muss
         // genau ihn ausführen.
-        if (k.pruefOrdner) auftrag += texte.agentenPruefordner.zusatz(k.pruefOrdner)
+        // Prüfkarten laufen von selbst (BAUPLAN 52): Was FlowForge rund um die
+        // Bauer dieses Zweigs gemessen hat, steht schon fest, bevor der Prüfer
+        // startet. Zuerst die Freigabe setzen — der Prüfordner-Zusatz gleich
+        // darunter nennt die freigegebenen Kartenordner namentlich.
+        const kartenBefunde = k.def.prueft ? kartenBefundeFuer(k) : null
+        const kartenRote = (kartenBefunde?.befunde ?? []).filter((e) =>
+          ['vorherRot', 'neuRot', 'schonVorherRot'].includes(e.bewertung)
+        )
+        if (kartenBefunde) kartenFreigabeSetzen(k, kartenRote)
+        // Und die von Hand gezogenen Karten, die genau ihm gehören.
+        if (k.def.prueft)
+          for (const [kartenId, besitzer] of gezogeneKartenBesitzer) {
+            if (besitzer !== k.eintrag.instanzId) continue
+            const ordner = pruefkartenOrdner(kartenId)
+            if (!k.freieKartenOrdner.includes(ordner)) k.freieKartenOrdner.push(ordner)
+          }
+        if (k.pruefOrdner)
+          auftrag += texte.agentenPruefordner.zusatz(k.pruefOrdner, k.freieKartenOrdner)
         if (k.def.kartenZuteilung) {
           const nachfahren = nachfahrenAdressen(k.eintrag.instanzId)
           if (nachfahren.length)
@@ -3541,6 +3797,28 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
                 anhang.dateien
                   ? texte.agentenPruefkarten.eintrag(anhang.titel, anhang.text, anhang.ordner)
                   : texte.agentenPruefkarten.eintragOhneDateien(anhang.titel, anhang.text)
+              )
+              .join('')
+        // Der zweite Fall (BAUPLAN 52): NICHT vom Nutzer gezogen, sondern von
+        // FlowForge ausgewählt und schon abgespielt. Hier stehen nur die
+        // LÜCKEN — Karten ohne Urteil. Grüne stehen im Ticker und im
+        // Laufbericht (im Auftrag kosteten sie nur Platz), rote kommen mit
+        // ihrer Fehlerausgabe weiter unten als kartenRot.
+        const kartenOffene = (kartenBefunde?.befunde ?? []).filter((e) =>
+          ['nichtGemessen', 'nichtVergleichbar'].includes(e.bewertung)
+        )
+        if (kartenOffene.length)
+          auftrag +=
+            texte.agentenPruefkarten.einleitungGemessen(kartenBefunde.gruen) +
+            kartenOffene
+              .map((e) =>
+                texte.agentenPruefkarten.eintragGemessen(
+                  e.titel,
+                  e.was,
+                  e.bewertung === 'nichtVergleichbar'
+                    ? texte.agentenPruefkarten.ausgangNichtVergleichbar
+                    : texte.agentenPruefkarten.ausgangNichtGemessen
+                )
               )
               .join('')
         if (k.rueckmeldung) auftrag += texte.agentenUebergabe.prueferRueckmeldung(k.rueckmeldung)
@@ -3581,6 +3859,28 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         // dem Lauf rot war, geht ihn unabhängig vom Zweig an.
         for (const b of baselineFuer(k))
           auftrag += texte.agentenUebergabe.baselineRot(b.befehl, b.ausgabe)
+        // Die roten Karten mit ihrer Fehlerausgabe — im Muster der Baseline und
+        // mit demselben Deckel: Prozess-Ausgaben sind keine Übergaben. Was nicht
+        // mehr hineinpasst, steht im Ticker, statt still zu verschwinden.
+        if (kartenRote.length) {
+          const gedeckelt = kartenFuerAuftrag(kartenRote, BASELINE_MAX)
+          auftrag += texte.agentenUebergabe.kartenRot(
+            gedeckelt.eintraege.map((e) => ({
+              titel: e.titel,
+              was: e.was,
+              ordner: e.ordner,
+              // Der Auftrag folgt der Freigabe, nicht dem Befund: Nur wer den
+              // Ordner wirklich anfassen darf, wird zum Anpassen aufgefordert.
+              // Sonst schickte der Text einen zweiten Prüfer in die harte
+              // Motor-Sperre (gemessen 22.08.2026).
+              darfAnpassen: k.freieKartenOrdner.includes(e.ordner),
+              ausgabe: mitteGekuerzt(e.ausgabe, KARTE_AUSGABE_MAX).text
+            })),
+            kartenBefunde.unschaerfe
+          )
+          if (gedeckelt.weggelassen)
+            tickern(texte.ticker.kartenAuftragGekuerzt(k.name, gedeckelt.weggelassen))
+        }
         // Diff + Vor-Fazit (BAUPLAN 34, Retained Reasoning light): Der frische
         // Agent erkundet nicht neu — er weiß, was in diesem Lauf schon
         // geschehen ist und warum. Das Frische-Prinzip bleibt: Er erbt kein
@@ -3808,6 +4108,10 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
             if (lauf.sanft)
               return mitBlockVerbrauch({ ...ergebnis, zustand: 'sanft-gestoppt' })
             tickern(texte.ticker.kontingentVersuch)
+            // Nach der Pause ist die Vorher-Messung überholt (Fund 14): In der
+            // Zwischenzeit kann ein Nachbar fertig geworden sein. Der nächste
+            // Anlauf misst neu, auch wenn der Sicherungspunkt derselbe ist.
+            k.messVeraltet = true
             continue
           }
         }
@@ -4155,6 +4459,12 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     //     Paket von vor Bauschritt 44 jeden Schreibversuch.
     function dateiListeFuer(k) {
       if (k.def.nurLesen || k.def.prueft) return null
+      return dateiListeVereinigen(angekommenePaketeFuer(k))
+    }
+
+    // Dieselbe Rechnung ohne den Ausstieg oben — die Pakete, die bei diesem
+    // Knoten angekommen sind, ganz gleich, ob er sie als Sperre bekäme.
+    function angekommenePaketeFuer(k) {
       const distanz = distanzVon.get(k.eintrag.instanzId)
       const lieferungen = []
       for (const vorfahre of vorfahrenVon.get(k.eintrag.instanzId)) {
@@ -4184,7 +4494,149 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
             if (schluessel.includes(zuschnittSchluessel(paket))) angekommene.push(paket)
         }
       }
-      return dateiListeVereinigen(angekommene)
+      return angekommene
+    }
+
+    // Der Stempel einer neuen Prüfkarte (BAUPLAN 52): Welche Dateien wurden
+    // geprüft, als diese Karte entstand? Für den PRÜFER rechnet dateiListeFuer
+    // bewusst nichts (er soll keine Schreibsperre bekommen) — hier zählt
+    // dieselbe Auswahl ohne die Sperr-Absicht.
+    //
+    // Kommt dabei nichts heraus, ist das der Alltag und kein Sonderfall
+    // (Fund 19: Gesamtprüfung, Übungs-Prüfer, Blöcke ohne Arbeitspaket-Bedarf).
+    // Dann gilt die Vereinigung ALLER im Lauf gemeldeten Zuschnitt-Dateilisten:
+    // Der Lauf hat an diesen Dateien gearbeitet, also passt die Karte dazu.
+    // Bleibt auch die leer, wird eine leere Liste gestempelt — die Karte gilt
+    // dann dauerhaft als „im Zweifel betroffen" und läuft immer mit. Im Zweifel
+    // ausführen, nie im Zweifel überspringen.
+    function paketDateienFuerPruefer(instanzId) {
+      const k = knoten.get(instanzId)
+      if (!k) return []
+      const eigene = dateiListeVereinigen(angekommenePaketeFuer(k))
+      if (eigene?.length) return eigene
+      const alle = []
+      for (const nk of knoten.values())
+        if (nk.meldungen?.length) alle.push(...zuschnitteAusMeldungen(nk.meldungen))
+      return dateiListeVereinigen(alle) ?? []
+    }
+
+    // ——— Messpunkte rund um einen schreibenden Block (BAUPLAN 52) —————————
+    // Ein Messpunkt fährt die Auswahl, spielt sie ab und legt das Ergebnis an
+    // (instanzId, Runde, Phase) ab. Der Lauf-Deckel wird dabei fortgeschrieben:
+    // Er gilt über alle Messpunkte hinweg.
+    async function kartenMesspunktFahren(
+      k,
+      phase,
+      { deckelMs, restMs, abbrechen, nurNieGelaufen = false, wer } = {}
+    ) {
+      const instanzId = k.eintrag.instanzId
+      const runde = k.messRunde || 1
+      const ergebnis = await kartenMesspunkt({
+        projektPfad,
+        phase,
+        instanzId,
+        runde,
+        // Der Listenschnitt: Dateiliste des laufenden Pakets gegen die
+        // gestempelte Dateiliste der Karte. Ohne Liste läuft alles mit —
+        // im Zweifel ausführen.
+        paketDateien: k.dateiListeAktiv ?? dateiListeFuer(k),
+        gezogen: gezogeneKarten,
+        // Karten, die schon einem Prüfer gehören (gezogen oder rot und
+        // freigegeben): Der Messpunkt lässt ihren Ordner in Ruhe, sonst legte
+        // sich die Archivfassung über die Anpassung des Prüfers.
+        beimPruefer: kartenBeimPruefer(kartenAusgelegt),
+        schonGelaufen: kartenSchonGelaufen,
+        deckelMesspunktMs: deckelMs ?? kartenDeckelMesspunktMs,
+        restLaufMs: restMs ?? kartenDeckelLaufMs - kartenDeckelVerbrauchtMs,
+        abbrechen: abbrechen ?? (() => lauf.sanft || lauf.hart),
+        tickern,
+        ausgelegt: kartenAusgelegt,
+        wer: wer ?? k.name,
+        nurNieGelaufen
+      })
+      kartenDeckelVerbrauchtMs += ergebnis.verbrauchtMs
+      kartenMessungMerken(instanzId, runde, phase, ergebnis.ergebnisse, false)
+    }
+
+    // Das Ergebnis eines Messpunkts festhalten — und dabei gegen das „vorher"
+    // DERSELBEN Runde bewerten (Vertrag G7). `unschaerfe` heißt: Zu diesem
+    // Paar gehört eine Messung, die nebenan schreibend gestört war; der Satz
+    // steht später wörtlich im Auftrag des Prüfers.
+    function kartenMessungMerken(instanzId, runde, phase, ergebnisse, unschaerfe) {
+      const liste = kartenMessungen.get(instanzId) ?? []
+      const vorher =
+        phase === 'nach'
+          ? (liste.find((m) => m.runde === runde && m.phase === 'vor')?.ergebnisse ?? null)
+          : null
+      const bewertet = (ergebnisse ?? []).map((e) => {
+        if (phase === 'vor')
+          return { ...e, bewertung: e.ausgang === 'rot' ? 'vorherRot' : e.ausgang }
+        const gegen = vorher?.find((v) => v.kartenId === e.kartenId)?.ausgang ?? null
+        return { ...e, bewertung: kartenPaarAusgang(gegen, e.ausgang) }
+      })
+      for (const e of bewertet)
+        if (e.bewertung === 'nichtVergleichbar')
+          tickern(
+            texte.ticker.kartenNichtGemessen(
+              e.titel,
+              texte.pruefkarten.grundNichtGemessen.nichtVergleichbar
+            )
+          )
+      liste.push({ runde, phase, unschaerfe, ergebnisse: bewertet })
+      kartenMessungen.set(instanzId, liste)
+    }
+
+    // Die Schreiber, deren Lieferung bei diesem Prüfer angekommen ist — genau
+    // dieselbe Vorauswahl wie in dateiListeFuer. NICHT „alle" (dann bekäme ein
+    // Prüfer die Messungen eines fremden Zweigs) und nicht „nur die eigene
+    // Instanz" (dann fehlte ihm gerade der Bauer, den er prüft).
+    function kartenQuellenFuer(k) {
+      const ids = new Set()
+      for (const vorfahre of vorfahrenVon.get(k.eintrag.instanzId) ?? []) {
+        const vk = knoten.get(vorfahre.instanzId)
+        if (!vk || vk.lieferung == null || !vk.meldungen?.length) continue
+        ids.add(vorfahre.instanzId)
+      }
+      return ids
+    }
+
+    // Was dieser Prüfer über die abgespielten Karten erfährt. Je Karte zählt
+    // der JÜNGSTE Stand — sonst stünde dieselbe Prüfung nach vier Messpunkten
+    // vier Mal im Auftrag.
+    function kartenBefundeFuer(k) {
+      const quellen = kartenQuellenFuer(k)
+      const jeKarte = new Map()
+      let unschaerfe = false
+      let gruen = 0
+      for (const [instanzId, liste] of kartenMessungen) {
+        if (!quellen.has(instanzId)) continue
+        for (const m of liste) {
+          if (m.unschaerfe) unschaerfe = true
+          for (const e of m.ergebnisse)
+            jeKarte.set(e.kartenId, { ...e, was: phaseText(m.phase, m.runde) })
+        }
+      }
+      const befunde = [...jeKarte.values()]
+      for (const e of befunde) if (e.bewertung === 'gruen') gruen++
+      return { befunde, unschaerfe, gruen }
+    }
+
+    // Rot heißt: Der Kartenordner bleibt liegen, und GENAU EIN Prüfer darf
+    // hineinschreiben (BAUPLAN 52, Vertrag 3.6 — die Motor-Sperre kennt nur
+    // Namen, kein Muster). Wer zuerst seinen Auftrag baut, bekommt sie; ein
+    // zweiter Prüfer liest denselben Befund, darf die Datei aber nicht anfassen.
+    function kartenFreigabeSetzen(k, befunde) {
+      const instanzId = k.eintrag.instanzId
+      for (const e of befunde) {
+        const eintrag = kartenAusgelegt.get(e.kartenId)
+        if (!eintrag?.rot) continue
+        if (eintrag.instanzId && eintrag.instanzId !== instanzId) continue
+        if (!eintrag.instanzId) {
+          eintrag.instanzId = instanzId
+          tickern(texte.ticker.kartenFreigegeben(k.name, e.titel))
+        }
+        if (!k.freieKartenOrdner.includes(e.ordner)) k.freieKartenOrdner.push(e.ordner)
+      }
     }
 
     // Die geschützten Bereiche (BAUPLAN 45) für einen Knoten dieses Laufs — die
@@ -4220,7 +4672,20 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           }
         })
       )
-      return offen.length ? [...new Set([...bereiche, ...offen])] : bereiche
+      // Ausgelegte Prüfkarten (BAUPLAN 52) gelten für JEDEN als fremdes Revier
+      // — auch für den Block, dem sie freigegeben sind: Sein eigener Rollback
+      // in einer Reparatur-Runde nähme sonst die gerade laufende Messung mitten
+      // im Lauf weg, und mit ihr die Anpassung des Prüfers. Unsichtbar, weil
+      // pruefung/ vom Diff ausgenommen ist (Fund 6).
+      // Ein leerer Ordnername (Karte ohne Kennung) würde hier zu „pruefung/" —
+      // und schützte damit die GANZE Prüfmappe vor jedem Rollback.
+      const kartenBereiche = [...kartenAusgelegt.keys()]
+        .map((kartenId) => kartenOrdnerName(kartenId))
+        .filter(Boolean)
+        .map((ordner) => PRUEFMAPPE + '/' + ordner + '/')
+      return offen.length || kartenBereiche.length
+        ? [...new Set([...bereiche, ...offen, ...kartenBereiche])]
+        : bereiche
     }
 
     // Die Zweige, für die gerade eine Folgen-Frage offen ist (Nacharbeit
@@ -4769,9 +5234,38 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         const pruefOrdner = knoten.get(instanzId)?.pruefOrdner ?? ''
         const frisch = kartenLaden(projektPfad)
         const vorhandene = new Set(frisch.ok ? frisch.karten.map((karte) => karte.id) : [])
+        // Aufgefrischt wird beides (BAUPLAN 52): die vom Nutzer gezogenen
+        // Karten wie bisher UND die roten, die FlowForge selbst abgespielt und
+        // genau diesem Prüfer freigegeben hat. Jede namentlich im Ticker — auch
+        // wenn nichts zu holen war (sonst wäre ein leerer Kartenordner ein
+        // stilles return, und Georg hielte die alte Fassung für angepasst).
+        const aufzufrischen = new Map()
         for (const anhang of pruefkartenVonInstanz.get(instanzId) ?? [])
-          if (vorhandene.has(anhang.id))
-            pruefkartenArchivAuffrischen(projektPfad, anhang.id, pruefOrdner)
+          if (vorhandene.has(anhang.id)) aufzufrischen.set(anhang.id, anhang.titel)
+        for (const [kartenId, eintrag] of kartenAusgelegt)
+          if (eintrag.instanzId === instanzId && vorhandene.has(kartenId))
+            aufzufrischen.set(
+              kartenId,
+              frisch.ok
+                ? (frisch.karten.find((karte) => karte.id === kartenId)?.titel ?? kartenId)
+                : kartenId
+            )
+        for (const [kartenId, titel] of aufzufrischen) {
+          const hatQuelle = pruefmappeHatKartenordner(projektPfad, kartenId)
+          pruefkartenArchivAuffrischen(projektPfad, kartenId)
+          tickern(
+            hatQuelle
+              ? texte.ticker.kartenAufgefrischt(titel)
+              : texte.ticker.kartenAuffrischenOhneQuelle(titel)
+          )
+        }
+        // Der Prüfer ist durch: Seine freigegebenen Kartenordner werden jetzt
+        // abgeräumt — sie liegen nur so lange, wie sie gebraucht werden.
+        for (const [kartenId, eintrag] of [...kartenAusgelegt])
+          if (eintrag.instanzId === instanzId) {
+            kartenOrdnerAbraeumen(projektPfad, kartenId)
+            kartenAusgelegt.delete(kartenId)
+          }
         // Prüfkarte aus dem gemeldeten Feld (BAUPLAN 42) statt aus zwei
         // Marker-Zeilen im Fließtext. Fehlt sie, greift wie bisher der Ersatz.
         const roh = pruefkarteAusMeldungen(meldungen) ?? {}
@@ -4791,6 +5285,37 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         )
         if (!angelegt.ok) return
         pruefungenArchivieren(projektPfad, angelegt.karte.id, pruefOrdner)
+        // Der Stempel (BAUPLAN 52) in einem EIGENEN try/catch: Der äußere leere
+        // catch verschluckte sonst jeden Fehler, und eine Karte ohne Stempel ist
+        // von einer Altkarte nicht zu unterscheiden — sie liefe nie wieder von
+        // selbst, ohne dass es irgendwo stünde (Fund 30).
+        // Gestempelt wird der Prüfbefehl der Instanz, NICHT der archivierte
+        // (Fund 22): Der Archiv-Stand ist der des VORIGEN Laufs und zeigt auf
+        // einen Ordner, den es heute nicht mehr gibt.
+        try {
+          const gesetzt = stempelSetzen(projektPfad, angelegt.karte.id, {
+            dateiListe: paketDateienFuerPruefer(instanzId),
+            befehl: pruefbefehlLaden(projektPfad, instanzId) ?? '',
+            ordner: pruefOrdner,
+            instanzId
+          })
+          if (!gesetzt?.ok)
+            tickern(
+              texte.ticker.kartenStempelFehlt(angelegt.karte.titel, gesetzt?.fehler ?? 'unbekannt')
+            )
+          // War die Datei unlesbar, hat der Stempel sie zur Seite gelegt und
+          // neu angefangen (BAUPLAN 52, Nacharbeit A). Das ist ein Verlust: Die
+          // gemerkten Startbefehle aller übrigen Karten sind erst einmal fort.
+          // Er wird benannt, sonst stünde er nirgends.
+          else if (gesetzt.beiseite) tickern(texte.ticker.kartenStempelBeiseite)
+        } catch (fehler) {
+          tickern(
+            texte.ticker.kartenStempelFehlt(
+              angelegt.karte.titel,
+              String(fehler?.message ?? fehler)
+            )
+          )
+        }
         senden({ art: 'karten', karten: angelegt.karten })
         tickern(texte.ticker.pruefkarteAngelegt(angelegt.karte.titel))
       } catch {
@@ -5140,7 +5665,11 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       // startet. Ein Bauer allein sieht davon nichts: Die Welle steht sofort,
       // der Test läuft in derselben Planer-Runde. Die Wartezeile kommt nur,
       // wenn nebenan wirklich noch jemand schreibt.
-      if (rauchtestSteht(k)) {
+      // Seit BAUPLAN 52 wartet JEDER schreibende Block im Nachlauf, nicht nur
+      // der mit Startanleitungs-Pflicht: Auch die Nachher-Messung der alten
+      // Prüfungen darf erst laufen, wenn die Welle steht (Fund 13). Wer davon
+      // einen Rauchtest bekommt, entscheidet weiterhin allein seine Startanleitungs-Pflicht.
+      if (nachlaufSteht(k)) {
         k.status = 'nachlauf'
         k.nachlaufErgebnis = blockErgebnis
         k.nachlaufReihe = ++nachlaufZaehler
@@ -5175,16 +5704,15 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     // wird VOR der Planer-Schleife angelegt, verarbeite läuft erst dort.
     let nachlaufZaehler = 0
 
-    // Steht für diesen Block ein Rauchtest an? Genau die Bedingung, die bis
-    // Bauschritt 45 direkt vor dem Test stand.
-    function rauchtestSteht(k) {
-      return (
-        k.def.startanleitungPflicht &&
-        k.status === 'fertig' &&
-        !lauf.sanft &&
-        !lauf.hart &&
-        !endZustand
-      )
+    // Wartet dieser Block im Nachlauf? (BAUPLAN 52 — die Regel steht oben im
+    // Modul als reine Rechnung.) Diese Funktion hieß bis Bauschritt 51
+    // `rauchtestSteht` und trug BEIDE Fragen in einer: „wartet der Block?" und
+    // „bekommt er einen Rauchtest?". Seit auch die Nachher-Messung der alten
+    // Prüfungen im Nachlauf sitzt, sind das zwei verschiedene Fragen — die
+    // zweite beantwortet `def.startanleitungPflicht` beim Aufruf von
+    // nachlaufFuerWelle, wo der Status längst 'nachlauf' ist.
+    function nachlaufSteht(k) {
+      return nachlaufNoetig(k.def, k.status, lauf.sanft || lauf.hart || Boolean(endZustand))
     }
 
     // Letzte nichtleere Zeile einer Prozess-Ausgabe, gedeckelt wie eine
@@ -5307,7 +5835,26 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       if (eintraege.length === 0) return
       // Sanft gestoppt oder anderswo gescheitert: Der Test entfällt, wie er
       // auch sofort entfallen wäre — die Blöcke gelten als fertig.
-      if (!lauf.sanft && !endZustand) await nachlaufFuerWelle(eintraege)
+      // Den Rauchtest bekommen weiterhin NUR die Blöcke mit
+      // Startanleitungs-Pflicht (BAUPLAN 52): Seit auch die anderen Schreiber
+      // hier warten, muss die Liste gefiltert werden — sonst bekäme ein Block
+      // ohne Startanleitung plötzlich deren Nachbesserungs-Runde. Ist die
+      // Liste leer, entfällt der Rauchtest, ohne dass etwas gemeldet wird.
+      const mitAnleitung = eintraege.filter((e) => e.k.def.startanleitungPflicht)
+      if (!lauf.sanft && !endZustand) await nachlaufFuerWelle(mitAnleitung)
+      // Die Nachher-Messung der alten Prüfungen (BAUPLAN 52): jetzt, wo die
+      // Welle steht und der Ordner still ist — und VOR verarbeiteEnde, damit
+      // das Ergebnis noch in den Auftrag des Prüfers kommt, der gleich startet.
+      // Die Messung nennt ALLE Schreiber der Welle namentlich (Vertrag G5):
+      // Nach einer Welle ist „um wen herum wurde gemessen" nicht mehr eine
+      // Person, und das darf der Ticker nicht verschweigen.
+      const schreiberDerWelle = eintraege
+        .filter((e) => !e.k.def.nurLesen && !e.k.def.prueft)
+        .map((e) => e.k.name)
+      if (!lauf.sanft && !lauf.hart && !endZustand)
+        for (const { k } of eintraege)
+          if (!k.def.nurLesen && !k.def.prueft)
+            await kartenMesspunktFahren(k, 'nach', { wer: schreiberDerWelle.join(', ') })
       // Erst jetzt, Block für Block, aus dem Nachlauf heraus: Wer noch wartet,
       // belegt sein Revier weiter — der Punkt „Nach Block A" nimmt B's und C's
       // Arbeit sonst schon mit, und B und C bekämen keinen eigenen Punkt mehr
@@ -5914,6 +6461,32 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       standSpeichern()
     }
 
+    // Aufhol-Messpunkt (BAUPLAN 52): Ein sanfter Stopp bricht mitten in der
+    // Kette ab — Karten, die in diesem Lauf noch gar nicht dran waren, würden
+    // die Zusage „mindestens einmal je Lauf" sonst still verfehlen. Zwei
+    // Minuten, mehr nicht; was dann noch fehlt, steht namentlich im Ticker.
+    // Beim HARTEN Stopp wird nichts nachgeholt (der Ordner geht gleich zurück
+    // auf den Sicherungspunkt) — nur die ehrliche Zeile.
+    if (lauf.hart) {
+      tickern(texte.ticker.kartenHartOhneAufholen)
+    } else if (lauf.sanft) {
+      const letzterSchreiber = kettenIds
+        .map((kid) => knoten.get(kid))
+        .filter((nk) => nk && !nk.def.nurLesen && !nk.def.prueft)
+        .pop()
+      if (letzterSchreiber) {
+        tickern(texte.ticker.kartenAufholen)
+        await kartenMesspunktFahren(letzterSchreiber, 'nach', {
+          deckelMs: KARTEN_AUFHOL_DECKEL_MS,
+          restMs: KARTEN_AUFHOL_DECKEL_MS,
+          // Der sanfte Stopp ist schon gedrückt — sonst bräche der Messpunkt
+          // sofort ab und holte gar nichts nach. „Sofort abbrechen" gilt weiter.
+          abbrechen: () => lauf.hart,
+          nurNieGelaufen: true
+        })
+      }
+    }
+
     // Die Lauf-Session geordnet schließen — der Lauf ist zu Ende (BAUPLAN 19).
     lauf.laufMotor?.beenden()
 
@@ -6167,6 +6740,17 @@ function fremdePruefbereiche(projektPfad, abgebrochenId) {
     if (eintrag.instanzId === abgebrochenId) continue
     const ordner = pruefOrdnerFuer(blockDefinition(eintrag.blockId), eintrag)
     if (ordner) bereiche.push(PRUEFMAPPE + '/' + ordner + '/')
+  }
+  // Abgespielte Prüfkarten (BAUPLAN 52) zählen genauso: In einem
+  // pruefkarte-*-Ordner kann die Anpassung eines Prüfers liegen, die noch nicht
+  // ins Archiv zurückgeschrieben ist. Gelesen wird der echte Bestand statt eines
+  // Musters — die geschützten Bereiche kennen nur Pfade, keine Platzhalter.
+  try {
+    for (const e of fs.readdirSync(path.join(projektPfad, PRUEFMAPPE), { withFileTypes: true }))
+      if (e.isDirectory() && /^pruefkarte-/i.test(e.name))
+        bereiche.push(PRUEFMAPPE + '/' + e.name + '/')
+  } catch {
+    // Keine Prüfmappe: dann gibt es auch nichts zu schützen.
   }
   return [...new Set(bereiche)]
 }

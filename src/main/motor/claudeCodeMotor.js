@@ -517,6 +517,34 @@ function liegtImEigenenPruefordner(datei, projektPfad, pruefOrdner) {
   return relativ === eigen || relativ.startsWith(eigen + path.sep)
 }
 
+// Freigegebene Kartenordner (BAUPLAN 52): Spielt FlowForge eine archivierte
+// Prüfkarte selbst ab und sie wird ROT, bekommt genau EIN Prüfer den Ordner
+// dieser Karte zum Anpassen frei — er soll echte Regression von veralteter
+// Prüfung trennen können, und die angepasste Fassung ersetzt anschließend die
+// aufbewahrte.
+//
+// Bewusst eine zweite, eigene Bedingung neben liegtImEigenenPruefordner statt
+// einer erweiterten Ordnerliste: Es sind zwei verschiedene Rechte. Der eigene
+// Prüfordner gehört dem Prüfer, solange er läuft; ein Kartenordner ist eine
+// befristete Freigabe für genau diese Karte. Wer eines von beiden ändert, soll
+// im Code sehen, dass er das andere nicht mitändert.
+//
+// Erwartet ORDNERNAMEN (z.B. 'pruefkarte-0049e5aa'), kein Muster: Ein Muster
+// gäbe jedem Prüfer jede Karte frei, und die Zuordnung „genau ein Prüfer je
+// Karte" wäre nicht mehr durchsetzbar.
+function liegtInFreigegebenerKarte(datei, projektPfad, freieKartenOrdner) {
+  if (!datei || !Array.isArray(freieKartenOrdner) || freieKartenOrdner.length === 0) return false
+  const relativ = path
+    .relative(path.resolve(projektPfad), path.resolve(projektPfad, String(datei)))
+    .toLowerCase()
+  return freieKartenOrdner.some((name) => {
+    const sauber = String(name ?? '').trim()
+    if (!sauber) return false
+    const frei = path.join(PRUEF_ORDNER, sauber).toLowerCase()
+    return relativ === frei || relativ.startsWith(frei + path.sep)
+  })
+}
+
 // Die Wegwerf-Fläche der Agenten (SPEC §4.3): Hilfsskripte und Probedateien
 // legt der Bauer laut Katalog-Auftrag hier ab, und FlowForge leert den Ordner am
 // Lauf-Ende. Der Zuschnitt listet ihn nie auf — deshalb ist er von der
@@ -630,8 +658,12 @@ function liegtImProjekt(datei, projektPfad) {
 // Ein Befehl schreibt an der Dateiliste vorbei, und ein Build oder Test liest
 // den Halbstand des Nachbarn. Rein lesende Befehle bleiben frei; die harten
 // Sperren (Git, Prüfmappe, Dateiliste bei Umleitungen, „darf nur lesen") gehen
-// wie bisher vor. Steht als LETZTER Parameter mit sicherem Standard false.
-export function pruefeWerkzeug(name, eingabe, projektPfad, nurLesen, darfPruefen, lokaleKi = true, nurLesenBefehle = false, darfKartenAnlegen = false, darfVorschlagen = false, darfLaufVorschlag = false, darfZuteilen = false, pruefOrdner = '', lieferscheinFrei = [], dateiListe = null, inWelle = false) {
+// wie bisher vor.
+// freieKartenOrdner (BAUPLAN 52): die Ordnernamen der von FlowForge abgespielten
+// Prüfkarten, die DIESEM Prüfer zum Anpassen freigegeben sind — eine Liste, kein
+// Muster, und wirksam nur bei darfPruefen: Ein Bauer fasst pruefung/ weiterhin
+// nirgends an. Steht als LETZTER Parameter mit sicherem Standard [].
+export function pruefeWerkzeug(name, eingabe, projektPfad, nurLesen, darfPruefen, lokaleKi = true, nurLesenBefehle = false, darfKartenAnlegen = false, darfVorschlagen = false, darfLaufVorschlag = false, darfZuteilen = false, pruefOrdner = '', lieferscheinFrei = [], dateiListe = null, inWelle = false, freieKartenOrdner = []) {
   if (name.startsWith(MENSCH_PRAEFIX)) return { erlaubt: true }
   // Lieferschein (BAUPLAN 42): frei ist je Block genau das Werkzeug zu seinem
   // liefert-Etikett — die anderen fragen nach.
@@ -755,12 +787,14 @@ export function pruefeWerkzeug(name, eingabe, projektPfad, nurLesen, darfPruefen
     // Die Prüfmappe gehört dem Prüfer (Entscheidung Georg, 12.08.2026).
     if (!darfPruefen && liegtInPruefmappe(datei, projektPfad))
       return { gesperrt: texte.rechteFrage.pruefmappeGesperrtFuerAgent, tickerText: texte.ticker.pruefmappeGesperrt }
-    // Und jedem Prüfer sein eigener Ordner (BAUPLAN 41).
+    // Und jedem Prüfer sein eigener Ordner (BAUPLAN 41) — dazu die Kartenordner,
+    // die ihm für diesen Lauf ausdrücklich freigegeben sind (BAUPLAN 52).
     if (
       darfPruefen &&
       pruefOrdner &&
       liegtInPruefmappe(datei, projektPfad) &&
-      !liegtImEigenenPruefordner(datei, projektPfad, pruefOrdner)
+      !liegtImEigenenPruefordner(datei, projektPfad, pruefOrdner) &&
+      !liegtInFreigegebenerKarte(datei, projektPfad, freieKartenOrdner)
     )
       return {
         gesperrt: texte.rechteFrage.fremderPruefordnerFuerAgent(pruefOrdner),
@@ -790,6 +824,30 @@ export function pruefeWerkzeug(name, eingabe, projektPfad, nurLesen, darfPruefen
       return { gesperrt: texte.rechteFrage.pruefmappeBildFuerAgent, tickerText: texte.ticker.pruefmappeBildGesperrt }
     if (!darfPruefen && befehlAendertPruefmappe(befehl))
       return { gesperrt: texte.rechteFrage.pruefmappeGesperrtFuerAgent, tickerText: texte.ticker.pruefmappeGesperrt }
+    // Und der eigene Prüfordner gilt auch für Befehle (BAUPLAN 41/52).
+    // Gemessen am 22.08.2026: Die Sperre hing allein an den Schreib-Werkzeugen —
+    // `echo x > pruefung/pruefkarte-ffffffff/pruefe.mjs` und
+    // `echo x > pruefung/pruefer-fremd/x.mjs` liefen für JEDEN Prüfer durch,
+    // während derselbe Pfad am Write-Werkzeug hart gesperrt war. Laufen zwei
+    // Prüfer nebeneinander, überschrieb der eine so die Karte des anderen, und
+    // die überschriebene Fassung wanderte anschließend ins Archiv.
+    // Das Umleitungsziel liegt hier schon ausgelesen vor, deshalb dieselbe
+    // Regel und dieselbe Meldung wie am Schreib-Werkzeug. Ehrliche Grenze, die
+    // bleibt: Ein Befehl OHNE Umleitung (`rm -rf pruefung/pruefkarte-…`) ist aus
+    // einem Befehlstext nicht sicher zu lesen — er fragt weiter nach.
+    if (darfPruefen && pruefOrdner)
+      for (const ziel of umleitungsZiele(befehl)) {
+        // Ein Ziel mit stehengebliebenem Anführungszeichen ist ein Fehlgriff der
+        // Zerlegung, kein Pfad — im Zweifel NICHT sperren (wie unten).
+        if (/["']/.test(ziel)) continue
+        if (!liegtInPruefmappe(ziel, projektPfad)) continue
+        if (liegtImEigenenPruefordner(ziel, projektPfad, pruefOrdner)) continue
+        if (liegtInFreigegebenerKarte(ziel, projektPfad, freieKartenOrdner)) continue
+        return {
+          gesperrt: texte.rechteFrage.fremderPruefordnerFuerAgent(pruefOrdner),
+          tickerText: texte.ticker.fremderPruefordnerGesperrt
+        }
+      }
     // Ehrliche Grenze des Datenvertrags (BAUPLAN 44, SPEC §7): Die Sperre greift
     // an den Schreib-Werkzeugen, nicht an ausgeführten Befehlen. Genau EINE
     // Stelle ist billig mitzunehmen — das Umleitungsziel liegt hier schon
@@ -1851,7 +1909,10 @@ export function starteLaufMotor(optionen) {
       // Datenvertrag als Schreibsperre (BAUPLAN 44) — null heißt keine Sperre.
       block?.dateiListe ?? null,
       // Welle (BAUPLAN 46): je Aufruf frisch, denn Nachbarn kommen und gehen.
-      inWelleJetzt()
+      inWelleJetzt(),
+      // Freigegebene Kartenordner (BAUPLAN 52) — leer für alle außer dem einen
+      // Prüfer, dem eine rot gelaufene Prüfkarte gemeldet wurde.
+      block?.freieKartenOrdner ?? []
     )
     if (urteil.gesperrt) return nein(urteil.gesperrt, urteil.tickerText)
     if (urteil.erlaubt) {
@@ -2211,7 +2272,9 @@ export function starteLaufMotor(optionen) {
             // Datenvertrag als Schreibsperre (BAUPLAN 44) — null heißt keine Sperre.
             block?.dateiListe ?? null,
             // Welle (BAUPLAN 46): je Aufruf frisch, denn Nachbarn kommen und gehen.
-            inWelleJetzt()
+            inWelleJetzt(),
+            // Freigegebene Kartenordner (BAUPLAN 52).
+            block?.freieKartenOrdner ?? []
           )
           if (urteil.erlaubt) return { behavior: 'allow', updatedInput: eingabeDaten }
           if (urteil.gesperrt) {
@@ -2661,7 +2724,10 @@ export function starteLaufMotor(optionen) {
     // einer Klasse ohne Denktiefe (Haiku): dort läuft der Block als 'block',
     // damit nie eine effort-Definition an ein Modell geht, das sie nicht kennt;
     // der Ticker sagt dann ehrlich „wird ignoriert".
-    blockAusfuehren({ auftrag, blockName, instanzId = null, nurLesen = false, darfPruefen = false, pruefOrdner = '', lokaleKi = true, darfKartenAnlegen = false, darfVorschlagen = false, darfLaufVorschlag = false, darfZuteilen = false, liefert = [], lieferscheinFrei = [], ziele = null, dateiListe = null, sicherung = null, inWelle = null, modell = null, unterModell = null, modellName = '', uebertrag, denktiefe = DENKTIEFE_STANDARD, denktiefeName = '', klasse = MODELL_KLASSE_STANDARD }) {
+    // freieKartenOrdner (BAUPLAN 52): die Ordnernamen der rot gelaufenen
+    // Prüfkarten, die GENAU DIESEM Prüfer zum Anpassen freigegeben sind. Leer
+    // für jeden anderen Block — die Prüfmappe bleibt sonst zu.
+    blockAusfuehren({ auftrag, blockName, instanzId = null, nurLesen = false, darfPruefen = false, pruefOrdner = '', freieKartenOrdner = [], lokaleKi = true, darfKartenAnlegen = false, darfVorschlagen = false, darfLaufVorschlag = false, darfZuteilen = false, liefert = [], lieferscheinFrei = [], ziele = null, dateiListe = null, sicherung = null, inWelle = null, modell = null, unterModell = null, modellName = '', uebertrag, denktiefe = DENKTIEFE_STANDARD, denktiefeName = '', klasse = MODELL_KLASSE_STANDARD }) {
       if (tot)
         return Promise.resolve({
           zustand: 'fehlgeschlagen',
@@ -2681,6 +2747,9 @@ export function starteLaufMotor(optionen) {
           nurLesen,
           darfPruefen,
           pruefOrdner,
+          // Abgespielte Prüfkarten (BAUPLAN 52): dieselbe Prüfmappen-Sperre,
+          // nur mit einer benannten Ausnahme je Karte.
+          freieKartenOrdner,
           lokaleKi,
           darfKartenAnlegen,
           darfVorschlagen,
@@ -2935,7 +3004,10 @@ export function starteChatMotor(optionen) {
       '', // pruefOrdner
       [], // lieferscheinFrei
       null, // dateiListe
-      false // inWelle
+      false, // inWelle
+      // freieKartenOrdner (BAUPLAN 52): Der Chat spielt keine Prüfkarten ab, ihm
+      // ist also nie eine freigegeben — und die Prüfmappe ist ihm ohnehin tabu.
+      []
     )
     // Während ein Lauf läuft, sagt die Abweisung ehrlich, warum: nicht „dieser
     // Block darf nur lesen", sondern „im Projekt läuft gerade ein Lauf".

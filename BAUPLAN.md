@@ -1506,6 +1506,9 @@ Werkzeugbeschreibungen und nicht nur im Auftrag: Ein Appell im Auftragstext häl
 (Zugsimulator-Befund, 12.08.2026).
 
 ### 52 — Prüfkarten laufen von selbst
+*(Ausgeliefert als **0.54.0**, nicht als 0.52.0 — Entscheidung Georg, 22.08.2026: Weil 53
+vor 52 gebaut wurde, hätte eine 0.52.0 älter ausgesehen als die installierte 0.53.0. Die
+Regel in CLAUDE.md ist entsprechend ergänzt: Die Nummer sinkt nie.)*
 (Georgs Entwurf, 21.08.2026: „Was ist, wenn der Prüfer nur entscheidet, welche Karte
 relevant ist, und das FlowForge meldet, und FlowForge die Tests dann deterministisch
 laufen lässt?" — im Gespräch verschärft zu: FlowForge entscheidet auch das selbst, ohne
@@ -1529,7 +1532,7 @@ Lauf N+2 prüft also niemand mehr, ob das Alte noch hält.
    Ordnerlauf (SPEC §4.3 schreibt genau das vor). Die 38 archivierten Karten haben keinen
    einheitlichen Einstieg: mal `alle.mjs`, mal `sammel.mjs`, mal `pruefe.mjs`, mal zwei
    gleichrangige `pruefe_*.js` nebeneinander.
-2. **Die Ordnertiefe entscheidet über Grün und Rot.** 80 von 135 archivierten Prüfdateien
+2. **Die Ordnertiefe entscheidet über Grün und Rot.** 89 von 135 archivierten Prüfdateien (beim Bauen am 22.08.2026 nachgemessen; die zuerst notierten 80 waren zu niedrig gezählt)
    rechnen sich den Projektordner über feste Aufwärts-Schritte aus
    (`resolve(HIER, "..", "..")`). Geschrieben wurden sie in `pruefung/pruefer-<Kennung>/`,
    zwei Ebenen unter dem Projekt. FlowForge legt eine gezogene Prüfkarte heute aber nach
@@ -1583,6 +1586,17 @@ Lauf N+2 prüft also niemand mehr, ob das Alte noch hält.
   dem Paket zu tun hat — dieselbe Haltung wie bei der VRAM-Prüfung, die lieber schweigt,
   als aus einer misslungenen Messung zu warnen. **Entscheidung Georg 21.08.2026:** Die
   9 stempellosen Altkarten laufen wie gestempelte mit, nicht in einem Schonprogramm.
+  **Richtigstellung beim Bauen (22.08.2026, am echten Archiv gemessen):** Diese Entscheidung
+  gilt für die **Auswahl** — stempellose Karten werden nie als „nicht betroffen"
+  weggefiltert. **Ausführen** lassen sie sich trotzdem nicht: Der Kartenordner heißt nach
+  der Karten-Kennung, der aufbewahrte Prüfbefehl ist nach der Instanz-Kennung geschlüsselt,
+  und die Herkunft einer Prüfkarte trägt keine Instanz-Kennung — Überschneidung 0 von 38
+  Karten. Ein Einstieg lässt sich auch nicht ableiten (15 Karten mit Sammler, 4 Einzeldatei,
+  13 nur `*.test.*`, 6 mehrere gleichrangige Skripte). Sie heißen deshalb „ohne Stempel —
+  nicht abspielbar" und bekommen im Ticker eine **eigene Zahl**, getrennt von „nicht
+  betroffen". Ab der ersten neu angelegten Prüfkarte wird gestempelt. Eine einmalige
+  Rettung des Altbestands wäre ein eigener kleiner Schritt nach 52 — sie steckt bewusst
+  nicht hier drin, sonst hinge der Alltagstest an einer Reparatur, die selbst schiefgehen kann.
 - **Rotation als Gegenprobe** (Entscheidung Georg 21.08.2026): Zusätzlich laufen je Lauf
   die **zwei am längsten nicht gelaufenen** Karten mit, auch wenn sie nicht betroffen
   sind. Das deckt die indirekten Fälle ab, die ein Listenschnitt strukturell nicht sieht,
@@ -1662,11 +1676,19 @@ als nicht abspielbar galten und welche aus der Rotation dabei waren.
   Gegengewicht: Er passt nur an, was rot ist, und jede angepasste Karte steht namentlich im
   Ticker.
 
-**Alltagstest:** Ein Paket bauen lassen, das eine Datei anfasst, die eine ältere Prüfkarte
-gestempelt hat. Im Ticker muss stehen: dass FlowForge diese Prüfung vor dem Bauer und nach
-dem Bauer gemessen hat, wie viele es als nicht betroffen übersprungen hat und welche zwei
-Karten aus der Rotation mitgelaufen sind. Danach im Laufbericht nachsehen, ob das Ergebnis
-im Auftrag des Prüfers steht — und dass keine Reparatur-Runde davon ausgelöst wurde.
+**Alltagstest — zweistufig** (die Zweistufigkeit ist keine Bequemlichkeit, sondern die Folge
+der Richtigstellung oben: Am Tag der Auslieferung gibt es noch keine einzige gestempelte
+Karte, ein Stempel entsteht erst mit der nächsten bestandenen Prüfung):
+1. **Erster Lauf** — irgendein normaler Lauf mit einem Prüfer. Erwartung im Ticker: an jedem
+   Messpunkt eine Zahlen-Zeile, in der die alten Karten als „ohne Stempel — nicht
+   abspielbar" mit eigener Zahl stehen. Am Ende, nach der bestandenen Prüfung, entsteht
+   eine neue Prüfkarte — die ist gestempelt.
+2. **Zweiter Lauf** — ein Paket bauen lassen, das eine Datei anfasst, die genau diese neue
+   Prüfkarte gestempelt hat. Im Ticker muss stehen: dass FlowForge diese Prüfung vor dem
+   Bauer und nach dem Bauer gemessen hat, wie viele es als nicht betroffen übersprungen hat
+   und welche Karten aus der Rotation mitgelaufen sind. Danach im Laufbericht nachsehen, ob
+   das Ergebnis im Auftrag des Prüfers steht — und dass keine Reparatur-Runde davon
+   ausgelöst wurde.
 
 ## Reihenfolge-Begründung (Paket 40–48)
 Im Paket 40–48 bestimmt die Angriffsliste die Reihenfolge, nicht der Nutzen: Die

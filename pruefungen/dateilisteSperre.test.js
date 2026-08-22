@@ -230,8 +230,8 @@ describe('BAUPLAN 44 · Der Bauer erfährt vor der Arbeit, dass die Dateiliste s
 })
 
 describe('BAUPLAN 44 · Alle Motor-Aufrufstellen reichen die Dateiliste durch', () => {
-  // Fund 12 der Angriffsliste: pruefeWerkzeug hat 15 Positionsparameter (seit
-  // BAUPLAN 46: inWelle als letzter) und drei
+  // Fund 12 der Angriffsliste: pruefeWerkzeug hat 16 Positionsparameter (seit
+  // BAUPLAN 52: freieKartenOrdner als letzter, davor inWelle) und drei
   // Aufrufstellen im Motor. Ein Neuzugang, der an einer davon vergessen wird,
   // rutscht still an die falsche Stelle — dann landet die Dateiliste z.B. auf
   // `lieferscheinFrei` und der Block kann sein Melde-Werkzeug nicht mehr rufen,
@@ -239,7 +239,7 @@ describe('BAUPLAN 44 · Alle Motor-Aufrufstellen reichen die Dateiliste durch', 
   // gelesen.
   const quelle = fs.readFileSync('src/main/motor/claudeCodeMotor.js', 'utf8')
 
-  it('hat genau drei Aufrufstellen, und jede endet auf Dateiliste und Welle', () => {
+  it('hat genau drei Aufrufstellen, und jede endet auf Dateiliste, Welle und Kartenordner', () => {
     const stellen = [...quelle.matchAll(/pruefeWerkzeug\(\s*\n([\s\S]*?)\n\s*\)/g)]
     expect(stellen).toHaveLength(3)
     for (const stelle of stellen) {
@@ -249,17 +249,105 @@ describe('BAUPLAN 44 · Alle Motor-Aufrufstellen reichen die Dateiliste durch', 
         .split('\n')
         .map((z) => z.trim())
         .filter((z) => z && !z.startsWith('//'))
-      expect(zeilen).toHaveLength(15)
+      expect(zeilen).toHaveLength(16)
       expect(zeilen[13]).toMatch(/dateiListe|null/)
       // BAUPLAN 46: der 15. Parameter ist die Welle — im Lauf frisch abgefragt
       // (inWelleJetzt), im Chat ausdrücklich false.
-      expect(zeilen[14]).toMatch(/^inWelleJetzt\(\)$|^false/)
+      expect(zeilen[14]).toMatch(/^inWelleJetzt\(\),$|^false,/)
+      // BAUPLAN 52: der 16. sind die freigegebenen Kartenordner — am Block
+      // abgelegt, im Chat ausdrücklich leer (er spielt keine Prüfkarten ab).
+      expect(zeilen[15]).toMatch(/^block\?\.freieKartenOrdner \?\? \[\]$|^\[\]$/)
     }
   })
 
   it('nimmt die Dateiliste in blockAusfuehren entgegen und legt sie am Block ab', () => {
     expect(quelle).toMatch(/blockAusfuehren\(\{[^}]*dateiListe = null/)
     expect(quelle).toMatch(/\n\s+dateiListe,\n/)
+  })
+
+  it('nimmt die freigegebenen Kartenordner genauso entgegen (BAUPLAN 52)', () => {
+    expect(quelle).toMatch(/blockAusfuehren\(\{[^}]*freieKartenOrdner = \[\]/)
+    expect(quelle).toMatch(/\n\s+freieKartenOrdner,\n/)
+  })
+})
+
+// Freigegebene Kartenordner (BAUPLAN 52): Spielt FlowForge eine archivierte
+// Prüfkarte selbst ab und sie wird rot, bekommt GENAU EIN Prüfer den Ordner
+// dieser Karte zum Anpassen frei. Das ist eine benannte Ausnahme neben dem
+// eigenen Prüfordner, kein zweiter Prüfordner — und sie gilt nur für Prüfer.
+//
+// Rot-vor-Grün: Ohne liegtInFreigegebenerKarte wurde der Schreibversuch in
+// pruefung/pruefkarte-0049e5aa/alt.test.js mit „fremder Prüfordner" hart
+// abgelehnt — der Prüfer hätte die rote Karte nicht anpassen können, und die
+// aufgefrischte Fassung wäre nie entstanden.
+describe('BAUPLAN 52 · Freigegebene Kartenordner', () => {
+  function pruefer(datei, { pruefOrdner = 'pruefer-1a2b', frei = [], darfPruefen = true } = {}) {
+    return pruefeWerkzeug(
+      'Write',
+      { file_path: datei },
+      projekt,
+      false, // nurLesen
+      darfPruefen,
+      true, // lokaleKi
+      false, // nurLesenBefehle
+      false, // darfKartenAnlegen
+      false, // darfVorschlagen
+      false, // darfLaufVorschlag
+      false, // darfZuteilen
+      pruefOrdner,
+      [], // lieferscheinFrei
+      null, // dateiListe — ein Prüfer steht nie unter dem Datenvertrag
+      false, // inWelle
+      frei
+    )
+  }
+
+  it('lässt den Prüfer in die ihm freigegebene Karte schreiben', () => {
+    expect(
+      pruefer('pruefung/pruefkarte-0049e5aa/alt.test.js', { frei: ['pruefkarte-0049e5aa'] }).erlaubt
+    ).toBe(true)
+  })
+
+  it('sperrt jede andere Karte weiterhin — die Freigabe ist eine Liste, kein Muster', () => {
+    expect(
+      pruefer('pruefung/pruefkarte-99999999/alt.test.js', { frei: ['pruefkarte-0049e5aa'] }).gesperrt
+    ).toBe(texte.rechteFrage.fremderPruefordnerFuerAgent('pruefer-1a2b'))
+  })
+
+  it('sperrt ohne Freigabe wie bisher', () => {
+    expect(pruefer('pruefung/pruefkarte-0049e5aa/alt.test.js').gesperrt).toBe(
+      texte.rechteFrage.fremderPruefordnerFuerAgent('pruefer-1a2b')
+    )
+  })
+
+  it('lässt den eigenen Prüfordner unberührt davon', () => {
+    expect(pruefer('pruefung/pruefer-1a2b/neu.test.js', { frei: ['pruefkarte-0049e5aa'] }).erlaubt).toBe(
+      true
+    )
+  })
+
+  // Ein Bauer fasst pruefung/ nirgends an — auch nicht mit einer Freigabe im
+  // Gepäck. Sonst wäre die Prüfmappen-Sperre über einen Umweg aufweichbar.
+  it('gilt nur für Prüf-Blöcke', () => {
+    expect(
+      pruefer('pruefung/pruefkarte-0049e5aa/alt.test.js', {
+        frei: ['pruefkarte-0049e5aa'],
+        darfPruefen: false,
+        pruefOrdner: ''
+      }).gesperrt
+    ).toBe(texte.rechteFrage.pruefmappeGesperrtFuerAgent)
+  })
+
+  it('bleibt beim harten Nein für Bilder in der Prüfmappe', () => {
+    expect(
+      pruefer('pruefung/pruefkarte-0049e5aa/bild.png', { frei: ['pruefkarte-0049e5aa'] }).gesperrt
+    ).toBe(texte.rechteFrage.pruefmappeBildFuerAgent)
+  })
+
+  it('lässt sich mit einem leeren Eintrag nicht die ganze Mappe aufschließen', () => {
+    expect(pruefer('pruefung/fremd/x.test.js', { frei: ['', '  '] }).gesperrt).toBe(
+      texte.rechteFrage.fremderPruefordnerFuerAgent('pruefer-1a2b')
+    )
   })
 })
 
@@ -442,5 +530,107 @@ describe('BAUPLAN 44 · Melden und Sperren rechnen mit derselben Schreibweise', 
       )
       expect(ergebnis.fehler).toBe(tl.paketFehler(1, tl.dateiAusserhalb(eintrag)))
     }
+  })
+})
+
+// Der Prüfordner gilt auch für Befehle (Nacharbeit Bauschritt 52).
+//
+// Gemessen am 22.08.2026 mit genau diesen vier Zeilen, VOR der Reparatur:
+//   Prüfer, „echo x > pruefung/pruefkarte-ffffffff/pruefe.mjs"  → ERLAUBT
+//   Prüfer, „echo x > pruefung/pruefer-fremd/x.mjs"             → ERLAUBT
+//   Prüfer, „rm -rf pruefung/pruefkarte-ffffffff"               → FRAGE
+//   Bauer,  dieselbe Umleitung                                  → GESPERRT
+// Die Sperre hing allein an den Schreib-Werkzeugen, der Auftragstext versprach
+// aber „andere pruefkarte-Ordner sind gesperrt". Laufen zwei Prüfer nebeneinander,
+// konnte der eine die Karte des anderen per Befehl überschreiben — und die
+// überschriebene Fassung wanderte anschließend ins Archiv.
+//
+// Die vierte Zeile bleibt bewusst eine Rückfrage: Ein Befehl ohne Umleitung ist
+// aus dem Befehlstext nicht sicher zu lesen. Sie steht hier, damit die Grenze
+// gemessen dasteht statt behauptet.
+describe('BAUPLAN 52 · Der Prüfordner gilt auch für Umleitungen in Befehlen', () => {
+  function prueferBefehl(
+    command,
+    { pruefOrdner = 'pruefer-1a2b', frei = [], darfPruefen = true, dateiListe = null } = {}
+  ) {
+    return pruefeWerkzeug(
+      'Bash',
+      { command },
+      projekt,
+      false, // nurLesen
+      darfPruefen,
+      true, // lokaleKi
+      false, // nurLesenBefehle
+      false, // darfKartenAnlegen
+      false, // darfVorschlagen
+      false, // darfLaufVorschlag
+      false, // darfZuteilen
+      pruefOrdner,
+      [], // lieferscheinFrei
+      dateiListe,
+      false, // inWelle
+      frei
+    )
+  }
+
+  it('stoppt einen Prüfer, der in eine FREMDE Karte umleitet', () => {
+    const urteil = prueferBefehl('echo x > pruefung/pruefkarte-ffffffff/pruefe.mjs')
+    expect(urteil.frage).toBeUndefined()
+    expect(urteil.erlaubt).toBeUndefined()
+    expect(urteil.gesperrt).toBe(texte.rechteFrage.fremderPruefordnerFuerAgent('pruefer-1a2b'))
+    expect(urteil.tickerText).toBe(texte.ticker.fremderPruefordnerGesperrt)
+  })
+
+  it('stoppt ihn genauso im Ordner eines anderen Prüfers', () => {
+    const urteil = prueferBefehl('echo x > pruefung/pruefer-fremd/x.mjs')
+    expect(urteil.frage).toBeUndefined()
+    expect(urteil.gesperrt).toBe(texte.rechteFrage.fremderPruefordnerFuerAgent('pruefer-1a2b'))
+    expect(urteil.tickerText).toBe(texte.ticker.fremderPruefordnerGesperrt)
+  })
+
+  it('fragt bei einem Befehl OHNE Umleitung weiter nach — die ehrliche Grenze', () => {
+    // Kein Umleitungsziel, also nichts sicher Auslesbares: Es bleibt bei der
+    // üblichen Rückfrage (im Automodus also ein Ja). Genau das steht so im
+    // Bericht an Georg, statt als geschlossen zu gelten.
+    const urteil = prueferBefehl('rm -rf pruefung/pruefkarte-ffffffff')
+    expect(urteil.gesperrt).toBeUndefined()
+    expect(urteil.frage).toBe(texte.rechteFrage.befehl('rm -rf pruefung/pruefkarte-ffffffff'))
+  })
+
+  it('sperrt denselben Befehl bei einem Bauer wie bisher — an der Prüfmappe', () => {
+    const urteil = prueferBefehl('echo x > pruefung/pruefkarte-ffffffff/pruefe.mjs', {
+      darfPruefen: false,
+      pruefOrdner: '',
+      dateiListe: liste
+    })
+    expect(urteil.gesperrt).toBe(texte.rechteFrage.pruefmappeGesperrtFuerAgent)
+    expect(urteil.tickerText).toBe(texte.ticker.pruefmappeGesperrt)
+  })
+
+  it('lässt den eigenen Ordner und die freigegebene Karte durch', () => {
+    expect(prueferBefehl('node pruefe.mjs > pruefung/pruefer-1a2b/protokoll.txt').erlaubt).toBe(
+      true
+    )
+    expect(
+      prueferBefehl('node pruefe.mjs > pruefung/pruefkarte-0049e5aa/neu.mjs', {
+        frei: ['pruefkarte-0049e5aa']
+      }).erlaubt
+    ).toBe(true)
+  })
+
+  it('ändert außerhalb von pruefung/ nichts', () => {
+    // Ohne Dateiliste steht ein Prüfer unter keiner Schreibsperre — das war
+    // vorher so und bleibt so.
+    expect(prueferBefehl('node bauen.js > src/main/lauf.js').erlaubt).toBe(true)
+    expect(prueferBefehl('npx vitest run pruefung/pruefer-1a2b').erlaubt).toBe(true)
+  })
+
+  it('sperrt nicht auf einen Fehlgriff der Befehls-Zerlegung hin', () => {
+    // Ein Pfeil im Testfilter schreibt nichts — ein stehengebliebenes
+    // Anführungszeichen im „Ziel" verrät den Fehlgriff.
+    expect(
+      prueferBefehl('npx vitest run pruefung/pruefer-1a2b -t "pruefung/pruefkarte-ffffffff > x"')
+        .erlaubt
+    ).toBe(true)
   })
 })

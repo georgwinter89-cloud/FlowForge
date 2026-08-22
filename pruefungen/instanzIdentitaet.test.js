@@ -74,10 +74,14 @@ describe('BAUPLAN 41 · Prüfordner je Prüf-Instanz', () => {
     expect(pruefOrdnerFuer(bauerDef, eintrag)).toBe('')
   })
 
-  it('legt die Dateien einer Prüfkarte im Ordner ihres Prüfers ab', () => {
-    expect(pruefkartenOrdner('abcdefgh-1234', 'pruefer-3f1c8a2b')).toBe(
-      'pruefer-3f1c8a2b/pruefkarte-abcdefgh'
-    )
+  // Bis BAUPLAN 52 lag der Kartenordner IM Prüfordner der Instanz. Das war
+  // genau die Ebene zu tief: Aufbewahrte Prüfdateien rechnen sich den
+  // Projektordner über feste Aufwärts-Schritte aus und zeigten von dort auf
+  // pruefung/. Seit 52 spielt FlowForge die Karten selbst ab — zwei Kopien für
+  // zwei Prüfer braucht es nicht mehr, und der Ordner liegt wieder auf der
+  // Ebene, auf der die Dateien geschrieben wurden.
+  it('legt die Dateien einer Prüfkarte auf der Ebene ab, auf der sie geschrieben wurden', () => {
+    expect(pruefkartenOrdner('abcdefgh-1234')).toBe('pruefkarte-abcdefgh')
   })
 })
 

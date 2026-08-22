@@ -19,6 +19,7 @@ import crypto from 'node:crypto'
 import {
   MAPPEN_ERKLAERUNG,
   istMappenErklaerung,
+  istKartenOrdner,
   mappenErklaerungSchreiben,
   pruefmappeHatDateien
 } from '../src/main/pruefmappe.js'
@@ -193,6 +194,110 @@ describe('0.51.6 · Die Prüfmappen-Ansicht zeigt die Erklärung nicht', () => {
 
   it('zeigt die echten Prüfungen daneben', () => {
     mappenErklaerungSchreiben(projekt)
+    fs.writeFileSync(mappe(projekt, 'ticker.test.js'), 'test', 'utf8')
+    const erg = pruefmappeUebersicht(projekt)
+    expect(erg.ok).toBe(true)
+    expect(erg.dateien.map((d) => d.name)).toEqual(['ticker.test.js'])
+  })
+})
+
+// Seit BAUPLAN 52 legt FlowForge archivierte Prüfkarten SELBST in die Wurzel
+// der Mappe (pruefung/pruefkarte-<kurz>/) und spielt sie dort ab. Das sind alte
+// Dateien, keine Prüfungen dieses Laufs — sie brauchen dieselbe Ausnahme wie
+// die Erklärung, an denselben drei Zählstellen.
+//
+// Rot-vor-Grün: Ohne istKartenOrdner meldete pruefmappeHatDateien für eine
+// Mappe, in der nur ein ausgelegter Kartenordner liegt, „hat Prüfungen" — die
+// Baseline-Schranke schaltete damit eine Messung scharf, die nichts über
+// diesen Lauf aussagt; und pruefmappeUebersicht zeigte Georg Dutzende Dateien,
+// die kein Block geschrieben hat.
+describe('BAUPLAN 52 · Ausgelegte Prüfkarten sind keine Prüfungen dieses Laufs', () => {
+  it('erkennt einen Kartenordner in der Wurzel der Mappe', () => {
+    expect(istKartenOrdner('pruefkarte-0049e5aa')).toBe(true)
+  })
+
+  it('ignoriert dabei die Groß- und Kleinschreibung (Windows-Dateisystem)', () => {
+    expect(istKartenOrdner('Pruefkarte-0049e5aa')).toBe(true)
+  })
+
+  it('lässt einen gleichnamigen Ordner im Prüfordner eines Blocks dessen Sache sein', () => {
+    expect(istKartenOrdner('pruefer-aaaaaaaa/pruefkarte-0049e5aa')).toBe(false)
+  })
+
+  it('hält jeden anderen Eintrag für eine Prüfung', () => {
+    expect(istKartenOrdner('pruefer-aaaaaaaa')).toBe(false)
+    expect(istKartenOrdner('ticker.test.js')).toBe(false)
+    expect(istKartenOrdner('')).toBe(false)
+    expect(istKartenOrdner(undefined)).toBe(false)
+  })
+})
+
+describe('BAUPLAN 52 · Die Baseline hält eine Mappe mit nur ausgelegten Karten für leer', () => {
+  let projekt
+  let kartenId
+  beforeEach(() => {
+    projekt = fs.mkdtempSync(path.join(os.tmpdir(), 'flowforge-kartenordner-'))
+    kartenId = crypto.randomUUID()
+  })
+  afterEach(() => {
+    pruefkartenArchivLoeschen(projekt, kartenId)
+    fs.rmSync(projekt, { recursive: true, force: true })
+  })
+
+  it('zählt einen ausgelegten Kartenordner nicht als Prüfung', () => {
+    mappenErklaerungSchreiben(projekt)
+    fs.mkdirSync(mappe(projekt, 'pruefkarte-0049e5aa'), { recursive: true })
+    fs.writeFileSync(mappe(projekt, 'pruefkarte-0049e5aa', 'alt.test.js'), 'alt', 'utf8')
+    expect(pruefmappeHatDateien(projekt)).toBe(false)
+  })
+
+  it('zählt die echte Prüfung daneben weiterhin', () => {
+    mappenErklaerungSchreiben(projekt)
+    fs.mkdirSync(mappe(projekt, 'pruefkarte-0049e5aa'), { recursive: true })
+    fs.writeFileSync(mappe(projekt, 'ticker.test.js'), 'test', 'utf8')
+    expect(pruefmappeHatDateien(projekt)).toBe(true)
+  })
+
+  // Ohne diese Ausnahme wanderten FlowForges eigene ausgelegte Karten hinter
+  // die frische Prüfkarte — und würden beim nächsten Lauf als „Prüfung dieses
+  // Laufs" wieder eingelegt.
+  it('bewahrt ohne Prüfordner nur die losen Dateien auf, keinen Ordner', () => {
+    fs.mkdirSync(mappe(projekt, 'pruefkarte-0049e5aa'), { recursive: true })
+    fs.writeFileSync(mappe(projekt, 'pruefkarte-0049e5aa', 'alt.test.js'), 'alt', 'utf8')
+    fs.writeFileSync(mappe(projekt, 'ticker.test.js'), 'test', 'utf8')
+    pruefungenArchivieren(projekt, kartenId)
+
+    fs.rmSync(mappe(projekt), { recursive: true, force: true })
+    expect(pruefkarteEinlegen(projekt, kartenId)).toBe(true)
+    expect(fs.readdirSync(mappe(projekt, pruefkartenOrdner(kartenId)))).toEqual(['ticker.test.js'])
+  })
+
+  it('bewahrt gar nichts auf, wenn nur ein ausgelegter Kartenordner in der Mappe liegt', () => {
+    fs.mkdirSync(mappe(projekt, 'pruefkarte-0049e5aa'), { recursive: true })
+    fs.writeFileSync(mappe(projekt, 'pruefkarte-0049e5aa', 'alt.test.js'), 'alt', 'utf8')
+    pruefungenArchivieren(projekt, kartenId)
+    expect(pruefkartenArchivHatDateien(projekt, kartenId)).toBe(false)
+  })
+})
+
+describe('BAUPLAN 52 · Die Prüfmappen-Ansicht zeigt ausgelegte Karten nicht', () => {
+  let ablage
+  let projekt
+  beforeEach(async () => {
+    ablage = fs.mkdtempSync(path.join(os.tmpdir(), 'flowforge-kartenansicht-'))
+    const erg = await projektAnlegen('Kartenansicht', ablage)
+    expect(erg.ok).toBe(true)
+    projekt = erg.pfad
+  })
+  afterEach(() => {
+    projektVergessen(projekt)
+    fs.rmSync(ablage, { recursive: true, force: true })
+  })
+
+  it('lässt den Kartenordner samt Inhalt aus der Liste', () => {
+    mappenErklaerungSchreiben(projekt)
+    fs.mkdirSync(mappe(projekt, 'pruefkarte-0049e5aa'), { recursive: true })
+    fs.writeFileSync(mappe(projekt, 'pruefkarte-0049e5aa', 'alt.test.js'), 'alt', 'utf8')
     fs.writeFileSync(mappe(projekt, 'ticker.test.js'), 'test', 'utf8')
     const erg = pruefmappeUebersicht(projekt)
     expect(erg.ok).toBe(true)

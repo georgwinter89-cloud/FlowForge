@@ -20,6 +20,11 @@ Ausnahme: Sagt Georg „Führe das Zweit-Audit aus", gilt statt alldem die Proze
 - Versionsnummer in package.json an den Bauschritt koppeln: Bauschritt N → 0.N.0
   (Zwischen-Sessions ohne Bauschritt erhöhen die dritte Stelle). Erst dann bauen —
   Georg erkennt den Stand am Dateinamen der Setup-Datei.
+  **Die Nummer sinkt nie.** Wird ein Bauschritt außer der Reihe gebaut (52 nach 53),
+  gilt der Zweck vor dem Buchstaben: Entscheidung Georg, 22.08.2026 — Bauschritt 52
+  wurde 0.54.0, weil 0.52.0 älter ausgesehen hätte als die installierte 0.53.0 und der
+  Installer sich beim Drüberinstallieren quergestellt hätte. Die Kopplung setzt danach
+  bei der nächsthöheren freien Nummer fort.
 - `npm test` (Regel-Prüfungen in `pruefungen/`) muss grün sein, bevor gebaut wird.
 - Installierbare Version bauen; Build-Befehle sind die in package.json definierten Scripts.
 - Abschluss-Commit: „Bauschritt N: <Titel>".

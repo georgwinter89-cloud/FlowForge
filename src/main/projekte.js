@@ -18,7 +18,8 @@ import {
 } from '../shared/kartenRegeln.js'
 import { sicherungspunktAnlegen } from './sicherungspunkte.js'
 import { pruefkartenArchivLoeschen } from './pruefkarten.js'
-import { istMappenErklaerung } from './pruefmappe.js'
+import { istMappenErklaerung, istKartenOrdner } from './pruefmappe.js'
+import { stempelLoeschen } from './pruefkartenStempel.js'
 
 const PROJEKT_DATEI = 'projekt.json'
 const KARTEN_DATEI = 'karten.json'
@@ -354,9 +355,13 @@ export function karteLoeschen(projektPfad, id) {
     karten.splice(stelle, 1)
   })
   // Löschen einer Prüfkarte räumt ihre aufbewahrten Prüfdateien mit weg
-  // (BAUPLAN 18) — sonst sammelte sich verwaistes Archiv an.
-  if (ergebnis.ok && geloeschte?.sorte === 'pruefung')
+  // (BAUPLAN 18) — sonst sammelte sich verwaistes Archiv an. Seit BAUPLAN 52
+  // gilt dasselbe für ihren Stempel: Er entscheidet, ob FlowForge die Karte von
+  // selbst abspielt; ein verwaister Stempel wäre ein Auftrag ohne Auftraggeber.
+  if (ergebnis.ok && geloeschte?.sorte === 'pruefung') {
     pruefkartenArchivLoeschen(projektPfad, geloeschte.id)
+    stempelLoeschen(projektPfad, geloeschte.id)
+  }
   return ergebnis
 }
 
@@ -410,6 +415,12 @@ export function pruefmappeUebersicht(projektPfad, unterordner = '') {
     for (const eintrag of eintraege) {
       const voll = path.join(ordner, eintrag.name)
       if (eintrag.isDirectory()) {
+        // Die Ordner der von FlowForge abgespielten Prüfkarten (BAUPLAN 52)
+        // sind keine Prüfungen dieses Laufs, sondern alte Dateien, die
+        // FlowForge selbst zur Messung ausgelegt hat. Georg sähe sonst in der
+        // Prüfmappen-Ansicht Dutzende Dateien, die kein Block geschrieben hat.
+        const relativ = path.relative(mappe, voll).replaceAll(path.sep, '/')
+        if (istKartenOrdner(eigen ? eigen + '/' + relativ : relativ)) continue
         sammle(voll)
         continue
       }

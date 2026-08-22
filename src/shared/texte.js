@@ -1405,6 +1405,49 @@ export const texte = {
       'deine: Du musst sie in diesem Paket nicht beheben (FlowForge legt sie als Aufgaben-Karte ' +
       'ab), und sie zählen nicht als Fehlschlag deiner Arbeit. Was neu dazukommt, zählt sehr ' +
       'wohl. Das war vorher schon rot:\n' + ausgabe,
+    // Prüfkarten laufen von selbst (BAUPLAN 52): Was FlowForge rund um die
+    // Bauer dieses Zweigs gemessen hat, geht als Tatsache an den Prüfer — im
+    // Muster der Baseline. Nur ROTE Karten stehen hier; Grünes steht im Ticker
+    // und im Laufbericht und hätte im Auftrag nur Kontext gekostet.
+    // Ausdrücklich KEINE Reparatur-Runde: Zwischen zwei Bauern darf Rot
+    // legitim sein — der Prüfer entscheidet, was es bedeutet.
+    // Zwei Gruppen, nicht eine (gemessen 22.08.2026): Eine rote Karte wird
+    // GENAU EINEM Prüfer freigegeben, den Befund bekommen aber alle Prüfer, bei
+    // denen die Lieferung angekommen ist. Der alte Sammel-Satz forderte jeden
+    // von ihnen auf, die Dateien anzupassen — der zweite Prüfer lief damit in
+    // die harte Sperre „fremder Prüfordner", verbrannte einen Anlauf und sah
+    // aus, als hätte er sich nicht an die Regeln gehalten. „Passe die Dateien
+    // an" steht deshalb nur noch bei den Karten, die dieser Block wirklich
+    // anfassen darf (eintrag.darfAnpassen).
+    kartenRot: (eintraege, unschaerfe) => {
+      const zeile = (e) =>
+        `\n- „${e.titel}" (${e.was}, Ordner pruefung/${e.ordner}/):\n${e.ausgabe}\n`
+      const meine = eintraege.filter((e) => e.darfAnpassen)
+      const fremde = eintraege.filter((e) => !e.darfAnpassen)
+      return (
+        '\n\nAlte Prüfungen, die FlowForge selbst abgespielt hat (ohne KI, 0 Tokens): Diese ' +
+        'aufbewahrten Prüfungen aus früheren Läufen sind ROT. FlowForge hat sie rund um die ' +
+        'umsetzenden Blöcke gemessen, deren Lieferung bei dir angekommen ist. Deine Aufgabe ' +
+        'hier ist zu trennen: Ist das eine echte Regression (dann gehört sie in deine ' +
+        'Beanstandungen), oder ist die alte Prüfung nur veraltet? Verwirf nichts und lösche ' +
+        'nichts.' +
+        (unschaerfe
+          ? ' Ehrliche Grenze: Ein Teil davon wurde gemessen, während nebenan noch ein anderer ' +
+            'Block schrieb — dann sagt die Messung weniger, als sie zu sagen scheint.'
+          : '') +
+        (meine.length
+          ? '\n\nDIESE Kartenordner sind dir freigegeben: Ist die alte Prüfung nur veraltet, ' +
+            'passe die Dateien in ihrem Kartenordner an — FlowForge bewahrt die angepasste ' +
+            'Fassung hinter der Karte auf.\n' + meine.map(zeile).join('')
+          : '') +
+        (fremde.length
+          ? '\n\nDIESE Karten bearbeitet ein anderer Prüf-Block: Ihre Ordner sind für dich ' +
+            'gesperrt, jeder Schreibversuch dort wird abgelehnt. Beurteile nur, ob das eine ' +
+            'echte Regression ist, und schreibe das in deine Beanstandungen.\n' +
+            fremde.map(zeile).join('')
+          : '')
+      )
+    },
     // Übergabe an den nächsten Anlauf desselben Blocks nach einem Übertrag.
     uebertragFortsetzung: (uebergabe) =>
       '\n\nÜbergabe deines Vorgängers: Genau dieser Auftrag lief schon in einem früheren ' +
@@ -1726,15 +1769,29 @@ export const texte = {
   // seinen eigenen Unterordner in der Prüfmappe — sonst archiviert der erste
   // bestehende Prüfer die Tests aller anderen hinter seiner Prüfkarte.
   agentenPruefordner: {
-    zusatz: (ordner) =>
+    // freieKartenOrdner (BAUPLAN 52): Ordner abgespielter alter Prüfungen, die
+    // ROT sind und die genau DIESER Prüfer anpassen darf. Sie werden namentlich
+    // genannt — ein Muster („alles, was mit pruefkarte- anfängt") wäre eine
+    // Einladung, in fremde Karten zu schreiben.
+    zusatz: (ordner, freieKartenOrdner = []) =>
       '\n\nDEIN PRÜFORDNER (von FlowForge zugewiesen): pruefung/' +
       ordner +
       '/\nAlle deine Prüfungen und Sammel-Skripte gehören ausschließlich dorthin — nicht ' +
-      'direkt nach pruefung/ und nie in den Ordner eines anderen Prüf-Blocks (das ist gesperrt). ' +
+      'direkt nach pruefung/ und nie in den Ordner eines anderen Prüf-Blocks (das ist gesperrt — ' +
+      'auch für Befehle, die dorthin schreiben). ' +
       'Dein Prüfbefehl muss genau diesen Ordner ausführen (z.B. „npx vitest run pruefung/' +
       ordner +
-      '"). Nur was in deinem Ordner liegt, bewahrt FlowForge nach bestandener Prüfung hinter ' +
-      'deiner Prüfkarte auf.',
+      '"). Was in deinem Ordner liegt, bewahrt FlowForge nach bestandener Prüfung hinter ' +
+      'deiner Prüfkarte auf.' +
+      (freieKartenOrdner.length
+        ? '\nZusätzlich freigegeben sind genau diese Ordner abgespielter alter Prüfungen, die ' +
+          'gerade rot sind: ' +
+          freieKartenOrdner.map((o) => 'pruefung/' + o + '/').join(', ') +
+          '. Dort darfst du die alte Prüfung anpassen, wenn sie nur veraltet ist — FlowForge ' +
+          'bewahrt die angepasste Fassung hinter der zugehörigen Prüfkarte auf. Jeder andere ' +
+          'pruefkarte-Ordner gehört einem anderen Prüf-Block: gesperrt, auch über Befehle — ' +
+          'schreibe, lösche und verschiebe dort nichts.'
+        : ''),
     // Die Erklärung, die beim Leeren in der Prüfmappe zurückbleibt (0.51.6,
     // src/main/pruefmappe.js). Kurz halten: Sie landet im Kontext jedes
     // Blocks, der die Mappe ansieht.
@@ -1747,8 +1804,16 @@ export const texte = {
       '\n' +
       'Das Gedächtnis der Prüfungen steckt in den Prüfkarten des Projekts, nicht in diesem ' +
       'Ordner: Was eine Prüfung bestanden hat, bewahrt FlowForge hinter ihrer Prüfkarte auf ' +
-      'und legt es beim nächsten Lauf wieder hier ab — sobald diese Karte auf einen ' +
-      'Prüf-Block gezogen wurde.\n' +
+      'und legt es beim nächsten Lauf wieder hier ab.\n' +
+      '\n' +
+      'Während eines Laufs entstehen hier zwei Sorten Unterordner:\n' +
+      '\n' +
+      '- `pruefer-…` — die Arbeit eines Prüf-Blocks aus GENAU DIESEM Lauf.\n' +
+      '- `pruefkarte-…` — eine alte Prüfung, die FlowForge selbst wieder abgespielt hat, um ' +
+      'zu sehen, ob das Alte noch hält. Sie liegt nur so lange da, wie sie gebraucht wird.\n' +
+      '\n' +
+      'Beides ist kein Fund und kein Mangel, sondern der normale Betrieb — auch wenn hier ' +
+      'gerade gar nichts oder sehr viel liegt.\n' +
       '\n' +
       'Diese Datei ist die Erklärung, keine Prüfung: FlowForge zählt sie nirgends mit.\n'
   },
@@ -1764,7 +1829,25 @@ export const texte = {
       'bestanden und gehört in deine Beanstandungen. Die Prüfkarten:\n',
     eintrag: (titel, text, ordner) => `- „${titel}" (Dateien in pruefung/${ordner}/): ${text}\n`,
     eintragOhneDateien: (titel, text) =>
-      `- „${titel}" (keine aufbewahrten Prüfdateien — prüfe das Beschriebene mit frisch geschriebenen Prüfungen): ${text}\n`
+      `- „${titel}" (keine aufbewahrten Prüfdateien — prüfe das Beschriebene mit frisch geschriebenen Prüfungen): ${text}\n`,
+    // Zweiter Fall seit BAUPLAN 52: NICHT vom Nutzer gezogen, sondern von
+    // FlowForge selbst ausgewählt und schon abgespielt. Der Unterschied ist
+    // wichtig genug für einen eigenen Absatz: Hier steht das Ergebnis schon
+    // fest — der Prüfer soll nicht noch einmal messen, sondern einordnen.
+    einleitungGemessen: (gruen) =>
+      '\n\nZusätzlich von FlowForge — alte Prüfungen, bei denen kein Urteil herauskam: ' +
+      'FlowForge spielt aufbewahrte Prüfungen aus früheren Läufen selbst ab (ohne KI, ' +
+      '0 Tokens), sobald sie Dateien betreffen, an denen in diesem Lauf gearbeitet wurde. ' +
+      (gruen
+        ? `${gruen} davon ${gruen === 1 ? 'lief' : 'liefen'} sauber durch. `
+        : '') +
+      'Bei den folgenden konnte FlowForge nichts belegen — sie sind KEIN Fehlschlag und ' +
+      'gehören nicht in deine Beanstandungen. Sie stehen hier, damit du weißt, wo die ' +
+      'Absicherung dieses Laufs eine Lücke hat, und ob du dort selbst hinsehen willst:\n',
+    eintragGemessen: (titel, was, ausgang) => `- „${titel}" (${was}): ${ausgang}\n`,
+    ausgangNichtVergleichbar:
+      'rot, aber ohne Vergleichswert von vorher — daraus lässt sich kein Fehlschlag ableiten',
+    ausgangNichtGemessen: 'kein Urteil'
   },
   // Lokale Helfer-KI (Experiment, Wunsch Georg 13.08.2026): Recherche über
   // Ollama statt über Motor-Unteraufgaben — kostet kein Kontingent. Das lokale
@@ -3070,6 +3153,26 @@ export const texte = {
     unteraufgabenWieBlock: 'Wie der Block selbst',
     unteraufgabenWieBlockHinweis:
       'Unteraufgaben laufen auf demselben Modell wie ihr Block. Teurer, aber die Zuarbeit ist genauso gründlich wie der Block. Die drei Blickwinkel des Audits folgen ohnehin immer ihrem Block.',
+    // Prüfkarten laufen von selbst (BAUPLAN 52): zwei Zeitgrenzen, damit ein
+    // wachsendes Archiv den Lauf nie ausbremst. Sie ändern nur, wie OFT eine
+    // alte Prüfung läuft — nie, OB sie läuft: Jede ausgewählte Karte kommt
+    // mindestens einmal je Lauf dran, auch wenn beide Grenzen längst erreicht
+    // sind. Genau das war Georgs Bedingung (21.08.2026).
+    pruefkartenUeberschrift: 'Alte Prüfungen automatisch mitlaufen lassen',
+    pruefkartenDeckelMesspunkt: 'Höchstens Zeit je Messung',
+    pruefkartenDeckelMesspunktWahl: (ms) => `${Math.round(Number(ms) / 60000)} Minuten`,
+    pruefkartenDeckelMesspunktHinweis:
+      'FlowForge spielt aufbewahrte Prüfungen aus früheren Läufen von selbst ab — jeweils ' +
+      'direkt bevor und direkt nachdem ein Block etwas gebaut hat. Das kostet keine Tokens, ' +
+      'aber Zeit. Ist diese Grenze bei einer Messung erreicht, kommen die restlichen ' +
+      'Prüfungen erst beim nächsten Mal dran — sie fallen nicht weg, und der Ticker nennt ' +
+      'jede davon beim Namen. Wer viele langsame Prüfungen hat, stellt hier höher.',
+    pruefkartenDeckelLauf: 'Höchstens Zeit im ganzen Lauf',
+    pruefkartenDeckelLaufWahl: (ms) => `${Math.round(Number(ms) / 60000)} Minuten`,
+    pruefkartenDeckelLaufHinweis:
+      'Die Obergrenze über den ganzen Lauf hinweg. Ist sie erreicht, läuft nur noch, was in ' +
+      'diesem Lauf überhaupt noch nie gelaufen ist — die Zusage „jede ausgewählte Prüfung ' +
+      'mindestens einmal" gilt weiter. Alles andere wartet auf den nächsten Lauf.',
     uebertragUeberschrift: 'Sessions & Übertrag',
     uebertragTest: 'Test-Schalter: Übertrag schon bei etwa 10 %',
     uebertragTestHinweis:
@@ -3751,6 +3854,103 @@ export const texte = {
     // in der Welle die Startanleitung gesetzt hat.
     rauchtestRueckfall: (block) =>
       `Niemand in dieser Welle hat die Startanleitung gesetzt — die Nachbesserung geht an „${block}" (zuletzt fertig geworden).`,
+    // ——— Prüfkarten laufen von selbst (BAUPLAN 52) ————————————————————————
+    // FlowForge spielt archivierte Prüfungen selbst ab — ohne KI, 0 Tokens.
+    // Jede Zahl steht hier, und jeder Ausfall wird namentlich genannt: Der
+    // Zugsimulator-Befund (12.08.2026) hat gezeigt, dass alles, was nur „still
+    // übersprungen" wird, monatelang unbemerkt bleibt.
+    // ZWEI Zeilen je Messpunkt, keine gemeinsame. Gemessen (22.08.2026): Die
+    // eine Zahlen-Zeile stand VOR der Karten-Schleife, in der die Zahlen erst
+    // entstehen — sie meldete in acht Messpunkten immer „0 abgespielt, 0 ohne
+    // Urteil, 0 zurückgestellt" und dazu den widersprüchlichen Satz „0
+    // abgespielt, davon 2 reihum mitgenommen". Georg hätte daraus gelesen, dass
+    // die Funktion nie läuft. Der Plan steht deshalb vorher (er ist der Beleg,
+    // dass nichts still weggelassen wurde), das Ergebnis nachher.
+    kartenPlan: (was, wer, plan) =>
+      `Alte Prüfungen ${was} (${wer}): ${plan.ausgewaehlt} ausgewählt (ohne KI, 0 Tokens)` +
+      (plan.rotation ? `, davon ${plan.rotation} reihum mitgenommen` : '') +
+      `, ${plan.nichtBetroffen} nicht betroffen übersprungen` +
+      (plan.gezogen ? `, ${plan.gezogen} liegen schon bei einem Prüfer auf dem Schaubild` : '') +
+      (plan.beimPruefer
+        ? `, ${plan.beimPruefer} sind gerade einem Prüfer zur Anpassung überlassen`
+        : '') +
+      (plan.schonGelaufen ? `, ${plan.schonGelaufen} liefen in diesem Lauf schon` : '') +
+      `, ${plan.nichtAbspielbar} nicht abspielbar.`,
+    kartenErgebnis: (was, wer, zahlen) =>
+      `Alte Prüfungen ${was} (${wer}) durch: ${zahlen.ausgefuehrt} abgespielt, ` +
+      `davon ${zahlen.rot} rot, ` +
+      `${zahlen.nichtGemessen} ohne Urteil, ` +
+      `${zahlen.zurueckgestellt} auf später zurückgestellt.`,
+    kartenKeine: (was, wer) =>
+      `Alte Prüfungen ${was} (${wer}): keine Prüfkarte in diesem Projekt.`,
+    kartenNichtAbspielbar: (titel, grund) =>
+      `Alte Prüfung „${titel}" nicht abspielbar: ${grund}.`,
+    // Zwei Sätze, weil die Zusage nur für den Messpunkt-Deckel gilt. Gemessen
+    // (22.08.2026): Bei verbrauchtem LAUF-Deckel stand dreimal „Sie läuft in
+    // diesem Lauf noch mindestens einmal" — dabei läuft dann nur noch, was in
+    // diesem Lauf NIE lief. Ein Versprechen, das FlowForge nicht hält, ist
+    // schlimmer als die ehrliche Auskunft.
+    kartenZurueckgestellt: (titel, grund) =>
+      `Alte Prüfung „${titel}" auf später zurückgestellt: ${grund}. Sie läuft in diesem Lauf noch mindestens einmal.`,
+    kartenErstNaechsterLauf: (titel, grund) =>
+      `Alte Prüfung „${titel}" läuft jetzt nicht mehr: ${grund}. Sie ist in diesem Lauf schon gelaufen und kommt erst im nächsten wieder dran.`,
+    kartenNichtGemessen: (titel, grund) => `Alte Prüfung „${titel}" ohne Urteil: ${grund}.`,
+    kartenRotation: (titel) =>
+      `Alte Prüfung „${titel}" läuft reihum mit — sie war am längsten nicht dran.`,
+    kartenRot: (titel, was) =>
+      `Alte Prüfung „${titel}" ist ROT (${was}). Der Kartenordner bleibt liegen, damit der Prüfer hineinsehen kann.`,
+    kartenFreigegeben: (block, titel) =>
+      `„${block}" darf den Ordner der roten Prüfung „${titel}" bearbeiten — nur er, und nur diesen.`,
+    kartenAuftragGekuerzt: (block, anzahl) =>
+      `${anzahl} weitere rote alte ${anzahl === 1 ? 'Prüfung passt' : 'Prüfungen passen'} nicht mehr in den Auftrag von „${block}" — sie ${anzahl === 1 ? 'steht' : 'stehen'} im Laufbericht.`,
+    kartenAufgefrischt: (titel) =>
+      `Alte Prüfung „${titel}" wurde vom Prüfer angepasst — die neue Fassung ist jetzt die aufbewahrte.`,
+    kartenAuffrischenOhneQuelle: (titel) =>
+      `Alte Prüfung „${titel}" konnte nicht aufgefrischt werden: Im Kartenordner lag nichts mehr. Die aufbewahrte Fassung bleibt, wie sie war.`,
+    // Ohne Stempel ist eine frische Karte von einer Altkarte nicht zu
+    // unterscheiden — deshalb ein Fehlschlag mit Namen statt einer stillen
+    // Karte, die nie wieder von selbst läuft.
+    kartenStempelFehlt: (titel, fehler) =>
+      `Zur neuen Prüfkarte „${titel}" ließ sich nicht merken, welcher Befehl sie startet (${fehler}) — FlowForge kann sie später nicht von selbst abspielen.`,
+    kartenStempelKaputt:
+      'Die gemerkten Startbefehle der Prüfkarten waren nicht lesbar — FlowForge fängt damit von vorn an; die Karten selbst sind unberührt.',
+    // Der Neuanfang bleibt, aber der Verlust wird belegbar. Gemessen
+    // (22.08.2026): Ein Stempeln auf eine unlesbare Datei schrieb sie mit einer
+    // EINZIGEN Karte neu — die gemerkten Startbefehle aller übrigen Karten waren
+    // ohne eine eigene Meldung fort.
+    kartenStempelBeiseite:
+      'Die alte, unlesbare Datei mit den gemerkten Startbefehlen liegt jetzt als „stempel.json.kaputt" daneben — die Startbefehle der übrigen Prüfkarten sind damit erst einmal weg, aber nachschlagbar.',
+    // Ohne diesen Vermerk wählt die Rotation immer wieder dieselben Karten:
+    // Sie geht nach „am längsten nicht gelaufen", und eine Messung, die niemand
+    // notiert, hat nie stattgefunden. Gemessen: Bei blockiertem Schreiben zogen
+    // drei Messpunkte hintereinander dieselben zwei Karten.
+    kartenStempelNichtGemerkt: (titel) =>
+      `Bei „${titel}" ließ sich nicht merken, dass sie gerade gelaufen ist — die Reihum-Auswahl bleibt stehen und nimmt in diesem Lauf möglicherweise wieder dieselben Prüfungen.`,
+    // Ein liegengebliebener Kartenordner ist kein Fehlschlag der Prüfung: Sie
+    // lief gerade grün durch. Er wird deshalb eigens gemeldet — und geschützt
+    // stehen gelassen, statt ihn dem nächsten Block als frische Arbeit
+    // unterzuschieben.
+    kartenOrdnerBleibtLiegen: (titel, fehler) =>
+      `Der Ordner der alten Prüfung „${titel}" ließ sich nicht wegräumen (${fehler}) — er bleibt geschützt liegen, FlowForge versucht es beim nächsten Mal erneut.`,
+    kartenWelleUnschaerfe: (block, was) =>
+      `Alte Prüfungen ${was} von „${block}" nicht gemessen — nebenan schreibt noch jemand. Ein Urteil über einen halb geschriebenen Ordner wäre keins.`,
+    kartenUnveraendert: (block, was) =>
+      `Alte Prüfungen ${was} von „${block}" nicht erneut gemessen: Am Projektordner hat sich seit der letzten Messung nichts geändert — es gilt das Ergebnis von vorhin.`,
+    kartenAppLaeuft: (anzahl) =>
+      `${anzahl} alte ${anzahl === 1 ? 'Prüfung' : 'Prüfungen'} nicht gemessen: Die App läuft gerade im App-Tab — FlowForge nimmt ihr den Port nicht weg.`,
+    kartenPortFremd: (anzahl, port, besitzer) =>
+      `${anzahl} alte ${anzahl === 1 ? 'Prüfung' : 'Prüfungen'} nicht gemessen: Port ${port} ist von ${besitzer.name || 'einem Prozess'} (PID ${besitzer.pid}) belegt, der nicht zu diesem Lauf gehört — kein Urteil statt eines falschen Rots.`,
+    kartenPortAbgeraeumt: (p, port) =>
+      `Rest aus diesem Lauf beendet (${p.name || 'PID ' + p.pid}, PID ${p.pid}) — Port ${port} war für die alten Prüfungen belegt.`,
+    // Sanfter Stopp: Die Zusage „mindestens einmal je Lauf" wird noch einmal
+    // eingelöst, so weit die zwei Minuten reichen — und was dann fehlt, steht
+    // namentlich da statt gar nicht.
+    kartenAufholen:
+      'Sanft gestoppt — FlowForge holt jetzt noch die alten Prüfungen nach, die in diesem Lauf kein einziges Mal gelaufen sind (höchstens zwei Minuten).',
+    kartenAufholenOffen: (titel) =>
+      `Alte Prüfung „${titel}" ist in diesem Lauf gar nicht gelaufen — dafür reichte die Zeit nicht mehr.`,
+    kartenHartOhneAufholen:
+      'Sofort abgebrochen — die alten Prüfungen, die in diesem Lauf noch nicht gelaufen sind, bleiben ungemessen.',
     sicherungspunktAngelegt: 'Sicherungspunkt angelegt.',
     zurueckgesetzt: 'Projektordner auf den letzten Sicherungspunkt zurückgesetzt.',
     // Sicherungspunkte je Schreiber (BAUPLAN 45). „Strang" ist ein Fachwort —
@@ -4264,7 +4464,53 @@ export const texte = {
       'Auf einen Prüfer lassen sich nur Prüfkarten ziehen (die grünen Häkchen-Karten legt FlowForge nach jeder bestandenen Prüfung an). Aufgaben-Karten ziehst du in die Auswahl über dem Schaubild; Wissen und Entscheidungen kommen bei jedem Lauf ohnehin mit.',
     ersatzTitel: (zeit) => `Geprüft am ${zeit}`,
     ersatzText:
-      'Diese Prüfung wurde bestanden. Einzelheiten stehen im Laufbericht dieses Laufs.'
+      'Diese Prüfung wurde bestanden. Einzelheiten stehen im Laufbericht dieses Laufs.',
+    // Prüfkarten laufen von selbst (BAUPLAN 52): Warum eine Karte NICHT
+    // gelaufen ist — in Alltagssprache, weil dieselben Sätze im Ticker, im
+    // Laufbericht und im Auftrag des Prüfers stehen. Die Schlüssel sind die
+    // Gründe aus kartenAuswahl und befehlUmschreiben; ein unbekannter Grund
+    // fällt auf `unbekannt` zurück, damit nie eine leere Klammer dasteht.
+    grundNichtAbspielbar: {
+      ohneStempel:
+        'ohne Stempel — FlowForge weiß bei dieser Karte nicht, welcher Befehl sie startet',
+      ohneBefehl: 'kein Prüfbefehl gemerkt',
+      ordnerLeer: 'kein eigener Prüfordner gemerkt',
+      ordnerNichtImBefehl: 'der gemerkte Prüfbefehl nennt den Ordner gar nicht',
+      ungueltig: 'der umgeschriebene Prüfbefehl wäre nicht mehr erlaubt',
+      keineDatei: 'im Kartenordner passt keine Datei zu dem, was der Befehl ausführen will',
+      ohneDateien: 'es sind keine Prüfdateien aufbewahrt',
+      einlegen: 'die aufbewahrten Dateien ließen sich nicht in die Prüfmappe legen',
+      unbekannt: 'aus einem unbekannten Grund'
+    },
+    // Warum eine abgespielte Karte KEIN Urteil ergibt. Keiner dieser Fälle ist
+    // ein Rot (Vertrag G3/G6): Ein Testlauf, der nicht endet, nichts findet
+    // oder an einem belegten Port scheitert, belegt gar nichts.
+    grundNichtGemessen: {
+      abgebrochen: 'der Lauf wurde gestoppt, bevor die Prüfung durch war',
+      zeitlimit: 'die Prüfung war nach 90 Sekunden noch nicht fertig',
+      startFehler: 'die Prüfung ließ sich auf diesem Rechner gar nicht erst starten',
+      portBelegt: 'die Adresse, die die Prüfung braucht, war schon belegt',
+      appLaeuft: 'die App lief gerade im App-Tab — FlowForge nimmt ihr die Adresse nicht weg',
+      nichtsGemessen: 'die Prüfung lief zwar durch, hat aber gar keinen Test ausgeführt',
+      nichtVergleichbar:
+        'es gibt keine Messung von vorher aus derselben Runde, mit der sich das vergleichen ließe',
+      unbekannt: 'aus einem unbekannten Grund'
+    },
+    // Warum eine Karte in diesem Messpunkt zurückgestellt wurde (Notbremse,
+    // BAUPLAN 52): Sie läuft trotzdem noch mindestens einmal in diesem Lauf.
+    grundZurueckgestellt: {
+      messpunkt: 'die eingestellte Zeit für diesen Messpunkt ist aufgebraucht',
+      lauf: 'die eingestellte Zeit für alte Prüfungen in diesem Lauf ist aufgebraucht',
+      unbekannt: 'aus einem unbekannten Grund'
+    },
+    // Rückfall, wenn nicht einmal die GRUPPE bekannt ist. Gemessen
+    // (22.08.2026): grundText mit einer unbekannten Gruppe lieferte eine leere
+    // Zeichenkette — im Ticker stand dann „nicht abspielbar: ." Der versprochene
+    // Rückfall greift nur innerhalb einer bekannten Gruppe; dieser hier greift
+    // immer.
+    grundUnbekannt: 'aus einem unbekannten Grund',
+    phaseVor: (runde) => `vor Runde ${runde}`,
+    phaseNach: (runde) => `nach Runde ${runde}`
   },
   // Sonderläufe (BAUPLAN 30): Aufräum-Knöpfe der Karten-Seitenleiste.
   sonderlauf: {

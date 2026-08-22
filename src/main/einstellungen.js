@@ -12,6 +12,12 @@ import {
   adresseBereinigen,
   searxngAdresseBereinigen
 } from '../shared/lokalRegeln.js'
+import {
+  PRUEFKARTEN_DECKEL_MESSPUNKT_STANDARD,
+  PRUEFKARTEN_DECKEL_LAUF_STANDARD,
+  pruefkartenDeckelMesspunktBereinigen,
+  pruefkartenDeckelLaufBereinigen
+} from '../shared/pruefkartenRegeln.js'
 
 // Abo-Regel (SPEC §2, neu seit 0.46.4 — Entscheidung Georg, 19.08.2026): Der
 // Abo-Modus bleibt auch in veröffentlichten Versionen an. Anthropic sagt seit
@@ -105,7 +111,16 @@ const STANDARD = {
   // gewählt, die Frage kommt nicht wieder. Einziger Schreiber auf true ist
   // extraKostenBestaetigen() — der Einstellungen-Dialog kann den Wert weder
   // setzen noch zurücksetzen (einstellungenSpeichern liest ihn aus der Datei).
-  extraKostenBestaetigt: false
+  extraKostenBestaetigt: false,
+  // Prüfkarten laufen von selbst (BAUPLAN 52): Zeitgrenzen für das Abspielen
+  // archivierter Prüfungen. Sie ändern nur, wie OFT eine Karte läuft, nie ob —
+  // jede ausgewählte Karte kommt mindestens einmal je Lauf dran (Entscheidung
+  // Georg, 21.08.2026). Die Stufenlisten stehen in src/shared/pruefkartenRegeln.js,
+  // damit Dialog und Speichern dieselbe Liste sehen (die 0.51.3-Lehre: eine
+  // Stufe an zwei Orten heißt, der Dialog bietet an, was das Speichern
+  // stillschweigend zurückdreht).
+  pruefkartenDeckelMesspunktMs: PRUEFKARTEN_DECKEL_MESSPUNKT_STANDARD,
+  pruefkartenDeckelLaufMs: PRUEFKARTEN_DECKEL_LAUF_STANDARD
 }
 
 // Die Stufenliste hat seit 0.51.3 genau einen Wohnort (src/shared/lokalRegeln.js) —
@@ -170,6 +185,13 @@ export function einstellungenLaden() {
   // einem Wert, zu dem es keinen Auswahl-Eintrag mehr gibt, und die Wartezeit
   // im Motor wiche von der angezeigten ab.
   daten.lokaleAntwortGeduldMs = lokaleGeduldBereinigen(daten.lokaleAntwortGeduldMs)
+  // Prüfkarten-Deckel (BAUPLAN 52): an derselben Stelle bereinigt wie die
+  // Geduld — der Lauf liest die Werte direkt aus dieser Antwort und darf nie
+  // vor einer Zahl stehen, die im Dialog gar nicht wählbar ist.
+  daten.pruefkartenDeckelMesspunktMs = pruefkartenDeckelMesspunktBereinigen(
+    daten.pruefkartenDeckelMesspunktMs
+  )
+  daten.pruefkartenDeckelLaufMs = pruefkartenDeckelLaufBereinigen(daten.pruefkartenDeckelLaufMs)
   return {
     ok: true,
     einstellungen: daten,
@@ -342,6 +364,20 @@ export function einstellungenSpeichern(neu) {
       neu.lokaleAntwortGeduldMs === undefined
         ? lokaleGeduldBereinigen(einstellungenLaden().einstellungen.lokaleAntwortGeduldMs)
         : lokaleGeduldBereinigen(neu.lokaleAntwortGeduldMs),
+    // Prüfkarten-Deckel (BAUPLAN 52) — nach demselben Muster wie die Geduld
+    // darüber: Ein Aufrufer, der das Feld gar nicht kennt (undefined), darf
+    // Georgs Wahl nicht still auf den Standard zurückdrehen; alles andere wird
+    // auf eine gültige Stufe gezogen.
+    pruefkartenDeckelMesspunktMs:
+      neu.pruefkartenDeckelMesspunktMs === undefined
+        ? pruefkartenDeckelMesspunktBereinigen(
+            einstellungenLaden().einstellungen.pruefkartenDeckelMesspunktMs
+          )
+        : pruefkartenDeckelMesspunktBereinigen(neu.pruefkartenDeckelMesspunktMs),
+    pruefkartenDeckelLaufMs:
+      neu.pruefkartenDeckelLaufMs === undefined
+        ? pruefkartenDeckelLaufBereinigen(einstellungenLaden().einstellungen.pruefkartenDeckelLaufMs)
+        : pruefkartenDeckelLaufBereinigen(neu.pruefkartenDeckelLaufMs),
     // Lokale KI als Block-Agent (BAUPLAN 49): Häkchen und Feineinstellungen.
     // Fehlt lokalFein (ältere Aufrufer), bleibt alles Ollama-Standard.
     lokalBlockAgent: Boolean(neu.lokalBlockAgent),
