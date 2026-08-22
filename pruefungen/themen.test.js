@@ -86,6 +86,20 @@ describe('Bauschritt 30 · Vorschlagsart „thema" (Sammelform)', () => {
       tv.themaGleich('Login bauen')
     )
   })
+  // Karten-Index (BAUPLAN 53): Der Agent sieht im Verzeichnis nur noch die
+  // ersten 8 Zeichen der id — der Eintrag muss trotzdem die VOLLE tragen, denn
+  // angewandt wird er erst nach Georgs Klick im Sammel-Dialog.
+  it('nimmt die Kurz-Kennung an und trägt die volle id in den Eintrag', () => {
+    const lang = [
+      { id: 'feedbeef-1111-4111-8111-111111111111', sorte: 'wissen', titel: 'Aufbau', text: 'x', thema: 'Technik' }
+    ]
+    const urteil = themenVorschlagLeitplanken({
+      themen: [{ kartenId: 'feedbeef', thema: 'Architektur' }],
+      karten: lang
+    })
+    expect(urteil.ok).toBe(true)
+    expect(urteil.eintraege[0].kartenId).toBe(lang[0].id)
+  })
   it('„anlegen" verlangt jetzt ein Thema und kanonisiert es', () => {
     const ohne = vorschlagLeitplanken({ art: 'anlegen', titel: 'T', text: 'X', karten })
     expect(ohne.fehler).toBe(texte.kartenRegeln.themaFehlt(['Login', 'Technik']))
@@ -115,6 +129,22 @@ describe('Bauschritt 30 · paket_melden', () => {
     expect(paketMeldungPruefen({ aufgabenIds: ['zzz'], karten, ausgewaehlt, feldGefuellt: false }).fehler).toBe(
       tp.unbekannteId('zzz')
     )
+  })
+  // Karten-Index (BAUPLAN 53): Die gemeldete id wird zum Herkunfts-Stempel
+  // jeder Karte des Laufs UND zum Maßstab der Zuschnitt-Deckung — eine
+  // Kurzform deckte dort nichts ab.
+  it('nimmt die Kurz-Kennung an und meldet die volle id zurück', () => {
+    const lang = [
+      { id: 'feedbeef-1111-4111-8111-111111111111', sorte: 'aufgabe', titel: 'Login bauen', text: 'x', thema: 'Login', erledigt: false }
+    ]
+    expect(
+      paketMeldungPruefen({
+        aufgabenIds: ['feedbeef'],
+        karten: lang,
+        ausgewaehlt: [lang[0].id],
+        feldGefuellt: false
+      })
+    ).toEqual({ ok: true, aufgaben: [{ id: lang[0].id, titel: 'Login bauen' }] })
   })
   it('leer nur erlaubt, wenn das Wunsch-/Fehlerbild-Feld gefüllt war', () => {
     expect(paketMeldungPruefen({ aufgabenIds: [], karten, ausgewaehlt, feldGefuellt: true })).toEqual({

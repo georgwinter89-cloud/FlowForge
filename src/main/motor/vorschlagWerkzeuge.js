@@ -26,7 +26,8 @@ import {
   themaNormalisieren,
   themaSchluessel,
   kanonischesThema,
-  vorhandeneThemen
+  vorhandeneThemen,
+  kennungFuerLeitplanke
 } from '../../shared/kartenRegeln.js'
 import { kartenLaden } from '../projekte.js'
 
@@ -91,8 +92,14 @@ export function themenVorschlagLeitplanken({ themen, karten }) {
   const bekannt = vorhandeneThemen(karten)
   const eintraege = []
   const gesehen = new Set()
+  const alleKarten = Array.isArray(karten) ? karten : []
   for (const roh of liste) {
-    const kartenId = String(roh?.kartenId ?? '')
+    // Kurz-Kennung → volle id (BAUPLAN 53): Der Eintrag wird erst nach Georgs
+    // Klick angewandt (karteThemaSetzen) — eine Kurzform scheiterte dort
+    // Zeile für Zeile im schon offenen Sammel-Dialog.
+    const treffer = kennungFuerLeitplanke(alleKarten, roh?.kartenId)
+    if (treffer.fehler) return { fehler: treffer.fehler }
+    const kartenId = treffer.id
     const karte = nachId.get(kartenId)
     if (!karte) return { fehler: tv.unbekannteId(kartenId || '?') }
     if (gesehen.has(kartenId)) return { fehler: tv.themaDoppelt(kartenId) }
@@ -147,7 +154,10 @@ export async function vorschlagWerkzeugServer({ projektPfad, aufKartenVorschlag 
       kartenId: z
         .string()
         .optional()
-        .describe('id der betroffenen Karte aus karten_uebersicht (entfällt bei anlegen und thema)'),
+        .describe(
+          'Kennung der betroffenen Karte aus karten_uebersicht (Kurzform oder volle id) — ' +
+            'entfällt bei anlegen und thema'
+        ),
       titel: z
         .string()
         .optional()
@@ -164,7 +174,9 @@ export async function vorschlagWerkzeugServer({ projektPfad, aufKartenVorschlag 
         ),
       themen: liste(
           z.object({
-            kartenId: z.string().describe('id der Karte aus karten_uebersicht'),
+            kartenId: z
+              .string()
+              .describe('Kennung der Karte aus karten_uebersicht (Kurzform oder volle id)'),
             thema: z.string().describe(`Vorgeschlagenes Thema, höchstens ${THEMA_MAX} Zeichen`)
           })
         )
@@ -199,7 +211,16 @@ export async function vorschlagWerkzeugServer({ projektPfad, aufKartenVorschlag 
         }
       }
 
-      const karte = kartenId ? geladen.karten.find((k) => k.id === kartenId) : null
+      // Kurz-Kennung → Karte (BAUPLAN 53). Bleibt sie unauflösbar, gilt wie
+      // bisher „unbekannte id" aus den Leitplanken; mehrdeutig wird ehrlich
+      // gemeldet, statt eine der beiden Karten zu raten.
+      let karte = null
+      if (kartenId) {
+        const treffer = kennungFuerLeitplanke(geladen.karten, kartenId)
+        if (treffer.fehler) return fehler(treffer.fehler)
+        kartenId = treffer.id
+        karte = geladen.karten.find((k) => k.id === kartenId) ?? null
+      }
       const urteil = vorschlagLeitplanken({
         art,
         kartenId,

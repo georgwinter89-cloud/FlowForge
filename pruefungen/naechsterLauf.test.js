@@ -47,6 +47,26 @@ describe('Leitplanken von naechster_lauf_vorschlagen', () => {
     expect(urteil.kartenIds).toEqual(['a1'])
     expect(urteil.kartenTitel).toEqual(['Login bauen'])
   })
+  // Karten-Index (BAUPLAN 53): Vorgeschlagen werden nur noch Aufgaben-Karten.
+  // Wissen und Entscheidungen kommen als Verzeichnis automatisch in jeden
+  // Auftrag — sie hier zu nennen füllte die Auswahl wieder mit genau dem, was
+  // dieser Schritt aus ihr herausgenommen hat. Sie fallen still heraus, wie
+  // die Status-Karte es schon immer tat.
+  it('filtert Wissens- und Entscheidungs-Karten still heraus — sie kommen automatisch mit', () => {
+    const mitEntscheidung = [
+      ...karten,
+      { id: 'e1', sorte: 'entscheidung', titel: 'Farbwahl', text: 'Dunkel', erledigt: false }
+    ]
+    const urteil = laufVorschlagPruefen({
+      kartenIds: ['w1', 'a1', 'e1'],
+      empfehlung: 'Weiter mit dem Login.',
+      begruendung: 'Offen.',
+      karten: mitEntscheidung
+    })
+    expect(urteil.ok).toBe(true)
+    expect(urteil.kartenIds).toEqual(['a1'])
+    expect(urteil.kartenTitel).toEqual(['Login bauen'])
+  })
   it('verlangt eine gefüllte Empfehlung innerhalb der Längengrenze', () => {
     const leer = laufVorschlagPruefen({ kartenIds: ['a1'], empfehlung: '  ', karten })
     expect(leer.fehler).toBe(tl.empfehlungUngueltig(EMPFEHLUNG_MAX))

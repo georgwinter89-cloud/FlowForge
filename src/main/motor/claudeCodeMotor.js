@@ -23,6 +23,7 @@ import {
   UEBERTRAG_TEST_AUFSCHLAG_PUNKTE
 } from './schnittstelle.js'
 import { kartenWerkzeugServer } from './kartenWerkzeuge.js'
+import { listeAusText } from './werkzeugSchema.js'
 import { helferWerkzeugServer } from './helferWerkzeuge.js'
 import { webWerkzeugServer } from './webWerkzeuge.js'
 import { ollamaSpeicherStand } from './lokalerSpeicher.js'
@@ -151,10 +152,23 @@ const INTERNET_WERKZEUGE = new Set(['WebSearch', 'WebFetch'])
 // Karten-Werkzeuge (BAUPLAN 7): in-Prozess-Werkzeuge des „karten"-Servers.
 // Sie setzen die harten Kartenregeln selbst durch — keine Rückfrage nötig.
 const KARTEN_PRAEFIX = 'mcp__karten__'
-const KARTEN_NUR_LESEN = 'mcp__karten__karten_uebersicht'
+// Karten-Index (BAUPLAN 53): Seit die Übersicht nur noch Titel liefert, ist
+// das Nachlesen (karten_lesen) genauso rein lesend wie sie — bliebe es eine
+// einzelne Zeichenkette, wäre das neue Werkzeug unter „darf nur lesen" hart
+// gesperrt und die Hauptnutznießer (Paket schneiden, Diagnose, Angreifer,
+// Audit, Karten-Prüfer, Späher und der Co-Piloten-Chat) sähen nur Titel.
+const KARTEN_LESEN = 'mcp__karten__karten_lesen'
+const KARTEN_NUR_LESEN = new Set(['mcp__karten__karten_uebersicht', KARTEN_LESEN])
 // Audit (BAUPLAN 25): Karten anlegen ist die einzige Schreibarbeit des
 // nur-lesenden Audit-Blocks — freigeschaltet über darfKartenAnlegen.
 const KARTEN_ANLEGEN = 'mcp__karten__karte_anlegen'
+
+// Wie viele Karten will dieser karten_lesen-Aufruf sehen? Exportiert, damit
+// die Regel-Prüfung die Ticker-Zahl ohne Motor messen kann.
+export function kartenAnzahl(ids) {
+  const wert = listeAusText(ids)
+  return Array.isArray(wert) ? wert.length : 0
+}
 
 // Mensch-Werkzeuge (BAUPLAN 9): eine Frage stellen verändert nichts am Projekt —
 // erlaubt ohne Rückfrage, auch unter der Sperre „darf nur lesen" (der
@@ -692,12 +706,12 @@ export function pruefeWerkzeug(name, eingabe, projektPfad, nurLesen, darfPruefen
       return { gesperrt: texte.rechteFrage.nurLesenGesperrtFuerAgent, tickerText: texte.ticker.nurLesenGesperrt }
     return { erlaubt: true }
   }
-  // Karten-Werkzeuge zuerst: die Übersicht ist rein lesend, alles andere
-  // schreibt — und fällt damit unter die Sperre „darf nur lesen".
+  // Karten-Werkzeuge zuerst: Übersicht und Nachlesen sind rein lesend, alles
+  // andere schreibt — und fällt damit unter die Sperre „darf nur lesen".
   if (name.startsWith(KARTEN_PRAEFIX)) {
     if (
       nurLesen &&
-      name !== KARTEN_NUR_LESEN &&
+      !KARTEN_NUR_LESEN.has(name) &&
       !(darfKartenAnlegen && name === KARTEN_ANLEGEN)
     )
       return { gesperrt: texte.rechteFrage.nurLesenGesperrtFuerAgent, tickerText: texte.ticker.nurLesenGesperrt }
@@ -945,7 +959,17 @@ export function tickerZeilen(
     // Karten-Werkzeuge: die Übersicht meldet sich hier, Änderungen melden ihr
     // Ergebnis selbst aus dem Werkzeug heraus (angelegt/abgelehnt).
     if (block.name.startsWith(KARTEN_PRAEFIX)) {
-      if (block.name === KARTEN_NUR_LESEN) zeilen.push(t.liestKarten)
+      if (block.name === KARTEN_LESEN) {
+        // Der Kern von BAUPLAN 53 wäre sonst für Georg unsichtbar: Die Zahl
+        // sagt ihm, wie sparsam der Agent nachliest. listeAusText, weil über
+        // Ollamas Schnittstelle ein Listen-Argument als JSON-Text ankommt
+        // (BAUPLAN 49) — sonst stünde dort „0 Karten".
+        const anzahl = kartenAnzahl(e.ids)
+        // Bei null gar keine Zeile (Befund Prüfer 1): Ein Aufruf ohne
+        // Kennungen scheitert im nächsten Atemzug — „Liest 0 Karten im
+        // Volltext" behauptete einen Vorgang, den es nicht gab.
+        if (anzahl > 0) zeilen.push(t.liestKartenVolltext(anzahl))
+      } else if (KARTEN_NUR_LESEN.has(block.name)) zeilen.push(t.liestKarten)
       continue
     }
     // Mensch-Fragen melden sich aus der Lauf-Verwaltung heraus (Frage + Antwort

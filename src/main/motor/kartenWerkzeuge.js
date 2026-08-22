@@ -8,9 +8,25 @@
 // Lauf, Paket-Aufgaben bzw. der Chat) — FlowForge stempelt damit jede angelegte
 // oder geänderte Karte. Ohne Hol-Funktion gilt „vom Nutzer".
 import { z } from 'zod'
+import { liste } from './werkzeugSchema.js'
 import { texte } from '../../shared/texte.js'
-import { TITEL_MAX, TEXT_MAX, THEMA_MAX, vorhandeneThemen } from '../../shared/kartenRegeln.js'
+import {
+  TITEL_MAX,
+  TEXT_MAX,
+  THEMA_MAX,
+  vorhandeneThemen,
+  kurzKennung,
+  kennungenFuer,
+  kennungAufloesen
+} from '../../shared/kartenRegeln.js'
 import { kartenLaden, karteAnlegen, karteAendern, karteErledigtSetzen } from '../projekte.js'
+
+// Karten-Index (BAUPLAN 53): Höchstzahl der Kennungen je karten_lesen-Aufruf.
+// Es ist der EINZIGE Deckel — einen zweiten auf der Zeichenzahl braucht es
+// nicht: Der Kartentext ist FlowForges eigener und durch TEXT_MAX (400
+// Zeichen) hart begrenzt, 25 Karten sind damit höchstens rund 12.500 Zeichen.
+// (Anders als bei Fremdtext aus dem Netz, siehe webWerkzeuge.js.)
+export const KARTEN_LESEN_MAX = 25
 
 function antwort(text) {
   return { content: [{ type: 'text', text }] }
@@ -34,6 +50,73 @@ export function kartenZeile(karte) {
   return `[${sorteMarke(karte)}] ${karte.titel}: ${karte.text}`
 }
 
+// Zwei Darstellungen, nicht eine (BAUPLAN 53): Der Blockauftrag und das
+// Projektwissen der lokalen Helfer-KI brauchen den Volltext weiter — die
+// Übersicht bekommt die kurze Zeile. Dieselbe Sortenmarke wie oben, nur
+// ohne „: text": Der Index ist kein neues Format, es fällt nur der Text weg.
+export function kartenIndexZeile(karte) {
+  return `[${sorteMarke(karte)}] ${karte.titel}`
+}
+
+// Der Index, wie ihn karten_uebersicht ausliefert — als reine Funktion
+// exportiert, damit die Regel-Prüfungen ihn ohne Motor fahren können.
+// Sortierung und Kartenmenge bleiben unverändert (auch Prüfkarten stehen
+// drin); die Themenzeile bleibt am Ende wie bisher.
+export function uebersichtText(karten) {
+  const alle = Array.isArray(karten) ? karten : []
+  const kennung = kennungenFuer(alle)
+  const zeilen = alle.map((k) => `- ${kennung.get(k.id) ?? kurzKennung(k.id)} · ${kartenIndexZeile(k)}`)
+  const themen = vorhandeneThemen(alle)
+  return (
+    zeilen.join('\n') + (themen.length ? '\n\n' + texte.agentenKarten.themenZeile(themen) : '')
+  )
+}
+
+// Der Volltext bestimmter Karten (karten_lesen) — ebenfalls rein, ebenfalls
+// für die Prüfungen exportiert. Liefert { text, anzahl } oder { fehler }.
+// Doppelte Kennungen fallen still heraus (auch Kurzform und volle id
+// derselben Karte); eine unbekannte oder mehrdeutige Kennung ist dagegen eine
+// ehrliche Ablehnung: Ein stilles Weglassen ließe den Agenten glauben, die
+// Karte sei leer.
+export function kartenLesenErgebnis(karten, ids) {
+  const t = texte.agentenKarten
+  const roh = (Array.isArray(ids) ? ids : []).map((id) => String(id ?? '').trim()).filter(Boolean)
+  const gesehen = new Set()
+  const eindeutig = []
+  for (const eingabe of roh) {
+    const schluessel = eingabe.toLowerCase()
+    if (gesehen.has(schluessel)) continue
+    gesehen.add(schluessel)
+    eindeutig.push(eingabe)
+  }
+  if (eindeutig.length === 0) return { fehler: t.keineIds }
+  // Der Deckel steht NUR hier, nicht im Schema (gemessen Prüfer 1): Ein
+  // `liste(…, 25)` greift vor dem Handler und schickt dem Agenten englisches
+  // Roh-JSON („Too big: expected array to have <=25 items") — der deutsche
+  // Satz, der ihm sagt, was zu tun ist, käme nie an. Dieselbe Aufteilung wie
+  // beim Lieferschein (lieferscheinWerkzeuge.js): Listen-Felder ohne
+  // Schema-Deckel, die Grenze im Klartext. Gezählt wird nach dem Entdoppeln —
+  // 26 Kennungen mit einer Dublette sind 25 Karten.
+  if (eindeutig.length > KARTEN_LESEN_MAX)
+    return { fehler: t.zuVieleIds(KARTEN_LESEN_MAX, eindeutig.length) }
+  const treffer = []
+  const schonDa = new Set()
+  for (const eingabe of eindeutig) {
+    const aufgeloest = kennungAufloesen(karten, eingabe)
+    if (aufgeloest.fehler) return { fehler: aufgeloest.fehler }
+    if (schonDa.has(aufgeloest.karte.id)) continue
+    schonDa.add(aufgeloest.karte.id)
+    treffer.push(aufgeloest.karte)
+  }
+  const kennung = kennungenFuer(karten)
+  return {
+    text: treffer
+      .map((k) => `- ${kennung.get(k.id) ?? kurzKennung(k.id)} · ${kartenZeile(k)}`)
+      .join('\n'),
+    anzahl: treffer.length
+  }
+}
+
 // Baut den In-Prozess-Werkzeugkasten „karten" für einen Motor-Lauf.
 export async function kartenWerkzeugServer({ projektPfad, aufEreignis, holeHerkunft = null }) {
   const { createSdkMcpServer, tool } = await import('@anthropic-ai/claude-agent-sdk')
@@ -55,17 +138,38 @@ export async function kartenWerkzeugServer({ projektPfad, aufEreignis, holeHerku
 
   const uebersicht = tool(
     'karten_uebersicht',
-    'Listet alle Projektkarten von FlowForge auf (Status, Aufgaben, Entscheidungen, Wissen, ' +
-      'Prüfungen), mit der id für die anderen Karten-Werkzeuge und dem Thema jeder Karte.',
+    texte.agentenKarten.uebersichtBeschreibung,
     {},
     async () => {
       const geladen = kartenLaden(projektPfad)
       if (!geladen.ok) return fehlerAntwort(geladen.fehler)
-      const zeilen = geladen.karten.map((k) => `- id ${k.id} · ${kartenZeile(k)}`)
-      const themen = vorhandeneThemen(geladen.karten)
-      return antwort(
-        zeilen.join('\n') + (themen.length ? '\n\n' + texte.agentenKarten.themenZeile(themen) : '')
+      return antwort(uebersichtText(geladen.karten))
+    },
+    { alwaysLoad: true }
+  )
+
+  // Die Ergänzung zur Übersicht (BAUPLAN 53): Sie nennt nur Titel, dieses
+  // Werkzeug holt den Text der Karten, die der Agent wirklich braucht. Das
+  // Listen-Feld bleibt bewusst OHNE Schema-Deckel — sonst lehnte zod ab, bevor
+  // der Handler zu Wort kommt, und der Agent bekäme englisches Roh-JSON statt
+  // des Satzes, der ihm sagt, wie er die Anfrage aufteilt (gemessen Prüfer 1).
+  const lesen = tool(
+    'karten_lesen',
+    texte.agentenKarten.lesenBeschreibung(KARTEN_LESEN_MAX),
+    {
+      ids: liste(z.string()).describe(
+        `Kennungen aus karten_uebersicht (Kurzform oder volle id), höchstens ${KARTEN_LESEN_MAX} je Aufruf`
       )
+    },
+    async ({ ids }) => {
+      const geladen = kartenLaden(projektPfad)
+      if (!geladen.ok) return fehlerAntwort(geladen.fehler)
+      const ergebnis = kartenLesenErgebnis(geladen.karten, ids)
+      // Kein Ticker-Eintrag hier: Lesen ändert nichts — die Zeile
+      // („Liest N Karten im Volltext") setzt der Motor am Werkzeugaufruf,
+      // wie bei der Übersicht auch.
+      if (ergebnis.fehler) return fehlerAntwort(ergebnis.fehler)
+      return antwort(ergebnis.text)
     },
     { alwaysLoad: true }
   )
@@ -98,19 +202,22 @@ export async function kartenWerkzeugServer({ projektPfad, aufEreignis, holeHerku
       if (!ergebnis.ok) return abgelehnt(ergebnis.fehler)
       const karte = ergebnis.karten[ergebnis.karten.length - 1]
       melden(ergebnis.karten, texte.ticker.karteAngelegt(karte.titel))
-      return antwort(texte.agentenKarten.angelegt(karte))
+      // Die Kurz-Kennung gleich mitmelden (BAUPLAN 53): Der Agent will die
+      // neue Karte oft sofort zuteilen oder melden — sonst müsste er dafür
+      // die ganze Übersicht neu holen.
+      return antwort(texte.agentenKarten.angelegt(karte, kurzKennung(karte.id)))
     },
     { alwaysLoad: true }
   )
 
   const aktualisieren = tool(
     'karte_aktualisieren',
-    'Aktualisiert Titel und Inhalt einer bestehenden Karte (id aus karten_uebersicht). ' +
+    'Aktualisiert Titel und Inhalt einer bestehenden Karte (Kennung aus karten_uebersicht). ' +
       'Bei der Status-Karte bleibt der Titel fest — nur der Inhalt ist änderbar. ' +
       'Es gelten dieselben Längengrenzen wie beim Anlegen. Optional lässt sich das thema ' +
       'mitändern (z.B. bei einer alten Karte ohne Thema).',
     {
-      id: z.string().describe('id der Karte aus karten_uebersicht'),
+      id: z.string().describe('Kennung der Karte aus karten_uebersicht (Kurzform oder volle id)'),
       titel: z
         .string()
         .optional()
@@ -124,22 +231,26 @@ export async function kartenWerkzeugServer({ projektPfad, aufEreignis, holeHerku
     async ({ id, titel, text, thema }) => {
       const geladen = kartenLaden(projektPfad)
       if (!geladen.ok) return fehlerAntwort(geladen.fehler)
-      const bisher = geladen.karten.find((k) => k.id === id)
-      if (!bisher) return fehlerAntwort(texte.agentenKarten.unbekannteId(id))
+      // Ab hier zählt nur noch die VOLLE id (BAUPLAN 53): Der Agent nennt die
+      // Kurz-Kennung aus dem Index, gespeichert wird gegen die echte id —
+      // sonst schriebe karteAendern still ins Leere.
+      const aufgeloest = kennungAufloesen(geladen.karten, id)
+      if (aufgeloest.fehler) return fehlerAntwort(aufgeloest.fehler)
+      const bisher = aufgeloest.karte
       // Prüfkarten pflegt FlowForge selbst (BAUPLAN 18) — würde der Agent sie
       // umschreiben, passte der Kartentext nicht mehr zum aufbewahrten Archiv.
       if (bisher.sorte === 'pruefung')
         return abgelehnt(texte.kartenRegeln.pruefkarteNurFlowForge)
       const ergebnis = karteAendern(
         projektPfad,
-        id,
+        bisher.id,
         { titel: titel ?? bisher.titel, text, ...(thema !== undefined ? { thema } : {}) },
         herkunft()
       )
       if (!ergebnis.ok) return abgelehnt(ergebnis.fehler)
-      const karte = ergebnis.karten.find((k) => k.id === id)
+      const karte = ergebnis.karten.find((k) => k.id === bisher.id)
       melden(ergebnis.karten, texte.ticker.karteAktualisiert(karte.titel))
-      return antwort(texte.agentenKarten.aktualisiert(karte))
+      return antwort(texte.agentenKarten.aktualisiert(karte, kurzKennung(karte.id)))
     },
     { alwaysLoad: true }
   )
@@ -149,7 +260,9 @@ export async function kartenWerkzeugServer({ projektPfad, aufEreignis, holeHerku
     'Markiert eine Aufgaben-Karte als erledigt (oder öffnet sie mit erledigt=false wieder). ' +
       'Nur Aufgaben-Karten können erledigt werden.',
     {
-      id: z.string().describe('id der Aufgaben-Karte aus karten_uebersicht'),
+      id: z
+        .string()
+        .describe('Kennung der Aufgaben-Karte aus karten_uebersicht (Kurzform oder volle id)'),
       erledigt: z
         .boolean()
         .optional()
@@ -157,9 +270,16 @@ export async function kartenWerkzeugServer({ projektPfad, aufEreignis, holeHerku
     },
     async ({ id, erledigt }) => {
       const wert = erledigt ?? true
-      const ergebnis = karteErledigtSetzen(projektPfad, id, wert, herkunft())
+      // Erst laden und auflösen (BAUPLAN 53), dann setzen: Bis hierher kam die
+      // rohe Eingabe durch — eine Kurz-Kennung fände karteErledigtSetzen nicht
+      // und meldete „unbekannt", obwohl die Karte im Index steht.
+      const geladen = kartenLaden(projektPfad)
+      if (!geladen.ok) return fehlerAntwort(geladen.fehler)
+      const aufgeloest = kennungAufloesen(geladen.karten, id)
+      if (aufgeloest.fehler) return fehlerAntwort(aufgeloest.fehler)
+      const ergebnis = karteErledigtSetzen(projektPfad, aufgeloest.karte.id, wert, herkunft())
       if (!ergebnis.ok) return abgelehnt(ergebnis.fehler)
-      const karte = ergebnis.karten.find((k) => k.id === id)
+      const karte = ergebnis.karten.find((k) => k.id === aufgeloest.karte.id)
       melden(
         ergebnis.karten,
         wert ? texte.ticker.aufgabeErledigt(karte.titel) : texte.ticker.aufgabeGeoeffnet(karte.titel)
@@ -174,8 +294,10 @@ export async function kartenWerkzeugServer({ projektPfad, aufEreignis, holeHerku
     version: '1.0.0',
     instructions:
       'Projektkarten sind das Gedächtnis dieses FlowForge-Projekts. Lies und schreibe sie ' +
-      'ausschließlich über diese Werkzeuge — niemals über direkte Dateizugriffe. Jede neue ' +
+      'ausschließlich über diese Werkzeuge — niemals über direkte Dateizugriffe. ' +
+      'karten_uebersicht zeigt das Verzeichnis (Kennung, Sorte, Thema, Titel — ohne Text), ' +
+      'karten_lesen holt den Text der Karten, die du wirklich brauchst. Jede neue ' +
       'Karte bekommt ein Thema: bevorzugt ein vorhandenes, ein neues nur, wenn keines passt.',
-    tools: [uebersicht, anlegen, aktualisieren, erledigen]
+    tools: [uebersicht, lesen, anlegen, aktualisieren, erledigen]
   })
 }

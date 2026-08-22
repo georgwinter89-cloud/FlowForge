@@ -128,6 +128,23 @@ describe('BAUPLAN 44 · karten_zuteilen adressiert je Blocknummer genau eine Ins
       }).fehler
     ).toBe(tz.unbekannteBloecke('Bauer', gleichnamig.map((z) => z.bezeichnung).join(' | ')))
   })
+  // Karten-Index (BAUPLAN 53): Der Agent nennt die Kennung, die im Verzeichnis
+  // stand. Gespeichert werden muss die VOLLE id — die Zuteilung wird später
+  // mit `kartenIds.includes(k.id)` verbraucht und bräche sonst still: ein
+  // Block ohne Karten, ohne eine einzige Meldung.
+  it('nimmt die Kurz-Kennung an und teilt die volle id zu', () => {
+    const lang = [
+      { id: 'feedbeef-1111-4111-8111-111111111111', sorte: 'aufgabe', titel: 'Login bauen', text: 'x', erledigt: false }
+    ]
+    const urteil = kartenZuteilungPruefen({
+      zuteilung: [{ block: '2', kartenIds: ['feedbeef'] }],
+      karten: lang,
+      ausgewaehlt: [lang[0].id],
+      ziele
+    })
+    expect(urteil.ok).toBe(true)
+    expect(urteil.zuteilung).toEqual([['i-bauer', [lang[0].id]]])
+  })
   it('weist eine leere Zuteilung und Blöcke ohne Nachfahren klar ab', () => {
     expect(kartenZuteilungPruefen({ zuteilung: [], karten, ausgewaehlt, ziele }).fehler).toBe(
       tz.leereZuteilung

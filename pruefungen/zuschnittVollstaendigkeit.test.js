@@ -77,6 +77,21 @@ describe('BAUPLAN 44 · Jede gemeldete Aufgabe muss in einem Zuschnitt vorkommen
     )
   })
 
+  // Karten-Index (BAUPLAN 53): Der Agent nimmt hier dieselben Kennungen, die
+  // er im Verzeichnis gesehen hat — die Kurzform. Löst die Rechnung sie nicht
+  // auf, weist sie eine vollkommen richtige Meldung als „erfundene id" ab.
+  it('nimmt die Kurz-Kennung an und speichert die volle id im Zuschnitt', () => {
+    const langesPaket = [
+      { id: 'feedbeef-1111-4111-8111-111111111111', titel: 'Oberfläche aufräumen' }
+    ]
+    const gemeldet = meldung([zuschnitt('2', 'Oberfläche', ['feedbeef'])], {
+      ziele,
+      paket: langesPaket
+    })
+    expect(gemeldet.pakete[0].aufgabenIds).toEqual([langesPaket[0].id])
+    expect(zuschnittDeckung(ziele, langesPaket, [gemeldet]).fehlendeAufgaben).toEqual([])
+  })
+
   it('misst gegen das gemeldete Paket, nicht gegen die Zuschnitte — eine Rechnung, kein Textvergleich', () => {
     // Der Zuschnitt nennt eine Aufgabe, die gar nicht gemeldet wurde: Das ist
     // kein Deckungsfehler, aber es deckt auch nichts ab.

@@ -315,9 +315,29 @@ Kopfzeile unter dem Titel („zuletzt geändert vor 2 Std. · angelegt von Sessi
 ‚Login bauen' (Lauf 14.08., 11:08)"), klickbar zum Laufbericht; alte Karten ohne Herkunft
 zeigen nur das Datum. Die Herkunft wandert **nie** in Aufträge oder `karten_uebersicht`.
 
-Der Agent liest und schreibt Karten über eingebaute **Karten-Werkzeuge** (Übersicht, anlegen,
-aktualisieren, erledigen) — dieselben Regeln, hart durchgesetzt; abgelehnte Versuche sind im
-Liveticker sichtbar. FlowForges Verwaltungsdateien im Projektordner (projekt.json, karten.json,
+Der Agent liest und schreibt Karten über eingebaute **Karten-Werkzeuge** (Übersicht, lesen,
+anlegen, aktualisieren, erledigen) — dieselben Regeln, hart durchgesetzt; abgelehnte Versuche
+sind im Liveticker sichtbar.
+
+**Verzeichnis statt Volltext** (seit Bauschritt 53): `karten_uebersicht` liefert je Karte nur
+**Kennung, Sorte, Thema und Titel — ohne den Kartentext**; den vollen Text bestimmter Karten
+holt `karten_lesen` (höchstens 25 Kennungen je Aufruf, für mehr ruft der Agent erneut).
+Gemessen an der fertigen Fassung, Projekt „Zugsimulator" (83 Karten): die Ausgabe von
+`karten_uebersicht` fällt von 40.300 auf 7.319 Zeichen — **81,8 % weniger**, und kein
+einziger Kartentext bleibt darin stehen. Beide Werkzeugbeschreibungen sagen
+ausdrücklich, dass der Text in der Übersicht fehlt (ein Appell allein im Auftragstext hält
+nicht); beide sind unter „darf nur lesen" erlaubt, denn beide lesen nur. Der Deckel von 25
+steht im **Handler**, nicht im Schema: Sonst lehnte die Schema-Prüfung vorher ab, und beim
+Agenten landete englisches Roh-JSON statt des Satzes, der ihm sagt, wie er die Anfrage
+aufteilt. Ehrliche Grenze: Der Volltext kostet einen zweiten Werkzeugaufruf — ein Agent, der
+ihn unterlässt, urteilt über Titel. Die **Kennung** ist die auf 8 Zeichen gekürzte Karten-Kennung (statt der vollen
+36-Zeichen-UUID, die bei 83 Karten allein 2.300 Zeichen kostet); **jedes** Karten-Werkzeug
+nimmt beide Formen an. Kollidieren zwei Karten in ihren ersten 8 Zeichen, zeigt FlowForge
+**genau diesen beiden** ihre volle Kennung — sonst stünde dieselbe Kennung zweimal
+untereinander. Passt eine getippte Kurzform trotzdem auf mehrere Karten, rät FlowForge
+nicht, sondern nennt die vollen Kennungen zur Auswahl.
+
+FlowForges Verwaltungsdateien im Projektordner (projekt.json, karten.json,
 workflow.json, startanleitung.json, laufstand.json, naechster-lauf.json, chat.json — der
 Verlauf des Co-Piloten, §6 —, pruefbefehl.json — der Prüfbefehl des Tors, §4.3 — und die
 Laufberichte) sind für direkte Schreibzugriffe des
@@ -1853,16 +1873,42 @@ umstellbar wie jede Karte.
   bei Anthropic.
 - **Lauf-Ende-Benachrichtigung:** Ist das Fenster beim Laufende nicht im Vordergrund, meldet
   sich FlowForge per Windows-Benachrichtigung.
-- **Kontext-Zuführung:** Beim Start wählt die App Karten automatisch vor — festgenagelt auf
-  **Status-Karte (immer) + offene Aufgaben-Karten**; der Nutzer kann weitere Karten per
-  Drag & Drop in die Auswahl ziehen und vorausgewählte per Klick rauswerfen, dann Start.
-  Die gewählten Karten bekommt der Agent zu Beginn **jedes Blocks** frisch mit. Seit
-  Bauschritt 29 sitzen an der Kartenauswahl zwei Knöpfe: **„Alle Karten hinzufügen"**
-  (lädt Status-Karte, alle Entscheidungs- und Wissens-Karten und alle offenen Aufgaben —
-  erledigte Aufgaben und Prüfkarten bleiben draußen: Historie liefert der Laufbericht,
-  Prüfkarten haben ihren eigenen Weg über den Prüfer) und **„Standard-Auswahl"** (springt
-  auf die festgenagelte Vorauswahl zurück); einzelne Chips bleiben wie gewohnt änderbar.
-  Prüfkarten per Drag & Drop in die Auswahl werden freundlich abgelehnt (seit Bauschritt 30).
+- **Kontext-Zuführung — der Nutzer wählt die Arbeit, nicht die Unterlagen** (seit
+  Bauschritt 53): Die Auswahl über dem Schaubild zeigt **nur noch die offenen
+  Aufgaben-Karten** (plus die Status-Karte, die immer dabei ist). Vorausgewählte wirft
+  der Nutzer per Klick raus, eine erledigte Aufgabe zieht er per Drag & Drop wieder
+  herein. **Wissens- und Entscheidungs-Karten wählt er nicht mehr aus — sie kommen
+  immer mit**, und zwar als Verzeichnis (§3.1): Jeder Block sieht, DASS es die
+  Entscheidungs-Karte gibt, und liest sie mit `karten_lesen`, wenn er sie braucht.
+  Grund (Gespräch Georg, 21.08.2026): Relevanz ist genau das, was der Nutzer nicht
+  beurteilen kann — die Karten haben Agenten geschrieben, und mit wachsendem Bestand
+  sinkt seine Trefferquote, während die eines Agenten mit Verzeichnis steigt. Der
+  frühere Knopf „Alle Karten hinzufügen" (Bauschritt 29) ist damit gegenstandslos und
+  entfällt; an seiner Stelle steht **„Alle offenen Aufgaben"** — der Weg zurück, wenn der
+  Nutzer zu viel rausgeworfen hat (ohne ihn könnte er nach dem letzten × keinen Lauf mehr
+  starten und müsste jede Karte einzeln zurückziehen).
+  Prüfkarten per Drag & Drop in die Auswahl werden
+  freundlich abgelehnt (seit Bauschritt 30), Wissens-, Entscheidungs- und Status-Karten
+  ebenso — mit dem ehrlichen Grund, dass sie ohnehin dabei sind.
+  **Was ein Block im Auftrag bekommt:** den **Volltext** der Karten, um die es geht (die
+  Status-Karte immer, dazu die zugeteilten bzw. — ohne Zuteilung — die gewählten
+  Aufgaben-Karten), und darunter das **Verzeichnis der übrigen lebenden Karten**. Beides zu
+  Beginn **jedes Blocks** frisch gelesen. Wissens- und Entscheidungs-Karten stehen
+  trotzdem in der Auswahl-Menge des Laufs — sonst könnte die Auftragsquelle sie keinem
+  Block zuteilen (unten).
+  **Erledigte Aufgaben und Prüfkarten stehen NICHT im Verzeichnis** — an ihnen arbeitet
+  kein Block, und `karten_zuteilen` weist sie ohnehin ab; gemessen waren sie 33 von 83
+  Zeilen, 842 Tokens je Block. Wer sie braucht (Karten-Prüfer, Themen-Sortierer), holt
+  sich mit `karten_uebersicht` die vollständige Liste; der Verzeichnis-Kopf sagt das.
+  **Die Rechnung, ehrlich** (gemessen an denselben 83 Karten, Kette Paket schneiden →
+  Bauer → Prüfer → Sessionende): Das Verzeichnis macht jeden Auftrag um rund 1.250 Tokens
+  **größer**. Es zahlt sich, weil dafür kein Block dieser Kette mehr `karten_uebersicht`
+  aufruft — ein Aufruf kostete vorher 11.515 Tokens. Deshalb steht in den Aufträgen
+  ausdrücklich, dass das Verzeichnis schon da ist: Wer beides täte, zahlte doppelt. Der
+  eigentliche Gewinn ist aber nicht der Token-Saldo, sondern dass **kein Block mehr blind
+  ist** — vorher sah ein Bauer die Entscheidungs-Karte nur, wenn der Nutzer vorher „Alle
+  Karten hinzufügen" gedrückt hatte (dieser Zustand kostete 31.547 statt heute 14.785
+  Tokens für dieselben vier Aufträge).
 - **Karten-Zuteilung** (seit Bauschritt 29): Damit „alle Karten" nicht jeden Agenten
   flutet, teilen die Auftragsquellen-Blöcke (Paket schneiden, Diagnose) über das
   Werkzeug `karten_zuteilen` je nachfolgendem Block die Karten zu, die er wirklich
@@ -1881,8 +1927,21 @@ umstellbar wie jede Karte.
   die Status-Karte fällt still heraus (sie ist immer dabei). Ab der Zuteilung bekommt
   jeder genannte Block nur noch seine Teilmenge in den Auftrag; dasselbe gilt fürs
   Projektwissen der lokalen Helfer-KI (das Fenster kleiner Modelle verträgt keine
-  Kartenflut). **Rückfall ohne Bruch:** Wird das Werkzeug nicht benutzt oder ein Block
-  nicht genannt, bekommt er wie bisher die volle Auswahl. Die Zuteilung wandert in den
+  Kartenflut). **Rückfall in zwei Fällen** (seit Bauschritt 53 unterschieden): Hat in
+  diesem Lauf noch niemand zugeteilt, bekommt ein Block die gewählten Aufgaben-Karten im
+  Volltext. Hat eine Auftragsquelle zugeteilt und diesen Block dabei übergangen, obwohl
+  er in ihrem Nachfahren-Bereich lag, bekommt er nur die Status-Karte — das Übergehen
+  war eine Entscheidung. Die Auftragsquelle selbst ist nie ihr eigener Nachfahre und
+  behält deshalb ihre Grundlage, auch in einer Reparatur-Runde oder nach einem Übertrag;
+  vorher hätte ausgerechnet sie nach der eigenen Zuteilung genau eine Karte gesehen — und
+  das gilt auch für eine **zweite** Auftragsquelle im Schaubild, die Nachfahre der ersten
+  ist (Vorlage „Bug jagen"). Der Bereich wandert mit in den Laufstand; ein Laufstand von
+  vor Bauschritt 53 kennt ihn nicht und fällt still auf das alte Verhalten zurück.
+  **Ehrliche Grenze:** Teilt die Auftragsquelle sparsam zu, sehen auch Prüfer und
+  Sessionende nur noch die Status-Karte im Volltext — sie müssen die Aufgaben, die sie
+  abhaken oder beurteilen wollen, über das Verzeichnis nachlesen. Das ist gewollt (Kontext
+  ist der teuerste Teil des Laufs), kostet aber einen Werkzeugaufruf; der Verzeichnis-Kopf
+  im Auftrag sagt es jedem Block ausdrücklich. Die Zuteilung wandert in den
   Laufstand (Wiederaufnahme nach Neustart) und steht mit Kartenzahl je Block im Ticker
   und im Laufbericht — seit Bauschritt 44 mit der Blocknummer („Karten verteilt:
   Block 3 ‚Bauer · UI' 4 | Block 4 ‚Prüfer · UI' 2 …"), sonst ergäben zwei
@@ -1899,11 +1958,12 @@ umstellbar wie jede Karte.
   Schaubild-Tab (kein blockierender Dialog): Empfehlung plus Karten-Chips, dazu
   **„Übernehmen"** (die Auswahl springt exakt auf den Vorschlag; danach wie gewohnt
   änderbar — das ist das Bearbeiten) und **„Verwerfen"**; ignorieren geht immer. Nur
-  existierende Karten-IDs zählen (gelöschte fallen beim Anzeigen still heraus,
-  Prüfkarten und Fantasie-IDs weist das Werkzeug ab, die Status-Karte fällt still
-  heraus — sie ist ohnehin immer dabei). Verfall statt Pflege: Ein Lauf-Start räumt
+  existierende Karten-Kennungen zählen (gelöschte fallen beim Anzeigen still heraus,
+  Prüfkarten und Fantasie-Kennungen weist das Werkzeug ab). Vorgeschlagen werden seit
+  Bauschritt 53 nur noch **Aufgaben-Karten** — Status, Wissen und Entscheidungen kommen
+  ohnehin mit und fallen still heraus. Verfall statt Pflege: Ein Lauf-Start räumt
   den Vorschlag ab (übernommen oder nicht), ein neues Sessionende ersetzt ihn; Läufe
-  ohne Sessionende erzeugen keinen. Die festgenagelte Standard-Vorauswahl bleibt der
+  ohne Sessionende erzeugen keinen. Die Vorauswahl aller offenen Aufgaben bleibt der
   Normalfall. Ehrlichkeit: Vorschlag samt Empfehlung steht im Ticker und im
   Laufbericht des erzeugenden Laufs.
 - **Parallelität** (seit Bauschritt 12): Bis zu **3 Workflows gleichzeitig, aber nur in

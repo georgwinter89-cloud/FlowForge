@@ -542,7 +542,10 @@ export const texte = {
     fehlerPflichtfeld: (blockName, feld) =>
       `Beim Block „${blockName}" ist das Pflichtfeld „${feld}" leer. Bitte ausfüllen — sonst startet der Lauf nicht.`,
     fehlerAuftragsquelle: (blockName, feld) =>
-      `Beim Block „${blockName}" ist das Feld „${feld}" leer, und in der Kartenauswahl ist keine offene Aufgaben-Karte. Trag einen Wunsch ins Feld ein — oder leg links eine Aufgaben-Karte an. Sonst wüsste der Agent nicht, was gebaut werden soll.`,
+      // Nennt seit BAUPLAN 53 den Rückweg-Knopf: Der häufigste Grund ist ab
+      // jetzt, dass Georg alle Aufgaben-Chips rausgeworfen hat — „leg eine
+      // Aufgaben-Karte an" wäre dann der falsche Rat (Befund Prüfer 2).
+      `Beim Block „${blockName}" ist das Feld „${feld}" leer, und über dem Schaubild steht keine offene Aufgaben-Karte. Drück „Alle offenen Aufgaben", um sie zurückzuholen, trag einen Wunsch ins Feld ein — oder leg links eine Aufgaben-Karte an. Sonst wüsste der Agent nicht, was gebaut werden soll.`,
     fehlerWaehrendLauf: 'Während ein Lauf läuft, kann die Kette nicht verändert werden.',
     fehlerWaehrendWarteschlange:
       'Dieser Workflow wartet in der Warteschlange auf seinen Start. Nimm ihn erst aus der Warteschlange, wenn du ihn ändern willst.',
@@ -783,22 +786,30 @@ export const texte = {
     startText: 'Projekt frisch angelegt. Noch nichts gebaut.'
   },
   kartenAuswahl: {
-    ueberschrift: 'Karten für den Lauf',
+    ueberschrift: 'Aufgaben für den Lauf',
+    // Nur noch die Aufgabe (BAUPLAN 53): Wissen, Entscheidungen und die
+    // Status-Karte kommen von selbst mit — welche davon ein Block wirklich
+    // braucht, ist nichts, was Georg beurteilen kann (die Karten haben Agenten
+    // geschrieben). Er wählt die Arbeit, nicht die Unterlagen.
     hinweis:
-      'Diese Karten bekommt der Agent zu Beginn jedes Blocks mit. Status-Karte und offene Aufgaben sind vorausgewählt — weitere Karten ziehst du aus der Seitenleiste hierher, rauswerfen per ×.',
+      'Du wählst hier nur, woran dieser Lauf arbeitet: die offenen Aufgaben-Karten. Wissens- und Entscheidungs-Karten kommen automatisch mit — jeder Block sieht sie im Verzeichnis und liest nach, was er braucht. Rauswerfen per ×, eine erledigte Aufgabe wieder hereinziehen per Drag & Drop.',
     immerDabei: 'immer dabei',
     entfernen: 'Aus der Auswahl nehmen',
-    // Alle Karten laden (BAUPLAN 29): ein Knopf lädt alles Wissenswerte in
-    // die Auswahl — Paket schneiden teilt dann zu, wer was bekommt.
-    alleHinzufuegen: 'Alle Karten hinzufügen',
-    alleHinzufuegenHinweis:
-      'Lädt Status-Karte, alle Entscheidungs- und Wissens-Karten und alle offenen Aufgaben in die Auswahl. Erledigte Aufgaben und Prüfkarten bleiben draußen. Paket schneiden bzw. Diagnose teilt den Folgeblöcken dann nur die Karten zu, die sie wirklich brauchen.',
-    standardAuswahl: 'Standard-Auswahl',
-    standardAuswahlHinweis:
-      'Springt zurück auf die übliche Vorauswahl: Status-Karte und offene Aufgaben.',
+    // Der Weg zurück (BAUPLAN 53): Die beiden alten Knöpfe „Alle Karten
+    // hinzufügen" und „Standard-Auswahl" sind gegenstandslos — der eine, weil
+    // Wissen und Entscheidungen ohnehin mitkommen. Ein Rückweg bleibt aber
+    // nötig: Wer alle Aufgaben-Chips rausgeworfen hat, kann sonst gar keinen
+    // Lauf mehr starten und müsste jede Karte einzeln zurückziehen.
+    alleAufgaben: 'Alle offenen Aufgaben',
+    alleAufgabenHinweis:
+      'Holt alle offenen Aufgaben-Karten zurück in die Auswahl — der Weg zurück, wenn du zu viel rausgeworfen hast.',
     // Prüfkarten per Drag & Drop (BAUPLAN 30, Kleinkram): freundlich abgelehnt.
     pruefkarteAbgelehnt:
-      'Prüfkarten gehören nicht in die Kartenauswahl — zieh sie stattdessen auf einen Prüfer-Block im Schaubild, dann führt er die aufbewahrte Prüfung erneut aus.'
+      'Prüfkarten gehören nicht in die Kartenauswahl — zieh sie stattdessen auf einen Prüfer-Block im Schaubild, dann führt er die aufbewahrte Prüfung erneut aus.',
+    // Wissen/Entscheidung/Status per Drag & Drop (BAUPLAN 53): kein Fehler,
+    // sondern eine gute Nachricht — sie sind längst dabei.
+    kommtAutomatisch:
+      'Das musst du nicht auswählen: Status-, Entscheidungs- und Wissens-Karten bekommt jeder Block dieses Laufs ohnehin — er sieht sie im Kartenverzeichnis und liest sie, wenn er sie braucht. Hier wählst du nur die Aufgaben.'
   },
   // Karten-Vorschlag fürs nächste Paket (BAUPLAN 28): die Vorschlags-Zeile an
   // der Kartenauswahl im Schaubild-Tab — eine Einladung, kein neuer Standard.
@@ -968,7 +979,7 @@ export const texte = {
       'Mit karte_vorschlagen schlägst du dem Nutzer Karten-Korrekturen vor — er ' +
       'entscheidet jede einzeln, FlowForge wendet sie an. Karten änderst du nie direkt.',
     unbekannteId: (id) =>
-      `Keine Karte mit der id ${id} — hol dir die ids mit karten_uebersicht.`,
+      `Keine Karte mit der Kennung ${id} — hol dir die Kennungen mit karten_uebersicht.`,
     pruefkarteTabu:
       'Prüfkarten pflegt FlowForge selbst — zu ihnen gibt es keine Vorschläge. Erwähne ' +
       'Auffälliges stattdessen in deinem Kartenbericht.',
@@ -1023,10 +1034,17 @@ export const texte = {
       'Mit naechster_lauf_vorschlagen deckst du den Tisch für den nächsten Lauf — ein ' +
       'Vorschlag an den Nutzer, keine Automatik. Ein erneuter Aufruf ersetzt den alten Vorschlag.',
     unbekannteIds: (ids) =>
-      `Keine Karte(n) mit diesen ids: ${ids} — nimm nur ids aus karten_uebersicht.`,
+      `Keine Karte(n) mit diesen Kennungen: ${ids} — nimm nur Kennungen aus karten_uebersicht.`,
     pruefkartenTabu:
       'Prüfkarten gehören nicht in die Kartenauswahl — sie haben ihren eigenen Weg über ' +
       'die Prüf-Blöcke. Lass sie aus dem Vorschlag weg.',
+    // Nur Aufgaben (BAUPLAN 53): Wissen, Entscheidungen und die Status-Karte
+    // fallen still heraus — nennt der Agent NUR solche, wäre der gespeicherte
+    // Vorschlag leer, und niemand erführe warum.
+    nurAufgaben:
+      'Keine dieser Karten ist eine Aufgaben-Karte. Vorschlagen kannst du nur offene ' +
+      'Aufgaben — Wissens-, Entscheidungs- und Status-Karten bekommt der nächste Lauf ' +
+      'ohnehin. Nenne offene Aufgaben, oder lass kartenIds leer, wenn nichts ansteht.',
     empfehlungUngueltig: (max) =>
       `Abgelehnt: empfehlung muss gefüllt sein — ein Satz in Alltagssprache, höchstens ${max} Zeichen.`,
     gespeichert: (anzahl) =>
@@ -1038,10 +1056,15 @@ export const texte = {
   agentenKartenZuteilung: {
     werkzeugBeschreibung:
       'Teilt den nachfolgenden Blöcken dieses Laufs die Karten zu, die sie wirklich ' +
-      'brauchen — je Eintrag eine Blocknummer und die Karten-IDs aus der Kartenauswahl. ' +
+      'brauchen — je Eintrag eine Blocknummer und die Kennungen der Karten. ' +
       'Adressiert wird über die Blocknummer, denn zwei Blöcke können gleich heißen; jede ' +
-      'Nummer trifft genau einen Block. Nicht genannte Blöcke bekommen wie bisher die volle ' +
-      'Kartenauswahl; die Status-Karte ist immer dabei.',
+      // Sagte bis zur Nacharbeit „bekommen wie bisher die volle Kartenauswahl"
+      // — das Gegenteil dessen, was seit BAUPLAN 53 geschieht (gemessen
+      // Prüfer 2). Diese Beschreibung steht in JEDEM Turn im Fenster; sie wiegt
+      // schwerer als jeder Auftragstext.
+      'Nummer trifft genau einen Block. Wen du NICHT nennst, der bekommt nur die ' +
+      'Status-Karte im Volltext und muss alles Weitere selbst nachlesen — du entscheidest ' +
+      'also auch für die, die du auslässt.',
     serverHinweis:
       'Mit karten_zuteilen bekommt jeder nachfolgende Block nur die Karten in den ' +
       'Auftrag, die er wirklich braucht — Kontext ist der teuerste Teil des Laufs. ' +
@@ -1051,9 +1074,17 @@ export const texte = {
     // eine Adresse — dieselbe Bezeichnung, die Vorspann und Ticker nennen.
     auftragZusatz: (bezeichnungen) =>
       '\nZum Schluss: Teil mit dem Werkzeug karten_zuteilen den nachfolgenden Blöcken ' +
-      'dieses Laufs die Karten aus der Kartenauswahl zu, die sie für ihre Arbeit ' +
-      'wirklich brauchen (je Eintrag: block = die Blocknummer, kartenIds = ids aus der ' +
-      'Kartenauswahl oben). Die nachfolgenden Blöcke sind:\n' +
+      'dieses Laufs die Karten zu, die sie für ihre Arbeit wirklich brauchen ' +
+      '(je Eintrag: block = die Blocknummer, kartenIds = Kennungen aus dem ' +
+      // Karten-Index (BAUPLAN 53): Der Auftrag zeigt oben nicht mehr „die
+      // Kartenauswahl", sondern Volltext plus ein Verzeichnis ALLER Karten —
+      // darunter erledigte Aufgaben und Prüfkarten, die das Werkzeug hart
+      // abweist. Ohne diesen Halbsatz verbrennt die Auftragsquelle eine Runde
+      // an einer Ablehnung, die sie nicht kommen sah.
+      'Verzeichnis oben — erledigte Aufgaben und Prüfkarten kannst du nicht ' +
+      'zuteilen, sie gehören diesem Lauf nicht). Wo dir der Titel nicht reicht, ' +
+      'lies die Karte vorher mit karten_lesen — sonst teilst du nach Titeln zu. ' +
+      'Die nachfolgenden Blöcke sind:\n' +
       bezeichnungen.map((b) => '- ' + b).join('\n') +
       // Empfänger im Auftrag (BAUPLAN 43): Dieser Auftrag trägt zwei Blocklisten
       // — diese hier (alle Nachfahren, denn Karten kann jeder brauchen) und die
@@ -1067,8 +1098,10 @@ export const texte = {
       '„Wer bekommt, was du lieferst" stehen; Karten kann auch jemand brauchen, dem du ' +
       'nichts lieferst. Sei sparsam — Kontext ist der teuerste Teil des Laufs: Jeder Block bekommt ' +
       'nur, was er wirklich braucht (die Status-Karte ist immer dabei; eine leere ' +
-      'Liste heißt „nur die Status-Karte"). Blöcke, die du nicht nennst, bekommen ' +
-      'wie bisher die volle Auswahl.',
+      'Liste heißt „nur die Status-Karte"). Wen du nicht nennst, der bekommt genau ' +
+      'das: die Status-Karte und das Verzeichnis — er kann jede Karte selbst ' +
+      'nachlesen, aber du hast dann für ihn entschieden. Nenne deshalb jeden Block, ' +
+      'der etwas Bestimmtes braucht.',
     leereZuteilung:
       'Abgelehnt: zuteilung muss mindestens einen Eintrag mit Blocknummer enthalten.',
     keineNachfolger:
@@ -1077,10 +1110,11 @@ export const texte = {
       `Keine nachfolgenden Blöcke unter dieser Adresse: ${namen}. ` +
       `Zuteilen kannst du an: ${gueltig} — trage im Feld block die Blocknummer ein.`,
     fremdeKarten: (ids) =>
-      `Diese Karten gehören nicht zur Kartenauswahl dieses Laufs: ${ids} — ` +
-      'zuteilen kannst du nur Karten aus der Kartenauswahl in deinem Auftrag.',
+      `Diese Karten gehören nicht zu diesem Lauf: ${ids} — zuteilen kannst du nur ` +
+      'offene Aufgaben-Karten sowie Wissens- und Entscheidungs-Karten; erledigte ' +
+      'Aufgaben und Prüfkarten nicht.',
     gespeichert: (zeilen) =>
-      `Zuteilung gespeichert: ${zeilen}. Nicht genannte Blöcke bekommen die volle Auswahl.`
+      `Zuteilung gespeichert: ${zeilen}. Nicht genannte Blöcke bekommen die Status-Karte und das Verzeichnis.`
   },
   // Paket melden (BAUPLAN 30, Herkunft): Die Auftragsquellen-Blöcke melden,
   // an welchen Aufgaben-Karten der Lauf arbeitet — FlowForge stempelt damit
@@ -1088,24 +1122,25 @@ export const texte = {
   agentenPaket: {
     werkzeugBeschreibung:
       'Meldet FlowForge, welche offenen Aufgaben-Karten dieses Arbeitspaket bearbeitet ' +
-      '(ids aus der Kartenauswahl). FlowForge vermerkt damit an jeder Karte, die in diesem ' +
+      '(ihre Kennungen aus deinem Auftrag). FlowForge vermerkt damit an jeder Karte, die in diesem ' +
       'Lauf entsteht oder sich ändert, bei welcher Aufgabe das geschah. Leer, wenn der ' +
       'Auftrag allein aus dem Wunsch- bzw. Fehlerbild-Feld kam.',
     serverHinweis:
       'Mit paket_melden benennst du die Aufgaben-Karten deines Pakets — ein erneuter Aufruf ersetzt die Meldung.',
     auftragZusatz:
       '\nSobald feststeht, welche Aufgaben-Karte(n) das Paket bearbeitet, melde sie mit dem ' +
-      'Werkzeug paket_melden (aufgabenIds = ids der offenen Aufgaben-Karten aus der ' +
-      'Kartenauswahl oben; leer, wenn dein Auftrag allein aus dem Feld kam). FlowForge ' +
+      'Werkzeug paket_melden (aufgabenIds = Kennungen der OFFENEN Aufgaben-Karten, die ' +
+      'oben im Volltext stehen; leer, wenn dein Auftrag allein aus dem Feld kam). FlowForge ' +
       'vermerkt damit an jeder Karte, die dieser Lauf anlegt oder ändert, aus welcher ' +
       'Aufgabe sie entstand.',
     leerOhneFeld:
       'Abgelehnt: aufgabenIds ist leer, aber das Wunsch-/Fehlerbild-Feld dieses Blocks ist ' +
-      'auch leer — die offenen Aufgaben-Karten der Kartenauswahl sind dein Auftrag; nenne die, ' +
+      'auch leer — die offenen Aufgaben-Karten oben sind dein Auftrag; nenne die, ' +
       'die du dir vornimmst.',
-    unbekannteId: (id) => `Keine Karte mit der id ${id} — nimm nur ids aus der Kartenauswahl.`,
+    unbekannteId: (id) =>
+      `Keine Karte mit der Kennung ${id} — nimm nur Kennungen aus deinem Auftrag.`,
     keineOffeneAufgabe: (titel) => `„${titel}" ist keine offene Aufgaben-Karte.`,
-    nichtInAuswahl: (titel) => `„${titel}" gehört nicht zur Kartenauswahl dieses Laufs.`,
+    nichtInAuswahl: (titel) => `„${titel}" gehört nicht zu den Aufgaben dieses Laufs.`,
     gemeldet: (anzahl) =>
       anzahl === 0
         ? 'Gemeldet: Das Paket kommt allein aus dem Feld — keine Aufgaben-Karten.'
@@ -1173,19 +1208,58 @@ export const texte = {
     // Ohne paket_melden gibt es nichts, wogegen gemessen werden könnte.
     nachforderungPaket:
       '\n\nNachforderung von FlowForge: Du hast nicht gemeldet, an welchen Aufgaben-Karten dieser ' +
-      'Lauf arbeitet. Arbeite jetzt NICHTS neu — rufe paket_melden auf (aufgabenIds = ids der ' +
-      'offenen Aufgaben-Karten deiner Kartenauswahl; leer, wenn dein Auftrag allein aus dem Feld ' +
+      'Lauf arbeitet. Arbeite jetzt NICHTS neu — rufe paket_melden auf (aufgabenIds = Kennungen der ' +
+      'offenen Aufgaben-Karten aus deinem Auftrag; leer, wenn dein Auftrag allein aus dem Feld ' +
       'kam) und danach melde_arbeitspaket erneut mit allen Paketen. Ohne die Paket-Meldung ' +
       'bekommt keine Karte dieses Laufs ihre Herkunft, und niemand prüft, ob dein Zuschnitt ' +
       'vollständig ist.'
   },
   agentenKarten: {
-    kontext: (liste, themen = []) =>
-      'Aktuelle Projektkarten (von FlowForge für diesen Lauf ausgewählt):\n' +
-      liste +
+    // Karten-Index (BAUPLAN 53): Der Auftrag trägt zwei Darstellungen — den
+    // VOLLTEXT der Karten, um die es in diesem Lauf geht, und darunter das
+    // VERZEICHNIS aller übrigen Karten mit Titel und Kennung. So sieht jeder
+    // Block, DASS es die Entscheidungs-Karte gibt, und liest sie erst, wenn er
+    // sie braucht (statt den ganzen Bestand ins Fenster zu ziehen).
+    kontext: (volltext, verzeichnis = '', themen = []) =>
+      // Nicht mehr „von FlowForge für diesen Lauf ausgewählt" (Befund Prüfer 2):
+      // Bei einem Block, den die Auftragsquelle übergangen hat, steht hier nur
+      // die Status-Karte, während die Aufgaben des Laufs unten im Verzeichnis
+      // stehen — der alte Kopf behauptete dann etwas Falsches.
+      'Die Projektkarten, um die es in deiner Arbeit geht:\n' +
+      volltext +
+      (verzeichnis
+        ? '\n\nVerzeichnis der übrigen Projektkarten dieses Projekts — nur Kennung und ' +
+          'Titel, OHNE Text:\n' +
+          verzeichnis +
+          '\n\nDas ist die vollständige Liste der lebenden Karten — du brauchst dafür ' +
+          'karten_uebersicht nicht aufzurufen (erledigte Aufgaben und Prüfkarten stehen ' +
+          'nur dort). Den Text einer Karte holst du mit karten_lesen, mehrere Kennungen ' +
+          'auf einmal. Urteile nie über eine Karte, deren Text du nicht gelesen hast.'
+        : '') +
       '\n\nWeitere Karten kannst du über die karten-Werkzeuge lesen, anlegen, aktualisieren und erledigen. ' +
       texte.agentenKarten.themenRegel(themen) +
       '\n\n',
+    // Werkzeugbeschreibungen (BAUPLAN 53): Der Hinweis „ohne Text" steht in
+    // BEIDEN Beschreibungen, nicht nur im Auftrag — ein Appell im Auftragstext
+    // hält nicht (Zugsimulator-Befund, 12.08.2026).
+    uebersichtBeschreibung:
+      'Listet alle Projektkarten von FlowForge auf (Status, Aufgaben, Entscheidungen, ' +
+      'Wissen, Prüfungen) — als Verzeichnis: Kennung, Sorte, Thema und Titel jeder Karte, ' +
+      'ABER OHNE ihren Text. Was eine Karte wirklich sagt, steht erst in karten_lesen: ' +
+      'urteile nie über eine Karte, von der du nur den Titel kennst.',
+    lesenBeschreibung: (max) =>
+      'Liest den vollen Text bestimmter Projektkarten — die Ergänzung zu karten_uebersicht, ' +
+      'die nur Titel liefert. Gib die Kennungen der Karten an, deren Inhalt du wirklich ' +
+      `brauchst (höchstens ${max} auf einmal; für mehr rufe das Werkzeug erneut auf).`,
+    zuVieleIds: (max, anzahl) =>
+      `Zu viele Karten auf einmal: ${anzahl} angefragt, höchstens ${max} je Aufruf. ` +
+      'Teile sie auf mehrere Aufrufe auf.',
+    keineIds: 'Keine Kennung angegeben — nenne die Karten, die du lesen willst.',
+    // Kurz-Kennung (BAUPLAN 53): 8 Zeichen statt 36. Zwei Karten mit gleichen
+    // ersten 8 Zeichen sind möglich (rechnerisch selten) — dann rät FlowForge
+    // nicht, sondern nennt beide vollen Kennungen.
+    mehrdeutigeKennung: (eingabe, ids) =>
+      `Die Kennung ${eingabe} passt auf mehrere Karten (${ids}). Nimm eine der vollen Kennungen.`,
     // Themen (BAUPLAN 30): Die vorhandenen Themen stehen im Auftrag — bewusst
     // NICHT in der Werkzeugbeschreibung (je Turn geänderte Beschreibungen
     // brächen den Prompt-Cache).
@@ -1196,14 +1270,16 @@ export const texte = {
       'Jede neue Karte braucht ein thema: sortiere sie primär in ein vorhandenes Thema ein — ' +
       'ein neues Thema nur, wenn wirklich keines passt.',
     themenZeile: (themen) => `Vorhandene Themen: ${themen.join(', ')}.`,
-    angelegt: (karte) => `Karte angelegt: „${karte.titel}" (${karte.sorte}, id ${karte.id}).`,
-    aktualisiert: (karte) => `Karte aktualisiert: „${karte.titel}" (id ${karte.id}).`,
+    angelegt: (karte, kennung) =>
+      `Karte angelegt: „${karte.titel}" (${karte.sorte}, Kennung ${kennung}).`,
+    aktualisiert: (karte, kennung) =>
+      `Karte aktualisiert: „${karte.titel}" (Kennung ${kennung}).`,
     erledigtGesetzt: (karte, erledigt) =>
       erledigt
         ? `Aufgabe „${karte.titel}" ist jetzt als erledigt markiert.`
         : `Aufgabe „${karte.titel}" ist wieder offen.`,
     unbekannteId: (id) =>
-      `Keine Karte mit der id ${id} gefunden. Hol dir die aktuellen ids mit karten_uebersicht.`
+      `Keine Karte mit der Kennung ${id} gefunden. Hol dir die aktuellen Kennungen mit karten_uebersicht.`
   },
   // Übergaben zwischen Blöcken (SPEC §4.3): Der Abschlusstext eines Blocks wird
   // Folgeblöcken mit passendem „braucht" in den Auftrag gereicht.
@@ -1482,8 +1558,10 @@ export const texte = {
       'oder /c/… verwenden — sie zeigen auf Windows auf falsche Orte.\n' +
       'Projektkarten: FlowForge verwaltet strukturierte Karten (Status, Aufgabe, ' +
       'Entscheidung, Wissen) als Gedächtnis des Projekts. Lies und schreibe sie ' +
-      'ausschließlich über die karten-Werkzeuge (karten_uebersicht, karte_anlegen, ' +
-      'karte_aktualisieren, karte_erledigen) — niemals über die Datei karten.json. ' +
+      'ausschließlich über die karten-Werkzeuge (karten_uebersicht, karten_lesen, ' +
+      'karte_anlegen, karte_aktualisieren, karte_erledigen) — niemals über die Datei ' +
+      'karten.json. Die Übersicht bringt nur Titel; den Text einer Karte holst du mit ' +
+      'karten_lesen. ' +
       `Harte Regeln: Titel höchstens ${titelMax} Zeichen, Inhalt höchstens ${textMax} ` +
       'Zeichen; wer mehr zu sagen hat, legt mehrere fokussierte Karten an. Es gibt genau ' +
       'eine Status-Karte — sie kann weder gelöscht noch neu angelegt werden.',
@@ -1520,7 +1598,8 @@ export const texte = {
       'Sicherungspunkte · Metriken · App) und rechts die Blockbibliothek in Kategorien ' +
       '(Vorlagen · Auftrag finden · Bauen · Prüfen · Gedächtnis · Eigene · Übung). Blöcke zieht ' +
       'man aufs Schaubild und verbindet sie mit Pfeilen; Prüfkarten zieht man auf einen ' +
-      'Prüfer-Block; Karten zieht man in die Kartenauswahl unter dem Schaubild; „Lauf starten" ' +
+      'Prüfer-Block; über dem Schaubild wählt man die offenen Aufgaben für den Lauf ' +
+      '(Wissens- und Entscheidungs-Karten kommen immer von selbst mit); „Lauf starten" ' +
       'wechselt in den Lauf-Tab (Liveticker, Denk-Bereich, Fragen des Agenten, Stopp in zwei ' +
       'Stufen). Vorlagen: „Neue App starten" (nur Spec-Interview), „Feature hinzufügen" (Paket ' +
       'schneiden → Angreifer → Bauer → Prüfer → Sessionende), „Bug jagen" (Diagnose → Bauer → ' +
@@ -1561,7 +1640,8 @@ export const texte = {
           'Verwende bei Datei-Werkzeugen ausschließlich Pfade relativ zum Projektordner oder ' +
           'diesen absoluten Windows-Pfad — niemals POSIX-Pfade wie /tmp/… oder /c/….\n' +
           'Projektkarten liest und schreibst du ausschließlich über die karten-Werkzeuge ' +
-          '(karten_uebersicht, karte_anlegen, karte_aktualisieren, karte_erledigen) — niemals ' +
+          '(karten_uebersicht, karten_lesen, karte_anlegen, karte_aktualisieren, ' +
+          'karte_erledigen; die Übersicht bringt nur Titel, den Text holt karten_lesen) — niemals ' +
           `über die Datei karten.json. Harte Regeln: Titel höchstens ${titelMax} Zeichen, Inhalt ` +
           `höchstens ${textMax} Zeichen; wer mehr zu sagen hat, legt mehrere fokussierte Karten an.\n` +
           'Die gebaute App des Projekts bedienst du über die app-Werkzeuge (app_starten, ' +
@@ -3599,7 +3679,12 @@ export const texte = {
     verwaisteUebrig: (n) =>
       `${n} ${n === 1 ? 'Prozess aus dem Lauf ließ' : 'Prozesse aus dem Lauf ließen'} sich nicht beenden — siehe App-Tab, Liste „noch laufende Prozesse".`,
     verwaltungGesperrt: 'Schreib-Versuch auf eine FlowForge-Verwaltungsdatei gestoppt.',
-    liestKarten: 'Liest die Projektkarten.',
+    liestKarten: 'Liest die Übersicht der Projektkarten.',
+    // Karten-Index (BAUPLAN 53): Die Übersicht bringt nur noch Titel — den
+    // Volltext holt der Agent gezielt nach. Die Zahl sagt Georg, wie sparsam
+    // er dabei ist.
+    liestKartenVolltext: (anzahl) =>
+      anzahl === 1 ? 'Liest 1 Karte im Volltext.' : `Liest ${anzahl} Karten im Volltext.`,
     karteAngelegt: (titel) => `Karte angelegt: „${titel}"`,
     karteAktualisiert: (titel) => `Karte aktualisiert: „${titel}"`,
     aufgabeErledigt: (titel) => `Aufgabe abgehakt: „${titel}"`,
@@ -4176,7 +4261,7 @@ export const texte = {
       'Zieh eine Prüfkarte aus der Seitenleiste hierher — der Prüfer prüft sie dann beim nächsten Lauf zusätzlich.',
     entfernen: 'Von diesem Prüfer nehmen',
     nurPruefkarten:
-      'Auf einen Prüfer lassen sich nur Prüfkarten ziehen (die grünen Häkchen-Karten legt FlowForge nach jeder bestandenen Prüfung an). Andere Karten ziehst du in die Kartenauswahl über dem Schaubild.',
+      'Auf einen Prüfer lassen sich nur Prüfkarten ziehen (die grünen Häkchen-Karten legt FlowForge nach jeder bestandenen Prüfung an). Aufgaben-Karten ziehst du in die Auswahl über dem Schaubild; Wissen und Entscheidungen kommen bei jedem Lauf ohnehin mit.',
     ersatzTitel: (zeit) => `Geprüft am ${zeit}`,
     ersatzText:
       'Diese Prüfung wurde bestanden. Einzelheiten stehen im Laufbericht dieses Laufs.'
@@ -4195,7 +4280,11 @@ export const texte = {
       'ohne am Code nachzumessen und ohne Karten umzuformulieren. Antworte auf Deutsch. ' +
       'Du selbst veränderst NICHTS: keine Dateien, keine Programme oder Tests, keine ' +
       'direkten Kartenänderungen. Hol dir mit karten_uebersicht alle Karten samt ihren ' +
-      'Themen (Karten ohne Themen-Marke haben noch keins). Jede Aufgaben-, Entscheidungs- ' +
+      'Themen — du brauchst auch die erledigten Aufgaben, die im Verzeichnis über deinem ' +
+      'Auftrag fehlen (Karten ohne Themen-Marke haben noch keins). Die Übersicht bringt nur ' +
+      'Titel — wo dir der Titel nicht reicht, um das Thema zu bestimmen, hol dir den Text der ' +
+      'betroffenen Karten in Portionen mit karten_lesen (höchstens 25 Kennungen je Aufruf). ' +
+      'Jede Aufgaben-, Entscheidungs- ' +
       'und Wissens-Karte soll unter EINEM kurzen Thema stehen (Schlagwort, kein Satz). ' +
       'Bevorzuge die vorhandenen Themen — ein neues Thema nur, wenn wirklich keines ' +
       'passt; halte die Zahl der Themen klein (lieber sechs klare als zwanzig feine). ' +

@@ -91,7 +91,7 @@ import {
   karteLoeschen,
   karteThemaSetzen
 } from './projekte.js'
-import { vorhandeneThemen } from '../shared/kartenRegeln.js'
+import { vorhandeneThemen, kennungenFuer } from '../shared/kartenRegeln.js'
 import { lokaleGeduldBereinigen } from '../shared/lokalRegeln.js'
 import {
   pruefkartenOrdner,
@@ -122,7 +122,7 @@ import {
   pruefbefehlArchivLaden
 } from './pruefbefehl.js'
 import { befehlAbspielen, rauchtest } from './torProzess.js'
-import { kartenZeile } from './motor/kartenWerkzeuge.js'
+import { kartenZeile, kartenIndexZeile } from './motor/kartenWerkzeuge.js'
 import {
   sicherungspunktAnlegen,
   aufLetztenPunktZuruecksetzen,
@@ -1031,20 +1031,64 @@ function meldungenZusammenfuehren(bisher, neue) {
 // laut Prüfer-Auftrag am ENDE des Belegs und fielen darum regelmäßig weg).
 // Die Regel selbst steht in kantenRegeln.js und ist einzeln geprüft.
 
+// Welche Karten ein Block im VOLLTEXT bekommt (BAUPLAN 29/53). Reine
+// Entscheidung, exportiert für die Regel-Prüfungen — die drei Fälle sind der
+// Kern von Bauschritt 53 und lassen sich sonst nur über einen ganzen Lauf
+// beobachten:
+//   zugeteilt        → genau diese Karten (eine leere Liste ist eine Aussage:
+//                      „nur die Status-Karte")
+//   im Bereich einer Zuteilung, aber nicht genannt → nur die Status-Karte;
+//                      das Übergehen war eine Entscheidung der Auftragsquelle
+//   sonst            → die gewählten Aufgaben des Laufs
+// Die Ausnahme: Eine Auftragsquelle behält immer ihre Grundlage. Sie ist zwar
+// nie ihr eigener Nachfahre — die ZWEITE Auftragsquelle im Schaubild aber sehr
+// wohl Nachfahre der ersten (Vorlage „Bug jagen"), und dasselbe träfe jede
+// Reparatur-Runde und jeden frischen Anlauf nach einem Übertrag.
+export function volltextKarten({ zugeteilt, imBereich, istAuftragsquelle, gewaehlteAufgaben }) {
+  if (Array.isArray(zugeteilt)) return zugeteilt
+  if (imBereich && !istAuftragsquelle) return []
+  return gewaehlteAufgaben
+}
+
 // Kartenvorauswahl (BAUPLAN 7, SPEC §5): Status-Karte immer + die beim Start
 // gewählten Karten. Wird vor jedem Block frisch gelesen — der Agent kann Karten
 // ja mitten im Lauf ändern.
+// Seit BAUPLAN 53 zwei Darstellungen statt einer: VOLLTEXT der Karten, um die
+// es geht, darunter das VERZEICHNIS der übrigen (Kennung, Sorte, Thema, Titel
+// — ohne Text). Der Block sieht damit, DASS es die Entscheidungs-Karte gibt,
+// und liest sie mit karten_lesen, wenn er sie braucht — statt dass FlowForge
+// für ihn rät, was er wissen muss.
+//
+// Ehrlich gerechnet (gemessen Prüfer 2, 83 Karten): Das Verzeichnis macht den
+// Auftrag GRÖSSER, rund 1.250 Tokens je Block. Es zahlt sich nur, weil dafür
+// kein Block mehr karten_uebersicht aufrufen muss (ein Aufruf kostete vorher
+// 11.515 Tokens) — deshalb steht in den Aufträgen ausdrücklich, dass das
+// Verzeichnis schon da ist. Wer beides täte, zahlte doppelt.
 function kartenKontext(projektPfad, kartenIds) {
   const geladen = kartenLaden(projektPfad)
   if (!geladen.ok) return ''
-  const gewaehlt = geladen.karten.filter(
-    (k) => k.sorte === 'status' || kartenIds.includes(k.id)
-  )
+  const imVolltext = (k) => k.sorte === 'status' || kartenIds.includes(k.id)
+  const gewaehlt = geladen.karten.filter(imVolltext)
   if (gewaehlt.length === 0) return ''
+  // Bewusst OHNE die Volltext-Karten: Sie stehen schon oben, ein zweites Mal
+  // wären sie genau die Verschwendung, gegen die dieser Schritt gebaut ist.
+  //
+  // Und ohne Prüfkarten und erledigte Aufgaben: Gemessen waren das 33 von 83
+  // Zeilen — 40 % des Verzeichnisses, das karten_zuteilen ohnehin hart abweist
+  // und an dem kein Block dieses Laufs arbeitet. Wer sie braucht (der
+  // Karten-Prüfer, der Themen-Sortierer), holt sie mit karten_uebersicht; der
+  // Verzeichnis-Kopf sagt das.
+  const lebt = (k) => k.sorte !== 'pruefung' && !(k.sorte === 'aufgabe' && k.erledigt)
+  const uebrige = geladen.karten.filter((k) => !imVolltext(k) && lebt(k))
+  // Dieselben Anzeige-Kennungen wie in karten_uebersicht — kollidieren zwei
+  // Karten in ihren ersten 8 Zeichen, tragen genau die beiden ihre volle id.
+  const kennung = kennungenFuer(geladen.karten)
+  const zeige = (k) => kennung.get(k.id) ?? k.id
   // Themen (BAUPLAN 30): Die vorhandenen Themen stehen im Auftrag — bewusst
   // nicht in der Werkzeugbeschreibung (Prompt-Cache).
   return texte.agentenKarten.kontext(
-    gewaehlt.map((k) => '- ' + kartenZeile(k)).join('\n'),
+    gewaehlt.map((k) => `- ${zeige(k)} · ${kartenZeile(k)}`).join('\n'),
+    uebrige.map((k) => `- ${zeige(k)} · ${kartenIndexZeile(k)}`).join('\n'),
     vorhandeneThemen(geladen.karten)
   )
 }
@@ -1114,15 +1158,30 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
   // Prüfordner je Prüf-Instanz (BAUPLAN 41).
   const ordnerVon = (eintrag) => pruefOrdnerFuer(defVon(eintrag.blockId), eintrag)
 
-  // Ohne ausdrückliche Auswahl gilt die festgenagelte Vorauswahl:
-  // Status-Karte (immer) + offene Aufgaben-Karten.
-  let ausgewaehlt = Array.isArray(kartenIds) ? kartenIds.filter((id) => typeof id === 'string') : null
-  if (!ausgewaehlt) {
-    const geladen = kartenLaden(projektPfad)
-    ausgewaehlt = geladen.ok
-      ? geladen.karten.filter((k) => k.sorte === 'aufgabe' && !k.erledigt).map((k) => k.id)
+  // Die Auswahl-Menge des Laufs (SPEC §5). Der Nutzer wählt nur die ARBEIT —
+  // die offenen Aufgaben-Karten; ohne ausdrückliche Auswahl sind das alle.
+  //
+  // Wissens- und Entscheidungs-Karten kommen seit BAUPLAN 53 IMMER dazu, und
+  // zwar hier und nirgends sonst: Die Oberfläche ist nur eine von sechs Quellen
+  // für kartenIds (Warteschlange, Wiederaufnahme, Sonderläufe, IPC …) — stünde
+  // die Regel im Renderer, hätte ausgerechnet der Karten-Prüfer als Sonderlauf
+  // sie nicht. Sie stehen NICHT im Volltext des Auftrags (das wäre die
+  // Kartenflut, die dieser Schritt abschafft), sondern im Verzeichnis; in der
+  // Auswahl-Menge müssen sie trotzdem stehen, sonst könnte die Auftragsquelle
+  // sie keinem Block zuteilen (karten_zuteilen weist Fremdes ab).
+  const vorauswahl = kartenLaden(projektPfad)
+  const gewaehlteAufgaben = Array.isArray(kartenIds)
+    ? kartenIds.filter((id) => typeof id === 'string')
+    : vorauswahl.ok
+      ? vorauswahl.karten.filter((k) => k.sorte === 'aufgabe' && !k.erledigt).map((k) => k.id)
       : []
-  }
+  const immerDabei = vorauswahl.ok
+    ? vorauswahl.karten
+        .filter((k) => k.sorte === 'entscheidung' || k.sorte === 'wissen')
+        .map((k) => k.id)
+        .filter((id) => !gewaehlteAufgaben.includes(id))
+    : []
+  const ausgewaehlt = [...gewaehlteAufgaben, ...immerDabei]
 
   const geladen = sonderlauf
     ? { ok: true, workflow: sonderlaufWorkflow(sonderlauf) }
@@ -1747,11 +1806,21 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     })
   }
 
-  // Karten-Zuteilung (BAUPLAN 29): Welche Karten ein Block in den Auftrag
-  // bekommt — die volle Auswahl, oder seine Teilmenge, sobald Paket schneiden/
-  // Diagnose zugeteilt hat. Gefüllt im Ablaufplaner; hier nur der Rückfall,
-  // damit das Projektwissen der lokalen KI (unten) sie schon kennen darf.
-  let kartenFuerBlock = () => ausgewaehlt
+  // Welche Karten ein Block im VOLLTEXT bekommt (BAUPLAN 29/53): seine
+  // Zuteilung, sonst die gewählten Aufgaben. Wissens- und Entscheidungs-Karten
+  // stehen zwar in `ausgewaehlt` (damit die Auftragsquelle sie zuteilen kann),
+  // aber nie im Volltext-Rückfall — sie stehen im Verzeichnis. Gefüllt im
+  // Ablaufplaner; hier nur der Rückfall, damit das Projektwissen der lokalen KI
+  // (unten) ihn schon kennen darf.
+  const nurAufgaben = (ids) => {
+    const geladen = kartenLaden(projektPfad)
+    if (!geladen.ok) return ids
+    const aufgaben = new Set(
+      geladen.karten.filter((k) => k.sorte === 'aufgabe').map((k) => k.id)
+    )
+    return ids.filter((id) => aufgaben.has(id))
+  }
+  let kartenFuerBlock = () => nurAufgaben(ausgewaehlt)
 
   // Lokale Helfer-KI (Experiment, 13.08.2026): nur nutzen, wenn Ollama jetzt
   // wirklich läuft und das Modell da ist — sonst ehrlicher Hinweis und alles
@@ -1970,6 +2039,11 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         if (angelegt.ok) {
           senden({ art: 'karten', karten: angelegt.karten })
           tickern(texte.ticker.baselineAltlastKarte(angelegt.karte.titel))
+          // Sie entsteht NACH der Kartenauswahl (oben) und stand deshalb bis
+          // BAUPLAN 53 in keiner: Seit der Karten-Index sie im Auftrag jedes
+          // Blocks sichtbar macht, lädt sie zur Zuteilung ein — und
+          // karten_zuteilen wies sie als „gehört nicht zu diesem Lauf" ab.
+          if (!ausgewaehlt.includes(angelegt.karte.id)) ausgewaehlt.push(angelegt.karte.id)
         }
       }
     } catch {
@@ -2205,7 +2279,22 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     // Werkzeug karten_zuteilen der Auftragsquellen-Blöcke. Nicht zugeteilte
     // Blöcke bekommen die volle Auswahl (Rückfall ohne Bruch).
     const kartenZuteilung = new Map()
-    kartenFuerBlock = (instanzId) => kartenZuteilung.get(instanzId) ?? ausgewaehlt
+    // Wer stand im REICHWEITE einer Zuteilung? (BAUPLAN 53) Bis hierher gab es
+    // einen einzigen Rückfall für zwei verschiedene Lagen: „es hat nie jemand
+    // zugeteilt" und „es hat jemand zugeteilt und diesen Block dabei
+    // übergangen". Nur die zweite ist eine Entscheidung — sie bedeutet „nur die
+    // Status-Karte". Die erste bedeutet weiter „die gewählten Aufgaben".
+    // Hinein kommen alle Nachfahren des zuteilenden Blocks, nicht nur die
+    // genannten: Wer hätte genannt werden können, aber nicht genannt wurde, ist
+    // bewusst übergangen.
+    const zuteilungsBereich = new Set()
+    kartenFuerBlock = (instanzId) =>
+      volltextKarten({
+        zugeteilt: kartenZuteilung.get(instanzId),
+        imBereich: zuteilungsBereich.has(instanzId),
+        istAuftragsquelle: Boolean(knoten.get(instanzId)?.def?.kartenZuteilung),
+        gewaehlteAufgaben: nurAufgaben(ausgewaehlt)
+      })
     const nachfolgerVon = new Map(kettenIds.map((id) => [id, []]))
     for (const pfeil of workflow.pfeile) nachfolgerVon.get(pfeil.von)?.push(pfeil.nach)
     // Alle Nachfahren eines Blocks entlang der Pfeile, je Instanz eine ADRESSE
@@ -2546,6 +2635,11 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         // nach einer Wiederaufnahme arbeiten die Folgeblöcke weiter mit
         // ihrer Teilmenge.
         kartenZuteilung: [...kartenZuteilung],
+        // Die Reichweite der Zuteilung muss mit (BAUPLAN 53) — ohne sie fiele
+        // nach einem App-Neustart jeder übergangene Block wieder auf die
+        // gewählten Aufgaben zurück, und dieselbe Kette verhielte sich vor und
+        // nach der Unterbrechung verschieden.
+        zuteilungsBereich: [...zuteilungsBereich],
         // Paket (BAUPLAN 30): die gemeldeten Aufgaben-Karten wandern mit —
         // die Herkunft stimmt auch nach einer Wiederaufnahme. Seit BAUPLAN 44
         // je Auftragsquelle statt einmal je Lauf.
@@ -2742,6 +2836,13 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         : [])
         if (knoten.has(id) && Array.isArray(ids))
           kartenZuteilung.set(id, ids.filter((kartenId) => typeof kartenId === 'string'))
+      // Reichweite (BAUPLAN 53): Ein Laufstand von vor diesem Schritt trägt sie
+      // nicht — dann ist der Bereich leer, und alle fallen wie früher auf die
+      // gewählten Aufgaben zurück. Kein alter Stand wird dadurch ungültig.
+      for (const id of Array.isArray(fortsetzung.zuteilungsBereich)
+        ? fortsetzung.zuteilungsBereich
+        : [])
+        if (typeof id === 'string' && knoten.has(id)) zuteilungsBereich.add(id)
       // Paket (BAUPLAN 30/44): tolerant gegenüber alten Laufständen — ein Stand
       // von vor Bauschritt 44 trägt EINE Liste ohne Block; sie gilt dann wie
       // bisher für alle. Ein alter Laufstand wird dadurch nicht ungültig.
@@ -2780,14 +2881,32 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     function kartenZuteilungAnnehmen({ instanzId, zuteilung }) {
       const geladen = kartenLaden(projektPfad)
       if (!geladen.ok) return { fehler: geladen.fehler }
+      // Zuteilbar ist, was die Auswahl-Menge trägt — PLUS jede Wissens- und
+      // Entscheidungs-Karte, die es gerade gibt (Befund Prüfer 2): Diese Sorten
+      // kommen seit BAUPLAN 53 ohnehin immer mit, und eine mitten im Lauf
+      // angelegte stand zwar schon im Verzeichnis der Auftragsquelle, wurde
+      // aber mit „gehört nicht zu diesem Lauf" abgewiesen — von einer Meldung,
+      // die im selben Satz genau diese Sorten als zuteilbar nannte.
+      const zuteilbar = [
+        ...new Set([
+          ...ausgewaehlt,
+          ...geladen.karten
+            .filter((k) => k.sorte === 'entscheidung' || k.sorte === 'wissen')
+            .map((k) => k.id)
+        ])
+      ]
       const urteil = kartenZuteilungPruefen({
         zuteilung,
         karten: geladen.karten,
-        ausgewaehlt,
+        ausgewaehlt: zuteilbar,
         ziele: nachfahrenAdressen(instanzId)
       })
       if (urteil.fehler) return urteil
       for (const [id, ids] of urteil.zuteilung) kartenZuteilung.set(id, ids)
+      // Reichweite dieser Zuteilung merken (BAUPLAN 53): ALLE Nachfahren, auch
+      // die nicht genannten — sie sind ab jetzt bewusst übergangen und bekommen
+      // die Status-Karte plus das Verzeichnis statt der gewählten Aufgaben.
+      for (const ziel of nachfahrenAdressen(instanzId)) zuteilungsBereich.add(ziel.instanzId)
       // Der Bericht zeigt den Gesamtstand der Zuteilung — je Block mit
       // Kartenzahl; ein erneuter Aufruf ersetzt die erneut genannten Blöcke.
       // Mit der Blocknummer (BAUPLAN 44): Zwei namensgleiche Ziele ergaben

@@ -13,6 +13,7 @@
 import { z } from 'zod'
 import { liste } from './werkzeugSchema.js'
 import { texte } from '../../shared/texte.js'
+import { kennungFuerLeitplanke } from '../../shared/kartenRegeln.js'
 import { zielFuerAdresse } from '../../shared/kettenRegeln.js'
 
 // Reine Prüf-Funktion, exportiert für die Regel-Prüfungen.
@@ -46,15 +47,25 @@ export function kartenZuteilungPruefen({ zuteilung, karten, ausgewaehlt, ziele }
         liste.map((z) => z.bezeichnung).join(' | ')
       )
     }
-  const nachId = new Map((Array.isArray(karten) ? karten : []).map((k) => [k.id, k]))
+  const alleKarten = Array.isArray(karten) ? karten : []
+  const nachId = new Map(alleKarten.map((k) => [k.id, k]))
   const auswahl = new Set(Array.isArray(ausgewaehlt) ? ausgewaehlt : [])
   // Je Instanz eine Karten-Liste — nennt der Agent dieselbe Adresse mehrfach,
   // gewinnt der letzte Eintrag (ein erneuter Aufruf ersetzt, kein Rätselraten).
   const jeInstanz = new Map()
   for (const eintrag of eintraege) {
-    const ids = [
-      ...new Set((Array.isArray(eintrag.kartenIds) ? eintrag.kartenIds : []).map((id) => String(id)))
-    ]
+    // Kurz-Kennungen (BAUPLAN 53): Der Agent nennt, was er im Index gesehen
+    // hat. Gespeichert und weiterverarbeitet wird ab hier NUR die volle id —
+    // die Zuteilung wird später mit `kartenIds.includes(k.id)` verbraucht,
+    // eine Kurzform bräche dort still (Block ohne Karten, keine Meldung).
+    const ids = []
+    for (const roh of Array.isArray(eintrag.kartenIds) ? eintrag.kartenIds : []) {
+      const eingabe = String(roh ?? '').trim()
+      if (!eingabe) continue
+      const treffer = kennungFuerLeitplanke(alleKarten, eingabe)
+      if (treffer.fehler) return { fehler: treffer.fehler }
+      if (!ids.includes(treffer.id)) ids.push(treffer.id)
+    }
     // Die Status-Karte ist bei jedem Block ohnehin dabei — still herausfiltern.
     const ohneStatus = ids.filter((id) => nachId.get(id)?.sorte !== 'status')
     const fremd = ohneStatus.filter((id) => !auswahl.has(id))
@@ -92,10 +103,20 @@ export function paketMeldungPruefen({ aufgabenIds, karten, ausgewaehlt, feldGefu
   // Keine Anzahl-Grenze (seit 0.46.1) — wie im Zuschnitt (lieferschein.js,
   // aufgabenIds): Beide Enden derselben Rechnung reichen gleich weit, sonst
   // entstünde ein Paket, dessen Vollständigkeit niemand mehr erfüllen kann.
-  const nachId = new Map((Array.isArray(karten) ? karten : []).map((k) => [k.id, k]))
+  const alleKarten = Array.isArray(karten) ? karten : []
+  const nachId = new Map(alleKarten.map((k) => [k.id, k]))
   const auswahl = new Set(Array.isArray(ausgewaehlt) ? ausgewaehlt : [])
   const aufgaben = []
-  for (const id of ids) {
+  for (const eingabe of ids) {
+    // Kurz-Kennung → volle id (BAUPLAN 53): Die gemeldete id wird zum
+    // Herkunfts-Stempel jeder Karte des Laufs UND zum Maßstab der
+    // Zuschnitt-Deckung — eine Kurzform deckte dort nichts.
+    const treffer = kennungFuerLeitplanke(alleKarten, eingabe)
+    if (treffer.fehler) return { fehler: treffer.fehler }
+    const id = treffer.id
+    // Kurzform und volle id derselben Karte: erst nach dem Auflösen als
+    // Dublette erkennbar — sonst stünde die Aufgabe zweimal im Paket.
+    if (aufgaben.some((a) => a.id === id)) continue
     const karte = nachId.get(id)
     if (!karte) return { fehler: tp.unbekannteId(id) }
     if (karte.sorte !== 'aufgabe' || karte.erledigt) return { fehler: tp.keineOffeneAufgabe(karte.titel) }
@@ -122,8 +143,9 @@ export async function kartenZuteilungWerkzeugServer({ aufKartenZuteilung, aufPak
     {
       aufgabenIds: liste(z.string())
         .describe(
-          'ids der offenen Aufgaben-Karten aus der Kartenauswahl, die dieses Paket bearbeitet — ' +
-            'leer, wenn der Auftrag allein aus dem Wunsch-/Fehlerbild-Feld kam'
+          'Kennungen aus karten_uebersicht (Kurzform oder volle id) der offenen Aufgaben-Karten ' +
+            'aus der Kartenauswahl, die dieses Paket bearbeitet — leer, wenn der Auftrag allein ' +
+            'aus dem Wunsch-/Fehlerbild-Feld kam'
         )
     },
     async ({ aufgabenIds }) => {
@@ -151,7 +173,8 @@ export async function kartenZuteilungWerkzeugServer({ aufKartenZuteilung, aufPak
               ),
             kartenIds: liste(z.string())
               .describe(
-                'ids der Karten aus der Kartenauswahl, die dieser Block bekommen soll — leer heißt „nur die Status-Karte"'
+                'Kennungen aus karten_uebersicht (Kurzform oder volle id) der Karten aus der ' +
+                  'Kartenauswahl, die dieser Block bekommen soll — leer heißt „nur die Status-Karte"'
               )
           })
         )

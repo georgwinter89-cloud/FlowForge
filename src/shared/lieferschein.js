@@ -20,7 +20,7 @@
 // andere Ende der Dateilisten-Rechnung (stehtInDateiliste, braucht node:path)
 // in src/main/dateilistenPfade.js.
 import { texte } from './texte.js'
-import { TITEL_MAX, TEXT_MAX } from './kartenRegeln.js'
+import { TITEL_MAX, TEXT_MAX, idAusKennung } from './kartenRegeln.js'
 import { zielFuerAdresse } from './kettenRegeln.js'
 import { eigenesEtikett, eigeneEtikettenListe, zusatznameBereinigen } from './blockKatalog.js'
 
@@ -376,21 +376,33 @@ function zuschnittPruefen(roh, umfeld) {
   //
   // Keine Anzahl-Grenze — weder hier noch in paketMeldungPruefen (seit 0.46.1):
   // Beide Enden derselben Rechnung reichen damit gleich weit, nämlich beliebig.
-  const aufgabenIds = zeilenListe(roh?.aufgabenIds)
+  //
+  // Kurz-Kennungen (BAUPLAN 53): Der Agent nimmt hier dieselben Kennungen, die
+  // er im Index gesehen hat. Aufgelöst wird gegen das gemeldete Paket, und
+  // gespeichert wird die VOLLE id — sonst wiese die Deckungsrechnung eine
+  // vollkommen richtige Meldung als „erfundene id" ab.
+  let aufgabenIds = zeilenListe(roh?.aufgabenIds)
   if (umfeld && 'paket' in umfeld && aufgabenIds.length) {
     const paket = Array.isArray(umfeld.paket) ? umfeld.paket : null
     // Noch gar kein Paket gemeldet: Die Reihenfolge ist die Antwort — erst
     // paket_melden, dann der Zuschnitt. Sonst zeigte die Verbindung ins Leere.
     if (!paket) return { fehler: tl.aufgabenIdsOhnePaket }
-    const bekannt = new Set(paket.map((a) => String(a?.id)))
-    for (const id of aufgabenIds)
-      if (!bekannt.has(id))
+    const bekannt = paket.map((a) => String(a?.id))
+    const aufgeloest = []
+    for (const id of aufgabenIds) {
+      const treffer = idAusKennung(bekannt, id)
+      if (treffer.fehler)
         return {
-          fehler: tl.aufgabeUnbekannt(
-            id,
-            paket.map((a) => `${a?.id} („${a?.titel ?? ''}")`).join(', ')
-          )
+          fehler: treffer.mehrdeutig
+            ? treffer.fehler
+            : tl.aufgabeUnbekannt(
+                id,
+                paket.map((a) => `${a?.id} („${a?.titel ?? ''}")`).join(', ')
+              )
         }
+      if (!aufgeloest.includes(treffer.id)) aufgeloest.push(treffer.id)
+    }
+    aufgabenIds = aufgeloest
   }
   const dateien = dateiListePruefen(roh?.erlaubteDateien)
   if (dateien.fehler) return dateien
@@ -605,9 +617,17 @@ export function zuschnittDeckung(ziele, gemeldetesPaket, meldungen) {
   // Ohne einen einzigen Zuschnitt gibt es nichts zu decken — dass gar nichts
   // gemeldet wurde, fängt die Meldungspflicht ab (meldungVollstaendig).
   if (zuschnitte.length === 0) return { fehlendeAufgaben, unbedienteZiele }
+  // Beide Enden derselben Rechnung müssen gleich weit reichen (BAUPLAN 53):
+  // Nennt ein Zuschnitt die Kurz-Kennung — etwa aus einer Meldung ohne
+  // Paket-Umfeld (Prüfskripte, selbstgebaute Wege) — gilt die Aufgabe als
+  // abgedeckt, statt als „vergessen" zurückgemeldet zu werden.
+  const paketIds = (Array.isArray(gemeldetesPaket) ? gemeldetesPaket : []).map((a) =>
+    String(a?.id)
+  )
   const abgedeckt = new Set()
   for (const paket of zuschnitte)
-    for (const id of paket?.aufgabenIds ?? []) abgedeckt.add(String(id))
+    for (const id of paket?.aufgabenIds ?? [])
+      abgedeckt.add(idAusKennung(paketIds, id).id ?? String(id))
   for (const aufgabe of Array.isArray(gemeldetesPaket) ? gemeldetesPaket : [])
     if (!abgedeckt.has(String(aufgabe?.id))) fehlendeAufgaben.push(aufgabe)
   const liste = Array.isArray(ziele) ? ziele : []

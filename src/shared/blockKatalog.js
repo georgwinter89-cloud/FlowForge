@@ -269,8 +269,10 @@ export const BLOCK_KATALOG = [
     auftrag:
       'Du bist der erste Block eines Workflows und lädst den Kontext. Antworte auf Deutsch. ' +
       'Verschaffe dir einen gründlichen Überblick über dieses Projekt: Sieh dir die Dateien im ' +
-      'Projektordner an (Aufbau und die wichtigsten Inhalte) und lies alle Projektkarten mit ' +
-      'karten_uebersicht. ' +
+      'Projektordner an (Aufbau und die wichtigsten Inhalte). Das Verzeichnis aller ' +
+      'Projektkarten steht schon über deinem Auftrag — ruf dafür NICHT karten_uebersicht ' +
+      'auf, das wäre dieselbe Liste ein zweites Mal. Den Text der Karten, auf die es ' +
+      'ankommt, liest du mit karten_lesen nach (mehrere Kennungen je Aufruf). ' +
       PRUEFMAPPE_HINWEIS +
       'Du darfst nichts verändern — nur lesen: Rein lesende Befehle ' +
       '(Ordner auflisten, suchen, Dateien ansehen) laufen durch; Programme oder Tests ' +
@@ -401,6 +403,13 @@ export const BLOCK_KATALOG = [
       'Ist das Feld leer, sind die offenen Aufgaben-Karten der Wunsch — wähle daraus die ' +
       'sinnvollste nächste Arbeit und benenne, welche Karte(n) du dir vornimmst; ' +
       'zusammengehörige Aufgaben darfst du zu einem Paket bündeln. ' +
+      // Karten-Index (BAUPLAN 53): Die Auftragsquelle ist der Engpass — sie
+      // muss alles SEHEN, aber nicht alles LESEN. Der Satz steht vor dem
+      // Zuteilen, weil sie hier entscheidet, was die anderen brauchen.
+      'Über deinem Auftrag steht das Verzeichnis aller Projektkarten — nur Titel, kein ' +
+      'Text. Was du wirklich brauchst, holst du dir mit karten_lesen im Volltext ' +
+      '(mehrere Kennungen auf einmal); erst dann teilst du zu. Über einen Kartentitel zu ' +
+      'urteilen, ohne die Karte gelesen zu haben, ist geraten. ' +
       'Prüfe durch eigenes Lesen im Projektordner (liegt dir ein Projekt-Überblick vor, nutze ' +
       'ihn als Abkürzung), wie sich dieser Wunsch in Arbeitspakete fassen lässt. ' +
       PRUEFMAPPE_HINWEIS +
@@ -536,6 +545,11 @@ export const BLOCK_KATALOG = [
       '{{fehlerbild}}\n' +
       'Ist das Feld leer, beschreiben die offenen Aufgaben-Karten den Fehler — wähle die ' +
       'passende und benenne sie. ' +
+      // Karten-Index (BAUPLAN 53): dieselbe Sprache wie bei der anderen
+      // Auftragsquelle — sie sieht alles im Verzeichnis und liest gezielt nach.
+      'Über deinem Auftrag steht das Verzeichnis aller Projektkarten — nur Titel, kein ' +
+      'Text. Was du wirklich brauchst, holst du dir mit karten_lesen im Volltext ' +
+      '(mehrere Kennungen auf einmal); erst dann teilst du zu. ' +
       'Halte dein eigenes Arbeitsgedächtnis schlank: Delegiere breites Suchen und Einlesen ' +
       'an Unteraufgaben (bevorzugt lokal_recherchieren, falls es bereitsteht — sonst das ' +
       'Agent-Werkzeug) — der Wegwerf-Helfer wühlt in seinem eigenen Kontext ' +
@@ -1014,7 +1028,15 @@ export const BLOCK_KATALOG = [
       'Nutzer einen Vorschlag mit dem Werkzeug karte_vorschlagen; er entscheidet jede ' +
       'Karte einzeln (übernehmen, bearbeiten, ablehnen), und FlowForge wendet seine ' +
       'Entscheidung an. Ein Vorschlag pro Aufruf — das Werkzeug wartet auf die Antwort. ' +
-      'Hol dir zuerst mit karten_uebersicht alle Karten. Prüfe dann Karte für Karte ' +
+      // Karten-Index (BAUPLAN 53): Er ist der einzige Block, der wirklich JEDE
+      // Karte im Volltext braucht — deshalb ausdrücklich in Portionen, statt
+      // ihn den Deckel selbst entdecken zu lassen.
+      'Du bist der eine Block, der WIRKLICH jede Karte braucht — auch die erledigten ' +
+      'Aufgaben und die Prüfkarten, die im Verzeichnis über deinem Auftrag fehlen. Hol ' +
+      'dir deshalb zuerst mit karten_uebersicht das vollständige Verzeichnis; es bringt ' +
+      'nur Titel. Den Volltext holst du dir dann in Portionen mit karten_lesen (höchstens ' +
+      '25 Kennungen je Aufruf, für den Rest rufst du erneut auf): Ohne den Text kannst du ' +
+      'nicht prüfen, ob eine Karte noch wahr ist. Prüfe dann Karte für Karte ' +
       'gegen den echten Stand des Projekts: Delegiere das Nachmessen ' +
       '(bevorzugt lokal_recherchieren, falls es bereitsteht — sonst das Agent-Werkzeug) ' +
       'und lies die entscheidenden Stellen selbst nach — jedes Urteil braucht einen ' +
@@ -1104,7 +1126,11 @@ export const BLOCK_KATALOG = [
       'Du bist das Sessionende: Du bringst das Projektgedächtnis auf den neuesten Stand — am ' +
       'Code und an Dateien änderst du nichts. Antworte auf Deutsch und arbeite ausschließlich ' +
       'mit den karten-Werkzeugen: ' +
-      '1. Hol dir mit karten_uebersicht den aktuellen Stand aller Karten. ' +
+      '1. Das Verzeichnis aller lebenden Karten steht schon über deinem Auftrag (Kennung ' +
+      'und Titel) — ruf dafür NICHT karten_uebersicht auf. Lies mit karten_lesen den Text ' +
+      'der Karten nach, die du ändern oder abhaken willst; die Status-Karte gehört immer ' +
+      'dazu. Nur wenn du eine erledigte Aufgabe oder eine Prüfkarte suchst, brauchst du ' +
+      'karten_uebersicht — die stehen im Verzeichnis nicht. ' +
       '2. Aktualisiere die Status-Karte: Wo steht das Projekt jetzt, nach diesem Lauf — ' +
       'einschließlich des Prüfungs-Ergebnisses? ' +
       '3. Hake mit karte_erledigen genau die Aufgaben-Karten ab, die dieser Lauf wirklich ' +
@@ -1114,8 +1140,11 @@ export const BLOCK_KATALOG = [
       'Beachte die harten Längengrenzen — lieber mehrere fokussierte Karten als eine lange; ' +
       'jede neue Karte mit thema, bevorzugt ein vorhandenes. ' +
       '5. Deck den Tisch für den nächsten Lauf: Schlage mit naechster_lauf_vorschlagen die ' +
-      'Karten vor, die der nächste Lauf bekommen sollte (kartenIds aus karten_uebersicht — ' +
-      'du kennst den Lauf gerade am besten: was fertig wurde, was offen blieb). Dazu ' +
+      // Nur noch Aufgaben (BAUPLAN 53): Wissen und Entscheidungen kommen bei
+      // jedem Lauf automatisch mit — sie vorzuschlagen wäre eine leere Geste.
+      'offenen Aufgaben-Karten vor, an denen der nächste Lauf arbeiten sollte (kartenIds = ' +
+      'ihre Kennungen — du kennst den Lauf gerade am besten: was fertig wurde, was offen ' +
+      'blieb; Wissens- und Entscheidungs-Karten kommen ohnehin bei jedem Lauf mit). Dazu ' +
       'empfehlung: EIN Satz in Alltagssprache, was als Nächstes ansteht (du darfst eine ' +
       'Vorlage nennen, z.B. „als Nächstes ‚Bug jagen‘"), und begruendung: kurz, warum genau ' +
       'diese Karten. Das ist nur eine Einladung an den Nutzer — FlowForge baut nichts um und ' +
@@ -1238,7 +1267,8 @@ export const BLOCK_KATALOG = [
     felder: [],
     auftrag:
       'Dies ist eine Übung für die Karten-Werkzeuge von FlowForge. Antworte auf Deutsch. ' +
-      'Schritt 1: Hol dir mit karten_uebersicht alle Karten und merke dir den Inhalt der Status-Karte. ' +
+      'Schritt 1: Hol dir mit karten_uebersicht das Verzeichnis aller Karten — es bringt nur ' +
+      'Titel. Hol dir dann mit karten_lesen den Volltext der Status-Karte und merke dir ihren Inhalt. ' +
       'Schritt 2: Versuche absichtlich, mit karte_anlegen eine Aufgaben-Karte anzulegen, deren Inhalt ' +
       'deutlich länger als 400 Zeichen ist — die Ablehnung ist gewollt und Teil der Übung. Genau ein Versuch. ' +
       'Schritt 3: Lege dann eine richtige Aufgaben-Karte an: Titel „Karten-Probe erledigt", Inhalt: zwei ' +

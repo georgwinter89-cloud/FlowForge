@@ -1759,16 +1759,21 @@ export default function Leinwand({
 
   // --- Kartenvorauswahl für den Lauf ---------------------------------------
 
+  // Seit BAUPLAN 53 stehen hier nur noch die ARBEIT und die Status-Karte:
+  // Wissens- und Entscheidungs-Karten kommen bei jedem Lauf automatisch mit
+  // (als Verzeichnis im Auftrag, lauf.js) — Georg soll nicht beurteilen müssen,
+  // welches von Agenten geschriebene Wissen ein Block braucht. Eine erledigte
+  // Aufgabe kann er per Drag & Drop zurückholen; sie liegt dann in kontextZusatz.
   function kontextAuswahl() {
     // Feste Sortierung nach Sorte (Feedback Georg, 07.08.2026): Status zuerst,
-    // dann Aufgaben, Entscheidungen, Wissen — statt Anlege-Reihenfolge.
-    const sortenReihenfolge = { status: 0, aufgabe: 1, entscheidung: 2, wissen: 3 }
+    // dann die Aufgaben.
+    const sortenReihenfolge = { status: 0, aufgabe: 1 }
     return (karten ?? [])
       .filter(
         (k) =>
           k.sorte === 'status' ||
-          kontextZusatz.has(k.id) ||
-          (k.sorte === 'aufgabe' && !k.erledigt && !kontextRaus.has(k.id))
+          (k.sorte === 'aufgabe' &&
+            (kontextZusatz.has(k.id) || (!k.erledigt && !kontextRaus.has(k.id))))
       )
       .sort((a, b) => (sortenReihenfolge[a.sorte] ?? 9) - (sortenReihenfolge[b.sorte] ?? 9))
   }
@@ -1782,6 +1787,12 @@ export default function Leinwand({
     const karte = (karten ?? []).find((k) => k.id === id)
     if (karte?.sorte === 'pruefung') {
       setMeldung(texte.kartenAuswahl.pruefkarteAbgelehnt)
+      return
+    }
+    // Wissen, Entscheidungen und die Status-Karte sind seit BAUPLAN 53 ohnehin
+    // dabei — kein Fehler, sondern eine gute Nachricht.
+    if (karte && karte.sorte !== 'aufgabe') {
+      setMeldung(texte.kartenAuswahl.kommtAutomatisch)
       return
     }
     setMeldung('')
@@ -1814,8 +1825,12 @@ export default function Leinwand({
     const zusatz = new Set()
     const raus = new Set()
     for (const karte of karten ?? []) {
-      if (karte.sorte === 'status') continue
-      const standard = karte.sorte === 'aufgabe' && !karte.erledigt
+      // Seit BAUPLAN 53 enthält der Vorschlag nur noch Aufgaben-Karten (das
+      // Werkzeug filtert die anderen still heraus) — und nur Aufgaben-Chips
+      // sind sichtbar. Alles andere hier zu setzen, änderte den Zustand, ohne
+      // dass Georg sähe, was der Knopf getan hat.
+      if (karte.sorte !== 'aufgabe') continue
+      const standard = !karte.erledigt
       if (gewollt.has(karte.id)) {
         if (!standard) zusatz.add(karte.id)
       } else if (standard) raus.add(karte.id)
@@ -1829,22 +1844,14 @@ export default function Leinwand({
     await window.flowforge.naechsterLaufVerwerfen(pfad)
   }
 
-  // Alle Karten laden (BAUPLAN 29): Status + alle Entscheidungs- und
-  // Wissens-Karten + alle offenen Aufgaben. Erledigte Aufgaben und Prüfkarten
-  // bleiben draußen (Historie liefert der Laufbericht, Prüfkarten haben ihren
-  // eigenen Weg über den Prüfer). Danach wie gewohnt per × und Drag & Drop
-  // änderbar — Paket schneiden/Diagnose teilt den Folgeblöcken dann zu.
-  function alleKartenHinzufuegen() {
-    const zusatz = new Set()
-    for (const karte of karten ?? [])
-      if (karte.sorte === 'entscheidung' || karte.sorte === 'wissen') zusatz.add(karte.id)
-    setKontextZusatz(zusatz)
-    setKontextRaus(new Set())
-  }
-
-  // „Standard-Auswahl": zurück auf die festgenagelte Vorauswahl (SPEC §5).
-  function standardAuswahl() {
-    setKontextZusatz(new Set())
+  // Der Weg zurück (BAUPLAN 53): alle offenen Aufgaben wieder in die Auswahl.
+  // „Alle Karten hinzufügen" (BAUPLAN 29) ist entfallen — Wissen und
+  // Entscheidungen kommen ohnehin bei jedem Lauf mit.
+  function alleAufgabenZurueck() {
+    // Nur die Rausgeworfenen zurückholen — was Georg absichtlich hereingezogen
+    // hat (eine erledigte Aufgabe), bleibt drin. Vorher leerte der Knopf auch
+    // kontextZusatz und warf dabei still weg, was der Nutzer gerade erst
+    // ausgewählt hatte (Befund Prüfer 2).
     setKontextRaus(new Set())
   }
 
@@ -1855,8 +1862,11 @@ export default function Leinwand({
     setFehler('')
     // Die Lauf-Anzeige leert das „Lauf startet"-Ereignis — so wird sie auch
     // bei automatischen Starts aus der Warteschlange frisch (BAUPLAN 12).
+    // Nur die gewählte ARBEIT geht mit (BAUPLAN 53) — Wissens- und
+    // Entscheidungs-Karten legt der Hauptprozess selbst dazu, damit dieselbe
+    // Regel auch für Sonderläufe, Warteschlange und Wiederaufnahme gilt.
     const kartenIds = kontextAuswahl()
-      .filter((k) => k.sorte !== 'status')
+      .filter((k) => k.sorte === 'aufgabe')
       .map((k) => k.id)
     const antwort = await window.flowforge.laufStarten(pfad, kartenIds)
     // Kosten-Rückfrage der Klasse Extra (0.48.1): Der Hauptprozess startet
@@ -2151,21 +2161,15 @@ export default function Leinwand({
               )}
             </span>
           ))}
-          {/* Alle Karten laden (BAUPLAN 29): ein Knopf lädt alles Wissenswerte,
-              einer springt zurück auf die Standard-Vorauswahl. */}
+          {/* Ein Knopf statt zweien (BAUPLAN 53): der Weg zurück zu allen
+              offenen Aufgaben. „Alle Karten hinzufügen" ist entfallen — Wissen
+              und Entscheidungen kommen bei jedem Lauf ohnehin mit. */}
           <button
             className="vorschlag-knopf"
-            title={ta.alleHinzufuegenHinweis}
-            onClick={alleKartenHinzufuegen}
+            title={ta.alleAufgabenHinweis}
+            onClick={alleAufgabenZurueck}
           >
-            {ta.alleHinzufuegen}
-          </button>
-          <button
-            className="vorschlag-knopf"
-            title={ta.standardAuswahlHinweis}
-            onClick={standardAuswahl}
-          >
-            {ta.standardAuswahl}
+            {ta.alleAufgaben}
           </button>
         </div>
       )}

@@ -73,3 +73,84 @@ export function pruefeThema(karten, thema, { pflicht }) {
     return { fehler: texte.kartenRegeln.themaZuLang(THEMA_MAX, eingabe.length) }
   return { thema: kanonischesThema(karten, eingabe) }
 }
+
+// Kurz-Kennung (BAUPLAN 53): Karten-IDs sind UUIDs mit 36 Zeichen. Im
+// Verzeichnis aller Karten wären das bei 69 Karten rund 2.500 Zeichen, die
+// dem Agenten nichts erklären — er sieht deshalb nur die ersten 8 und darf
+// sie überall dort einsetzen, wo bisher die volle id stand.
+export const KENNUNG_LAENGE = 8
+// Ehrliche Grenze: Zwei ids mit gleichen ersten 8 Zeichen sind möglich
+// (rechnerisch selten, aber nicht ausgeschlossen). Dann rät FlowForge NICHT,
+// sondern meldet „mehrdeutig" mit den vollen ids — der Agent nimmt eine davon.
+// Unter 4 Zeichen wird gar nicht erst gesucht: „a" träfe beliebig viele Karten.
+export const KENNUNG_MIN = 4
+
+export function kurzKennung(id) {
+  return String(id ?? '').slice(0, KENNUNG_LAENGE)
+}
+
+// Die Kennungen, die ein Agent ZU SEHEN bekommt (Verzeichnis, Volltext-Liste
+// im Auftrag, Antwort von karten_lesen). Kollidieren zwei Karten in ihren
+// ersten 8 Zeichen, bekommen GENAU DIESE beiden ihre volle id — sonst stünde
+// dieselbe Kennung zweimal untereinander, der Agent nähme eine davon, und erst
+// der Fehlversuch nennte ihm die vollen ids (gemessen Prüfer 1). Alle anderen
+// Karten behalten die kurze Form; die Rechnung kostet nichts, weil sie ohnehin
+// je Ausgabe einmal läuft. Liefert eine Map id → Anzeige-Kennung.
+export function kennungenFuer(karten) {
+  const alle = (Array.isArray(karten) ? karten : []).map((k) => String(k?.id ?? ''))
+  const wieOft = new Map()
+  for (const id of alle) {
+    const kurz = kurzKennung(id).toLowerCase()
+    wieOft.set(kurz, (wieOft.get(kurz) ?? 0) + 1)
+  }
+  return new Map(
+    alle.map((id) => [id, wieOft.get(kurzKennung(id).toLowerCase()) > 1 ? id : kurzKennung(id)])
+  )
+}
+
+// Reine Auflösung gegen eine ID-Liste — ohne Karten-Objekte, damit auch die
+// Zuschnitt-Deckung (shared/lieferschein.js) sie benutzen kann, die nur die
+// gemeldeten Aufgaben-IDs kennt. Liefert { id } oder { fehler } (bei
+// Mehrdeutigkeit zusätzlich mehrdeutig: true).
+// Reihenfolge: exakter Treffer zuerst, dann Präfix — sonst könnte eine volle
+// id, die zufällig Präfix einer anderen ist, als „mehrdeutig" gelten.
+export function idAusKennung(ids, eingabe) {
+  const roh = String(eingabe ?? '').trim()
+  const liste = (Array.isArray(ids) ? ids : []).map((id) => String(id ?? ''))
+  const klein = roh.toLowerCase()
+  if (!klein) return { fehler: texte.agentenKarten.unbekannteId(roh) }
+  const genau = liste.find((id) => id.toLowerCase() === klein)
+  if (genau) return { id: genau }
+  if (klein.length < KENNUNG_MIN) return { fehler: texte.agentenKarten.unbekannteId(roh) }
+  const anfang = liste.filter((id) => id.toLowerCase().startsWith(klein))
+  if (anfang.length === 1) return { id: anfang[0] }
+  if (anfang.length > 1)
+    return {
+      fehler: texte.agentenKarten.mehrdeutigeKennung(roh, anfang.join(', ')),
+      mehrdeutig: true
+    }
+  return { fehler: texte.agentenKarten.unbekannteId(roh) }
+}
+
+// Dasselbe mit Karten-Objekten: liefert { karte } oder { fehler }.
+export function kennungAufloesen(karten, eingabe) {
+  const liste = Array.isArray(karten) ? karten : []
+  const treffer = idAusKennung(
+    liste.map((k) => k?.id),
+    eingabe
+  )
+  if (treffer.fehler) return treffer
+  return { karte: liste.find((k) => String(k?.id) === treffer.id) }
+}
+
+// Für die Leitplanken (BAUPLAN 53, §3): Sie nehmen ab jetzt Kurz-Kennungen an,
+// haben für „gibt es nicht" aber ihre eigene, genauere Ablehnung („nicht in
+// der Auswahl", „keine offene Aufgabe"). Deshalb drei Ausgänge:
+// auflösbar → volle id · mehrdeutig → Fehler (Raten wäre hier schlimmer als
+// Abweisen) · unbekannt → die Eingabe unverändert, die Leitplanke urteilt.
+export function kennungFuerLeitplanke(karten, eingabe) {
+  const treffer = kennungAufloesen(karten, eingabe)
+  if (treffer.karte) return { id: treffer.karte.id }
+  if (treffer.mehrdeutig) return { fehler: treffer.fehler }
+  return { id: String(eingabe ?? '').trim() }
+}
