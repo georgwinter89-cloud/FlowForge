@@ -1690,6 +1690,91 @@ Karte, ein Stempel entsteht erst mit der nächsten bestandenen Prüfung):
    das Ergebnis im Auftrag des Prüfers steht — und dass keine Reparatur-Runde davon
    ausgelöst wurde.
 
+### 54 — Werkstatt-Tab: die lokale KI live sehen und wirklich messen
+*(Version **0.55.0** — 0.54.0 ist von Bauschritt 52 belegt, siehe CLAUDE.md.)*
+
+(Wunsch Georg, 22.08.2026, aus dem Brainstorming über
+`github.com/TiniLLM/ollama-token-monitor`. **Entscheidungen Georg:** beide Stufen — Überblick
+UND echte Messung — in **einem** Schritt; ohne laufenden Lauf zeigt der Tab den **Zustand der
+Rechner**. Der Hinweis, dass ein Ausfall der Zählstelle dann zusammen mit dem Tab in Betrieb
+geht und die Fehlersuche verdoppelt, lag vor der Entscheidung auf dem Tisch.)
+
+**Warum das Fremdwerkzeug nicht übernommen wird, seine Bauart aber schon:** `otop` ist ein
+Terminal-Dashboard in Python, das sich als Zwischenstation auf Port 11435 vor Ollama setzt
+und mitzählt. Als Werkzeug verworfen — 1 Commit, 1 Stern, kein Release, auf macOS/Apple
+Silicon zugeschnitten (die GPU-Anzeige, der interessanteste Teil, greift auf Georgs
+Windows-Karte nicht), und es stünde als Fremdprozess im Weg jedes lokalen Blocks. Die
+**Bauart** ist dagegen genau richtig, weil FlowForge sie ohne Fremdprozess haben kann.
+
+**Drei Messungen am Code (22.08.2026) — sie tragen den Schritt:**
+1. **Es gibt genau eine Stelle, an der der Weg zur lokalen KI festgelegt wird:**
+   `claudeCodeMotor.js:2130` setzt `umgebung.ANTHROPIC_BASE_URL = lokal.adresse`. Trägt
+   FlowForge dort seine eigene Adresse ein, läuft der ganze Verkehr des Block-Agenten durch
+   FlowForge — ohne Python, ohne zusätzlichen Port auf dem Ollama-Rechner, ohne dass Georg
+   etwas installiert.
+2. **Die Helfer-KI läuft an dieser Stelle vorbei.** `lokaleHelfer.js` spricht mit eigenem
+   `fetch` direkt gegen `adresse` (`:151`, `:662`, `:675`, `:697`). Sie ist aber FlowForges
+   eigener Code und nimmt die Adresse als Parameter — sie lässt sich also genauso durch die
+   Zählstelle führen. Das muss **absichtlich** gebaut werden, sonst zeigt der Tab die halbe
+   Wahrheit und niemand merkt es.
+3. **Der Füllstand ist heute geschätzt, nicht gemessen.** `LOKAL_WAECHTER_PROZENT = 80`
+   (`claudeCodeMotor.js:1174`), nach abgegebenem Lieferschein 95 über
+   `schwelleNachLieferung` (`:1223`, `:1762`). Die Schätzung existiert, weil Ollama oberhalb
+   der Fensterkante still kappt und gedeckelte `usage` meldet (0.51.1) — deshalb die
+   Selbst-Kalibrierung. **Wie gut sie ist, ist bis heute nicht gemessen.** Genau das
+   beantwortet eine Zählstelle: Sie sieht die Anfrage, bevor Ollama sie beschneidet.
+
+**Was der Tab zeigt** (eigener Tab in der Titelleiste, neben „Metriken"):
+- **Ohne Lauf — Zustand der Rechner** (Entscheidung Georg): je Adresse aus der Adress-Liste
+  (§9) — erreichbar? welches Modell liegt geladen (`/api/ps`)? passt es auf die Karte
+  (VRAM-Anteil, und bei misslungener Messung ehrlich „nicht beantwortbar" statt geraten —
+  dieselbe Haltung wie `ollamaSpeicherStand`)? liegt das abgeleitete `flowforge-<basis>`
+  überhaupt vor (`/api/tags`)? Damit beantwortet FlowForge **vor** dem Start die Frage „kann
+  ich jetzt lokal bauen"; heute erfährt Georg das erst mitten im Lauf im Ticker.
+- **Während eines Laufs — je arbeitendem lokalen Block:** Adresse, Modell, Laufzeit, Tokens
+  hinein und heraus (**gemessen**), Tokens je Sekunde, VRAM-Stand — und der Füllstand
+  **gemessen neben geschätzt**, mit der geltenden Wächter-Marke daneben.
+
+**Die Zählstelle — Bauart und die Regeln, die nicht verhandelbar sind:**
+- Ein HTTP-Weiterleiter im Hauptprozess, gebunden **nur an 127.0.0.1**, Port vom
+  Betriebssystem vergeben (Port 0), je Lauf frisch. **Nie eine feste Nummer:** Ein belegter
+  Port legte sonst jeden lokalen Lauf lahm — genau der Befund, der 0.46.2 den Port-Schutz
+  des Rauchtests eingebracht hat.
+- Er reicht Anfrage und Antwort **durch** — Strom an Strom, ohne zu sammeln, ohne umzuformen.
+  Gezählt wird aus dem, was ohnehin vorbeikommt: Größe der Anfrage beim Senden, `usage` aus
+  dem Antwortstrom.
+- **Die Gegenprobe steht schon im Bauplan:** 0.51.2 hat gemessen, dass ein schlecht gebautes
+  Textfilter den **ganzen Hauptprozess 232 Sekunden** stilllegt (1 MB Eingabe, kein Timer
+  lief). Eine Zählstelle, die den Strom sammelt oder zeichenweise durchsucht, wäre derselbe
+  Fehler an einer schlimmeren Stelle: Dann redet kein lokaler Block mehr mit Ollama.
+  **Pflicht-Prüfung:** ein großer Antwortstrom geht durch, und die zusätzliche Verzögerung
+  wird gemessen und festgenagelt.
+- **Fällt die Zählstelle aus, fällt nicht der Lauf aus:** Lässt sie sich nicht binden, sagt
+  der Ticker es im Klartext, und der Block bekommt die echte Ollama-Adresse wie bisher. Kein
+  stiller Ausfall — aber auch kein toter Lauf wegen eines Messgeräts.
+- Sie reicht ausschließlich an die **eine** für diesen Block zugeteilte Adresse weiter (kein
+  frei wählbares Ziel), und sie gilt nur für lokale Motor-Instanzen und die lokale Helfer-KI.
+  Claude-Blöcke reden unverändert direkt mit Anthropic.
+
+**Der eigentliche Zweck — die Gegenprobe zur Schätzung:** Eine Zeile je lokalem Block im
+Laufbericht stellt den geschätzten Füllstand neben den gemessenen und nennt den Abstand.
+Liegt die Schätzung systematisch daneben, ist das die belastbare Grundlage, die Marke zu
+korrigieren, statt weiter zu raten. Ohne diese Zeile wäre die Zählstelle nur Schaufenster.
+
+**Ehrliche Grenzen — bewusst benannt:**
+- Ein zusätzlicher Sprung kostet Zeit. Messbar klein, aber nicht null — die Messung gehört
+  in den Schritt, nicht in eine Behauptung.
+- Tokens je Sekunde ist eine **abgeleitete** Zahl, keine Angabe von Ollama.
+- Der Tab zeigt nur, was durch die Zählstelle geht. Was ein Agent an ihr vorbei tut (ein
+  ausgeführter Befehl, der selbst Ollama anspricht), sieht sie nicht.
+
+**Alltagstest:** Vor dem Start den Tab öffnen, ohne dass ein Lauf läuft — es muss je
+Ollama-Adresse dastehen, ob sie erreichbar ist und ob das Modell auf die Karte passt.
+Dann einen Lauf mit einem lokalen Block starten und im Tab zusehen: Tokens müssen steigen,
+Tokens je Sekunde eine plausible Zahl zeigen, und der Füllstand muss **zweimal** dastehen —
+gemessen und geschätzt. Danach im Laufbericht die Vergleichszeile suchen: Wie weit lag die
+Schätzung daneben?
+
 ## Reihenfolge-Begründung (Paket 40–48)
 Im Paket 40–48 bestimmt die Angriffsliste die Reihenfolge, nicht der Nutzen: Die
 Kanten müssen verlustfrei sein (40), bevor ein Auftrag verspricht, wohin eine
