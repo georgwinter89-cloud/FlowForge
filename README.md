@@ -24,17 +24,27 @@ gestartet; sie bekommt Block für Block genau einen Auftrag.
 **Das Schaubild.** Block-Karten auf der Leinwand, Pfeile bestimmen die
 Reihenfolge. An jeder Karte steht, was der Block **braucht** und **liefert**, und
 woher es kommt („← Paket schneiden"); ein Prüfer ohne Arbeitspaket lässt sich gar
-nicht erst starten. Der rote Prüf-Block schickt den Bauer bei Rot zurück
-(„Fehlschlag, 2 Runden") — mechanisch, ohne dass die KI darüber entscheidet.
+nicht erst starten. Je Karte wählst du außerdem **Modell** und **Denktiefe** —
+vom sparsamen Sonnet bis zur lokalen KI auf deinem eigenen Rechner. Der rote
+Prüf-Block schickt den Bauer bei Rot zurück („Fehlschlag, 2 Runden") — mechanisch,
+ohne dass die KI darüber entscheidet.
 
-<img src="docs/bilder/schaubild.png" alt="Schaubild: Paket schneiden → Angreifer → Bauer → Prüfer → Sessionende, mit braucht/liefert-Chips und Rückführungspfeil" width="100%">
+<img src="docs/bilder/schaubild.png" alt="Schaubild: Spec-Interview → Web-Recherche → Paket schneiden → Angreifer → zwei Bauer → Prüfer, mit braucht/liefert-Chips, Modell- und Denktiefe-Wahl je Karte und Rückführungspfeil" width="100%">
 
-**Die Projektansicht nach einem Lauf.** Links die Karten (Status, Aufgaben,
-Entscheidungen, Wissen — vom Sessionende gepflegt), in der Mitte der Laufbericht
-mit Tokens, Modell, lokaler Helfer-KI, den Blöcken und jeder Rechte-Rückfrage
-samt Antwort, rechts die Blockbibliothek.
+Dieselbe Leinwand weitergescrollt: zwei Bauer laufen **parallel**, jeder mit
+eigenem Prüfer; der **Integrator (Code)** führt ihre Teile zusammen und geht
+selbst noch einmal durch einen Prüfer, bevor das **Sessionende** die Karten auf
+Stand bringt.
 
-<img src="docs/bilder/werkbank-laufbericht.png" alt="Projektansicht mit Karten-Seitenleiste, Laufbericht und Blockbibliothek" width="100%">
+<img src="docs/bilder/schaubild-fortsetzung.png" alt="Fortsetzung des Schaubilds: zwei Bauer mit je eigenem Prüfer, Integrator (Code) führt zusammen, danach Prüfer und Sessionende" width="100%">
+
+**Ein Lauf, während er läuft.** Oben das **Gespräch**: Ein Block darf dich fragen,
+wenn eine Entscheidung dir gehört — der Lauf hält an, bis du antwortest (hier
+unscharf, es ging um private Haushaltsfragen). Darunter der **Liveticker**, der
+jeden Schritt mitschreibt: gemessene Größe des Start-Prompts, jeder ausgeführte
+Befehl, jede Frage. Ganz unten kannst du dem Agenten beim **Denken** zusehen.
+
+<img src="docs/bilder/werkbank-lauf.png" alt="Laufender Lauf: Gespräch mit Rückfragen an den Menschen, Liveticker mit Token-Messung und Befehlen, aufgeklapptes Denken des Agenten" width="100%">
 
 **Rechte des Agenten.** Drei Stufen, die FlowForge je Werkzeugaufruf durchsetzt:
 ohne Rückfrage · nur mit deiner Erlaubnis · immer gesperrt. Der Automodus betrifft
@@ -62,6 +72,44 @@ anmelden soll (siehe unten).
 <img src="docs/bilder/projektuebersicht.png" alt="Projektübersicht mit Kacheln" width="100%">
 <img src="docs/bilder/erststart.png" alt="Erststart-Dialog: Abo-Login oder API-Schlüssel" width="100%">
 
+## Die lokale KI: Opus an den Enden, dein Rechner in der Mitte
+
+Seit Bauschritt 49–51 kann jeder Block auch von einer **lokalen KI über Ollama**
+ausgeführt werden — auf demselben Rechner oder einem anderen im Heimnetz. Das
+kostet kein Kontingent und keine Cent. Der Gedanke dahinter: Die teuren Modelle
+stehen an den Enden der Kette (Paket schneiden, Prüfen, Abnahme), die lokale KI
+arbeitet in der Mitte.
+
+Damit das kein Vertrauensvorschuss bleibt, prüft FlowForge nach:
+
+- **Lokaler Prüfer mit Abnahme.** Sagt eine lokale KI „bestanden", spielt
+  FlowForge ihren Prüfbefehl selbst nach. Rot dreht das Urteil mechanisch um —
+  ein „bestanden" gilt nie ungeprüft.
+- **Der Lokal-Wächter.** Gemessen: Ollama schneidet oberhalb der Fensterkante
+  still ab und meldet dann geschönte Zahlen, die eingebaute Verdichtung der CLI
+  kann lokal also nie greifen. FlowForge schätzt den Füllstand deshalb selbst und
+  löst die Übergabe rechtzeitig aus, statt den Block sterben zu lassen.
+- **Speicher-Ehrlichkeit.** FlowForge fragt Ollamas Prozessliste, ob das Modell
+  wirklich auf der Grafikkarte liegt — statt es aus der Modellgröße zu raten. Ein
+  Lauf, der in den Arbeitsspeicher ausgelagert wird, kriecht sonst stundenlang.
+- **Websuche für lokale Blöcke.** Zwei rein lesende Werkzeuge, wahlweise über eine
+  eingebaute Quelle oder deine eigene SearXNG-Instanz. Harte Größendeckel, dein
+  Rechner und dein Heimnetz gesperrt, jeder Zugriff im Liveticker.
+- **Mehrere Rechner.** Eine Adress-Liste statt eines Feldes: je Adresse läuft ein
+  lokaler Block, mit mehreren laufen sie parallel.
+
+## Prüfungen, die nicht veralten
+
+Nach jeder bestandenen Prüfung legt FlowForge eine **Prüfkarte** an und bewahrt
+die Prüfdateien dahinter auf. Seit Bauschritt 52 spielt es sie **von selbst**
+wieder ab — ohne KI, 0 Tokens —, direkt vor und nach jedem schreibenden Block.
+Welche Prüfung dran ist, entscheidet eine Regel und kein Agent: Fasst das laufende
+Paket eine Datei an, die diese Prüfung kennt, läuft sie; im Zweifel läuft sie.
+Dazu laufen je Messpunkt zwei Karten reihum mit — die Gegenprobe gegen die
+Blindheit eines Listenvergleichs. Das Ergebnis geht dem Prüfer in den Auftrag,
+löst aber **keine** Reparatur-Runde aus: Zwischen zwei Bau-Runden darf Rot
+legitim sein.
+
 Was FlowForge **erzwingt**, statt darum zu bitten (die Lehre aus dem Vorgängerprojekt,
 in dem Regeln nur als Text im Prompt standen):
 
@@ -73,13 +121,16 @@ in dem Regeln nur als Text im Prompt standen):
 | Parallel schreiben | nur mit getrennten Dateilisten (Wirkbereich), Prüfer nie neben Bauer |
 | Jeder Schritt rückholbar | Sicherungspunkt vor dem Lauf und nach jedem schreibenden Block |
 | Kontext läuft über | bei ~85 % Füllstand der Lauf-Session Übergabe und frische Session, derselbe Block läuft weiter — automatisch |
+| Lokales „bestanden" | wird mechanisch nachgespielt; rot dreht das Urteil um |
+| Alte Prüfungen | laufen automatisch mit, ausgewählt per Dateivergleich — kein Agent schätzt, was betroffen ist |
+| Prüfmappe `pruefung/` | gehört den Prüf-Blöcken; jeder Prüfer nur sein eigener Ordner — auch für Befehle, die dorthin schreiben |
 
 ## Was es ist — und was nicht
 
 - **Ist:** ein Ein-Personen-Projekt, das ich für mich gebaut habe und benutze.
   Windows 11. Der KI-Motor ist die offizielle Claude Code CLI, über das Claude
-  Agent SDK gebündelt und im Hintergrund gestartet. Optional hilft eine lokale KI
-  über Ollama mit.
+  Agent SDK gebündelt und im Hintergrund gestartet. Optional übernimmt eine
+  lokale KI über Ollama einzelne Blöcke ganz (siehe oben).
 - **Ist nicht:** ein Produkt. Kein Support, keine Roadmap für andere, keine
   Beiträge erwartet (Issues und Pull Requests werden vermutlich nicht bearbeitet).
   Kein macOS, kein Linux.
@@ -96,12 +147,12 @@ ist — aber sie ist nicht versprochen.
 ### Ehrlich zum Code
 
 Der Code ist **gewachsen, nicht entworfen** — eher Spaghetti als Architektur.
-`src/main/lauf.js` hat über 5.000 Zeilen, der Motor-Adapter 2.400, die Texte
-3.300; es gibt keine saubere Schichtung, vieles hängt an langen Funktionen mit
+`src/main/lauf.js` hat fast 7.000 Zeilen, der Motor-Adapter 3.300, die Texte
+4.900; es gibt keine saubere Schichtung, vieles hängt an langen Funktionen mit
 vielen Sonderfällen, die jeweils eine Lehre aus einem echten Lauf sind. Was ihn
 zusammenhält: Jeder Bauschritt beginnt mit einer Angriffsliste (woran könnte genau
 das scheitern?) und endet mit Prüfer-Agenten, die das Verhalten nachmessen statt
-den Code zu lesen; `npm test` fährt über 700 Regel-Prüfungen in `pruefungen/`.
+den Code zu lesen; `npm test` fährt über 1.500 Regel-Prüfungen in `pruefungen/`.
 Das ist der Schutz, nicht die Struktur. Wer den Code lesen will: entlang der
 SPEC-Paragraphen und der Prüfdateien, nicht entlang der Ordner. Ein Aufräumen
 steht nicht im Bauplan — die fachlichen Schritte gehen vor.
