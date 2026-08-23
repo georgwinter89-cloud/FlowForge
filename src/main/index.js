@@ -65,6 +65,9 @@ import {
 import { etikettVorschlagErstellen } from './etikettAssistent.js'
 import { klappenLaden, klappenSpeichern } from './klappen.js'
 import { metrikenLaden } from './metriken.js'
+// Werkstatt (Bauschritt 54): Register der laufenden Zählstellen und der
+// Zustand der Ollama-Rechner.
+import { werkstattStand, rechnerZustandFuerEinstellungen } from './werkstatt.js'
 import {
   chatZustand,
   chatSenden,
@@ -249,6 +252,14 @@ function registriereIpc() {
   // Metriken (BAUPLAN 31): lokale KI und Motor über alle bekannten Projekte —
   // Extrakte und Urteile; die Schnitte rechnet die Oberfläche nach dem Filtern.
   ipcMain.handle('metriken-laden', () => metrikenLaden())
+  // Werkstatt (Bauschritt 54): zwei Abfragen, weil sie ganz verschieden teuer
+  // sind. „Stand" liest nur im eigenen Prozess (die Zählstellen liegen hier) —
+  // den darf die Oberfläche im Sekundentakt holen. „Rechner" fragt fremde
+  // Rechner über das Netz und wird deshalb nur beim Öffnen, auf Knopfdruck und
+  // im ruhigen Takt geholt; die Adressen kommen aus den Einstellungen, damit
+  // die Oberfläche keine zweite Wahrheit darüber führt.
+  ipcMain.handle('werkstatt-stand', () => ({ ok: true, ...werkstattStand() }))
+  ipcMain.handle('werkstatt-rechner', () => rechnerZustandFuerEinstellungen(einstellungenLaden))
   // Prüfmappen-Ansicht an der Prüferkarte (BAUPLAN 17) — nur zum Nachlesen.
   // ordner (BAUPLAN 41): der Prüfordner dieser Prüf-Instanz.
   ipcMain.handle('pruefmappe-lesen', (_e, { pfad, ordner }) =>

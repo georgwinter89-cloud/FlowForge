@@ -70,6 +70,10 @@ contextBridge.exposeInMainWorld('flowforge', {
   chatNeu: (pfad) => ipcRenderer.invoke('chat-neu', pfad ?? null),
   laufberichteLaden: (pfad) => ipcRenderer.invoke('laufberichte-laden', pfad),
   metrikenLaden: () => ipcRenderer.invoke('metriken-laden'),
+  // Werkstatt (Bauschritt 54): der billige Stand der Zählstellen (eigener
+  // Prozess) und der teure Zustand der Ollama-Rechner (Netz).
+  werkstattStand: () => ipcRenderer.invoke('werkstatt-stand'),
+  werkstattRechner: () => ipcRenderer.invoke('werkstatt-rechner'),
   pruefmappeLesen: (pfad, ordner = '') =>
     ipcRenderer.invoke('pruefmappe-lesen', { pfad, ordner }),
   startanleitungLaden: (pfad) => ipcRenderer.invoke('startanleitung-laden', pfad),

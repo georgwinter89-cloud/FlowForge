@@ -112,6 +112,11 @@ import {
 } from './pruefkartenLauf.js'
 import { starteLaufMotor } from './motor/claudeCodeMotor.js'
 import { lokalesModellBereitstellen } from './motor/lokalesModell.js'
+// Zählstelle (Bauschritt 54): Der Verkehr der Helfer-KI läuft an der Zählstelle
+// des Motors vorbei — sie bekommt deshalb eine eigene, sonst zeigte die
+// Werkstatt die halbe Wahrheit.
+import { zaehlstelleStarten } from './motor/zaehlstelle.js'
+import { werkstattAnmelden } from './werkstatt.js'
 import {
   lokaleHelferPruefen,
   lokaleHelferKontextSetzen,
@@ -1433,6 +1438,10 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     // eigene Motoren — „Sofort abbrechen" muss jeden einzelnen töten.
     laufMotor: null,
     motoren: new Map(), // instanzId → Motor
+    // Zählstelle der Helfer-KI (Bauschritt 54): Sie gehört dem LAUF, nicht
+    // einem Block — die Helfer-KI arbeitet quer über alle Claude-Blöcke.
+    helferZaehlstelle: null,
+    helferAbmelden: null,
     aktiveInstanzen: new Set(),
     fragen: new Map(),
     entscheidungen: new Map(),
@@ -2024,6 +2033,48 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         // kleiner Modelle verträgt keine Kartenflut.
         projektwissen: (instanzId) =>
           projektwissenFuerHelfer(projektPfad, kartenFuerBlock(instanzId))
+      }
+      // Zählstelle für die Helfer-KI (Bauschritt 54, Messung 2 am Code): Die
+      // Helfer-KI spricht mit eigenem fetch DIREKT gegen die Adresse und liefe
+      // damit an der Zählstelle des Motors vorbei. Sie nimmt die Adresse aber
+      // als Parameter — also wird sie hier ABSICHTLICH umgelenkt. Ohne diesen
+      // Handgriff zeigte die Werkstatt die halbe Wahrheit, und niemand merkte
+      // es. Klappt es nicht, bleibt die echte Adresse stehen: gemessen wird
+      // dann eben nur der Block-Verkehr (kein Lauf scheitert an einem
+      // Messgerät).
+      const helferStelle = await zaehlstelleStarten({
+        ziel: einstellungen.lokaleHelferAdresse,
+        art: 'helfer',
+        name: einstellungen.lokaleHelferModell
+      })
+      if (helferStelle.ok) {
+        lokaleHelfer.adresse = helferStelle.adresse
+        lauf.helferZaehlstelle = helferStelle
+        lauf.helferAbmelden = werkstattAnmelden({
+          holeStand: () => {
+            const stand = helferStelle.stand()
+            return {
+              art: 'helfer',
+              projektPfad,
+              ziel: stand.ziel,
+              modell: einstellungen.lokaleHelferModell,
+              blockName: '',
+              beginn: stand.block.beginn,
+              dauerMs: stand.block.dauerMs,
+              anfragen: stand.anfragen,
+              offeneAnfragen: stand.offeneAnfragen,
+              tokenHinein: stand.tokenHinein,
+              tokenHeraus: stand.tokenHeraus,
+              ersteKachelMs: stand.ersteKachelMs,
+              // Die Helfer-KI führt eigene kleine Kreisläufe mit eigenem
+              // Kontext — ein „Füllstand des Blocks" gibt es dort nicht, und
+              // eine erfundene Zahl wäre schlimmer als keine.
+              fenster: grenzen.kontext,
+              waechterProzent: null,
+              vergleich: null
+            }
+          }
+        })
       }
       lokaleHelferHinweis = texte.ticker.lokaleHelferBereit(
         einstellungen.lokaleHelferModell,
@@ -6503,6 +6554,13 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
 
     // Die Lauf-Session geordnet schließen — der Lauf ist zu Ende (BAUPLAN 19).
     lauf.laufMotor?.beenden()
+    // Zählstelle der Helfer-KI (Bauschritt 54): Sie gehört dem Lauf, nicht
+    // einem Block — also endet sie hier. Die Zählstellen der lokalen Blöcke
+    // schließen ihre Motoren selbst.
+    lauf.helferAbmelden?.()
+    lauf.helferAbmelden = null
+    lauf.helferZaehlstelle?.schliessen()
+    lauf.helferZaehlstelle = null
 
     // Harter Stopp: alle Motoren sind tot — der Projektordner springt einmal
     // zentral auf den letzten Sicherungspunkt zurück (SPEC §6).
@@ -6598,6 +6656,14 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     }
     // Der Lauf ist geordnet zu Ende — es gibt nichts mehr wiederaufzunehmen.
     laufstandLoeschen(projektPfad)
+    // Sicherheitsnetz für die Zählstelle der Helfer-KI: Der Weg oben ist der
+    // normale, aber dies hier ist der LETZTE gemeinsame Punkt aller Ausgänge.
+    // Zweimal schließen schadet nicht (die Zählstelle merkt es sich), einmal
+    // vergessen hielte einen Port offen, bis FlowForge endet.
+    lauf.helferAbmelden?.()
+    lauf.helferAbmelden = null
+    lauf.helferZaehlstelle?.schliessen()
+    lauf.helferZaehlstelle = null
     aktiveLaeufe.delete(projektPfad)
     laeufeMelden()
     // Lauf-Ende melden, wenn Georg gerade woanders ist (SPEC §5).

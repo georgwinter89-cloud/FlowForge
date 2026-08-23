@@ -200,6 +200,13 @@ Sitzungen hinweg Software entsteht — ohne dass dem Agenten der Kontext überl�
     nennt seither den Vorgang und die eingestellte Wartezeit — er behauptet **nicht** mehr,
     Ollama sei überlastet oder das Modell zu groß (an einem echten Fall widerlegt: alle
     Anfragen mit Status 200, konstant 19,8 Tokens/s, keine Auslagerung).
+    **Der Weg läuft seit Bauschritt 54 durch FlowForge:** Statt der Ollama-Adresse trägt
+    FlowForge in `ANTHROPIC_BASE_URL` seine eigene **Zählstelle** ein (§3.5) — ein
+    Weiterleiter im Hauptprozess, der Anfrage und Antwort durchreicht und dabei mitzählt.
+    Damit ist der Füllstand nicht mehr nur geschätzt, sondern auch **gemessen**: Die
+    Zählstelle sieht die Anfrage, bevor Ollama sie beschneidet. Lässt sie sich nicht
+    öffnen, bekommt der Block mit Klartext-Ticker-Zeile die echte Adresse wie zuvor — ein
+    Messgerät bringt keinen Lauf um.
     **Abgeleitetes Modell:** Weil die CLI
     keine Sampling-Optionen mitschickt, legt FlowForge vor dem Lauf per Ollama-API ein
     Modell `flowforge-<basis>` an (Kontextfenster + Feineinstellungen als
@@ -633,6 +640,67 @@ Seite aufs Projekt vorgefiltert zeigt (eigener Baustein, nicht Teil der Leinwand
   Blocktyp, und der Wochenverlauf vergleicht weiter Gleiches mit Gleichem.
   Auseinandergehalten werden sie über die Instanz-Kennung: Zwei verschieden benannte
   Prüfer in einem Lauf sind zwei Erstläufe, keine Wiederholung.
+
+### 3.5 Werkstatt (seit Bauschritt 54)
+
+Eigener Knopf in der Titelleiste neben „Metriken" (§9): die lokale KI live sehen **und
+wirklich messen**. Wie die Metriken reines Nachschlagewerk — kein Lauf-Agent sieht die
+Seite je (§10).
+
+- **Ohne Lauf — Zustand der Rechner** (Entscheidung Georg, 22.08.2026): je Adresse der
+  Ollama-Liste (§9) — antwortet der Rechner (`/api/tags`)? liegt Georgs Basis-Modell
+  dort? liegt das abgeleitete `flowforge-<basis>` schon vor? was ist gerade geladen und
+  zu welchem Anteil in der Grafikkarte (`/api/ps`, dieselbe Rechnung wie die
+  VRAM-Warnzeile in §2)? Damit beantwortet FlowForge **vor** dem Start die Frage „kann
+  ich jetzt lokal bauen"; bis Bauschritt 53 erfuhr Georg das erst mitten im Lauf im
+  Ticker. Eine Frage, die sich nicht beantworten lässt, steht als **„nicht
+  beantwortbar"** da — „nichts geladen" und „Prozessliste nicht erreichbar" sind
+  ausdrücklich zwei verschiedene Aussagen.
+- **Während eines Laufs — je Messstelle:** Adresse, Modell, Block, Laufzeit,
+  Gesprächswechsel (samt der gerade **laufenden**), Tokens hinein und heraus
+  (**gemessen**) und Tokens je Sekunde (**abgeleitet**, Ollama meldet sie nicht).
+- **Der Kern — Füllstand gemessen neben geschätzt:** Der Füllstand eines lokalen Blocks
+  war bis hierher ausschließlich geschätzt (§2, Füllstands-Wächter) — er musste es sein,
+  weil Ollama oberhalb der Fensterkante still kappt und danach falsche Zahlen meldet.
+  Die Zählstelle sieht die Anfrage, **bevor** Ollama sie beschneidet. Zwei Balken
+  übereinander zeigen beide Zahlen, die geltende Übertrags-Marke als rote Marke daneben;
+  eine Zeile je lokalem Block nennt am Blockende beide Zahlen und den Abstand im
+  Laufbericht (§3.2). Liegt die Schätzung systematisch daneben, ist das die belastbare
+  Grundlage, die Marke zu korrigieren, statt weiter zu raten. **Kein Vergleich ohne
+  Schätzung:** Solange der Koordinator seinen ersten Turn fährt, hat der Block-Agent
+  nicht angefangen — dann steht die Messung allein da und sagt das, statt „100 %
+  daneben" zu behaupten.
+
+**Die Zählstelle — Bauart und die Regeln, die nicht verhandelbar sind.** Ein
+HTTP-Weiterleiter **im Hauptprozess** (kein Fremdprozess, keine Installation): Für lokale
+Motor-Instanzen trägt FlowForge statt der Ollama-Adresse seine eigene in
+`ANTHROPIC_BASE_URL` ein, und die lokale Helfer-KI (§4.3) wird **absichtlich** ebenfalls
+dorthin gelenkt — sonst zeigte die Werkstatt die halbe Wahrheit. Gebunden **nur an
+127.0.0.1**, Port vom Betriebssystem (Port 0), je Motor frisch; **nie eine feste Nummer**,
+ein belegter Port legte sonst jeden lokalen Lauf lahm. Anfrage und Antwort gehen **durch**
+— Strom an Strom, ohne zu sammeln; gehalten wird nie mehr als der Rest hinter dem letzten
+Zeilenumbruch (Deckel 256 KB), gesucht wird über Bytes statt über eine Regex auf
+gesammeltem Text. Die Gegenprobe steht im Bestand: 0.51.2 hat gemessen, dass ein schlecht
+gebautes Textfilter den ganzen Hauptprozess 232 Sekunden stilllegt. **Fällt die Zählstelle
+aus, fällt nicht der Lauf aus:** Lässt sie sich nicht binden, sagt es der Ticker im
+Klartext, und der Block bekommt die echte Ollama-Adresse wie bisher. Sie reicht
+ausschließlich an die **eine** zugeteilte Adresse weiter (auch eine absolute Anfragezeile
+kann kein fremdes Ziel erzwingen), gilt nur für lokale Motor-Instanzen und die lokale
+Helfer-KI, und Claude-Blöcke reden unverändert direkt mit Anthropic.
+
+**Ehrliche Grenzen, in der Seite selbst benannt:**
+- Gemessen wird der Verkehr der ganzen Motor-Instanz — Block-Agent **und** Koordinator.
+  Für den Füllstand zählt die größte Anfrage, und das ist nach dem ersten Zug immer der
+  Block-Agent.
+- Der zusätzliche Sprung kostet Zeit. Gemessen (Pflicht-Prüfung des Bauschritts): bei
+  einem 8-MB-Antwortstrom unter einer Sekunde Aufschlag, und der Aufwand wächst linear
+  mit der Strommenge, nicht quadratisch.
+- Tokens je Sekunde ist abgeleitet, keine Angabe von Ollama.
+- Gezeigt wird nur, was durch die Zählstelle geht. Was ein Agent an ihr vorbei tut (ein
+  ausgeführter Befehl, der selbst Ollama anspricht), sieht sie nicht.
+- Antworten, die gepackt zurückkämen, wären nicht zählbar — die Zählstelle bittet deshalb
+  ausdrücklich um ungepackte (`accept-encoding: identity`) und zählt eine trotzdem
+  gepackte Antwort ehrlich **nicht** mit, statt aus Kompressat Zahlen zu erfinden.
 
 ## 4. Workflows & Blöcke
 
@@ -2593,7 +2661,10 @@ Signalrot für alles Lebendige (läuft, wartet auf Antwort, Lauf starten), Schri
 Archivo (lokal gebündelt), Zahlen und Protokolle in JetBrains Mono. Das Fenster hat
 eine eigene dunkle Titelleiste (Blitz-Logo, „FlowForge WERKBANK", Brotkrume zum
 Zurückspringen, rechts die Knöpfe **„Co-Pilot"** (§6, öffnet das seitliche Chat-Fenster),
-**„Metriken"** (§3.4) und „Einstellungen"); Windows zeichnet nur die drei Fensterknöpfe. Installer, Fenster und
+**„Werkstatt"** (§3.5, seit Bauschritt 54), **„Metriken"** (§3.4) und „Einstellungen");
+Werkstatt und Metriken schließen einander aus — beide legen sich über die Ansicht, und
+die Brotkrume führt aus beiden an denselben Ort zurück. Windows zeichnet nur die drei
+Fensterknöpfe. Installer, Fenster und
 Taskleiste tragen das **Blitz-Icon** (seit Bauschritt 30, aus dem Inline-SVG erzeugt). Der **Kontext-Füllstand**
 erscheint als Balken mit roter Marke an der Übertrags-Schwelle — in der Lauf-Ansicht
 und auf der Hero-Kachel; seit Bauschritt 36 steht der Füllstand des arbeitenden
@@ -2710,8 +2781,10 @@ Block-Agenten als Hinweis daneben (§6).
 - Umbau eines Workflows, während er läuft
 - Jede Form von Prozess-Selbstvermessung **im Agentenprozess** (Bestandslisten,
   Nachweis-Register o.ä. — das Life-OS-Übel). Nicht gemeint ist das Messinstrument des
-  Nutzers: die Metriken-Seite (§3.4) ist Nachschlagewerk, das **kein Lauf-Agent** je
-  sieht und das nie in einen Lauf-Auftrag fließt. Präzisiert in Bauschritt 51: Der
+  Nutzers: die Metriken-Seite (§3.4) und die Werkstatt (§3.5) sind Nachschlagewerk, das
+  **kein Lauf-Agent** je sieht und das nie in einen Lauf-Auftrag fließt. Die Zählstelle
+  der Werkstatt misst den Verkehr von außen — der Agent bekommt davon nichts zu sehen und
+  wird nicht gebeten, über sich selbst Buch zu führen. Präzisiert in Bauschritt 51: Der
   Co-Pilot (§6) ist kein Lauf-Agent, sondern das Sprachrohr des Nutzers — er bekommt die
   „Lokale Bilanz" (§3.4) für Empfehlungen an den Nutzer; auch aus dem Chat wandert keine
   Metrik-Zahl in einen Lauf-Auftrag.

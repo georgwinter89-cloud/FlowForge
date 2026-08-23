@@ -27,7 +27,18 @@ import { listeAusText } from './werkzeugSchema.js'
 import { helferWerkzeugServer } from './helferWerkzeuge.js'
 import { webWerkzeugServer } from './webWerkzeuge.js'
 import { ollamaSpeicherStand } from './lokalerSpeicher.js'
-import { vramProzent, LOKAL_WAECHTER_PROZENT } from '../../shared/lokalRegeln.js'
+// Zählstelle und Werkstatt (Bauschritt 54): der Weiterleiter, durch den der
+// Verkehr eines lokalen Blocks läuft, und das Register, aus dem der
+// Werkstatt-Tab live liest.
+import { zaehlstelleStarten } from './zaehlstelle.js'
+import { werkstattAnmelden } from '../werkstatt.js'
+import { fuellstandVergleich } from '../../shared/zaehlRegeln.js'
+import {
+  vramProzent,
+  LOKAL_WAECHTER_PROZENT,
+  ZEICHEN_JE_TOKEN,
+  lokaleKontextSchaetzung
+} from '../../shared/lokalRegeln.js'
 import { menschWerkzeugServer } from './menschWerkzeuge.js'
 import { kontextFensterFuerModell, kontextFensterMerken } from './motorWissen.js'
 import { startWerkzeugServer } from './startWerkzeuge.js'
@@ -1310,14 +1321,10 @@ export function schwelleNachLieferung(schwelle, meldungen) {
   if (!Array.isArray(meldungen) || meldungen.length === 0) return normal
   return Math.max(normal, WAECHTER_NOTBREMSE_PROZENT)
 }
-// Bewusst überschätzend: deutscher Text liegt bei etwa 4 Zeichen je Token,
-// Code eher bei 3–3,5. Lieber ein Übertrag zu früh als stilles Kappen.
-export const ZEICHEN_JE_TOKEN = 3.5
-export function lokaleKontextSchaetzung(zeichen) {
-  const zahl = Number(zeichen)
-  if (!Number.isFinite(zahl) || zahl <= 0) return 0
-  return Math.ceil(zahl / ZEICHEN_JE_TOKEN)
-}
+// Zeichen je Token und die Schätzung daraus wohnen seit Bauschritt 54 in
+// lokalRegeln.js (die Werkstatt braucht dieselbe Rechnung im Renderer) — hier
+// nur weitergereicht, damit jede bisherige Lesestelle gültig bleibt.
+export { ZEICHEN_JE_TOKEN, lokaleKontextSchaetzung }
 
 // Platz im Arbeitsgedächtnis bis zur geltenden Wächter-Marke, in ZEICHEN — der
 // Deckel, an dem die Websuche (0.51.2) ihre Treffer und Seitentexte misst.
@@ -1777,6 +1784,126 @@ export function starteLaufMotor(optionen) {
     aufEreignis({ art: 'verbrauch', verbrauch: blockVerbrauch() })
   }
 
+  // -------------------------------------------------------------------------
+  // Zählstelle und Werkstatt (Bauschritt 54)
+  // -------------------------------------------------------------------------
+  // Warum es sie gibt: Der Füllstand eines lokalen Blocks ist bis hierher
+  // ausschließlich GESCHÄTZT (lokalWaechter unten, 0.51.1) — Ollama meldet
+  // oberhalb der Fensterkante still gekappte Zahlen, deshalb die eigene
+  // Rechnung. Wie gut sie ist, war nie gemessen. Die Zählstelle sieht die
+  // Anfrage, BEVOR Ollama sie beschneidet: Damit steht am Blockende der
+  // gemessene Füllstand neben dem geschätzten, und die Wächter-Marke lässt
+  // sich korrigieren statt weiter zu raten.
+  let zaehlstelle = null
+  let werkstattAbmelden = null
+
+  async function zaehlstelleAufbauen() {
+    const gestartet = await zaehlstelleStarten({
+      ziel: lokal.adresse,
+      art: 'block',
+      name: lokal.modell ?? ''
+    })
+    if (!gestartet.ok) {
+      // Kein stiller Ausfall — aber auch kein toter Lauf wegen eines
+      // Messgeräts (BAUPLAN 54).
+      aufEreignis({ art: 'ticker', text: texte.ticker.zaehlstelleAus(gestartet.fehler) })
+      return
+    }
+    zaehlstelle = gestartet
+    werkstattAbmelden = werkstattAnmelden({ holeStand: werkstattEintrag })
+  }
+
+  function zaehlstelleAbbauen() {
+    werkstattAbmelden?.()
+    werkstattAbmelden = null
+    zaehlstelle?.schliessen()
+    zaehlstelle = null
+  }
+
+  // Der Eintrag, den der Werkstatt-Tab live anzeigt. Bewusst eine Funktion:
+  // Zahlen und Blockname ändern sich mit jeder Antwort, und ein beim Start
+  // eingefrorener Wert wäre schon nach der ersten Nachricht falsch.
+  function werkstattEintrag() {
+    if (!zaehlstelle) return null
+    const stand = zaehlstelle.stand()
+    const fenster = bekanntesFenster || KONTEXT_FENSTER_STANDARD
+    return {
+      art: 'block',
+      projektPfad,
+      ziel: stand.ziel,
+      modell: lokal?.modell ?? '',
+      blockName: block?.blockName ?? '',
+      beginn: stand.block.beginn,
+      dauerMs: stand.block.dauerMs,
+      anfragen: stand.block.anfragen,
+      // Eine LAUFENDE Anfrage ist eine Aussage: Bei einem lokalen Block dauert
+      // ein Gesprächswechsel Minuten, und ohne diese Zahl sähe der Tab in
+      // genau dieser Zeit tot aus (gemessen im Probelauf am 23.08.2026).
+      offeneAnfragen: stand.block.offeneAnfragen,
+      tokenHinein: stand.block.tokenHinein,
+      tokenHeraus: stand.block.tokenHeraus,
+      ersteKachelMs: stand.ersteKachelMs,
+      fenster,
+      waechterProzent: schwelleNachLieferung(LOKAL_WAECHTER_PROZENT, block?.meldungen),
+      ...fuellstandFelder(stand)
+    }
+  }
+
+  // Gemessener Füllstand — und der Vergleich nur, wenn es auch etwas zu
+  // vergleichen GIBT.
+  //
+  // Der Fund aus dem Probelauf (23.08.2026): Solange der Koordinator seinen
+  // ersten Turn fährt, hat der Block-Agent noch gar nicht angefangen, und
+  // `schaetzZeichen` steht auf 0. Die Werkstatt zeigte deshalb „gemessen
+  // 29.638 · geschätzt 0 · 100 % daneben" — das liest sich wie ein
+  // katastrophaler Schätzfehler, ist aber schlicht ein Vergleich gegen etwas,
+  // das es noch nicht gibt. Keine Schätzung heißt kein Vergleich; die Messung
+  // steht dann allein da und sagt das auch.
+  //
+  // Gemessen ist die GRÖSSTE Anfrage dieses Blocks: Jeder Turn schickt das
+  // ganze Gespräch neu, die größte Anfrage IST also der höchste erreichte
+  // Füllstand. Die letzte allein wäre trügerisch — der Koordinator schickt
+  // zwischendurch kleinere Anfragen über dieselbe Leitung.
+  function fuellstandFelder(stand) {
+    const fenster = bekanntesFenster || KONTEXT_FENSTER_STANDARD
+    const gemessenZeichen = stand.block.groessteAnfrageZeichen
+    const geschaetztZeichen = block?.schaetzZeichen ?? 0
+    const gemessen = lokaleKontextSchaetzung(gemessenZeichen)
+    return {
+      gemessen: gemessen > 0 ? gemessen : null,
+      gemessenProzent: gemessen > 0 && fenster > 0 ? (gemessen / fenster) * 100 : null,
+      vergleich:
+        geschaetztZeichen > 0
+          ? fuellstandVergleich(gemessenZeichen, geschaetztZeichen, fenster)
+          : null
+    }
+  }
+
+  // Die Zeile, für die es die Zählstelle eigentlich gibt (BAUPLAN 54): Am Ende
+  // eines lokalen Blocks steht im Laufbericht der geschätzte Füllstand neben
+  // dem gemessenen, mit dem Abstand dazwischen. Ohne sie wäre die Zählstelle
+  // nur Schaufenster.
+  function fuellstandVergleichMelden() {
+    if (!zaehlstelle || !block) return
+    const felder = fuellstandFelder(zaehlstelle.stand())
+    // Kein Vergleich ohne Messung: Ein Block, der gar nicht zum Reden kam,
+    // bekommt keine erfundene 0-Zeile.
+    if (felder.gemessen === null) return
+    // Gemessen, aber nie geschätzt (der Block-Agent kam nicht zum Zug): Dann
+    // steht die Messung allein da — und sagt das. Ein Vergleich gegen eine
+    // Schätzung, die es nie gab, wäre ein erfundener Befund.
+    aufEreignis({
+      art: 'ticker',
+      text: felder.vergleich
+        ? texte.ticker.lokalFuellstandVergleich(block.blockName, felder.vergleich)
+        : texte.ticker.lokalFuellstandOhneSchaetzung(
+            block.blockName,
+            felder.gemessen,
+            felder.gemessenProzent
+          )
+    })
+  }
+
   // VRAM-Passt-Prüfung (0.51.3): Liegt das abgeleitete Modell nicht (nahezu)
   // vollständig in der Grafikkarte, steht das als Warnzeile im Ticker und
   // damit im Laufbericht — Warnung, keine Sperre (Rückfrage-statt-Sperre).
@@ -1904,6 +2031,8 @@ export function starteLaufMotor(optionen) {
   // abgegebene Meldung nicht verschlucken.
   function blockAufloesen(zustand, extra = {}) {
     if (!block) return
+    // Erst die Vergleichszeile (sie braucht den Block noch), dann auflösen.
+    fuellstandVergleichMelden()
     const verbrauch = blockVerbrauch()
     const b = block
     block = null
@@ -2213,6 +2342,11 @@ export function starteLaufMotor(optionen) {
         })
       : null
 
+    // Zählstelle (Bauschritt 54): NUR für lokale Motoren. Ein Claude-Block redet
+    // unverändert direkt mit Anthropic — dort misst die CLI ehrlich, und ein
+    // Zwischenstück gäbe es umsonst.
+    if (lokal) await zaehlstelleAufbauen()
+
     // Saubere Umgebung (umgebungBereinigen): ANTHROPIC_*/CLAUDE*-Variablen und
     // die präfixlosen CLI-Schalter fliegen raus — sie könnten Anmeldung,
     // Verhalten oder Messung des Motors umleiten (z.B. wenn FlowForge selbst aus
@@ -2228,7 +2362,13 @@ export function starteLaufMotor(optionen) {
       // das Ollama-Modell, damit nichts still in die Cloud geht; Telemetrie
       // und Update-Checks bleiben aus; das Kontextfenster sagt FlowForge der
       // CLI ausdrücklich (sie kennt das Modell nicht und nähme 200000).
-      umgebung.ANTHROPIC_BASE_URL = lokal.adresse
+      // Zählstelle (Bauschritt 54): GENAU HIER wird der Weg zur lokalen KI
+      // festgelegt — deshalb steht hier auch die einzige Weiche. Steht die
+      // Zählstelle, läuft der ganze Verkehr des Block-Agenten durch FlowForge
+      // und die Werkstatt kann messen statt schätzen. Steht sie nicht, bekommt
+      // der Block die echte Ollama-Adresse wie bisher, und der Ticker sagt es
+      // im Klartext: Ein Messgerät darf keinen Lauf umbringen (BAUPLAN 54).
+      umgebung.ANTHROPIC_BASE_URL = zaehlstelle?.adresse ?? lokal.adresse
       umgebung.ANTHROPIC_AUTH_TOKEN = 'ollama'
       umgebung.ANTHROPIC_API_KEY = ''
       umgebung.ANTHROPIC_DEFAULT_HAIKU_MODEL = lokal.modell
@@ -2780,6 +2920,11 @@ export function starteLaufMotor(optionen) {
         else if (sanftAngefordert) blockAufloesen('sanft-gestoppt', { ergebnisText: '' })
         else blockAufloesen('fehlgeschlagen', { fehlertext: texte.fehler.unbekannt })
       }
+      // Zählstelle (Bauschritt 54): Sie lebt genau so lange wie dieser Motor.
+      // Hier ist der einzige Ausgang, den ALLE Enden passieren — Erfolg,
+      // Fehler, sanfter und harter Stopp. Ein liegengebliebener Weiterleiter
+      // hielte sonst einen Port und einen Verbindungspool offen.
+      zaehlstelleAbbauen()
     }
   })()
   // Fehler der Schleife selbst (z.B. beim Server-Aufbau VOR dem try) dürfen
@@ -2792,6 +2937,9 @@ export function starteLaufMotor(optionen) {
     blockAufloesen('fehlgeschlagen', {
       fehlertext: String(fehler?.message ?? texte.fehler.unbekannt)
     })
+    // Stirbt die Schleife VOR ihrem try (z.B. beim Server-Aufbau), läuft ihr
+    // finally nie — die Zählstelle bliebe offen.
+    zaehlstelleAbbauen()
   })
 
   return {
@@ -2909,6 +3057,11 @@ export function starteLaufMotor(optionen) {
           modellTokens: new Map(),
           unterVerbrauch: new Map()
         }
+        // Zählstelle (Bauschritt 54): Der Schnitt gehört hierher. Dieselbe
+        // Motor-Instanz kann nacheinander mehrere Blöcke tragen — ohne diesen
+        // Schnitt trüge die Vergleichszeile des zweiten Blocks die Spitze des
+        // ersten, und die „Messung" wäre eine Verwechslung.
+        zaehlstelle?.blockBeginnt()
         eingabeNachschieben(texte.agentenLaufSession.dispatch(blockName))
       })
     },

@@ -3474,3 +3474,101 @@ body {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
+
+/* Werkstatt (Bauschritt 54): die lokale KI live. Die Seite erbt das Gerüst der
+   Metriken (Kopf, Abschnitte, Tabellen, Kacheln) — eigenes gibt es nur da, wo
+   die Aussage eine eigene Form braucht: zwei Füllstands-Balken übereinander,
+   damit „gemessen" und „geschätzt" NEBENEINANDER stehen statt nacheinander. */
+.werkstatt-block {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--rand-panel);
+  border-radius: var(--radius-karte);
+  background: var(--flaeche-tief);
+}
+
+.werkstatt-fuellstand {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.werkstatt-balken {
+  position: relative;
+  height: 12px;
+  border-radius: 6px;
+  background: var(--rand-panel);
+  overflow: hidden;
+}
+
+.werkstatt-balken-wert {
+  height: 100%;
+  border-radius: 6px;
+  transition: width 0.3s ease;
+}
+
+.werkstatt-balken-wert.werkstatt-gemessen {
+  background: var(--akzent-hell);
+}
+
+/* Über 100 %: Ollama kappt dann still — das ist keine Nuance, sondern das
+   Symptom, für das die Zählstelle gebaut wurde. */
+.werkstatt-balken-wert.werkstatt-ueber {
+  background: var(--signal);
+}
+
+.werkstatt-balken-wert.werkstatt-geschaetzt {
+  background: var(--text-blass);
+}
+
+/* Die geltende Übertrags-Marke — dieselbe rote Marke wie am Kontext-Balken
+   der Lauf-Ansicht, damit beide Orte dieselbe Sprache sprechen. */
+.werkstatt-marke {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--signal-punkt);
+}
+
+.werkstatt-balken-zeile {
+  font-family: var(--schrift-mono);
+  font-size: 11px;
+  color: var(--text-zweit);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.werkstatt-punkt {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.werkstatt-punkt.werkstatt-gemessen {
+  background: var(--akzent-hell);
+}
+
+.werkstatt-punkt.werkstatt-geschaetzt {
+  background: var(--text-blass);
+}
+
+.werkstatt-warnung {
+  color: var(--signal-text);
+}
+
+.werkstatt-grenzen {
+  margin: 6px 0 0 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  list-style: disc;
+}
+
+/* Eine gerade laufende Anfrage: rot wie alles Lebendige in FlowForge. */
+.werkstatt-laeuft {
+  color: var(--signal-text);
+  font-size: 11px;
+}

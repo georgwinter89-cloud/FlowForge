@@ -110,11 +110,20 @@ describe('0.51.1 · alle drei Motor-Sessions benutzen dieselbe Bereinigung', () 
   })
 
   it('die Ollama-Umgebung wird NACH der Bereinigung gesetzt', () => {
-    const ollama = motorQuelle.indexOf('umgebung.ANTHROPIC_BASE_URL = lokal.adresse')
+    const ollama = motorQuelle.indexOf('umgebung.ANTHROPIC_BASE_URL =')
     expect(ollama).toBeGreaterThan(0)
     const bereinigt = motorQuelle.lastIndexOf('umgebungBereinigen(process.env)', ollama)
     expect(bereinigt).toBeGreaterThan(0)
     expect(bereinigt).toBeLessThan(ollama)
+  })
+
+  // Seit Bauschritt 54 steht an dieser Stelle die Zählstelle davor. Die
+  // Rückfalllinie ist der Kern der Zusage „ein Messgerät bringt keinen Lauf
+  // um": Ohne Zählstelle muss dort weiterhin die echte Ollama-Adresse landen.
+  it('fällt ohne Zählstelle auf die echte Ollama-Adresse zurück', () => {
+    expect(motorQuelle).toContain(
+      'umgebung.ANTHROPIC_BASE_URL = zaehlstelle?.adresse ?? lokal.adresse'
+    )
   })
 })
 

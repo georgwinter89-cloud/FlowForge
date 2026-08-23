@@ -5,6 +5,7 @@ import Projektansicht from './Projektansicht.jsx'
 import Einstellungen from './Einstellungen.jsx'
 import Erststart from './Erststart.jsx'
 import Metriken from './Metriken.jsx'
+import Werkstatt from './Werkstatt.jsx'
 import Chat from './Chat.jsx'
 
 export default function App() {
@@ -17,6 +18,12 @@ export default function App() {
   // der Titelleiste legt sie über die aktuelle Ansicht; die Brotkrume führt
   // zurück (das offene Projekt bleibt gemerkt).
   const [metrikenOffen, setMetrikenOffen] = useState(false)
+  // Werkstatt (Bauschritt 54): dieselbe Bauart wie die Metriken — eine globale
+  // Seite über den Knopf in der Titelleiste, Brotkrume zurück, das offene
+  // Projekt bleibt gemerkt. Beide Seiten schließen einander aus: Zwei
+  // Überlagerungen übereinander gäbe es sonst, und die Brotkrume wüsste nicht,
+  // wohin sie zurückführt.
+  const [werkstattOffen, setWerkstattOffen] = useState(false)
   // Co-Pilot (BAUPLAN 33): ein seitliches Chat-Fenster — in der Übersicht wie
   // im Projekt; welcher Chat gemeint ist, entscheidet das offene Projekt.
   const [chatOffen, setChatOffen] = useState(false)
@@ -52,11 +59,17 @@ export default function App() {
           </span>
           <span className="kopf-werkbank">{texte.kopfleiste.werkbank}</span>
         </span>
-        {metrikenOffen ? (
-          <button className="kopf-brotkrume" onClick={() => setMetrikenOffen(false)}>
+        {metrikenOffen || werkstattOffen ? (
+          <button
+            className="kopf-brotkrume"
+            onClick={() => {
+              setMetrikenOffen(false)
+              setWerkstattOffen(false)
+            }}
+          >
             ← {offenesProjekt ? offenesProjekt.name : texte.kopfleiste.zuProjekten}
             &nbsp;&nbsp;/&nbsp;&nbsp;
-            <b>{texte.metriken.ueberschrift}</b>
+            <b>{metrikenOffen ? texte.metriken.ueberschrift : texte.werkstatt.ueberschrift}</b>
           </button>
         ) : (
           offenesProjekt && (
@@ -73,8 +86,24 @@ export default function App() {
           💬 {texte.kopfleiste.chatKnopf}
         </button>
         <button
+          className={'knopf-klein kopf-knopf' + (werkstattOffen ? ' kopf-knopf-aktiv' : '')}
+          onClick={() =>
+            setWerkstattOffen((alt) => {
+              if (!alt) setMetrikenOffen(false)
+              return !alt
+            })
+          }
+        >
+          {texte.kopfleiste.werkstattKnopf}
+        </button>
+        <button
           className={'knopf-klein kopf-knopf' + (metrikenOffen ? ' kopf-knopf-aktiv' : '')}
-          onClick={() => setMetrikenOffen((alt) => !alt)}
+          onClick={() =>
+            setMetrikenOffen((alt) => {
+              if (!alt) setWerkstattOffen(false)
+              return !alt
+            })
+          }
         >
           {texte.kopfleiste.metrikenKnopf}
         </button>
@@ -87,7 +116,9 @@ export default function App() {
       </header>
       <div className="rumpf">
         <main className="inhalt">
-          {metrikenOffen ? (
+          {werkstattOffen ? (
+            <Werkstatt />
+          ) : metrikenOffen ? (
             <Metriken />
           ) : offenesProjekt ? (
             <Projektansicht pfad={offenesProjekt.pfad} initialTab={offenesProjekt.tab} />

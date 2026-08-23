@@ -17,8 +17,115 @@ export const texte = {
     zuProjekten: 'Projekte',
     // Metriken (BAUPLAN 31): Knopf in der Titelleiste → globale Seite.
     metrikenKnopf: 'Metriken',
+    // Werkstatt (Bauschritt 54): Knopf in der Titelleiste neben „Metriken" →
+    // die lokale KI live sehen und wirklich messen.
+    werkstattKnopf: 'Werkstatt',
     // Co-Pilot (BAUPLAN 33): Knopf in der Titelleiste → seitliches Chat-Fenster.
     chatKnopf: 'Co-Pilot'
+  },
+  // Werkstatt (Bauschritt 54): Ohne Lauf der Zustand der Rechner, während eines
+  // Laufs die gemessenen Zahlen der lokalen Blöcke. Wie die Metriken ein
+  // Messinstrument des Nutzers — kein Lauf-Agent sieht diese Seite je (SPEC §10).
+  werkstatt: {
+    ueberschrift: 'Werkstatt',
+    untertitel:
+      'Die lokale KI live. Ohne Lauf steht hier, ob deine Ollama-Rechner überhaupt bereit sind — ' +
+      'die Frage „kann ich jetzt lokal bauen" also, bevor du startest. Während eines Laufs stehen hier ' +
+      'die gemessenen Zahlen jedes lokalen Blocks. Nur zum Ansehen; kein Lauf-Agent bekommt das je zu sehen.',
+    aktualisieren: 'Neu abfragen',
+
+    // --- Zustand der Rechner (ohne Lauf) ---
+    rechnerUeberschrift: 'Zustand der Rechner',
+    rechnerErklaerung:
+      'Je Adresse aus deiner Ollama-Liste (Einstellungen): Antwortet der Rechner? Liegt dein Basis-Modell dort? ' +
+      'Und ist das abgeleitete Modell, mit dem FlowForge wirklich arbeitet, schon angelegt? Wo eine Frage nicht ' +
+      'beantwortbar ist, steht das da — geraten wird nichts.',
+    rechnerLaedt: 'Die Rechner werden gefragt …',
+    rechnerLeer: 'Es ist keine Ollama-Adresse eingetragen. Das machst du in den Einstellungen.',
+    ohneModell:
+      'In den Einstellungen ist kein Modell für die lokale KI eingetragen — ohne das lässt sich nicht sagen, ob ein Rechner bereit ist.',
+    spalteAdresse: 'Adresse',
+    spalteErreichbar: 'Antwortet',
+    spalteBasisModell: 'Dein Modell',
+    spalteAbgeleitet: 'FlowForge-Modell',
+    spalteGeladen: 'Gerade geladen',
+    spalteKarte: 'In der Grafikkarte',
+    ja: 'ja',
+    nein: 'nein',
+    nichtBeantwortbar: 'nicht beantwortbar',
+    nichtsGeladen: 'nichts geladen',
+    abgeleitetFehltHinweis:
+      'Das FlowForge-Modell wird beim Laufstart automatisch angelegt — dass es hier fehlt, ist vor dem ersten lokalen Lauf normal.',
+    modellFehltHinweis: (modell) =>
+      `Das Basis-Modell „${modell}" fehlt auf dieser Adresse. Solange das so ist, klammert FlowForge sie beim Laufstart aus — und wenn KEINE Adresse es hat, startet ein Lauf mit lokalem Block gar nicht erst.`,
+    bereitJa: 'Bereit für einen lokalen Lauf.',
+    bereitNein: 'Keine einzige Adresse ist bereit — ein Lauf mit lokalem Block würde jetzt nicht starten.',
+    bereitTeilweise: (bereit, gesamt) =>
+      `${bereit} von ${gesamt} Adressen sind bereit — die übrigen klammert FlowForge beim Laufstart mit Klartext aus.`,
+    karteProzent: (prozent) => `${prozent} %`,
+    karteKnapp: 'Der Rest rechnet im Arbeitsspeicher — der Block kriecht dann.',
+
+    // --- Während eines Laufs ---
+    laufUeberschrift: 'Was gerade misst',
+    laufErklaerung:
+      'Jede Zeile ist eine Messstelle, durch die FlowForge den Verkehr zur lokalen KI leitet. Tokens hinein und ' +
+      'heraus sind gemessen; Tokens je Sekunde rechnet FlowForge daraus aus (Ollama meldet die Zahl nicht).',
+    laufLeer:
+      'Gerade misst nichts — es läuft kein lokaler Block und keine lokale Helfer-KI. Sobald ein Lauf mit lokalem Block startet, füllt sich diese Tabelle von selbst.',
+    artBlock: 'Block',
+    artHelfer: 'Helfer-KI',
+    spalteArt: 'Wer',
+    spalteBlock: 'Block',
+    spalteModell: 'Modell',
+    spalteZiel: 'Ollama-Adresse',
+    spalteLaufzeit: 'Laufzeit',
+    spalteAnfragen: 'Gesprächswechsel',
+    spalteHinein: 'Tokens hinein',
+    spalteHeraus: 'Tokens heraus',
+    spalteTempo: 'Tokens/s',
+    ohneName: '—',
+    // Eine laufende Anfrage gehört sichtbar dazu: Ein Gesprächswechsel eines
+    // lokalen Blocks dauert Minuten. Ohne diese Zahl sähe der Tab genau
+    // dann tot aus, wenn am meisten passiert (gemessen im Probelauf am
+    // 23.08.2026: offene Verbindung zu Ollama, Anzeige „0").
+    laeuftGerade: (n) => (n === 1 ? '+1 läuft' : `+${n} laufen`),
+
+    // --- Der Kern: gemessen neben geschätzt ---
+    fuellstandUeberschrift: 'Füllstand: gemessen neben geschätzt',
+    fuellstandErklaerung:
+      'Das ist der eigentliche Grund für diese Seite. Den Füllstand eines lokalen Blocks hat FlowForge bisher nur ' +
+      'geschätzt — es musste, weil Ollama oberhalb der Fensterkante still kappt und danach falsche Zahlen meldet. ' +
+      'Die Messstelle sieht die Anfrage, BEVOR Ollama sie beschneidet. Steht die Schätzung dauerhaft daneben, ist ' +
+      'das die belastbare Grundlage, die Übertrags-Marke zu korrigieren, statt weiter zu raten.',
+    fuellstandLeer: 'Noch nichts gemessen — dafür muss ein lokaler Block arbeiten.',
+    // Gemessen, aber noch nichts zu vergleichen: Solange der Koordinator seinen
+    // ersten Turn fährt, hat der Block-Agent nicht angefangen — FlowForge
+    // schätzt dann noch gar nichts. Ein Balken „geschätzt 0 %" daneben sähe aus
+    // wie ein katastrophaler Schätzfehler und wäre eine glatte Falschaussage.
+    nurGemessen: (gemessen, prozent) =>
+      `Gemessen: ~${Math.round(gemessen).toLocaleString('de-DE')} Tokens` +
+      (prozent == null ? '' : ` (${prozent} % des Fensters)`) +
+      '. Zu vergleichen gibt es noch nichts: Der Block-Agent hat noch nicht angefangen, FlowForge schätzt also noch gar nicht. Sobald er arbeitet, stehen hier beide Balken.',
+    fuellstandGemessen: 'gemessen',
+    fuellstandGeschaetzt: 'geschätzt',
+    fuellstandMarke: (prozent) => `Übertrags-Marke: ${prozent} %`,
+    fuellstandZeile: (v) =>
+      `gemessen ~${Math.round(v.gemessen).toLocaleString('de-DE')} Tokens · geschätzt ~${Math.round(v.geschaetzt).toLocaleString('de-DE')} Tokens · Abstand ${v.abstand > 0 ? '+' : ''}${Math.round(v.abstand).toLocaleString('de-DE')}`,
+    fuellstandZuNiedrig:
+      'Die Schätzung liegt UNTER der Messung — die gefährliche Richtung: Der Übertrag käme später, als er sollte.',
+    fuellstandZuHoch: 'Die Schätzung liegt über der Messung — der Übertrag kommt eher zu früh als zu spät.',
+    fuellstandUeberFenster:
+      'Achtung: Was hinausgeht, passt nicht mehr ins Kontextfenster — Ollama schneidet dann still ab, und der Block arbeitet mit einem Gedächtnis voller Lücken.',
+
+    // --- Ehrliche Grenzen, im Bauplan ausdrücklich verlangt ---
+    grenzenUeberschrift: 'Was diese Seite NICHT sieht',
+    grenzen: [
+      'Gemessen wird der ganze Verkehr dieser Motor-Instanz — der Block-Agent UND der Koordinator, der ihn beauftragt. Beide reden über dieselbe Leitung mit derselben Grafikkarte. Für den Füllstand zählt die größte Anfrage, und das ist nach dem ersten Zug immer der Block-Agent.',
+      'Der zusätzliche Sprung über die Messstelle kostet Zeit. Gemessen ist er klein (bei einem 8-MB-Antwortstrom unter einer Sekunde), aber er ist nicht null.',
+      'Tokens je Sekunde ist eine abgeleitete Zahl, keine Angabe von Ollama: gemessene Tokens geteilt durch die verstrichene Zeit.',
+      'Gezeigt wird nur, was durch die Messstelle geht. Was ein Agent an ihr vorbei tut — etwa ein ausgeführter Befehl, der selbst Ollama anspricht —, sieht sie nicht.',
+      'Lässt sich die Messstelle nicht öffnen, arbeitet der Block trotzdem weiter und redet direkt mit Ollama. Der Liveticker sagt es; hier bleibt die Zeile dann leer.'
+    ]
   },
   // Metriken (BAUPLAN 31): lokale KI und Motor über alle Läufe hinweg — nur
   // Nachschlagewerk; nichts davon wandert je in einen Auftrag.
@@ -4351,6 +4458,32 @@ export const texte = {
       `Wartezeit auf Antworten der lokalen KI: ${minuten} Minuten. So lange darf eine einzelne Antwort ohne eintreffenden Text brauchen, bevor FlowForge den Block abbricht — bei einem großen Werkzeugaufruf ist genau das normal. Schnell macht mehr Geduld nichts, sie verhindert nur den Abbruch mittendrin.`,
     lokalWaechterUebertrag: (geschaetzt, fenster) =>
       `Das Arbeitsgedächtnis des lokalen Blocks ist fast voll (~${Math.round(geschaetzt).toLocaleString('de-DE')} von ${Math.round(fenster).toLocaleString('de-DE')} Tokens, von FlowForge geschätzt) — FlowForge übergibt an einen frischen Anlauf, bevor die lokale KI still vergisst.`,
+    // Zählstelle (Bauschritt 54): Fällt sie aus, fällt nicht der Lauf aus —
+    // aber still passieren darf es nicht. Der Block redet dann direkt mit
+    // Ollama wie vor diesem Bauschritt; nur die Werkstatt bleibt leer.
+    zaehlstelleAus: (grund) =>
+      `Die Messstelle für die lokale KI ließ sich nicht öffnen (${grund}) — der Block arbeitet ganz normal weiter und redet direkt mit Ollama. Im Werkstatt-Tab bleiben die Zahlen für diesen Block leer.`,
+    // Die Zeile, für die es die Zählstelle gibt (BAUPLAN 54): geschätzter
+    // Füllstand neben gemessenem, mit dem Abstand dazwischen. Gemessen ist die
+    // größte Anfrage dieses Blocks — jeder Turn schickt das ganze Gespräch neu,
+    // die größte Anfrage IST also der höchste erreichte Füllstand.
+    lokalFuellstandVergleich: (name, v) => {
+      const zahl = (n) => Math.round(n).toLocaleString('de-DE')
+      const prozent = (p) => (p == null ? '?' : Math.round(p) + ' %')
+      const richtung =
+        v.abstand > 0
+          ? `FlowForge hat um ${zahl(v.abstand)} Tokens ZU NIEDRIG geschätzt (${Math.round(v.abweichung * 100)} % des gemessenen Werts) — das ist die gefährliche Richtung: Die Übertrags-Marke greift dann später, als sie sollte.`
+          : v.abstand < 0
+            ? `FlowForge hat um ${zahl(-v.abstand)} Tokens zu hoch geschätzt — die Übertrags-Marke greift also eher zu früh als zu spät.`
+            : 'Schätzung und Messung liegen gleichauf.'
+      return `Füllstand von „${name}" am Blockende: gemessen ~${zahl(v.gemessen)} Tokens (${prozent(v.gemessenProzent)} des Fensters), geschätzt ~${zahl(v.geschaetzt)} Tokens (${prozent(v.geschaetztProzent)}). ${richtung}`
+    },
+    // Gemessen, aber nie geschätzt: Der Block-Agent kam nicht zum Zug (der
+    // Block endete im ersten Turn des Koordinators). Ein Vergleich gegen eine
+    // Schätzung, die es nie gab, wäre ein erfundener Befund — also steht die
+    // Messung allein da und sagt, warum.
+    lokalFuellstandOhneSchaetzung: (name, gemessen, prozent) =>
+      `Füllstand von „${name}" am Blockende: gemessen ~${Math.round(gemessen).toLocaleString('de-DE')} Tokens${prozent == null ? '' : ` (${Math.round(prozent)} % des Fensters)`}. Ein Vergleich mit der Schätzung entfällt: Der Block-Agent kam nicht zum Zug, FlowForge hatte also nie etwas zu schätzen.`,
     uebertragAngefordert: (von, bis) =>
       `Der Kontext ist zu etwa ${von}–${bis} % gefüllt — Übertrag: Der Agent notiert den Zwischenstand und übergibt.`,
     uebertragWeiter: (nummer, grenze) =>

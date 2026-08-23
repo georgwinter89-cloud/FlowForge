@@ -274,10 +274,12 @@ describe('0.51.1 · Ein lokaler Block bekommt keine Helfer-KI — er IST sie', (
     expect(lokal.lokaleHelfer).toBeNull()
     const claude = lauf.motor.start('bc')
     expect(claude.lokal).toBeNull()
-    expect(claude.lokaleHelfer).toMatchObject({
-      modell: 'qwen3.8:27b',
-      adresse: 'http://127.0.0.1:11434'
-    })
+    expect(claude.lokaleHelfer).toMatchObject({ modell: 'qwen3.8:27b' })
+    // Seit Bauschritt 54 zeigt die Adresse der Helfer-KI auf die Zählstelle in
+    // FlowForge, nicht mehr direkt auf Ollama — sonst liefe ihr Verkehr an der
+    // Messung vorbei und die Werkstatt zeigte die halbe Wahrheit. Die
+    // Zählstelle bindet nur an 127.0.0.1 und reicht an die echte Adresse weiter.
+    expect(claude.lokaleHelfer.adresse).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/)
   })
 
   it('hängt dem lokalen Bauer die Zerlege-Anweisung nicht an — dem Claude-Bauer schon', () => {

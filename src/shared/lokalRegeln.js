@@ -304,6 +304,24 @@ export function vramBefundAus(modelle, modell) {
   return null
 }
 
+// Zeichen je Token — die Umrechnung, mit der FlowForge den Füllstand eines
+// lokalen Block-Agenten schätzt. Bewusst überschätzend: deutscher Text liegt
+// bei etwa 4 Zeichen je Token, Code eher bei 3–3,5. Lieber ein Übertrag zu früh
+// als stilles Kappen.
+// Wohnort seit Bauschritt 54 hier statt im Motor: Die Werkstatt (§3.5) stellt
+// den geschätzten Füllstand neben den an der Zählstelle GEMESSENEN, und beide
+// Zahlen müssen aus derselben Rechnung kommen — sonst vergliche der Tab zwei
+// Maßstäbe und nennte die Differenz „Abstand". Der Renderer darf den Motor
+// nicht importieren (er hängt an Electron und am Betriebssystem), also gehört
+// die Rechnung nach src/shared/; claudeCodeMotor.js reicht beide Namen weiter,
+// damit jede bisherige Lesestelle gültig bleibt.
+export const ZEICHEN_JE_TOKEN = 3.5
+export function lokaleKontextSchaetzung(zeichen) {
+  const zahl = Number(zeichen)
+  if (!Number.isFinite(zahl) || zahl <= 0) return 0
+  return Math.ceil(zahl / ZEICHEN_JE_TOKEN)
+}
+
 // Die Marke des Lokal-Wächters (0.51.1): Ab diesem Füllstand fordert FlowForge
 // für einen lokalen Block-Agenten den Übertrag an. Die Begründung, warum es
 // diesen zweiten Wächter überhaupt gibt, steht bei lokalWaechter() im Motor;
