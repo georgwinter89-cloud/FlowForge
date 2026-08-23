@@ -1170,7 +1170,7 @@ export function volltextKarten({ zugeteilt, imBereich, istAuftragsquelle, gewaeh
 // kein Block mehr karten_uebersicht aufrufen muss (ein Aufruf kostete vorher
 // 11.515 Tokens) — deshalb steht in den Aufträgen ausdrücklich, dass das
 // Verzeichnis schon da ist. Wer beides täte, zahlte doppelt.
-function kartenKontext(projektPfad, kartenIds) {
+function kartenKontext(projektPfad, kartenIds, waehltAus = false) {
   const geladen = kartenLaden(projektPfad)
   if (!geladen.ok) return ''
   const imVolltext = (k) => k.sorte === 'status' || kartenIds.includes(k.id)
@@ -1202,7 +1202,8 @@ function kartenKontext(projektPfad, kartenIds) {
     gewaehlt.map((k) => `- ${zeige(k)} · ${kartenZeile(k)}`).join('\n'),
     uebrige.map((k) => `- ${zeige(k)} · ${kartenIndexZeile(k)}`).join('\n'),
     vorhandeneThemen(geladen.karten),
-    kartenIds.length > 0
+    kartenIds.length > 0,
+    waehltAus
   )
 }
 
@@ -3742,7 +3743,13 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         // Inhaltsblöcken und läse sich wie ein Nachtrag.
         let auftrag =
           (vorspannVon.get(k.eintrag.instanzId) ?? '') +
-          kartenKontext(projektPfad, kartenFuerBlock(k.eintrag.instanzId)) +
+          kartenKontext(
+            projektPfad,
+            kartenFuerBlock(k.eintrag.instanzId),
+            // Fund 5: Eine Auftragsquelle SOLL zwischen den gewählten Karten
+            // auswählen — ihr Kartenkopf sagt das, statt es zu verbieten.
+            Boolean(k.def.kartenZuteilung)
+          ) +
           uebergabenText(k) +
           texte.agentenUebergabe.auftragEinleitung +
           auftragMitFeldern(k.def, k.eintrag.feldWerte)

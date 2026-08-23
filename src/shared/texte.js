@@ -1233,12 +1233,22 @@ export const texte = {
     // war. Deshalb jetzt zwei Köpfe statt eines Kompromisses: Die Stelle weiß,
     // welcher Fall vorliegt (leere Auswahl = übergangen), also darf sie es auch
     // sagen.
-    kontext: (volltext, verzeichnis = '', themen = [], ausgewaehlt = false) =>
-      (ausgewaehlt
-        ? 'Deine Aufgabe in diesem Lauf — diese Karten hat der Nutzer ausgewählt, die ' +
-          'Entscheidung ist gefallen. Leite sie nicht neu her und wähle nicht zwischen ' +
-          'ihnen aus:\n'
-        : 'Die Projektkarten, um die es in deiner Arbeit geht:\n') +
+    //
+    // Drei Köpfe, nicht zwei: Eine Auftragsquelle („Paket schneiden") SOLL
+    // zwischen den gewählten Karten auswählen — das ist ihre Arbeit. Ihr „wähle
+    // nicht aus" zu sagen, widerspräche ihrem eigenen Auftrag („wähle daraus
+    // die sinnvollste nächste Arbeit"). Fest steht für sie nur, WELCHE Karten
+    // überhaupt zur Wahl stehen; das muss sie nicht neu herleiten.
+    kontext: (volltext, verzeichnis = '', themen = [], ausgewaehlt = false, waehltAus = false) =>
+      (!ausgewaehlt
+        ? 'Die Projektkarten, um die es in deiner Arbeit geht:\n'
+        : waehltAus
+          ? 'Die Karten dieses Laufs — vom Nutzer ausgewählt. Welche davon in welches Paket ' +
+            'gehören, entscheidest du; DASS es diese sind, steht fest. Zieh keine anderen ' +
+            'Karten heran und leite die Auswahl nicht neu her:\n'
+          : 'Deine Aufgabe in diesem Lauf — diese Karten hat der Nutzer ausgewählt, die ' +
+            'Entscheidung ist gefallen. Leite sie nicht neu her und wähle nicht zwischen ' +
+            'ihnen aus:\n') +
       volltext +
       (verzeichnis
         ? '\n\nVerzeichnis der übrigen Projektkarten dieses Projekts — nur Kennung und ' +

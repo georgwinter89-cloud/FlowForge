@@ -98,6 +98,7 @@ vi.mock('../src/main/projekte.js', async (importOriginal) => ({
 import { laufStarten, volltextKarten } from '../src/main/lauf.js'
 import { meldungPruefen } from '../src/shared/lieferschein.js'
 import { kurzKennung } from '../src/shared/kartenRegeln.js'
+import { texte } from '../src/shared/texte.js'
 
 const [status, aufgabe, entscheidung, wissen, erledigt, pruefkarte] = KARTEN
 
@@ -301,6 +302,34 @@ describe('BAUPLAN 53 · Volltext für die Arbeit, Verzeichnis für den Rest', ()
     // Aufgaben zurück — dieselbe Kette verhielte sich vor und nach der
     // Unterbrechung verschieden.
     expect(laufstand.zuteilungsBereich ?? []).toEqual(expect.arrayContaining(['b', 'c']))
+  })
+})
+
+// Fund 5, dritter Fall: Eine Auftragsquelle („Paket schneiden") bekommt einen
+// eigenen Kopf. Aufgefallen beim Nachstellen der Läufe, 23.08.2026 — der scharfe
+// Kopf sagt „wähle nicht zwischen ihnen aus", und genau das steht als Arbeit im
+// Auftrag von Paket schneiden („wähle daraus die sinnvollste nächste Arbeit").
+// Zwei Anweisungen, die sich widersprechen, sind schlimmer als eine weiche.
+describe('Fund 5 · Wer auswählen SOLL, bekommt es nicht verboten', () => {
+  const volltext = '- aaaaaaaa · [Aufgabe] Etwas bauen\nText.'
+
+  it('sagt einer Auftragsquelle, dass die Karten feststehen — nicht, dass sie nicht wählen darf', () => {
+    const kopf = texte.agentenKarten.kontext(volltext, '', [], true, true)
+    expect(kopf).toContain('DASS es diese sind, steht fest')
+    expect(kopf).not.toContain('wähle nicht zwischen ihnen aus')
+  })
+
+  it('verbietet es allen anderen Blöcken weiterhin', () => {
+    expect(texte.agentenKarten.kontext(volltext, '', [], true, false)).toContain(
+      'wähle nicht zwischen ihnen aus'
+    )
+  })
+
+  it('bleibt ohne Auswahl in beiden Fällen bei der vorsichtigen Fassung', () => {
+    for (const waehltAus of [true, false])
+      expect(texte.agentenKarten.kontext(volltext, '', [], false, waehltAus)).toContain(
+        'Die Projektkarten, um die es in deiner Arbeit geht'
+      )
   })
 })
 
