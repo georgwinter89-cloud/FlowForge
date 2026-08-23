@@ -1361,6 +1361,23 @@ wie ihr Block (auch „darf nur lesen" — deshalb ist das Unteraufgaben-Werkzeu
 erlaubt); ihre Zeilen sind im Ticker als „Unteraufgabe" gekennzeichnet. Ihr
 Verbrauch zählt ehrlich zum Laufbericht dazu, belastet aber nicht den
 Kontext-Füllstand der Lauf-Session, der den automatischen Übertrag steuert.
+
+**Immer im Vordergrund, immer mit Längengrenze** (Fund 1/3/6, gemessen 22.08.2026):
+FlowForge setzt jeder Unteraufgabe zwei Dinge selbst — der Aufruf blockiert (der
+Block-Agent darf das nicht wählen), und an den Auftrag der Unteraufgabe kommt eine
+harte Grenze für ihre Antwort (höchstens 40 Zeilen, keine vollständigen Codeblöcke,
+nur Fundorte und Signaturen). Beides ist Mechanik, kein Appell. **Grund für den
+Vordergrund:** Ein Ergebnis aus dem Hintergrund kann der Block gar nicht abholen —
+das Werkzeug dafür steht in keiner Werkzeugliste, unter „darf nur lesen" ist es hart
+gesperrt. Gemessen wartete ein Bauer stattdessen 24 Minuten mit zehn `sleep`-Befehlen
+auf ein Ergebnis, das längst dalag. Was nicht abgeholt werden kann, darf nicht
+gestartet werden können. **Grund für die Grenze:** Dieselbe Unteraufgabe las sechs
+Dateien in 11 Sekunden und brauchte dann acht Minuten für einen Bericht, der den
+Quelltext nicht zusammenfasste, sondern neu ausgab — sie sparte nichts. Der Auftrag
+der Unteraufgabe stammt vom Block-Agenten, deshalb hängt FlowForge die Grenze an,
+statt sie zu erbitten. Der Systemtext des Block-Agenten sagt zusätzlich, dass eine
+Unteraufgabe blockiert und er keine eigene Warteschleife bauen soll — bewusst **ohne**
+Wartelimit: Ob eine Unteraufgabe noch rechnet oder tot ist, kann er nicht wissen.
 **Gezügelter Angreifer** (Entscheidung Georg, 13.08.2026 — Befund: 425.000 Tokens
 für eine Angriffsliste, weil vier Späher je das ganze Projekt einlasen): höchstens
 zwei Unteraufgaben pro Angreifer-Lauf, jede eng umrissen; gelesen werden nur die im
@@ -1991,6 +2008,15 @@ umstellbar wie jede Karte.
   Beginn **jedes Blocks** frisch gelesen. Wissens- und Entscheidungs-Karten stehen
   trotzdem in der Auswahl-Menge des Laufs — sonst könnte die Auftragsquelle sie keinem
   Block zuteilen (unten).
+  **Der Kopf über dem Volltext verzweigt** (Fund 5, gemessen 22.08.2026): Hat dieser
+  Block wirklich ausgewählte Karten bekommen, steht dort eine Ansage — „Deine Aufgabe in
+  diesem Lauf … die Entscheidung ist gefallen. Leite sie nicht neu her und wähle nicht
+  zwischen ihnen aus." Nur im übergangenen Randfall (unten: dann steht unter dem Kopf
+  allein die Status-Karte) bleibt die vorsichtige Fassung „Die Projektkarten, um die es
+  in deiner Arbeit geht". Vorher stand überall der vorsichtige Kopf, und ein Bauer, der
+  korrekt genau eine gewählte Aufgabenkarte im Volltext bekommen hatte, leitete Georgs
+  Auswahl trotzdem neu her und listete alle offenen Karten als Kandidaten — er wählte
+  richtig und bezahlte für eine Entscheidung, die längst gefallen war.
   **Erledigte Aufgaben und Prüfkarten stehen NICHT im Verzeichnis** — an ihnen arbeitet
   kein Block, und `karten_zuteilen` weist sie ohnehin ab; gemessen waren sie 33 von 83
   Zeilen, 842 Tokens je Block. Wer sie braucht (Karten-Prüfer, Themen-Sortierer), holt
@@ -2156,11 +2182,20 @@ umstellbar wie jede Karte.
   hat das Arbeitsgedächtnis von „Bauer" zusammengefasst — vorher 180.000 Tokens, danach
   40.000") und als eigener Abschnitt im Laufbericht (§3.2); die Metriken zählen es (§3.4).
   Ohne diese Zeile wäre unerklärlich, warum ein Agent plötzlich Details vergessen hat.
-- **Zwei Füllstände** (seit Bauschritt 36): Der Balken misst die **Lauf-Session** (den
-  Koordinator) — er steuert den Übertrag. Daneben steht als Hinweis der Füllstand des
-  **gerade arbeitenden Block-Agenten**, der die eigentliche Arbeit macht und sein eigenes
-  Fenster hat — seit Bauschritt 37 gemessen am Fenster **seines** Modells, nicht mehr an
-  dem des Koordinators. Der Hinweis steuert nichts.
+- **Zwei Füllstände** (seit Bauschritt 36): Es gibt zwei Fäden mit zwei eigenen Fenstern —
+  die **Lauf-Session** (den Koordinator) und den **gerade arbeitenden Block-Agenten**,
+  gemessen am Fenster **seines** Modells (seit Bauschritt 37). Wer von beiden im Balken
+  steht, hängt davon ab, wer arbeitet (Fund 9, 22.08.2026): Bei einem **Claude-Lauf** der
+  Koordinator — er steuert den Übertrag, die rote Marke ist seine Übertrags-Schwelle, und
+  der Agent steht als Hinweiszeile daneben. Bei einem **lokalen Lauf** ist es umgekehrt:
+  Dort startet der Koordinator nur Blöcke und wartet, während der Block-Agent einen
+  eigenen Wächter mit eigener Schwelle hat (§9) — also zeigt der Balken **ihn**, die rote
+  Marke steht auf **seiner** Schwelle, und der Koordinator wird zur Hinweiszeile mit
+  seiner eigenen Zahl. Vorher zeigte der Balken bei lokalen Läufen den Untätigen.
+  Die Hinweiszeile steuert nie etwas. **Die Tokenzahl daneben tragen ihren Maßstab im
+  Text** („alle Fäden zusammen"): Sie zählt Koordinator, Block-Agent und Unteraufgaben
+  zusammen, während die Prozente immer nur einen einzigen Faden messen — ohne die
+  Beschriftung las sich der Mittelpunkt zwischen beiden Zahlen wie ein Gleichheitszeichen.
 - **Stopp in zwei Stufen:** „Sanft anhalten" (laufender Block macht fertig, Halt am
   Sicherungspunkt) und „Sofort abbrechen" (Block gilt als nicht gelaufen; der Projektordner
   springt automatisch auf den letzten Sicherungspunkt zurück — seit Bauschritt 46 bei
@@ -2347,7 +2382,16 @@ veränderndes Werkzeug (`sed -i`, `rm`, `copy` …) **oder** eine echte
 Datei-Umleitung. Ein Pfeil im Suchmuster oder Testfilter
 (`grep -n "a => b" pruefung/x.test.js`, `npx vitest run pruefung/x.test.js -t "a > b"`)
 schreibt nicht und läuft durch — auch der Prüflauf, den §4.3 dem Bauer einmal am
-Ende erlaubt. Die Sperre „darf nur lesen" (§4.2) steht darüber:
+Ende erlaubt. **Der Körper eines Heredocs zählt nicht als Befehlstext** (Fund 4,
+gemessen 22.08.2026): Was zwischen `<<'EOF'` und `EOF` steht, ist Inhalt einer Datei,
+kein Befehl — ein Pfeil darin (`if (i > -1)`, `<div>Text</div>`) ist keine Umleitung.
+Vorher stoppte FlowForge dort hart und mit einem Nicht-Pfad als Begründung („Schreiben
+an „-1)" gestoppt"), obwohl in die ausdrücklich freie Wegwerf-Fläche geschrieben wurde.
+Die Umleitung der **Kopfzeile** (`cat > datei.js <<'EOF'`) und alles nach der
+Schlusszeile werden weiter geprüft. Zwei ehrliche Grenzen: Fehlt die Schlusszeile,
+wird nichts herausgeschnitten (im Zweifel lieber eine Umleitung erkennen), und führt
+eine **Shell** den Körper aus (`bash <<'EOF' … EOF`), bleibt er Befehlstext.
+PowerShells Hier-Zeichenketten (`@'` … `'@`) gelten wie Heredocs. Die Sperre „darf nur lesen" (§4.2) steht darüber:
 Sie stoppt jeden nicht rein lesenden Werkzeugaufruf hart, ohne Rückfrage. **Rein
 lesende Befehle laufen auch unter der Sperre durch** (seit 12.08.2026 — vorher war
 jeder Befehl gesperrt und die Abweisung hieß irreführend „Schreib-Versuch");

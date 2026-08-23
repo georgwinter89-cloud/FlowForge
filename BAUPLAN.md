@@ -1775,6 +1775,78 @@ Tokens je Sekunde eine plausible Zahl zeigen, und der Füllstand muss **zweimal*
 gemessen und geschätzt. Danach im Laufbericht die Vergleichszeile suchen: Wie weit lag die
 Schätzung daneben?
 
+### 55 — Gemessen statt geglaubt: die Dateiliste des Umsetzungsberichts
+*(Version **0.56.0**.)*
+
+(Funde 7 und 8 aus den beiden Läufen am Haushaltsplaner, 22.08.2026. Die Reparaturen
+1–6 und 9 aus derselben Fundliste sind in 0.54.1 erledigt; diese beiden brauchen neue
+Mechanik und stehen deshalb hier.)
+
+**Der Befund:** FlowForge nimmt die Meldung eines Blocks, wie sie kommt. Nichts wird
+gegen die tatsächlichen Vorgänge gemessen — obwohl FlowForge die Tatsachen zum Teil
+schon hat.
+
+Zwei Belege aus zwei Läufen:
+1. **Dateiliste (Vormittagslauf).** Der Integrator meldete **neun** angelegte oder
+   geänderte Dateien. Angefasst hatte er **zwei** (`index.html`, `js/app.js`); vier
+   stammten von den Bauern vor ihm, drei lagen in `arbeitsablage/` und werden nach dem
+   Lauf gelöscht. In seiner eigenen Anmerkung stand es sogar richtig: „Die Datenmodule
+   selbst habe ich nicht geändert." Wer nur die Liste liest, glaubt das Gegenteil.
+2. **Maßstab (Abendlauf).** Der Bauer nannte seine Prüfarbeit eine „Stichprobe".
+   Tatsächlich waren es vier selbstgebaute Prüfgerüste in `arbeitsablage/`, 31 + 8
+   Prüfungen und rund 30 Minuten. Das Wort stammt aus seinem eigenen Auftrag
+   („schnelle Stichproben") — also trägt alles dieses Etikett, unabhängig vom Umfang.
+
+**Was FlowForge schon hat:** Jeder Block hat seit Bauschritt 45 einen eigenen
+Sicherungsstrang, und `punkteVergleichen(projektPfad, diffBasis, letzterPunkt,
+{nurDateien: wirkbereich})` liefert daraus die Liste der wirklich geänderten Dateien —
+dieselbe Rechnung, aus der schon der Diff für die Reparatur-Runde entsteht
+(`diffTextFuer` in `lauf.js`). Es fehlt nur, sie an dieser Stelle zu benutzen.
+
+**Was gebaut wird:**
+- Beim Annehmen eines Umsetzungsberichts misst FlowForge die Dateien, die dieser Block
+  auf seinem eigenen Strang wirklich angefasst hat — angelegt, geändert, gelöscht sind
+  aus dem Vergleich ablesbar, das Etikett muss also nicht geglaubt werden.
+- Im Laufbericht und in der Block-Karte steht die **gemessene** Liste. Die gemeldete
+  wird **nicht** ersetzt, sondern danebengestellt, wenn sie abweicht — sonst
+  verschwände genau die Information, dass der Block sich geirrt hat.
+- Zwei Abweichungen werden benannt, je als eigene Zeile: gemeldet, aber nicht
+  angefasst · angefasst, aber nicht gemeldet. Die zweite ist die gefährlichere.
+- Für den Rest (Maßstab, Aufwand) genügt, dass der Bericht nicht behauptet, was
+  FlowForge nicht deckt: Das Wort „Stichprobe" gehört aus der Auftragsvorlage heraus,
+  weil es dort jede Prüfarbeit einfärbt, egal wie groß sie war.
+
+**Ehrliche Grenzen — vorher benennen:**
+- Ein Block ohne Sicherungsstrang (Nur-Lese-Blöcke, wiederaufgenommene Läufe von vor
+  Bauschritt 45) hat nichts zu messen. Dann steht die gemeldete Liste allein da — und
+  der Bericht sagt, dass sie ungemessen ist. Kein stiller Rückfall.
+- Gemessen wird der **Strang**, nicht die Absicht. Ein Bauer, der eine Datei ändert
+  und wieder zurückändert, taucht nicht auf. Das ist richtig so, aber es heißt: Die
+  Messung deckt das Ergebnis, nicht den Weg.
+- `arbeitsablage/` gehört in die Messung hinein und wird als solche markiert — sie ist
+  echte Arbeit, verschwindet aber nach dem Lauf.
+
+**Fund 8 — bewusst zurückgestellt, hier festgehalten.** Im selben Umsetzungsbericht
+standen wenige Zeilen auseinander zwei Aussagen zu derselben Sache: `angriffsliste`
+sagte „überfällig, da Mo verstrichen", `anmerkung` sagte „am Montag rot und am
+Mittwoch (heute) neutral". Im Code ist **beides richtig** — es gibt zwei Ebenen
+(`istUeberfaellig` je Aufgabe, ein Flag je Tag). Im Bericht liest es sich als
+Selbstwiderlegung. Schaden ist keiner entstanden: Der Prüfer ist in den Code gegangen,
+hat beide Ebenen verstanden und richtig aufgelöst. Deshalb **niedrig**.
+Der Grund fürs Zurückstellen ist ehrlich: FlowForge kann Text nicht gegen Text messen.
+Übrig blieben ein Appell im Auftrag (hält nicht — Zugsimulator-Befund, 12.08.2026)
+oder eine kleine KI-Kohärenzprüfung über die Felder EINER Meldung, bevor sie
+angenommen wird. Letzteres ist machbar und billig (es geht um wenige hundert Zeichen),
+aber es ist ein eigener Mechanismus mit eigenem Fehlalarm-Risiko und gehört nicht in
+denselben Schritt wie eine Messung, die nicht raten muss. Entscheidung für Georg,
+wenn 55 steht.
+
+**Alltagstest:** Einen Lauf mit zwei Bauern und einem Integrator fahren. Danach im
+Laufbericht beim Integrator nachsehen: Die Dateiliste muss die zwei Dateien nennen,
+die **er** angefasst hat — und wenn er mehr gemeldet hat, muss darunter stehen, welche
+davon nicht von ihm stammen. Gegenprobe: Bei einem Bauer, der genau meldet, was er
+getan hat, darf keine Abweichungszeile erscheinen.
+
 ## Reihenfolge-Begründung (Paket 40–48)
 Im Paket 40–48 bestimmt die Angriffsliste die Reihenfolge, nicht der Nutzen: Die
 Kanten müssen verlustfrei sein (40), bevor ein Auftrag verspricht, wohin eine

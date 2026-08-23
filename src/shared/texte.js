@@ -1220,12 +1220,25 @@ export const texte = {
     // VERZEICHNIS aller übrigen Karten mit Titel und Kennung. So sieht jeder
     // Block, DASS es die Entscheidungs-Karte gibt, und liest sie erst, wenn er
     // sie braucht (statt den ganzen Bestand ins Fenster zu ziehen).
-    kontext: (volltext, verzeichnis = '', themen = []) =>
-      // Nicht mehr „von FlowForge für diesen Lauf ausgewählt" (Befund Prüfer 2):
-      // Bei einem Block, den die Auftragsquelle übergangen hat, steht hier nur
-      // die Status-Karte, während die Aufgaben des Laufs unten im Verzeichnis
-      // stehen — der alte Kopf behauptete dann etwas Falsches.
-      'Die Projektkarten, um die es in deiner Arbeit geht:\n' +
+    // Der Kopf verzweigt (Fund 5, gemessen 22.08.2026). Vorgeschichte: Er hieß
+    // „von FlowForge für diesen Lauf ausgewählt", wurde auf die vorsichtige
+    // Fassung abgeschwächt (Befund Prüfer 2) — bei einem Block, den die
+    // Auftragsquelle übergangen hat, steht hier nur die Status-Karte, und der
+    // scharfe Kopf behauptete dann etwas Falsches — und war damit ÜBERALL
+    // weich. Gemessen wurde die Folge: Der Bauer bekam korrekt genau eine
+    // gewählte Aufgabenkarte im Volltext, leitete Georgs Entscheidung aber neu
+    // her („so I should pick the most reasonable next work from the open task
+    // cards") und listete alle drei Karten als Kandidaten. Er wählte richtig —
+    // und bezahlte dafür Rechenzeit für eine Entscheidung, die längst gefallen
+    // war. Deshalb jetzt zwei Köpfe statt eines Kompromisses: Die Stelle weiß,
+    // welcher Fall vorliegt (leere Auswahl = übergangen), also darf sie es auch
+    // sagen.
+    kontext: (volltext, verzeichnis = '', themen = [], ausgewaehlt = false) =>
+      (ausgewaehlt
+        ? 'Deine Aufgabe in diesem Lauf — diese Karten hat der Nutzer ausgewählt, die ' +
+          'Entscheidung ist gefallen. Leite sie nicht neu her und wähle nicht zwischen ' +
+          'ihnen aus:\n'
+        : 'Die Projektkarten, um die es in deiner Arbeit geht:\n') +
       volltext +
       (verzeichnis
         ? '\n\nVerzeichnis der übrigen Projektkarten dieses Projekts — nur Kennung und ' +
@@ -1595,6 +1608,17 @@ export const texte = {
       'Halte dein Arbeitsgedächtnis schlank — es ist der teuerste Teil des Laufs: Breites ' +
       'Suchen und Einlesen delegierst du an Unteraufgaben (Agent-Werkzeug), die dir nur ihr ' +
       'kompaktes Fazit zurückgeben. Lies keine Datei doppelt und nichts auf Vorrat.\n' +
+      // Fund 3 (gemessen 22.08.2026): Der Bauer hielt Warten für das
+      // Abholverfahren, schrieb „Now I'll wait for the sub-agent's report" und
+      // führte danach zehn sleep-Befehle aus (30 bis 120 Sekunden), bis er nach
+      // 24 Minuten aufgab. FlowForge zwingt Unteraufgaben inzwischen in den
+      // Vordergrund (unteraufgabenEingabe) — dieser Satz sagt es dem Agenten,
+      // damit er es gar nicht erst versucht. Bewusst OHNE Wartelimit: Das
+      // Modell kann nicht wissen, ob eine Unteraufgabe noch rechnet oder tot
+      // ist, und die erfolgreiche brauchte im selben Lauf acht Minuten.
+      'Eine Unteraufgabe blockiert, bis sie fertig ist — ihr Ergebnis steht im Ergebnis des ' +
+      'Werkzeugaufrufs. Baue niemals eine eigene Warteschleife und führe keine ' +
+      'sleep-Befehle aus, um auf eine Unteraufgabe zu warten.\n' +
       `Der Projektordner ist: ${projektPfad}\n` +
       'Verwende bei Datei-Werkzeugen (Read/Write/Edit) ausschließlich Pfade relativ zum ' +
       'Projektordner oder diesen absoluten Windows-Pfad. Niemals POSIX-Pfade wie /tmp/… ' +
@@ -1608,6 +1632,23 @@ export const texte = {
       `Harte Regeln: Titel höchstens ${titelMax} Zeichen, Inhalt höchstens ${textMax} ` +
       'Zeichen; wer mehr zu sagen hat, legt mehrere fokussierte Karten an. Es gibt genau ' +
       'eine Status-Karte — sie kann weder gelöscht noch neu angelegt werden.',
+    // Längengrenze für Unteraufgaben (Fund 6, gemessen 22.08.2026). FlowForge
+    // hängt sie an JEDEN Unteraufgaben-Auftrag (unteraufgabenEingabe), statt
+    // sie dem Block-Agenten ans Herz zu legen: Ein Appell im Auftragstext hält
+    // nicht (Zugsimulator-Befund, 12.08.2026), und geschrieben hat den
+    // Unteraufgaben-Auftrag der Agent selbst.
+    //
+    // Gemessen: sechs Dateien in 11 Sekunden gelesen, dann ACHT MINUTEN für den
+    // Bericht — und der war keine Zusammenfassung, sondern eine Neuausgabe:
+    // vollständige Codeblöcke, die komplette index.html, ganze API-Listen. Rund
+    // 700 Zeilen Quelltext wurden zu einem Bericht vergleichbarer Größe. Damit
+    // sparte die Unteraufgabe nichts — sie kostete Grafikkarte für Inhalt, den
+    // der Block in Sekunden selbst gelesen hätte.
+    unteraufgabeGrenze:
+      '\n\nHarte Vorgabe von FlowForge für deine Antwort: höchstens 40 Zeilen. Keine ' +
+      'vollständigen Codeblöcke, keine abgeschriebenen Dateien, keine vollständigen ' +
+      'Aufzählungen von Schnittstellen — nur Fundorte (Datei und Zeile), Signaturen und ' +
+      'dein Fazit. Wer den Inhalt braucht, liest ihn selbst nach; du sagst nur, wo er steht.',
     nurEinAgent:
       'FlowForge: Für diesen Block lief bereits ein Agent. Starte keinen weiteren — ' +
       'antworte nur mit: OK',
@@ -3242,11 +3283,24 @@ export const texte = {
     denkenUnteraufgabe: 'Unteraufgabe',
     denkenLokaleKi: 'lokale KI',
     verbrauchKontext: (von, bis) => `Kontext: etwa ${von}–${bis} % gefüllt`,
-    // Füllstand des Block-Agenten (BAUPLAN 36): der Balken misst den
-    // Koordinator, gearbeitet wird aber im Agenten.
+    // Füllstand des Block-Agenten (BAUPLAN 36): Bei einem Claude-Lauf misst der
+    // Balken den Koordinator, gearbeitet wird aber im Agenten.
     verbrauchAgent: (von, bis) =>
       `Der arbeitende Block-Agent hat sein eigenes Fenster: etwa ${von}–${bis} % gefüllt.`,
-    verbrauchTokens: (tokens) => `${tokens.toLocaleString('de-DE')} Tokens`,
+    // Lokaler Lauf (Fund 9): Jetzt steht der Agent im Balken — die Nebenzeile
+    // gehört dem Koordinator, und sie sagt gleich mit, warum er dort steht.
+    kontextBlockAgent: 'Kontext-Füllstand · Block-Agent',
+    // Die Schwelle kommt als Angabe herein: texte.js ist absichtlich
+    // importfrei (jede Schicht liest daraus, keine schreibt hinein).
+    verbrauchKoordinator: (von, bis, schwelle) =>
+      `Der Koordinator verteilt nur Aufträge und wartet; sein eigenes Fenster ist etwa ` +
+      `${von}–${bis} % gefüllt (Übertrag bei ${schwelle} %).`,
+    // Eigene Beschriftung (Fund 9): Diese Zahl zählt ALLE Fäden zusammen —
+    // Koordinator, Block-Agent und dessen Unteraufgaben. Die Prozentangabe
+    // daneben misst immer nur einen einzigen davon. Ohne die Beschriftung las
+    // sich der Mittelpunkt zwischen beiden wie ein Gleichheitszeichen.
+    verbrauchTokens: (tokens) =>
+      `${tokens.toLocaleString('de-DE')} Tokens (alle Fäden zusammen)`,
     verbrauchKosten: (usd) => `Kosten bisher: ${usd.toFixed(2).replace('.', ',')} $`,
     verbrauchKostenAbo: 'im Abo enthalten',
     zustandLabels: {

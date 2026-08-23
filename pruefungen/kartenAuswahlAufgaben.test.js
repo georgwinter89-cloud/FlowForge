@@ -263,6 +263,39 @@ describe('BAUPLAN 53 · Volltext für die Arbeit, Verzeichnis für den Rest', ()
     expect(auftrag).toContain(wissen.titel)
   })
 
+  // Fund 5 (Abendlauf am Haushaltsplaner, 22.08.2026): Die Mechanik von
+  // Bauschritt 53 funktionierte — genau eine gewählte Aufgabenkarte kam als
+  // Volltext, die übrigen als Verzeichnis. Der Kopf darüber hat die Trennung
+  // trotzdem eingeebnet. In der Denkspur des Bauers stand:
+  //   „The wish field is empty, so I should pick the most reasonable next work
+  //    from the open task cards"
+  // — und er listete alle drei Karten als Kandidaten. Er wählte richtig, aber
+  // er leitete eine Entscheidung neu her, die längst gefallen war, und bezahlte
+  // dafür Rechenzeit. Ursache war ein Kompromiss-Kopf: Er war einmal scharf
+  // („von FlowForge für diesen Lauf ausgewählt"), wurde für den Randfall des
+  // übergangenen Blocks abgeschwächt — und war damit ÜBERALL weich.
+  //
+  // Rot vor Grün: Mit dem alten Einheits-Kopf melden die ersten beiden
+  // Prüfungen rot („Deine Aufgabe in diesem Lauf" steht nirgends), die dritte
+  // grün. Mit einem scharfen Einheits-Kopf ist es umgekehrt.
+  it('sagt dem Block mit gewählter Aufgabe, dass die Entscheidung gefallen ist', () => {
+    const auftrag = auftraege.get('a')
+    expect(auftrag).toContain('Deine Aufgabe in diesem Lauf')
+    expect(auftrag).toContain('Leite sie nicht neu her')
+  })
+
+  it('sagt es dem zugeteilten Block genauso', () => {
+    expect(auftraege.get('b')).toContain('Deine Aufgabe in diesem Lauf')
+  })
+
+  it('bleibt beim übergangenen Block vorsichtig — dort wäre die Ansage gelogen', () => {
+    // c hat KEINE Karte zugeteilt bekommen; unten steht nur die Status-Karte.
+    // Ein Kopf, der hier eine Auswahl behauptet, zeigte auf die falsche Karte.
+    const auftrag = auftraege.get('c')
+    expect(auftrag).not.toContain('Deine Aufgabe in diesem Lauf')
+    expect(auftrag).toContain('Die Projektkarten, um die es in deiner Arbeit geht')
+  })
+
   it('merkt sich die Reichweite der Zuteilung im Laufstand', () => {
     // Ohne sie fiele c nach einem App-Neustart wieder auf die gewählten
     // Aufgaben zurück — dieselbe Kette verhielte sich vor und nach der

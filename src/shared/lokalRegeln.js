@@ -304,6 +304,16 @@ export function vramBefundAus(modelle, modell) {
   return null
 }
 
+// Die Marke des Lokal-Wächters (0.51.1): Ab diesem Füllstand fordert FlowForge
+// für einen lokalen Block-Agenten den Übertrag an. Die Begründung, warum es
+// diesen zweiten Wächter überhaupt gibt, steht bei lokalWaechter() im Motor;
+// die Zahl wohnt seit Fund 9 (22.08.2026) hier, weil die Oberfläche sie braucht:
+// Bei einem lokalen Lauf zeigt der Balken den Block-Agenten, und dann muss die
+// rote Marke SEINE Schwelle sein statt der des Koordinators. Der Renderer darf
+// den Motor nicht importieren (er hängt an Electron und am Betriebssystem) —
+// also gehört die Zahl nach src/shared/.
+export const LOKAL_WAECHTER_PROZENT = 80
+
 // Anteil als ganze Prozent für die Warnzeile — abgerundet, damit eine Warnung
 // nie „100 %" behauptet (99,4 % sind eben nicht ganz drin).
 export function vramProzent(anteil) {

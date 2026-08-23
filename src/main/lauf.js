@@ -1192,10 +1192,17 @@ function kartenKontext(projektPfad, kartenIds) {
   const zeige = (k) => kennung.get(k.id) ?? k.id
   // Themen (BAUPLAN 30): Die vorhandenen Themen stehen im Auftrag — bewusst
   // nicht in der Werkzeugbeschreibung (Prompt-Cache).
+  // Vierte Angabe (Fund 5): Hat dieser Block wirklich ausgewählte Karten
+  // bekommen? kartenIds ist das Ergebnis von volltextKarten — leer heißt
+  // entweder „die Auftragsquelle hat ihn übergangen" oder „es gab nichts zu
+  // wählen". In beiden Fällen steht unten nur die Status-Karte, und ein Kopf,
+  // der eine Auswahl behauptet, wäre gelogen. Nur wenn wirklich etwas gewählt
+  // wurde, sagt der Auftrag es als Ansage statt als Angebot.
   return texte.agentenKarten.kontext(
     gewaehlt.map((k) => `- ${zeige(k)} · ${kartenZeile(k)}`).join('\n'),
     uebrige.map((k) => `- ${zeige(k)} · ${kartenIndexZeile(k)}`).join('\n'),
-    vorhandeneThemen(geladen.karten)
+    vorhandeneThemen(geladen.karten),
+    kartenIds.length > 0
   )
 }
 

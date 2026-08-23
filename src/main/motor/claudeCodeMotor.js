@@ -27,7 +27,7 @@ import { listeAusText } from './werkzeugSchema.js'
 import { helferWerkzeugServer } from './helferWerkzeuge.js'
 import { webWerkzeugServer } from './webWerkzeuge.js'
 import { ollamaSpeicherStand } from './lokalerSpeicher.js'
-import { vramProzent } from '../../shared/lokalRegeln.js'
+import { vramProzent, LOKAL_WAECHTER_PROZENT } from '../../shared/lokalRegeln.js'
 import { menschWerkzeugServer } from './menschWerkzeuge.js'
 import { kontextFensterFuerModell, kontextFensterMerken } from './motorWissen.js'
 import { startWerkzeugServer } from './startWerkzeuge.js'
@@ -473,8 +473,75 @@ function zieleZerlegen(text, zitateBeachten) {
   return { ziele, offenesZitat: zitat !== '' }
 }
 
+// Eine Shell, die ihren Heredoc-Körper AUSFÜHRT (`bash <<'EOF' … EOF`) — dann
+// sind die Pfeile darin echte Umleitungen, und der Körper darf nicht
+// herausgeschnitten werden. Dasselbe für PowerShells Invoke-Expression.
+// Ehrliche Grenze: Ein Interpreter, der KEINE Shell ist (`node <<EOF`), kann
+// ebenfalls schreiben — nur eben ohne Pfeil, und dagegen half die Zerlegung
+// noch nie. Sie ist keine Sandbox, sie fängt das laute Idiom.
+const KOERPER_WIRD_AUSGEFUEHRT =
+  /(^|[\s|&;(])((ba|z|k|da)?sh|pwsh|powershell|iex|Invoke-Expression)\b/i
+
+// Heredoc-Kennzeichen einer Zeile: `<<EOF`, `<< EOF`, `<<-EOF`, `<<'EOF'`,
+// `<<"EOF"`. Bewusst nur ein WORT als Kennzeichen — damit ist der
+// Schiebe-Operator (`1 << 3`) ausgeschlossen.
+const HEREDOC_KOPF = /<<-?[ \t]*(?:'([A-Za-z_]\w*)'|"([A-Za-z_]\w*)"|([A-Za-z_]\w*))/g
+
+// Heredoc-Körper herausschneiden, bevor nach Umleitungen gesucht wird
+// (Fund 4, gemessen 22.08.2026). Anlass: Der Bauer schrieb per Heredoc in die
+// ausdrücklich freie Wegwerf-Fläche `arbeitsablage/`, der Körper enthielt den
+// Vergleich `i > -1`, und die Zerlegung las `-1)` als Dateinamen. Ergebnis:
+// „Schreiben an „-1)" gestoppt" — eine HARTE Sperre ohne Rückfrage, die auch
+// der Automodus nicht lösen kann.
+//
+// Betroffen ist jeder Körper mit einem Pfeil darin: Vergleiche (`i > -1`,
+// `n > 0`) und HTML-Fragmente (`<div>Text</div>` → Ziel „Text"). NICHT
+// betroffen sind Pfeilfunktionen: `=>` fängt die Zerlegung längst am
+// Gleichheitszeichen ab (siehe zieleZerlegen).
+//
+// Die Regel ist bewusst streng, denn ein Fehlschnitt macht die Sperre BLIND:
+// Geschnitten wird nur, wenn die Schlusszeile wirklich vorkommt — fehlt sie,
+// bleibt der Text unverändert. `<<<` (Hier-Zeichenkette) zählt nicht mit,
+// `<<-EOF` schon. PowerShells Hier-Zeichenketten (`@'` … `'@`) laufen nach
+// derselben Regel.
+export function ohneHeredocKoerper(text) {
+  const zeilen = String(text).split('\n')
+  const heraus = []
+  let i = 0
+  while (i < zeilen.length) {
+    const zeile = zeilen[i]
+    heraus.push(zeile)
+    i++
+    if (KOERPER_WIRD_AUSGEFUEHRT.test(zeile)) continue
+    // Alle Kennzeichen dieser Zeile in ihrer Reihenfolge — eine Zeile darf
+    // mehrere Heredocs eröffnen (`cat <<A >x.txt; cat <<B >y.txt`).
+    const schluesse = []
+    for (const treffer of zeile.matchAll(HEREDOC_KOPF)) {
+      // `<<<` ist eine Hier-Zeichenkette, kein Heredoc. Beide Seiten prüfen:
+      // In `cat <<<EOF` greift der reguläre Ausdruck erst am ZWEITEN Pfeil, das
+      // dritte Zeichen steht also davor, nicht dahinter.
+      if (zeile[treffer.index - 1] === '<' || zeile[treffer.index + 2] === '<') continue
+      schluesse.push(treffer[1] ?? treffer[2] ?? treffer[3])
+    }
+    const geputzt = zeile.trimEnd()
+    if (geputzt.endsWith("@'")) schluesse.push("'@")
+    else if (geputzt.endsWith('@"')) schluesse.push('"@')
+    for (const schluss of schluesse) {
+      const ende = zeilen.findIndex((z, k) => k >= i && z.trim() === schluss)
+      // Ohne Schlusszeile war die Annahme falsch — nichts schneiden.
+      if (ende < 0) continue
+      // Der Körper wird zu Leerzeilen: Alles AUSSERHALB (die Schlusszeile,
+      // spätere Befehle) wird unverändert weitergeprüft.
+      for (let k = i; k < ende; k++) heraus.push('')
+      heraus.push(zeilen[ende])
+      i = ende + 1
+    }
+  }
+  return heraus.join('\n')
+}
+
 function umleitungsZiele(befehl) {
-  const text = String(befehl)
+  const text = ohneHeredocKoerper(String(befehl))
   const mitZitaten = zieleZerlegen(text, true)
   // Bleibt am Ende ein Anführungszeichen offen, war die Zitat-Annahme falsch
   // (`echo don't > log.txt`). Sicherheits-Leitplanke: An dieser Stelle hängt
@@ -646,6 +713,46 @@ function liegtImProjekt(datei, projektPfad) {
 // (Feedback Georg, 14.08.2026), damit der Nutzer nicht ungefragt mit
 // Vorschlägen unterbrochen wird, ein Bauer mit gutem Grund aber auch nicht
 // ins Leere läuft.
+// Eingabe für eine Unteraufgabe eines Block-Agenten (BAUPLAN 37) — reine
+// Rechnung, damit die Regel-Prüfung sie ohne Motor messen kann.
+//
+// run_in_background: false IMMER (Fund 1, gemessen 22.08.2026): Der Block-Agent
+// darf selbst wählen, ob er eine Unteraufgabe in den Hintergrund schickt — und
+// wählt falsch. Gemessen im Abendlauf am Haushaltsplaner: Von drei
+// Unteraufgaben lief eine im Hintergrund; ihr Ergebnis erreichte den Block nie.
+// Er wartete stattdessen mit zehn sleep-Befehlen (30 bis 120 Sekunden) und gab
+// nach 24 Minuten auf. Die beiden anderen liefen im Vordergrund und lieferten —
+// gleicher Lauf, gleiches Modell, gleicher Harness.
+//
+// Abholen kann er das Ergebnis nicht: TaskOutput steht in keiner Werkzeugliste
+// (Fund 2). Unter „darf nur lesen" ist es hart gesperrt, sonst endet es in einer
+// Rückfrage. Damit ist die Hintergrund-Aufgabe eine Sackgasse, die der Agent
+// erst bemerkt, wenn er drinsteckt. Die Regel dahinter: Was nicht abgeholt
+// werden kann, darf nicht gestartet werden können — also nimmt FlowForge die
+// Wahl weg, statt ihre Folge zu behandeln. Gilt für lokale UND Claude-Blöcke;
+// die Sackgasse ist dieselbe.
+//
+// Das Modellfeld: Lokal (BAUPLAN 49) muss es WEG — das Agent-Werkzeug nimmt nur
+// die Claude-Aliase (Schema-Fehler gemessen 19.08.2026), die Unteraufgabe erbt
+// dann das Ollama-Modell der Instanz. Sonst trägt FlowForge das Modell der
+// Unteraufgaben ausdrücklich ein; ohne Angabe hinge es an der Agent-Art, und
+// das Hauptmodell ist das des Koordinators.
+// Die Längengrenze (Fund 6) hängt FlowForge an den Auftrag der Unteraufgabe —
+// den hat der Block-Agent geschrieben, also ist sein eigener Text die falsche
+// Stelle dafür. Angehängt wird nur einmal: Ein Anlauf, der denselben Auftrag
+// wiederholt, soll die Vorgabe nicht doppelt tragen.
+export function unteraufgabenEingabe(eingabe, { lokal = false, unterModell = null } = {}) {
+  const roh = eingabe && typeof eingabe === 'object' ? eingabe : {}
+  const { model: _weg, ...ohneModell } = roh
+  const grenze = texte.agentenLaufSession.unteraufgabeGrenze
+  const auftrag = typeof roh.prompt === 'string' ? roh.prompt : ''
+  const prompt = auftrag && !auftrag.includes(grenze) ? { prompt: auftrag + grenze } : {}
+  if (lokal) return { ...ohneModell, ...prompt, run_in_background: false }
+  if (unterModell)
+    return { ...ohneModell, ...prompt, model: unterModell, run_in_background: false }
+  return { ...roh, ...prompt, run_in_background: false }
+}
+
 // pruefOrdner (BAUPLAN 41): der eigene Unterordner dieser Prüf-Instanz in der
 // Prüfmappe — in fremde Prüfordner schreibt auch ein Prüfer nicht.
 // dateiListe (BAUPLAN 44): der Datenvertrag der Arbeitspakete, die bei DIESEM
@@ -1171,7 +1278,9 @@ export function rohenCliFehlerUebersetzen(
 // leer, fasst nie zusammen, vergisst still — und nach Stunden steht „Prompt is
 // too long" im Ergebnis. Deshalb zählt FlowForge die Zeichen des Block-Agenten
 // selbst und nutzt den vorhandenen Übertrags-Mechanismus, bevor es kippt.
-export const LOKAL_WAECHTER_PROZENT = 80
+// Wohnt seit Fund 9 in src/shared/lokalRegeln.js (die Oberfläche braucht sie),
+// bleibt hier aber ausgeleitet — Motor und Prüfungen holen sie weiter von hier.
+export { LOKAL_WAECHTER_PROZENT }
 
 // ── Schonung nach abgegebener Lieferung (0.51.4) ────────────────────────────
 // Gemessen am Life-OS-Lauf 21.08.2026: Der Block „Angreifer" hat um 08:23:15Z
@@ -1649,6 +1758,10 @@ export function starteLaufMotor(optionen) {
       aufschluesselung: block?.aufschluesselung ?? null,
       kontextFenster: bekanntesFenster,
       uebertragBand: block?.uebertragBand ?? null,
+      // Läuft dieser Block auf der lokalen KI? (Fund 9) Die Oberfläche stellt
+      // den Balken danach um: Bei einem lokalen Lauf wartet der Koordinator
+      // nur, gearbeitet wird im Block-Agenten — also gehört der Balken ihm.
+      lokal: Boolean(lokal),
       // Modell je Block und Füllstand des Block-Agenten (BAUPLAN 36).
       modelle: modellAnteile(),
       ...(() => {
@@ -1916,31 +2029,19 @@ export function starteLaufMotor(optionen) {
     )
     if (urteil.gesperrt) return nein(urteil.gesperrt, urteil.tickerText)
     if (urteil.erlaubt) {
-      // Unteraufgaben-Modell (BAUPLAN 37): Startet der Block-Agent einen
-      // Helfer (Späher, Einlese-Helfer, Audit-Blickwinkel), trägt FlowForge
-      // dessen Modell ein — je nach Einstellung sparsam oder die Klasse des
-      // Blocks. Immer ausdrücklich: Ohne Angabe hängt es an der Agent-Art,
-      // welches Modell greift, und das Hauptmodell ist das des Koordinators.
-      // Lokal (BAUPLAN 49): Unteraufgaben laufen ebenfalls auf dem
-      // Ollama-Modell — es gibt in dieser Instanz kein anderes. Das Feld
-      // model nimmt nur Claude-Aliase; ohne Angabe erben sie das
-      // Hauptmodell der Instanz, und das ist hier das Ollama-Modell.
-      if ((name === 'Agent' || name === 'Task') && lokal) {
-        const { model: _weg, ...ohneModell } = eingabeDaten
+      // Unteraufgaben (BAUPLAN 37): Startet der Block-Agent einen Helfer
+      // (Späher, Einlese-Helfer, Audit-Blickwinkel), setzt FlowForge Modell und
+      // Vordergrund selbst — die Rechnung samt Begründung steht bei
+      // unteraufgabenEingabe.
+      if (name === 'Agent' || name === 'Task')
         return {
           hookSpecificOutput: {
             hookEventName: 'PreToolUse',
             permissionDecision: 'allow',
-            updatedInput: ohneModell
-          }
-        }
-      }
-      if ((name === 'Agent' || name === 'Task') && block?.unterModell)
-        return {
-          hookSpecificOutput: {
-            hookEventName: 'PreToolUse',
-            permissionDecision: 'allow',
-            updatedInput: { ...eingabeDaten, model: block.unterModell }
+            updatedInput: unteraufgabenEingabe(eingabeDaten, {
+              lokal: Boolean(lokal),
+              unterModell: block?.unterModell ?? null
+            })
           }
         }
       return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'allow' } }
