@@ -639,8 +639,8 @@ export const BLOCK_KATALOG = [
       'Gegenstand: FlowForge pflegt sie über eigene Blöcke — du fasst sie nicht an. ' +
       'Die Prüfmappe im Ordner pruefung/ gehört den Prüf-Blöcken: Du änderst dort nie etwas (das ' +
       'ist gesperrt) — hältst du eine Prüfung für falsch, schreibe das ins Feld anmerkung ' +
-      'deiner Meldung. Prüfen ist nicht deine Aufgabe: Kontrolliere deine Arbeit mit eigenen, ' +
-      'schnellen Stichproben. Beim ersten Durchlauf ist die Prüfmappe ohnehin leer (FlowForge ' +
+      'deiner Meldung. Prüfen ist nicht deine Aufgabe: Kontrolliere deine Arbeit mit eigenen ' +
+      'Prüfungen, bevor du meldest. Beim ersten Durchlauf ist die Prüfmappe ohnehin leer (FlowForge ' +
       'leert sie am Laufstart); liegen dort in einer Reparatur-Runde fremde Prüfungen, ' +
       'darfst du sie höchstens EINMAL ganz am Ende laufen lassen — keine Dauerschleife. ' +
       'Eigene Hilfsskripte und Probedateien legst du im Ordner arbeitsablage/ ab — FlowForge ' +
@@ -726,7 +726,7 @@ export const BLOCK_KATALOG = [
       'eigene Blöcke — du fasst sie nicht an. Die Prüfmappe im Ordner pruefung/ gehört den ' +
       'Prüf-Blöcken: Du änderst dort nie etwas (das ist gesperrt) — hältst du eine Prüfung für ' +
       'falsch, schreibe das ins Feld anmerkung deiner Meldung. Kontrolliere deine Anpassungen ' +
-      'mit eigenen, schnellen Stichproben (die Nahtstelle einmal aufrufen, den Test der ' +
+      'mit eigenen Prüfungen, bevor du meldest (die Nahtstelle einmal aufrufen, den Test der ' +
       'betroffenen Datei einmal laufen lassen) — keine Dauerschleife. Eigene Hilfsskripte und ' +
       'Probedateien legst du im Ordner arbeitsablage/ ab — FlowForge leert ihn nach dem Lauf ' +
       'von selbst. ' +

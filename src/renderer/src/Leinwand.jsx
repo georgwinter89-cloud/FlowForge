@@ -534,6 +534,51 @@ function LieferscheinAnsicht({ meldungen }) {
                   (d) => `${d.pfad} (${tl.dateiArten[d.art] ?? d.art})`
                 )}
               />
+              {/* Gemessen statt geglaubt (Bauschritt 55): unter der GEMELDETEN
+                  Liste die gemessene aus den Sicherungspunkten, dann die zwei
+                  Abweichungszeilen — „angefasst, aber nicht gemeldet" ist die
+                  kritischere und trägt die Warnfarbe der bestehenden Palette.
+                  Meldungen alter Läufe ohne gemessen-Feld zeigen exakt das
+                  Bild von heute; ok:false heißt „ungemessen", nie „nichts
+                  angefasst". */}
+              {m.gemessen?.ok === false && (
+                <div className="lieferschein-abschnitt">
+                  <p className="bericht-zeile">{tl.gemessen.ungemessen(m.gemessen.grund)}</p>
+                </div>
+              )}
+              {m.gemessen?.ok === true && (
+                <>
+                  <Abschnitt
+                    label={tl.gemessen.label}
+                    zeilen={tl.gemessen.zeilenFuer(m.gemessen)}
+                  />
+                  {m.gemessen.arbeitsablage === null && m.gemessen.arbeitsablageGrund && (
+                    <p className="bericht-zeile">
+                      {tl.gemessen.arbeitsablageNichtMessbar(m.gemessen.arbeitsablageGrund)}
+                    </p>
+                  )}
+                  <Abschnitt
+                    label={
+                      m.gemessen.uebernimmtFremdes
+                        ? tl.gemessen.nurGemeldetUebernommen
+                        : tl.gemessen.nurGemeldet
+                    }
+                    zeilen={m.gemessen.nurGemeldet}
+                  />
+                  {(m.gemessen.nurGemessen ?? []).length > 0 && (
+                    <div className="lieferschein-abschnitt">
+                      <p className="bericht-abschnitt lieferschein-urteil urteil-fehlgeschlagen">
+                        {tl.gemessen.nurGemessen}
+                      </p>
+                      <ul className="lieferschein-liste">
+                        {m.gemessen.nurGemessen.map((pfad, p) => (
+                          <li key={p}>{pfad}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </>
+              )}
               <Abschnitt
                 label={tl.labels.angriffsliste}
                 zeilen={(m.angriffsliste ?? []).map((a) => `${a.fund} → ${a.umgang}`)}

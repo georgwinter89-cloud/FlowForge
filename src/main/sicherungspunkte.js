@@ -400,6 +400,13 @@ async function hauptIstVorfahr(gitdir, hauptSpitze, strangSpitze) {
 // Stand der Spitze von 'haupt' — den Stand von vor diesen Blöcken. So bleibt
 // „Nach Block A" genau A's Arbeit, und ein Absturz mitten in der Welle lässt B
 // nicht als halb festgehalten zurück. Rückgabe zusätzlich `ausgenommenDateien`.
+//
+// `basisId` (BAUPLAN 55): Jede erfolgreiche Rückgabe trägt zusätzlich die
+// Haupt-Spitze unmittelbar VOR der Zusammenführung — auf allen drei Wegen,
+// auch beim vorgezogenen Strangpunkt. Sie ist der Von-Punkt der Messung
+// (messungNachZusammenfuehrung): Fertige Nachbararbeit steckt in ihr drin und
+// misst sich damit nicht als eigene. Beim allerersten Punkt eines Projekts ist
+// sie ehrlich null — die Messung sagt dann ok:false statt einer erfundenen Liste.
 export function strangZusammenfuehren(projektPfad, strang, beschriftung, optionen = {}) {
   return nacheinander(projektPfad, () =>
     strangZusammenfuehrenIntern(projektPfad, strang, beschriftung, optionen)
@@ -440,7 +447,9 @@ async function strangZusammenfuehrenIntern(projektPfad, strang, beschriftung, { 
         ausgenommen: bereiche
       })
       await strangEntfernen(gitdir, zweig)
-      return punkt
+      // Auch dieser Alltagsweg trägt die Mess-Basis (BAUPLAN 55) — nur an eine
+      // erfolgreiche Rückgabe, ein ok:false bleibt unangetastet ok:false.
+      return punkt.ok ? { ...punkt, basisId: hauptSpitze?.oid ?? null } : punkt
     }
     // Vorziehen statt Zwilling (SPEC §3.3: EIN Punkt je schreibendem Block):
     // Trägt die Strangspitze schon genau denselben Ordnerstand UND dieselbe
@@ -478,7 +487,13 @@ async function strangZusammenfuehrenIntern(projektPfad, strang, beschriftung, { 
         await strangEntfernen(gitdir, zweig)
         // neu: false — es ist wirklich kein neuer Punkt entstanden; der Punkt
         // des Blocks IST jetzt die Spitze von 'haupt'.
-        return { ok: true, neu: false, id: strangSpitze.oid, ausgenommenDateien: 0 }
+        return {
+          ok: true,
+          neu: false,
+          id: strangSpitze.oid,
+          basisId: hauptSpitze?.oid ?? null,
+          ausgenommenDateien: 0
+        }
       }
     }
     // Sonst gegen 'haupt' einsammeln, nicht gegen den Strang: Der Baum soll den
@@ -498,7 +513,7 @@ async function strangZusammenfuehrenIntern(projektPfad, strang, beschriftung, { 
       parent: hauptSpitze ? [hauptSpitze.oid, strangSpitze.oid] : [strangSpitze.oid]
     })
     await strangEntfernen(gitdir, zweig)
-    return { ok: true, neu: true, id, ausgenommenDateien }
+    return { ok: true, neu: true, id, basisId: hauptSpitze?.oid ?? null, ausgenommenDateien }
   } catch {
     // Auch hier der eigene Text: Es scheitert die Zusammenführung mitten im
     // Lauf, nicht der Laufstart — und der Strang bleibt bewusst stehen (siehe
@@ -968,6 +983,30 @@ async function punkteVergleichenIntern(projektPfad, vonId, bisId, { nurDateien =
     return { ok: true, dateien, ausserhalb }
   } catch {
     return { ok: false, dateien: [], ausserhalb: 0 }
+  }
+}
+
+// Die Messung eines Anlaufs (BAUPLAN 55): Welche Dateien hat DIESER Block
+// wirklich angefasst? Diff von `basisId` (Haupt-Spitze unmittelbar vor der
+// Zusammenführung, siehe strangZusammenfuehren) zu `bisId` (der entstandene
+// bzw. vorgezogene Punkt) — dieselbe geprüfte Diff-Rechnung wie die
+// Reparatur-Runden, nur auf Pfad und Art eingedampft. Ungefiltert (kein
+// nurDateien): Gemessen wird ehrlich ALLES, was sich zwischen den Punkten
+// geändert hat; die Verwaltungsdateien filtert der Aufrufer über
+// MESSUNG_VERWALTUNGSDATEIEN (lieferschein.js). DIFF_AUSGESCHLOSSEN gilt wie
+// überall — die Prüfmappe ist keine Bauer-Änderung.
+//
+// ok:false heißt „ungemessen" und kommt bewusst OHNE dateien-Feld zurück: Eine
+// leere Liste hieße „nichts angefasst", und genau diese Verwechslung darf es
+// nie geben. Fehlt einer der beiden Punkte (erster Punkt eines Projekts hat
+// keine Basis), ist die Messung deshalb ok:false statt einer erfundenen Liste.
+export async function messungNachZusammenfuehrung(projektPfad, basisId, bisId) {
+  if (!basisId || !bisId) return { ok: false }
+  const vergleich = await punkteVergleichen(projektPfad, basisId, bisId)
+  if (!vergleich?.ok) return { ok: false }
+  return {
+    ok: true,
+    dateien: vergleich.dateien.map((datei) => ({ pfad: datei.pfad, art: datei.art }))
   }
 }
 

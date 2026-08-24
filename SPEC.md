@@ -1,6 +1,6 @@
 # FlowForge — Produkt-Spezifikation V1
 
-Stand: 21.08.2026 (Zwischenschritt 0.51.3) · Ursprung: Grilling-Session vom 07.08.2026 (von Georg freigegeben) ·
+Stand: 24.08.2026 (Bauschritt 55) · Ursprung: Grilling-Session vom 07.08.2026 (von Georg freigegeben) ·
 fortlaufend gepflegt — dieses Dokument beschreibt die Gegenwart, Verhaltensänderungen
 werden hier nachgezogen (Historie liefert git).
 
@@ -371,6 +371,31 @@ Bericht — angezeigt zusammen („Prüfer · Datenbank"), gezählt wird der Blo
 Seit 0.46.2 trägt das Blockergebnis eines Bauers das **Rauchtest-Ergebnis** (§8): grün,
 rot mit Fehlercode und letzter Ausgabezeile, oder übersprungen mit Grund — die Ausgabe des
 Startversuchs aufklappbar; bei einer Welle mit dem Vermerk, an welchem Bauer gemessen wurde.
+**Die Dateiliste des Umsetzungsberichts wird gemessen, nicht geglaubt** (seit Bauschritt 55):
+Nach jeder Zusammenführung des Sicherungsstrangs eines Blocks (§3.3) rechnet FlowForge aus
+den Sicherungspunkten, welche Dateien dieser Block wirklich angelegt, geändert oder gelöscht
+hat — Diff von der gemeinsamen Spitze unmittelbar vor der Zusammenführung zum entstandenen
+Punkt, je Anlauf gemessen und über die Anläufe vereinigt (Netto-Wirkung: was ein Block anlegt
+und selbst wieder löscht, verschwindet aus der Liste). Im Laufbericht und an der Block-Karte
+steht die **gemessene** Liste unter der **gemeldeten** — die gemeldete wird nicht ersetzt,
+sonst verschwände genau die Information, dass der Block sich geirrt hat. Weichen beide ab,
+stehen zwei Zeilen darunter: „gemeldet, aber nicht angefasst" und „angefasst, aber nicht
+gemeldet" (die gefährlichere, farblich hervorgehoben). Bei „führt zusammen"-Blöcken heißt
+die erste neutral „aus den gelieferten Berichten übernommen, nicht selbst angefasst" — der
+Integrator meldet die Dateien seiner Lieferanten auftragsgemäß mit (§4.3). Verglichen werden
+nur **Pfade** (normalisiert; ein gemeldeter Ordner deckt die gemessenen Dateien darunter),
+nie die Art — eine Umbenennung misst sich als gelöscht + neu und ist keine Falschmeldung.
+`arbeitsablage/` liegt in keinem Sicherungspunkt und wird per Dateisystem-Momentaufnahme je
+Anlauf mitgemessen (markiert, denn sie verschwindet nach dem Lauf); überlappten schreibende
+Anläufe, ist dieser Anteil ehrlich „nicht zuzuordnen", statt falsch zugeordnet zu werden.
+FlowForges Verwaltungsdateien (karten.json, startanleitung.json …) zählen nicht mit — sie
+entstehen über Werkzeuge, nicht über die Dateiliste. Ein Block ohne eigenen Strang
+(Nur-Lese-Ausnahmen, alte Laufstände, gescheitertes Strang-Anlegen) bleibt **ungemessen mit
+Grund** in Ticker und Bericht — kein stiller Rückfall, und „ungemessen" wird nie als „nichts
+angefasst" dargestellt. Der Ticker nennt jede Messung („Dateiliste gemessen: N Dateien
+angefasst · Abweichung: …"). Ehrliche Grenzen: Gemessen wird der **Strang**, nicht die
+Absicht — eine geänderte und wieder zurückgeänderte Datei taucht nicht auf; und die Messung
+geht nicht in die Übergabe an Nachfolger, sie ist für den Nutzer.
 Der Verbrauch steht je Block und für den ganzen Lauf im Bericht — seit 13.08.2026 mit
 **Token-Aufschlüsselung** (Eingabe, Ausgabe, Cache gelesen, Cache geschrieben) und den
 **theoretischen API-Kosten**, die der Motor aus den Preisen der genutzten Modelle berechnet
@@ -1181,7 +1206,8 @@ Auftrag. Darunter je Etikett ein eigener Teil: Arbeitspaket (Ziel,
 Fertig-Kriterien, Schritte, Fundstellen, nicht
 dabei), Prüfbeleg (Urteil als Auswahl, Beanstandungen mit Einstufung und Fundort,
 Rot-vor-Grün, geprüfte Kriterien, Prüfkarte), Umsetzungsbericht (je Kriterium wie
-umgesetzt, Dateiliste mit Art, Angriffsliste behandelt) und Angriffs-/Befundliste
+umgesetzt, Dateiliste mit Art, Angriffsliste behandelt — die Dateiliste wird seit
+Bauschritt 55 gegen die Sicherungspunkte nachgemessen, §3.2) und Angriffs-/Befundliste
 (Funde mit Schwere und Fundort). **Bewusst locker** bleiben Spec-Interview,
 Kontext laden, Frage an den Menschen und der Karten-Prüfer: Rahmen plus ein
 Freitext-Feld — enge Schemata kosten Nuance bei explorativer Arbeit.

@@ -320,6 +320,170 @@ export function dateilistenUeberschneidung(listeA, listeB) {
   return { ueberschneidet: paare.length > 0, paare }
 }
 
+// ——— Gemessen statt geglaubt (BAUPLAN 55) ——————————————————————————————————
+// Die Dateiliste des Umsetzungsberichts wird nach Blockende an den echten
+// Sicherungspunkten gemessen (sicherungspunkte.messungNachZusammenfuehrung).
+// Hier stehen die reinen Rechenglieder dazu — browser-tauglich, denn der
+// Renderer zeigt die Abweichungszeilen an und darf nicht anders rechnen als
+// der Lauf.
+
+// Die EINE Schreibweise für den MESS-Abgleich. Bewusst weicher als
+// dateiEintragNormalisieren: Gemessene Pfade kommen aus git.walk (immer schon
+// kanonisch), gemeldete aus dem Modelltext — './js/app.js', 'js\\app.js' und
+// '/js/app.js' meinen alle dieselbe Datei. Hier wird nichts abgewiesen, denn
+// die Meldung ist längst angenommen: Ein absoluter Windows-Pfad behält sein
+// Laufwerkspräfix, matcht dann eben nichts Gemessenes und landet ehrlich in
+// der Abweichungszeile. Groß-/Kleinschreibung bleibt unangetastet — verglichen
+// wird ohne sie (Windows), angezeigt wird, was dasteht. Die Kürzungs-Schleife
+// ist wörtlich die aus dateiEintragNormalisieren (siehe dort, Bauschritt 46):
+// EINE Kanonisierung im Haus, nicht zwei fast gleiche.
+export function dateiPfadNormalisieren(pfad) {
+  let text = String(pfad ?? '')
+    .trim()
+    .replace(/\\/g, '/')
+  let vorher = ''
+  while (text !== vorher) {
+    vorher = text
+    text = text
+      .replace(/\/{2,}/g, '/')
+      .replace(/\/\.(?=\/|$)/g, '')
+      .replace(/^\/+/, '')
+      .replace(/^(\.\/)+/, '')
+  }
+  return text
+}
+
+// Ordner-Regel wörtlich wie in dateilistenUeberschneidung und
+// src/main/dateilistenPfade.js: Ein Eintrag ist ein ORDNER, wenn er auf einen
+// Schrägstrich endet oder keine Datei-Endung trägt — 'src/api/' und 'src/api'
+// sind Ordner, 'src/app.js' und 'src/.hidden' sind Dateien.
+export function istOrdnerEintrag(pfad) {
+  const text = dateiPfadNormalisieren(pfad)
+  if (!text) return false
+  return text.endsWith('/') || !/\.[^./]+$/.test(text)
+}
+
+// Gemeldete Dateiliste gegen die gemessene: Was steht nur in der einen? Beide
+// Seiten tragen { pfad, art } — verglichen werden aber NUR die normalisierten
+// Pfade, nie die Art (Fund 8 der Angriffsliste: ob ein Agent 'neu' oder
+// 'geaendert' schrieb, ist Deutung, keine Abweichung). Ein gemeldeter ORDNER
+// deckt per Präfix alles Gemessene darunter; nur ein Ordner, unter dem nichts
+// Gemessenes liegt, zählt als nurGemeldet. Die nurGemeldet-Seite behält die
+// Schreibweise der Meldung (für die Anzeige), nurGemessen ist normalisiert
+// (die Pfade kommen aus der Messung und sind es schon).
+export function dateilistenAbgleich(gemeldet, gemessen) {
+  const gemessene = []
+  for (const eintrag of Array.isArray(gemessen) ? gemessen : []) {
+    const pfad = dateiPfadNormalisieren(eintrag?.pfad)
+    if (!pfad) continue
+    gemessene.push({ pfad, schluessel: pfad.toLowerCase(), gedeckt: false })
+  }
+  const nurGemeldet = []
+  // Dedupliziert über den NORMALISIERTEN Pfad — 'fehlt.js' und './fehlt.js'
+  // sind dieselbe Datei und ergeben eine Zeile, nicht zwei (Befund Prüfer 1).
+  const nurGemeldetSchluessel = new Set()
+  for (const eintrag of Array.isArray(gemeldet) ? gemeldet : []) {
+    const roh = String(eintrag?.pfad ?? '')
+    const pfad = dateiPfadNormalisieren(roh)
+    if (!pfad) continue
+    const schluessel = pfad.replace(/\/+$/, '').toLowerCase()
+    const ordner = istOrdnerEintrag(pfad)
+    let trifft = false
+    for (const messung of gemessene) {
+      if (
+        messung.schluessel === schluessel ||
+        (ordner && messung.schluessel.startsWith(schluessel + '/'))
+      ) {
+        // Nicht abbrechen: EIN Ordner-Eintrag deckt MEHRERE gemessene Dateien.
+        messung.gedeckt = true
+        trifft = true
+      }
+    }
+    if (!trifft && !nurGemeldetSchluessel.has(schluessel)) {
+      nurGemeldetSchluessel.add(schluessel)
+      nurGemeldet.push(roh)
+    }
+  }
+  const nurGemessen = []
+  for (const messung of gemessene)
+    if (!messung.gedeckt && !nurGemessen.includes(messung.pfad)) nurGemessen.push(messung.pfad)
+  return { nurGemeldet, nurGemessen }
+}
+
+// Vereinigt die Messungen mehrerer Anläufe EINES Blocks zur Netto-Wirkung —
+// damit die kumulativ gemeldete Dateiliste denselben Bezugszeitraum hat wie
+// die Messung. Die Regeln sind die Netto-Sicht über die Zeit: Was ein Anlauf
+// neu anlegte und ein späterer änderte, ist unterm Strich NEU; was er neu
+// anlegte und wieder löschte, war unterm Strich NIE da; was vor dem Block
+// existierte, gelöscht und neu angelegt wurde, ist unterm Strich GEÄNDERT.
+// In allen übrigen Paarungen gewinnt der jüngere Wert.
+export function messungVereinen(bisher, neu) {
+  const vereint = new Map()
+  const aufnehmen = (eintrag) => {
+    const pfad = dateiPfadNormalisieren(eintrag?.pfad)
+    const art = String(eintrag?.art ?? '')
+    if (!pfad || !DATEI_ARTEN.includes(art)) return null
+    return { pfad, art, schluessel: pfad.toLowerCase() }
+  }
+  for (const roh of Array.isArray(bisher) ? bisher : []) {
+    const eintrag = aufnehmen(roh)
+    if (eintrag) vereint.set(eintrag.schluessel, { pfad: eintrag.pfad, art: eintrag.art })
+  }
+  for (const roh of Array.isArray(neu) ? neu : []) {
+    const eintrag = aufnehmen(roh)
+    if (!eintrag) continue
+    const { pfad, art, schluessel } = eintrag
+    const alt = vereint.get(schluessel)
+    if (!alt) vereint.set(schluessel, { pfad, art })
+    else if (alt.art === 'neu' && art === 'geaendert') vereint.set(schluessel, { pfad, art: 'neu' })
+    else if (alt.art === 'neu' && art === 'geloescht') vereint.delete(schluessel)
+    else if (alt.art === 'geaendert' && art === 'geloescht')
+      vereint.set(schluessel, { pfad, art: 'geloescht' })
+    else if (alt.art === 'geloescht' && art === 'neu')
+      vereint.set(schluessel, { pfad, art: 'geaendert' })
+    else vereint.set(schluessel, { pfad, art })
+  }
+  return [...vereint.values()]
+}
+
+// arbeitsablage/ liegt in KEINEM Sicherungspunkt (bewusst ausgeschlossen) —
+// gemessen wird sie per Dateisystem-Momentaufnahme: zwei Abbilder
+// (relativer Pfad → { groesse, mtimeMs }), hier der Diff dazwischen. Eine
+// Datei gilt als geändert, wenn Größe ODER Zeitstempel abweichen — Inhalte
+// liest niemand, die Ablage ist eine Wegwerf-Fläche. Die Pfade kommen OHNE
+// Präfix zurück; 'arbeitsablage/' setzt der Aufrufer davor.
+export function arbeitsablageAbgleich(vorher, nachher) {
+  const alt = vorher && typeof vorher === 'object' ? vorher : {}
+  const neu = nachher && typeof nachher === 'object' ? nachher : {}
+  const dateien = []
+  for (const pfad of Object.keys(neu)) {
+    if (!(pfad in alt)) dateien.push({ pfad, art: 'neu' })
+    else if (alt[pfad]?.groesse !== neu[pfad]?.groesse || alt[pfad]?.mtimeMs !== neu[pfad]?.mtimeMs)
+      dateien.push({ pfad, art: 'geaendert' })
+  }
+  for (const pfad of Object.keys(alt)) if (!(pfad in neu)) dateien.push({ pfad, art: 'geloescht' })
+  dateien.sort((a, b) => a.pfad.localeCompare(b.pfad, 'de'))
+  return dateien
+}
+
+// FlowForges eigene Verwaltungsdateien gehören nicht in die Messung eines
+// Blocks — sie schreibt der Lauf selbst, nicht der Agent, und als „angefasst,
+// aber nicht gemeldet" wären sie ein Dauer-Fehlalarm. Der AUFRUFER der Messung
+// filtert damit (nicht die Messung selbst, die bleibt ungefiltert): Vergleich
+// auf normalisierten Pfaden, der Eintrag mit Schrägstrich am Ende
+// ('laufberichte/') deckt als Präfix alles darunter.
+export const MESSUNG_VERWALTUNGSDATEIEN = [
+  'projekt.json',
+  'karten.json',
+  'workflow.json',
+  'startanleitung.json',
+  'laufstand.json',
+  'naechster-lauf.json',
+  'chat.json',
+  'pruefbefehl.json',
+  'laufberichte/'
+]
+
 // Der Datenvertrag (BAUPLAN 44): welche Dateien dieses Paket anfassen darf.
 // Glob-Muster werden abgewiesen statt still ins Leere zu laufen — es gibt im
 // ganzen Projekt keinen Glob-Abgleicher, und ab Bauschritt 46 wäre die Folge

@@ -15,10 +15,10 @@ gehört repariert (der Rückstand aus 14 — eigene Blöcke durften nur `nurLese
 `fuehrtZusammen` setzen — ist seit Schritt 48 aufgeholt; einzig `uebung` bleibt Katalog-Sache,
 weil es kein Können ist, sondern „Demo-Block").
 
-**Abgeschlossen sind die Bauschritte 1–54** (39 wurde gestrichen); der jüngste Commit
-ist „Bauschritt 54". Davon sind die Schritte **1–49 ausgelagert** ins
+**Abgeschlossen sind die Bauschritte 1–55** (39 wurde gestrichen); der jüngste Commit
+ist „Bauschritt 55". Davon sind die Schritte **1–49 ausgelagert** ins
 [BAUPLAN-ARCHIV.md](BAUPLAN-ARCHIV.md) — Verweise wie „BAUPLAN 19" oder „BAUPLAN 44"
-zeigen dorthin. Hier stehen die fertigen Schritte 50–54 und alles Offene ab 55.
+zeigen dorthin. Hier stehen die fertigen Schritte 50–55 und alles Offene ab 56.
 
 ## Bauschritte
 
@@ -909,6 +909,52 @@ Laufbericht beim Integrator nachsehen: Die Dateiliste muss die zwei Dateien nenn
 die **er** angefasst hat — und wenn er mehr gemeldet hat, muss darunter stehen, welche
 davon nicht von ihm stammen. Gegenprobe: Bei einem Bauer, der genau meldet, was er
 getan hat, darf keine Abweichungszeile erscheinen.
+
+- **Gebaut (24.08.2026):** Gemessen wird **nach jeder Strang-Zusammenführung** eines
+  Blocks, nicht am Melde-Werkzeug — Kernfund der Angriffsliste: Beim Eintreffen der
+  Meldung existiert der Punkt des Blocks noch gar nicht (blockendePunktFuer legt für
+  Blöcke mit Strang nichts an), die im Bauplan skizzierte Rechnung hätte **lautlos immer
+  leer** gemessen. Stattdessen liefert strangZusammenfuehren jetzt auf allen drei
+  Erfolgs-Pfaden zusätzlich die **basisId** (Haupt-Spitze unmittelbar vor dem Merge);
+  gemessen wird der Diff basisId → entstandener Punkt (messungNachZusammenfuehrung) —
+  fertige Nachbararbeit steckt in der Basis und misst sich nicht als eigene. Je Anlauf
+  gemessen, am Knoten zur **Netto-Wirkung vereinigt** (messungVereinen: neu+gelöscht →
+  war nie da usw.), damit die kumulativ gemeldete Liste denselben Bezugszeitraum hat;
+  die vereinigte Messung überlebt die Wiederaufnahme im Laufstand. `m.gemessen` an der
+  umsetzungsbericht-Meldung (dateien · arbeitsablage · nurGemeldet · nurGemessen ·
+  ok:false mit Grund), Abgleich nur über **normalisierte Pfade** mit
+  Ordner-Präfix-Deckung, nie über die Art (eine Umbenennung ist keine Falschmeldung);
+  FlowForges Verwaltungsdateien (karten.json, startanleitung.json …) zählen nicht mit.
+  **arbeitsablage/** liegt in KEINEM Sicherungspunkt (zweiter Kernfund — AUSGESCHLOSSEN
+  greift schon beim Einsammeln, nicht erst beim Diff) und wird per
+  Dateisystem-Momentaufnahme je Anlauf gemessen; überlappen sich schreibende Anläufe,
+  ist der Anteil ehrlich „nicht zuzuordnen" statt falsch zugeordnet. Ticker-Zeile je
+  Messung, ungemessen immer mit Grund („kein eigener Sicherungsstrang" …) — nie als
+  „nichts angefasst" dargestellt. Anzeige in Laufbericht UND Block-Karte (eine
+  Komponente), „Angefasst, aber nicht gemeldet" im Warnton. Der **Integrator** behält
+  seinen Auftrag (die kumulierte Liste ist für die Nachfolger, dritter Kernfund) —
+  seine Abweichungszeile heißt neutral „Aus den gelieferten Berichten übernommen, nicht
+  selbst angefasst". „Schnelle Stichproben" ist aus Bauer- und Integrator-Auftrag
+  heraus; die Prüfer-Stellen („Stichproben nachstellen") bleiben bewusst — dort ist es
+  eine Handlungsanweisung ans Zweitaudit, kein Etikett auf eigener Arbeit.
+- **Messwerte der Bausession (24.08.2026, 1 Angreifer, 2 Bauer mit Vertrag, 2 Prüfer,
+  Integrator):** Angriffsliste 13 Funde, davon 3 blockierend (alle vor dem Bauen in den
+  Vertrag eingearbeitet, siehe oben). Prüfer 1 (Mechanik, 35 Wegwerf-Prüfungen an
+  echten Sicherungspunkten + 198 Regressionsläufe): bestanden, 4 kleine Befunde, 2
+  nachgearbeitet (Wiederaufnahme übersteht korrupte gemessenDateien-Einträge; der
+  Abgleich dedupliziert über den normalisierten Pfad statt der Roh-Schreibweise).
+  Prüfer 2 (Ende-zu-Ende, gebaute App, CDP, eigener Datenordner, 3 echte Läufe auf
+  Opus, 1:52–5:44 min, 0,65–1,40 $ theoretisch): Eine bestellte Falschmeldung wurde
+  gemessen und beanstandet — Ticker wörtlich „Block 2 ‚Bauer · Messprobe-Bau':
+  Dateiliste gemessen: 2 Dateien angefasst · Abweichung: 1 gemeldet, aber nicht
+  angefasst · 1 angefasst, aber nicht gemeldet." —, die Gegenprobe (ehrliche Meldung)
+  blieb ohne Abweichungszeile, Alt-Berichte ohne gemessen-Feld bleiben unverändert
+  lesbar. npm test: 1727 Prüfungen grün. Ehrliche Grenzen: Die Integrator-Neutralzeile
+  ist am Code belegt und regelgeprüft, aber nicht Ende-zu-Ende erzeugt (bräuchte einen
+  echten Mehrzweig-Lauf); Fund 8 (Text-gegen-Text-Kohärenz) bleibt wie geplant
+  zurückgestellt. Nebenbefund außerhalb von 55, für eine eigene kleine Session
+  vorgemerkt: laufStarten mit Schrägstrich-Pfad legt die Karten-Werkzeuge lahm („Der
+  Projektordner ist nicht mehr da"), über die Oberfläche nie erreichbar.
 
 ## Paket 56–58: Funde außerhalb der Dateilisten im selben Lauf reparieren
 

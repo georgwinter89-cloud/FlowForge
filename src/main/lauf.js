@@ -76,6 +76,13 @@ import {
   zuschnittDeckung,
   dateiListeVereinigen,
   dateilistenUeberschneidung,
+  // Gemessen statt geglaubt (Bauschritt 55): der Abgleich der gemeldeten
+  // Dateiliste mit der gemessenen aus den Sicherungspunkten.
+  dateiPfadNormalisieren,
+  dateilistenAbgleich,
+  messungVereinen,
+  arbeitsablageAbgleich,
+  MESSUNG_VERWALTUNGSDATEIEN,
   RAHMEN_WERKZEUG
 } from '../shared/lieferschein.js'
 import { fehlerZeilen, neueFehler } from '../shared/torRegeln.js'
@@ -148,7 +155,10 @@ import {
   strangOeffnen,
   strangZusammenfuehren,
   straengeAufraeumen,
-  sicherungspunkteLaden
+  sicherungspunkteLaden,
+  // Gemessen statt geglaubt (Bauschritt 55): der Diff der Zusammenführung
+  // (basisId → id) ist die Messung je Anlauf.
+  messungNachZusammenfuehrung
 } from './sicherungspunkte.js'
 import { workflowLaden } from './workflow.js'
 import { laufstandSpeichern, laufstandLaden, laufstandLoeschen } from './laufstand.js'
@@ -695,9 +705,101 @@ export async function strangSchliessenAn(
     tickern(texte.ticker.strangNichtZusammengefuehrt(bezeichnung))
     return false
   }
+  // Gemessen statt geglaubt (Bauschritt 55): Die Messung braucht beide Enden
+  // der Zusammenführung — basisId (Haupt-Spitze unmittelbar davor) und id (der
+  // entstandene bzw. vorgezogene Punkt). Am Knoten abgelegt statt
+  // zurückgegeben: Die Ja/Nein-Rückgabe dieser Funktion ist gemessener Bestand
+  // (rollbackWirkbereich.test.js), und die Aufrufer im Ablaufplaner lesen die
+  // Ablage unmittelbar nach dem Aufruf wieder aus.
+  k.strangZusammengefuehrtInfo = { id: ergebnis.id ?? null, basisId: ergebnis.basisId ?? null }
   k.strang = null
   if (k.status === 'fertig') tickern(texte.ticker.strangZusammengefuehrt(bezeichnung))
   return true
+}
+
+// ——— Gemessen statt geglaubt (Bauschritt 55) ————————————————————————————————
+// Die Dateiliste des Umsetzungsberichts wird nicht mehr geglaubt, sondern an
+// den Sicherungspunkten des Blocks nachgemessen. Die reinen Rechnungen stehen
+// hier als eigene, ausführbare Stellen — die Regel-Prüfungen fahren sie ohne
+// Motor und ohne Electron-Fenster.
+
+// FlowForges Verwaltungsdateien fliegen aus der Messung (der AUFRUFER filtert,
+// nicht die Messung selbst): Vergleich auf normalisierten Pfaden, ein Eintrag
+// mit Schrägstrich am Ende ('laufberichte/') deckt als Präfix alles darunter.
+export function messungVerwaltungAusfiltern(dateien) {
+  return (Array.isArray(dateien) ? dateien : []).filter((eintrag) => {
+    const pfad = dateiPfadNormalisieren(eintrag?.pfad).toLowerCase()
+    if (!pfad) return false
+    return !MESSUNG_VERWALTUNGSDATEIEN.some((verwaltung) =>
+      verwaltung.endsWith('/')
+        ? pfad.startsWith(verwaltung.toLowerCase())
+        : pfad === verwaltung.toLowerCase()
+    )
+  })
+}
+
+// arbeitsablage/ liegt in KEINEM Sicherungspunkt (AUSGESCHLOSSEN greift beim
+// Einsammeln) — gemessen wird sie per Dateisystem-Momentaufnahme: relativer
+// Pfad → { groesse, mtimeMs }, rekursiv. Ein fehlender Ordner ist der
+// Normalfall vor dem ersten Hilfsskript und ergibt still ein leeres Abbild.
+export function arbeitsablageAbbild(projektPfad) {
+  const abbild = {}
+  const sammeln = (ordner, praefix) => {
+    let eintraege
+    try {
+      eintraege = fs.readdirSync(ordner, { withFileTypes: true })
+    } catch {
+      return
+    }
+    for (const eintrag of eintraege) {
+      const relativ = praefix ? `${praefix}/${eintrag.name}` : eintrag.name
+      if (eintrag.isDirectory()) sammeln(path.join(ordner, eintrag.name), relativ)
+      else if (eintrag.isFile()) {
+        try {
+          const stat = fs.statSync(path.join(ordner, eintrag.name))
+          abbild[relativ] = { groesse: stat.size, mtimeMs: stat.mtimeMs }
+        } catch {
+          // Eine gerade verschwindende Datei fällt aus dem Abbild — kein Abbruch.
+        }
+      }
+    }
+  }
+  sammeln(path.join(projektPfad, 'arbeitsablage'), '')
+  return abbild
+}
+
+// Der Zusammenbau von m.gemessen (Datenmodell Vertrag 55) aus der über die
+// Anläufe VEREINIGTEN Messung. Ist die arbeitsablage nicht zuzuordnen (es
+// überlappten schreibende Anläufe), wird ihr Anteil ehrlich null — und ihre
+// GEMELDETEN Pfade fliegen aus dem Abgleich, denn „gemeldet, aber nicht
+// angefasst" wäre dort ein Urteil ohne Messung.
+export function gemessenErgebnisBauen({
+  vereinigt,
+  arbeitsablageUnzuordenbar = false,
+  gemeldet,
+  uebernimmtFremdes = false
+}) {
+  const istAblage = (pfad) => {
+    const text = dateiPfadNormalisieren(pfad).toLowerCase()
+    return text === 'arbeitsablage' || text.startsWith('arbeitsablage/')
+  }
+  const alle = Array.isArray(vereinigt) ? vereinigt : []
+  const dateien = alle.filter((eintrag) => !istAblage(eintrag?.pfad))
+  const ablage = arbeitsablageUnzuordenbar
+    ? null
+    : alle.filter((eintrag) => istAblage(eintrag?.pfad))
+  const gemeldetFuerAbgleich = (Array.isArray(gemeldet) ? gemeldet : []).filter(
+    (eintrag) => !arbeitsablageUnzuordenbar || !istAblage(eintrag?.pfad)
+  )
+  const { nurGemeldet, nurGemessen } = dateilistenAbgleich(
+    gemeldetFuerAbgleich,
+    arbeitsablageUnzuordenbar ? dateien : alle
+  )
+  const gemessen = { ok: true, dateien, arbeitsablage: ablage, nurGemeldet, nurGemessen }
+  if (arbeitsablageUnzuordenbar)
+    gemessen.arbeitsablageGrund = texte.lieferschein.gemessen.arbeitsablageGrundParallel
+  if (uebernimmtFremdes) gemessen.uebernimmtFremdes = true
+  return gemessen
 }
 
 // Ein Rückroll und seine ehrlichen Folgen an einer Stelle: Der Rückgabewert
@@ -2337,6 +2439,24 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           meldungenVorher: [],
           lieferungen: {},
           meldungWiederholen: false,
+          // Gemessen statt geglaubt (Bauschritt 55):
+          // gemessenDateien — die über alle Anläufe VEREINIGTE Netto-Messung
+          //   (inkl. arbeitsablage/-Einträge), Bezugszeitraum wie die kumulativ
+          //   gemeldete Dateiliste; wandert in den Laufstand.
+          // arbeitsablageVorher/FensterOffen/Ueberlappt — Momentaufnahme der
+          //   gemeinsamen Fläche arbeitsablage/ beim Anlauf-Start und die
+          //   Überlappungs-Erkennung schreibender Anläufe (Welle).
+          // arbeitsablageUnzuordenbar — einmal überlappt, bleibt der
+          //   arbeitsablage-Anteil unzuordenbar (ehrliches null statt falscher
+          //   Zuordnung); wandert in den Laufstand.
+          // strangZusammengefuehrtInfo — beide Enden der letzten
+          //   Zusammenführung (basisId → id), von strangSchliessenAn abgelegt.
+          gemessenDateien: [],
+          arbeitsablageVorher: null,
+          arbeitsablageFensterOffen: false,
+          arbeitsablageUeberlappt: false,
+          arbeitsablageUnzuordenbar: false,
+          strangZusammengefuehrtInfo: null,
           // Hat der Block gar nichts gemeldet, liegt sein freier Abschlusstext
           // der Nachforderung bei — daraus trägt er nach, ohne die Arbeit zu
           // wiederholen.
@@ -2793,6 +2913,24 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         meldungen: kettenIds
           .filter((id) => knoten.get(id).meldungen.length > 0)
           .map((id) => [id, knoten.get(id).meldungen]),
+        // Gemessen statt geglaubt (Bauschritt 55): Die über die Anläufe
+        // vereinigte Messung wandert mit — sonst verlöre eine Wiederaufnahme
+        // den Bezugszeitraum der kumulativ gemeldeten Dateiliste. Was vor
+        // einem Absturz nicht persistiert war, ist weg; vereinigt wird, was
+        // da ist.
+        gemessenDateien: kettenIds
+          .filter(
+            (id) =>
+              (knoten.get(id).gemessenDateien?.length ?? 0) > 0 ||
+              knoten.get(id).arbeitsablageUnzuordenbar
+          )
+          .map((id) => [
+            id,
+            {
+              dateien: knoten.get(id).gemessenDateien ?? [],
+              arbeitsablageUnzuordenbar: knoten.get(id).arbeitsablageUnzuordenbar === true
+            }
+          ]),
         rueckmeldungen: kettenIds
           .filter((id) => knoten.get(id).rueckmeldung)
           .map((id) => [id, knoten.get(id).rueckmeldung]),
@@ -2961,6 +3099,19 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           k.meldungen = liste
           k.lieferungen = lieferungenAusMeldungen(liste)
         }
+      // Gemessen statt geglaubt (Bauschritt 55) — tolerant: Ein Laufstand von
+      // vor diesem Schritt kennt das Feld nicht, dann beginnt die Messung leer.
+      for (const paar of Array.isArray(fortsetzung.gemessenDateien)
+        ? fortsetzung.gemessenDateien
+        : []) {
+        if (!Array.isArray(paar)) continue
+        const [id, wert] = paar
+        if (knoten.has(id) && wert && typeof wert === 'object') {
+          const k = knoten.get(id)
+          if (Array.isArray(wert.dateien)) k.gemessenDateien = wert.dateien
+          k.arbeitsablageUnzuordenbar = wert.arbeitsablageUnzuordenbar === true
+        }
+      }
       // Eine wiederhergestellte Rückmeldung ist unverbraucht (BAUPLAN 47): Der
       // Block startet nach der Wiederaufnahme frisch und liest sie erst dann —
       // bis dahin darf ein weiterer Prüfer seine Kritik daran anhängen.
@@ -3671,6 +3822,26 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       // laufen alle Sicherungspunkte dieses Blocks auf seinen Strang, und der
       // Diff unten braucht seinen Wirkbereich.
       await strangOeffnenFuer(k)
+      // Gemessen statt geglaubt (Bauschritt 55): arbeitsablage/ liegt in
+      // keinem Sicherungspunkt — beim Anlauf-Start jedes SCHREIBENDEN Blocks
+      // entsteht deshalb eine Momentaufnahme, die Messung am Anlauf-Ende zieht
+      // die zweite. Die Fläche ist gemeinsam (die Welle trennt nur die
+      // Dateilisten aus dem Datenvertrag, wellenStartRegel): Läuft beim Start
+      // schon ein anderer schreibender Anlauf — oder startet dieser hier
+      // mitten in dessen offenem Fenster —, lässt sich der ablage-Anteil
+      // KEINEM von beiden zuordnen; das Flag trifft darum beide Seiten. Das
+      // Fenster reicht bewusst bis zur Zusammenführung (auch durch den
+      // Nachlauf hindurch), denn erst dort fällt das zweite Abbild.
+      if (!k.def.nurLesen) {
+        k.arbeitsablageVorher = arbeitsablageAbbild(projektPfad)
+        k.arbeitsablageUeberlappt = false
+        for (const anderer of knoten.values())
+          if (anderer !== k && anderer.arbeitsablageFensterOffen) {
+            anderer.arbeitsablageUeberlappt = true
+            k.arbeitsablageUeberlappt = true
+          }
+        k.arbeitsablageFensterOffen = true
+      }
       // Lieferschein (BAUPLAN 42): Ein neuer Anlauf des Blocks (Reparatur-Runde,
       // Nachforderung) beginnt ohne Meldung — sonst gälte still das Urteil des
       // letzten Anlaufs weiter. Die alte bleibt als Vorlage erhalten. Ein
@@ -4821,6 +4992,7 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         tickern,
         ausgenommen: geschuetzteBereicheFuer(k)
       })
+      await umsetzungNachmessenFuer(k)
     }
 
     // Das Sicherheitsnetz am Laufende: Hier wird JEDER Strang geschlossen, auch
@@ -4834,6 +5006,122 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         endgueltig: true,
         ausgenommen: geschuetzteBereicheFuer(k)
       })
+      await umsetzungNachmessenFuer(k)
+    }
+
+    // Gemessen statt geglaubt (Bauschritt 55): Nach JEDER erfolgreichen
+    // Zusammenführung eines Blocks wird die Dateiliste seines
+    // Umsetzungsberichts an den Sicherungspunkten nachgemessen — Diff von
+    // basisId (Haupt-Spitze unmittelbar vor der Zusammenführung) zu id (der
+    // entstandene bzw. vorgezogene Punkt). Fertige Nachbararbeit steckt in
+    // basisId und misst sich damit nicht als eigene. Die Messung hängt bewusst
+    // NICHT am Melde-Werkzeug: Beim Eintreffen der Meldung existiert der Punkt
+    // noch gar nicht (blockendePunktFuer legt für Blöcke mit Strang nichts an,
+    // und ein Diff auf demselben Punkt fiele lautlos auf leer).
+    //
+    // Das Meldungsobjekt liegt referenzgleich in bericht.blockErgebnisse —
+    // nachträgliches Setzen von m.gemessen landet im Bericht (dasselbe Muster
+    // wie eintrag.abnahme). In k.lieferung/Übergabetexte geht die Messung
+    // NICHT (Vertrag 55): Sie ist für Georg, nicht für die Nachfolger.
+    function gemessenUngemessenSetzen(k, berichte, grund) {
+      const bisher = berichte[0]?.gemessen
+      // Eine gelungene Messung wird nie durch „ungemessen" ersetzt, und
+      // derselbe Grund wird nicht in jeder Runde erneut getickert.
+      if (bisher?.ok === true) return
+      const schonGemeldet = bisher?.ok === false && bisher.grund === grund
+      for (const meldung of berichte) meldung.gemessen = { ok: false, grund }
+      if (!schonGemeldet) tickern(texte.ticker.dateilisteUngemessen(bezeichnungFuer(k), grund))
+    }
+
+    async function umsetzungNachmessenFuer(k) {
+      const info = k.strangZusammengefuehrtInfo ?? null
+      k.strangZusammengefuehrtInfo = null
+      // Anlauf noch nicht zu Ende (Nachlauf, offene Folgen-Frage, offen
+      // gehaltener Strang): strangSchliessenAn hat bewusst NICHT
+      // zusammengeführt — die Messung kommt, wenn es so weit ist.
+      const laeuftNoch =
+        k.strang &&
+        (k.strangOffenHalten || k.status === 'nachlauf' || k.status === 'wartet-entscheidung')
+      if (!info && laeuftNoch) return
+      // Anlauf zu Ende (zusammengeführt oder nie ein Strang): Ab jetzt stört
+      // dieser Block keine arbeitsablage-Messung eines anderen mehr. Bei
+      // GESCHEITERTER Zusammenführung bleibt das Fenster offen — das
+      // Sicherheitsnetz am Laufende misst dann noch.
+      const ueberlappt = k.arbeitsablageUeberlappt === true
+      if (info || !k.strang) k.arbeitsablageFensterOffen = false
+      const berichte = (k.meldungen ?? []).filter((m) => m && m.art === 'umsetzungsbericht')
+      if (!berichte.length) return
+      // Kein Strang, keine frische Zusammenführung: nurLesen-Ausnahme, alter
+      // Laufstand oder gescheitertes Strang-Anlegen — ungemessen, mit Grund.
+      // NIE als „nichts angefasst" darstellen.
+      if (!info && !k.strang) {
+        gemessenUngemessenSetzen(k, berichte, texte.lieferschein.gemessen.gruende.keinStrang)
+        return
+      }
+      // Zusammenführung gescheitert (der Strang steht noch): ehrlich sagen,
+      // statt still auszulassen — gelingt sie am Laufende doch noch,
+      // überschreibt die Messung diesen Stempel.
+      if (!info) {
+        gemessenUngemessenSetzen(
+          k,
+          berichte,
+          texte.lieferschein.gemessen.gruende.nichtZusammengefuehrt
+        )
+        return
+      }
+      // Kern-Messung: Diff basisId → id. Sind beide Enden derselbe Punkt (der
+      // Anlauf hat nichts geändert), ist die Messung leer — das ist ein
+      // Ergebnis, kein Fehler.
+      let kern = null
+      if (info.id && info.id === info.basisId) kern = []
+      else if (info.id) {
+        const messung = await messungNachZusammenfuehrung(projektPfad, info.basisId, info.id)
+        if (messung?.ok) kern = messungVerwaltungAusfiltern(messung.dateien)
+      }
+      if (kern === null) {
+        gemessenUngemessenSetzen(k, berichte, texte.lieferschein.gemessen.gruende.diffGescheitert)
+        return
+      }
+      // arbeitsablage-Anteil: zweites Abbild, Diff, Präfix. Überlappten
+      // schreibende Anläufe, ist der Anteil ab jetzt unzuordenbar — die
+      // Kern-Messung bleibt, schon vereinigte ablage-Einträge fallen raus.
+      if (ueberlappt) k.arbeitsablageUnzuordenbar = true
+      let ablageDiff = []
+      if (!k.arbeitsablageUnzuordenbar && k.arbeitsablageVorher) {
+        const nachher = arbeitsablageAbbild(projektPfad)
+        ablageDiff = arbeitsablageAbgleich(k.arbeitsablageVorher, nachher).map((eintrag) => ({
+          pfad: 'arbeitsablage/' + eintrag.pfad,
+          art: eintrag.art
+        }))
+      }
+      // Je Anlauf gemessen, am Knoten über die Anläufe VEREINIGT — damit die
+      // kumulativ gemeldete Dateiliste denselben Bezugszeitraum hat. diffBasis
+      // bleibt davon unberührt (sie ist kumulativ, die Messung je Anlauf).
+      k.gemessenDateien = messungVereinen(k.gemessenDateien ?? [], [...kern, ...ablageDiff])
+      if (k.arbeitsablageUnzuordenbar)
+        k.gemessenDateien = k.gemessenDateien.filter(
+          (eintrag) => !dateiPfadNormalisieren(eintrag.pfad).toLowerCase().startsWith('arbeitsablage/')
+        )
+      const gemeldet = berichte.flatMap((m) => (Array.isArray(m.dateien) ? m.dateien : []))
+      const gemessen = gemessenErgebnisBauen({
+        vereinigt: k.gemessenDateien,
+        arbeitsablageUnzuordenbar: k.arbeitsablageUnzuordenbar === true,
+        gemeldet,
+        // Integrator („führt zusammen"): Er meldet vertragsgemäß auch die
+        // Dateien der Lieferanten — die Anzeige sagt das neutral statt im
+        // Irrtums-Ton. Aus der Blockdefinition abgeleitet und an der Meldung
+        // persistiert, damit auch alte Berichte es noch wissen.
+        uebernimmtFremdes: k.def.fuehrtZusammen === true
+      })
+      for (const meldung of berichte) meldung.gemessen = gemessen
+      tickern(
+        texte.ticker.dateilisteGemessen(
+          bezeichnungFuer(k),
+          gemessen.dateien.length + (gemessen.arbeitsablage?.length ?? 0),
+          gemessen.nurGemeldet.length,
+          gemessen.nurGemessen.length
+        )
+      )
     }
 
     // betroffen = der Block, dessen Arbeit fällt (bei der lokalen Vorreparatur

@@ -2829,6 +2829,44 @@ export const texte = {
       angriffsliste: 'Umgang mit der Angriffsliste',
       funde: 'Funde'
     },
+    // Gemessen statt geglaubt (Bauschritt 55): Unter der GEMELDETEN Dateiliste
+    // des Umsetzungsberichts steht, was die Sicherungspunkte wirklich sagen —
+    // und die zwei Abweichungszeilen. Die Gründe sind gespeicherter Text
+    // (m.gemessen.grund im Laufbericht), deshalb stehen sie hier als feste
+    // Werte und nicht als freie Formulierung im Lauf-Code.
+    gemessen: {
+      label: 'Gemessen (aus den Sicherungspunkten)',
+      keineDatei: 'Keine Datei angefasst.',
+      zeile: (pfad, artText) => `${pfad} (${artText})`,
+      arbeitsablageZeile: (pfad, artText) =>
+        `${pfad} (${artText}) — arbeitsablage, verschwindet nach dem Lauf`,
+      arbeitsablageNichtMessbar: (grund) => `arbeitsablage/ nicht zuzuordnen — ${grund}.`,
+      nurGemeldet: 'Gemeldet, aber nicht angefasst',
+      // Beim Integrator („führt zusammen") ist die nurGemeldet-Zeile kein
+      // Verdacht: Er meldet vertragsgemäß auch die Dateien der Lieferanten.
+      nurGemeldetUebernommen: 'Aus den gelieferten Berichten übernommen, nicht selbst angefasst',
+      nurGemessen: 'Angefasst, aber nicht gemeldet',
+      ungemessen: (grund) => `Dateiliste ungemessen — ${grund}.`,
+      gruende: {
+        keinStrang: 'kein eigener Sicherungsstrang',
+        diffGescheitert: 'der Vergleich der Sicherungspunkte ist fehlgeschlagen',
+        nichtZusammengefuehrt:
+          'der Sicherungsstrang ließ sich nicht mit dem gemeinsamen Stand zusammenführen'
+      },
+      arbeitsablageGrundParallel: 'parallel liefen weitere schreibende Blöcke',
+      // Die Zeilen der gemessenen Liste — eine Rechnung für beide Ansichten
+      // (Laufbericht und Block-Karte), damit die Prüfungen sie ohne JSX fahren.
+      zeilenFuer: (gemessen) => {
+        const tl = texte.lieferschein
+        const zeilen = []
+        for (const d of gemessen?.dateien ?? [])
+          zeilen.push(tl.gemessen.zeile(d.pfad, tl.dateiArten[d.art] ?? d.art))
+        for (const d of gemessen?.arbeitsablage ?? [])
+          zeilen.push(tl.gemessen.arbeitsablageZeile(d.pfad, tl.dateiArten[d.art] ?? d.art))
+        if (!zeilen.length) zeilen.push(tl.gemessen.keineDatei)
+        return zeilen
+      }
+    },
     // Werkzeug-Beschreibungen (sie stehen im Werkzeugkasten des Agenten).
     // Empfänger im Auftrag (BAUPLAN 43): Diese Beschreibungen baut FlowForge
     // EINMAL je Motor-Session und sie stehen im Werkzeugkasten jedes Agenten —
@@ -4149,6 +4187,21 @@ export const texte = {
       `Der eigene Sicherungsstrang von ${bezeichnung} ließ sich NICHT mit dem gemeinsamen ` +
       'Stand zusammenführen — sein Sicherungspunkt fehlt deshalb noch in der Liste. ' +
       'FlowForge versucht es am Ende des Laufs erneut.',
+    // Gemessen statt geglaubt (Bauschritt 55): Die Dateiliste des
+    // Umsetzungsberichts wird an den Sicherungspunkten nachgemessen — eine
+    // Zeile je Messung, und NIE stilles Weglassen, wenn nicht gemessen wurde.
+    dateilisteGemessen: (bezeichnung, anzahl, nurGemeldet, nurGemessen) => {
+      let zeile =
+        `${bezeichnung}: Dateiliste gemessen: ` +
+        `${anzahl === 1 ? '1 Datei' : `${anzahl} Dateien`} angefasst`
+      const abweichungen = []
+      if (nurGemeldet > 0) abweichungen.push(`${nurGemeldet} gemeldet, aber nicht angefasst`)
+      if (nurGemessen > 0) abweichungen.push(`${nurGemessen} angefasst, aber nicht gemeldet`)
+      if (abweichungen.length) zeile += ` · Abweichung: ${abweichungen.join(' · ')}`
+      return zeile + '.'
+    },
+    dateilisteUngemessen: (bezeichnung, grund) =>
+      `${bezeichnung}: Dateiliste ungemessen — ${grund}.`,
     straengeAufgeraeumt: (anzahl) =>
       anzahl === 1
         ? 'Ein liegengebliebener Sicherungsstrang aus einem früheren Abbruch wurde entfernt.'
