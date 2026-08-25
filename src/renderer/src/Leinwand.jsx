@@ -11,6 +11,7 @@ import {
   pruefOrdnerFuer,
   klasseHatKostenHinweis,
   klasseIstLokal,
+  klasseIstOpenRouter,
   klasseKenntDenktiefe,
   MODELL_KLASSEN,
   DENKTIEFEN,
@@ -699,9 +700,17 @@ function BlockErgebnisZeile({ eintrag }) {
           {eintrag.aufschluesselung && (
             <p className="feld-hinweis">{tb.aufschluesselungZeile(eintrag.aufschluesselung)}</p>
           )}
-          {eintrag.kostenUsd != null && (
+          {/* Kosten dreifach ehrlich (Bauschritt 59): lokal = „keine",
+              OpenRouter = „nicht gemessen" (kostenUsd bleibt dort null — die
+              Zeile erscheint trotzdem, sonst sähe fehlend wie gratis aus),
+              sonst die API-Zahl. */}
+          {(eintrag.kostenUsd != null || klasseIstOpenRouter(eintrag.klasse)) && (
             <p className="feld-hinweis">
-              {klasseIstLokal(eintrag.klasse) ? tb.lokalKeineKosten : tb.apiKosten(eintrag.kostenUsd)}
+              {klasseIstLokal(eintrag.klasse)
+                ? tb.lokalKeineKosten
+                : klasseIstOpenRouter(eintrag.klasse)
+                  ? tb.openrouterKosten
+                  : tb.apiKosten(eintrag.kostenUsd)}
             </p>
           )}
           {/* Rauchtest ehrlich (0.46.2): grün, rot mit Grund oder übersprungen
@@ -1147,6 +1156,12 @@ function SchaubildKarte({
         {klasseIstLokal(modellKlasse) && (
           <span className="feld-hinweis karte-kosten-hinweis">{tk.modellLokalHinweis}</span>
         )}
+        {/* Klasse openrouter (Bauschritt 59): läuft über OpenRouter auf dem
+            Modell aus den Einstellungen — ohne Häkchen, Schlüssel und Modell
+            startet der Lauf nicht (nie stiller Rückfall). */}
+        {klasseIstOpenRouter(modellKlasse) && (
+          <span className="feld-hinweis karte-kosten-hinweis">{tk.modellOpenRouterHinweis}</span>
+        )}
         {/* Lokaler Prüfer ohne Abnahme (BAUPLAN 50): Hinweis, keine Sperre —
             dahinter nimmt kein Claude-Prüfer das Urteil ab. Der Knopf fügt
             einen Standard-Prüfer „Abnahme" direkt dahinter ein (Rückführung
@@ -1190,7 +1205,11 @@ function SchaubildKarte({
         </select>
         {!klasseKenntDenktiefe(modellKlasse) && denktiefe !== DENKTIEFE_STANDARD && (
           <span className="feld-hinweis karte-kosten-hinweis">
-            {klasseIstLokal(modellKlasse) ? tk.denktiefeLokalHinweis : tk.denktiefeHaikuHinweis}
+            {/* OpenRouter zuerst (Bauschritt 59): der Haiku-Satz nennt Haiku
+                beim Namen und passt darum nicht. */}
+            {klasseIstOpenRouter(modellKlasse)
+              ? tk.denktiefeOpenrouterHinweis
+              : klasseIstLokal(modellKlasse) ? tk.denktiefeLokalHinweis : tk.denktiefeHaikuHinweis}
           </span>
         )}
       </label>

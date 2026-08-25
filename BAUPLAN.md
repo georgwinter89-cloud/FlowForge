@@ -1306,3 +1306,146 @@ offen sein.
   Angreifer-Runde ohne Werkzeug kostet einen doppelten Anlauf (nur relevant, falls
   der Ausweich je wieder abgewiesen wird). 1863 Prüfungen grün.
 
+## Paket 59–60: Anbieter-Öffnung — freie Modellwahl über OpenRouter
+
+(Entscheidung Georg, 25.08.2026: „Freie Modellwahl. Nicht nur für Ox Alpha —
+die OpenAI-Sprache ist neben Anthropic die zweite große, einmal gebaut trägt sie
+jedes künftige Modell." Auslöser war das Stealth-Modell Ox Alpha auf OpenRouter
+[kostenlos, 1M Kontext, Werkzeuge, anonymer Betreiber, der Eingaben SPEICHERT —
+die Daten-Ehrlichkeit gehört deshalb in die Einstellungen, nicht ins Kleingedruckte].
+Vorbild-Implementierung: anthropic-proxy [MIT, ~350 Zeilen, maxnowack] — wird NICHT
+als Abhängigkeit gezogen, sondern als eigenständige Neuimplementierung im
+FlowForge-Stil gepflegt [Entscheidung Georg: „direkt integrieren und selbst pflegen"];
+Herkunftsvermerk im Dateikopf.)
+
+**Der Kern:** FlowForge hat nur EINEN Motor (die Claude-CLI), und der spricht nur
+Anthropic. Ollama funktioniert, weil es dieselbe Sprache spricht; OpenRouter spricht
+OpenAI — sein eigener Anthropic-Endpunkt trägt laut eigener Doku nur
+Anthropic-Modelle. Der Weg ist deshalb ein **eingebauter Übersetzer**: ein
+In-Process-HTTP-Weiterleiter nach dem Muster der Zählstelle (54) — 127.0.0.1,
+Port 0, je Motor frisch —, der Anthropic-`/v1/messages`-Anfragen in
+OpenAI-`/chat/completions` übersetzt, an OpenRouter schickt und die
+Streaming-Antwort ereignisweise zurückübersetzt. Der OpenRouter-Schlüssel wohnt
+NUR im Übersetzer (Hauptprozess), nie in der Umgebung des Motor-Kindprozesses.
+
+Leitgedanken: (1) Ein OpenRouter-Block ist wie ein lokaler Block eine **eigene
+Motor-Instanz** mit umgebogener Basis-Adresse — dieselben Werkzeuge, Sperren,
+Lieferscheine, Hooks; kein eigener Agenten-Kreislauf. (2) Die Zählstellen-Lehren
+gelten wörtlich: Strom an Strom, zeilenweise mit Deckel, nie quadratisch sammeln
+(die 232-s-Blockade aus 0.51.2 ist die Gegenprobe). Einzige bewusste Ausnahme:
+Die ANFRAGE muss vollständig gelesen werden, bevor sie übersetzt werden kann
+(JSON), mit hartem Größendeckel. (3) Kosten ehrlich: Für OpenRouter-Modelle kennt
+die CLI keine Preise — der Lauf läuft wie lokal OHNE Ausgaben-Obergrenze, der
+Bericht weist Kosten als „nicht gemessen" aus (echte Preisliste: Schritt 60).
+(4) Kein stiller Rückfall: Fehlt Schlüssel, Modell oder Häkchen, startet der Lauf
+mit Klartext nicht (Muster lokalBlockAgent).
+
+### 59 — Anbieter-Öffnung I: Der Übersetzer und die Klasse „OpenRouter"
+(Version: dieser Schritt baut als **0.60.0** — 0.59.0 trägt bereits Bauschritt 58,
+die Nummern-Kopplung ist seit der 52er-Ausnahme um eins verschoben. Angriffsfund 1.)
+(Vertrauens-Entscheidung GEORG, 25.08.2026 — gegen die Angreifer-Empfehlung:
+OpenRouter-Prüfer werden wie jedes CLOUD-Modell behandelt, nicht wie lokale.
+Heißt: Sie dürfen Abnahme-Instanz sein, kein Tor-Anker-Zwang, kein
+Steck-Hinweis. istAbnahme/torAnkerLokal/kettenRegeln bleiben unverändert
+lokal-bezogen — die Klasse openrouter läuft dort automatisch als Cloud durch.)
+- **Übersetzer** `src/main/motor/uebersetzer.js` (Muster Zählstelle: node:http,
+  keine Electron-Abhängigkeit, prüfbar gegen einen Stub): Anfrage-Übersetzung
+  (System-Prompt String/Array, tools samt Schema-Putz, tool_use/tool_result,
+  `cache_control`/`thinking`/Anthropic-Sonderfelder abstreifen, tool_choice,
+  max_tokens), Antwort-Übersetzung als SSE-Ereignisse (message_start,
+  content_block_start/delta/stop, message_delta mit stop_reason-Abbildung und
+  usage aus dem OpenRouter-Schlussstück [include_usage], message_stop);
+  `count_tokens` wird mit einer Zeichen-Schätzung beantwortet, statt 404 zu
+  riskieren. Fehler von OpenRouter gehen als ehrliche Anthropic-Fehlerform durch.
+- **Neue Modellklasse `openrouter`** in MODELL_KLASSEN — eingeordnet ZWISCHEN
+  „sehr-sparsam" und „lokal" (die Liste ist eine Rangfolge; unterModellFuer
+  arbeitet mit indexOf — hinter „sparsam" heißt automatisch: Unteraufgaben
+  bleiben auf dem eigenen Modell, kein Herabstufen). `klasseIstOpenRouter()`
+  analog `klasseIstLokal()`; keine Denktiefe (Claude-Feld; Editor und Ticker
+  sagen es); an jeder Blockkarte und im Block-Editor wählbar (Regel „Kein
+  Kennzeichen ohne Editor-Feld").
+- **Weiche im Ablaufplaner** (Muster lokal): eigene Motor-Instanz je
+  OpenRouter-Block, `openrouterOption { modell, kontext }` an motorBauen —
+  ACHTUNG, das lokal-Objekt wird feldweise aufgezählt, kein Spread (Fund 4 aus
+  0.51.1 gilt hier neu). KEIN Adress-Pool: der galt der einen GPU; OpenRouter-
+  Blöcke laufen parallel wie Claude-Blöcke. Startprüfung mit Klartext-Absage
+  ohne Schlüssel/Modell/Häkchen. Motor-Umgebung: Basis-Adresse = Übersetzer,
+  Platzhalter-Token, alle Modell-Aliase auf den OpenRouter-Modellnamen,
+  `CLAUDE_CODE_MAX_CONTEXT_TOKENS` aus der Einstellung, keine maxBudgetUsd.
+- **Einstellungen** (STANDARD + Positivliste in einstellungenSpeichern +
+  Bereinigung — drei Stellen, bekannte Falle): `openRouterAktiv` (Häkchen, wie
+  lokalBlockAgent: ohne Häkchen keine OpenRouter-Blöcke), `openRouterSchluessel`
+  (Klartext wie apiSchluessel — bewusst konsistent; safeStorage wäre ein eigener
+  Schritt für BEIDE Schlüssel), `openRouterModell` (freies Feld, z. B.
+  `stealth/ox-alpha`), `openRouterKontext` (Token-Zahl, Standard 200.000).
+  Im Einstellungs-Bereich der ehrliche Datensatz-Hinweis: Eingaben gehen an den
+  gewählten Anbieter; bei Stealth-Modellen speichert ein ANONYMER Betreiber mit.
+- **Ehrliche Grenzen in die SPEC:** Die CLI ist auf Claude-Modelle gebaut —
+  ob ein fremdes Modell die Werkzeug-Disziplin der Blöcke trägt, entscheidet
+  der Alltag, nicht der Einbau. Websuche fehlt OpenRouter-Blöcken in 59 (die
+  CLI-WebSearch läuft über Anthropic; die lokalen Web-Werkzeuge folgen in 60).
+  Kosten stehen auf „nicht gemessen". E2E-Beleg der Session läuft gegen Ollamas
+  OpenAI-Endpunkt (dieselbe Sprache wie OpenRouter) — der echte
+  OpenRouter-Lauf ist Georgs Alltagstest mit eigenem Schlüssel.
+- Nachzuziehen: SPEC §2 (Klasse openrouter, Übersetzer, Grenzen), §9
+  (Einstellungs-Bereich OpenRouter samt Daten-Hinweis), §5 (keine
+  Ausgaben-Obergrenze für OpenRouter-Blöcke).
+**Alltagstest:** Georg trägt in den Einstellungen seinen OpenRouter-Schlüssel
+und `stealth/ox-alpha` ein, setzt das Häkchen, stellt einen Bauer-Block auf
+„OpenRouter" und startet einen Ein-Block-Lauf: Der Ticker zeigt echte
+Werkzeug-Arbeit des fremden Modells, der Laufbericht nennt das Modell, Kosten
+stehen ehrlich auf „nicht gemessen". Ohne Schlüssel: Klartext-Absage statt Lauf.
+- **Gebaut (25.08.2026):** Übersetzer `src/main/motor/uebersetzer.js` (Muster
+  Zählstelle; message_start immer mit usage, message_delta mit echten Zahlen aus dem
+  include_usage-Schlussstück, Nicht-Streaming-Rückfall, count_tokens-Schätzung,
+  /api/hello, Schema-Putz format/$schema/const→enum, Sonderfelder abgestreift,
+  Bearer nur im Übersetzer, Anfrage-Deckel max(16 MB, Kontext×20) mit ehrlichem 413,
+  Werkzeug-Argumente je Aufruf gesammelt als EIN Delta vor dem Block-Schluss —
+  Befund K1, damit ist „Delta nach Stop" auch bei verschränkten Anbietern
+  unmöglich); Klasse `openrouter` zwischen sehr-sparsam und lokal (keine Denktiefe,
+  kein Kosten-Hinweis, Assistent schlägt sie nie vor); vier Einstellungsfelder mit
+  schlüsselschonenden Speicher-Sieben (SearXNG-Muster); Motor-Option mit Übersetzer
+  je Instanz (Abbau in allen Endpfaden), Umgebungszweig VOR dem api-Zweig, kein
+  maxBudgetUsd, beide Fenster-Wächter + Lauf-Wächter gegen 200k-Vergiftung, Kosten
+  null („nicht gemessen", nie 0), harte WebSearch/WebFetch-Sperre mit Klartext;
+  Startprüfung mit drei getrennten Absagen (gilt auch der Wiederaufnahme);
+  parallele eigene Motor-Instanzen ohne Adress-Pool; Prüfstands-Variable
+  FLOWFORGE_OPENROUTER_ZIEL mit ehrlicher Ticker-Zeile; Bereich „OpenRouter" in den
+  Einstellungen samt Daten-Ehrlichkeits-Hinweis. Vier Vorbild-Fehler des
+  MIT-Referenzcodes bewusst NICHT übernommen (tool_calls-Format, tool_result-Arrays,
+  system-String, Index-Kollision).
+- **Messwerte der Bausession (25.08.2026, 1 Angreifer, 2 Bauer mit Vertrag, 2 Prüfer,
+  Integrator):** Angriffsliste 23 Funde (6 blockierend, alle vorab in die Verträge
+  eingearbeitet; gemessen u.a.: die CLI ruft nur HEAD /api/hello und POST /v1/messages,
+  ihr Accumulator liest message_delta.usage unkonditioniert, count_tokens hat eine
+  eingebaute Schätz-Toleranz). Mitten in der Session Georgs Richtungsentscheid:
+  OpenRouter-Prüfer wie CLOUD, nicht wie lokal — drei geplante Eingriffe entfielen.
+  Prüfer 1 (Mechanik, 44 Wegwerf-Messungen am echten Planer/Motor/Übersetzer):
+  Startprüfung unter Feuer inkl. Wiederaufnahme, gemischte Kette lokal+openrouter,
+  echte Parallelität zweier Instanzen, Umgebungs-Hygiene mit vergifteter
+  Eltern-Umgebung (kein Schlüssel-Leck, Gegenproben scharf), Fenster-Vergiftung,
+  Zusatz-Angreifer+Zusatzbauer erben die Klasse, Abnahme-wie-Cloud belegt; 1 Befund
+  (K1, verschränkte tool_call-Deltas) nachgearbeitet mit Rot-vor-Grün-Prüfung.
+  Prüfer 2 (Ende-zu-Ende, echte App, CDP, eigener Datenordner, Prüfstand gegen
+  Ollamas OpenAI-Endpunkt): Einstellungs-Roundtrip durch die echte Datei, alle drei
+  Startabsagen im Wortlaut, Kernlauf-Kette real belegt (CLI-Kind → Übersetzer-Port →
+  Ollama mit context_length 32768 = Einstellung), Schlüssel-Hygiene bis in die
+  Prozess-Umgebung (PEB-Auslese, 68 Variablen, Schlüssel nur in einstellungen.json),
+  harter Stopp ohne Port-Leck, Standalone-Beweis des Werkzeug-Roundtrips
+  (tool_use mit Argumenten, stop_reason tool_use, Usage 165/20). Null Befunde.
+  1935 Prüfungen grün. Ehrliche Grenzen: kein grüner Voll-Kernlauf über die CLI
+  (qwen2.5:7b des Testrechners zu langsam für den Bauer-Prompt — Modell-, keine
+  Mechanik-Frage; Georgs Alltagstest mit echtem Schlüssel ist der Beleg); der echte
+  TLS-Weg zu openrouter.ai ist baugleich, aber ungemessen; Bilder wandern nur als
+  Platzhalter durch den Übersetzer; thinking-Historie geht nicht an den Anbieter
+  zurück.
+
+### 60 — Anbieter-Öffnung II: OpenRouter im Alltag (geplant)
+- Kosten aus OpenRouters Preisliste je Modell (statt „nicht gemessen");
+  Metriken „davon OpenRouter" je Lauf analog „davon lokal".
+- Websuche-Werkzeuge (web_suche/webseite_lesen) auch für OpenRouter-Motoren.
+- Modell-Nachschlagen: Liste/Live-Status vom OpenRouter-Katalog statt freiem
+  Textfeld; Kontextfenster je Modell automatisch.
+- Werkstatt-Messung: Übersetzer-Verkehr in der Werkstatt sichtbar (Muster
+  Zählstelle).
+

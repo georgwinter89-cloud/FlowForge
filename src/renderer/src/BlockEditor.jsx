@@ -7,6 +7,7 @@ import {
   blockDenktiefe,
   klasseHatKostenHinweis,
   klasseIstLokal,
+  klasseIstOpenRouter,
   BEREICHE,
   BEREICH_EIGENE,
   MODELL_KLASSEN,
@@ -700,6 +701,12 @@ export default function BlockEditor({ block, onSpeichern, onAbbrechen }) {
                   {klasseIstLokal(werte.modell) && (
                     <span className="feld-hinweis">{tkette.modellLokalHinweis}</span>
                   )}
+                  {/* Klasse openrouter (Bauschritt 59): derselbe Satz wie an
+                      der Blockkarte — was sie braucht, was nicht gilt, und
+                      wohin die Daten gehen. */}
+                  {klasseIstOpenRouter(werte.modell) && (
+                    <span className="feld-hinweis">{tkette.modellOpenRouterHinweis}</span>
+                  )}
                 </label>
                 {/* Denktiefe (0.48.1): Voreinstellung des eigenen Blocks — wie
                     gründlich das Modell nachdenkt; an der Karte je Block
@@ -719,6 +726,9 @@ export default function BlockEditor({ block, onSpeichern, onAbbrechen }) {
                   <span className="feld-hinweis">{t.denktiefeHinweis}</span>
                   {klasseIstLokal(werte.modell) && (
                     <span className="feld-hinweis">{tkette.denktiefeLokalHinweis}</span>
+                  )}
+                  {klasseIstOpenRouter(werte.modell) && (
+                    <span className="feld-hinweis">{tkette.denktiefeOpenrouterHinweis}</span>
                   )}
                 </label>
                 {/* Feinheiten (BAUPLAN 48): die übrigen Kennzeichen des

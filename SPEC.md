@@ -66,15 +66,17 @@ Sitzungen hinweg Software entsteht — ohne dass dem Agenten der Kontext überl�
   - **Modellklasse je Block** (seit Bauschritt 37, Entscheidung Georg: frei je Block
     wählbar — auch Bauer und Prüfer, gegen die Empfehlung „nur Nebenrollen fest"; die
     Folge einer zu sparsamen Wahl sind mehr Reparatur-Runden, und genau die zeigen die
-    Kennzahlen aus §3.4). Fünf Klassen (bis 0.48.1 drei, bis Bauschritt 49 vier):
+    Kennzahlen aus §3.4). Sechs Klassen (bis 0.48.1 drei, bis Bauschritt 49 vier, bis Bauschritt 59 fünf):
     **Extra (Fable 5)** · **Standard (Opus)** · **sparsam (Sonnet)** · **sehr sparsam
-    (Haiku)** · **lokal (Ollama)**. Jeder Katalog-Block trägt eine Voreinstellung — Standard
+    (Haiku)** · **OpenRouter** · **lokal (Ollama)**. Jeder Katalog-Block trägt eine Voreinstellung — Standard
     für Bauer, Prüfer, Gesamtprüfung, Diagnose, Paket schneiden, Angreifer und Audit;
     sparsam für Sessionende, Frage an den Menschen, Karten-Prüfer (inkl. Sortiermodus)
     und Kontext laden. An jeder **Blockkarte im Schaubild** ist sie umstellbar (wie das
     Häkchen „lokale KI erlaubt", gespeichert je Karte in workflow.json); eigene Blöcke
     wählen ihre Voreinstellung im Block-Editor (§4.5). FlowForge trägt die Wahl beim
-    Start des Block-Agenten ein; Ticker und Laufbericht nennen sie (§3.2).
+    Start des Block-Agenten ein; Ticker und Laufbericht nennen sie (§3.2). Seit
+    Bauschritt 59 gibt es als sechste Klasse **OpenRouter** (zwischen sehr sparsam
+    und lokal eingeordnet, eigener Abschnitt unten).
     **Nebenrollen billigst:** Der Koordinator der Lauf-Session (§5) läuft immer auf
     Haiku, die Einmal-Frage des Block-Editors auf Sonnet. „Standard" ist bewusst fest
     auf Opus genagelt statt „was die CLI gerade als Standard nimmt" — sonst erbte jeder
@@ -112,8 +114,9 @@ Sitzungen hinweg Software entsteht — ohne dass dem Agenten der Kontext überl�
     Aufgaben, neigt zum Überdenken — vorher testen"). Technisch ist sie ein Feld der
     Agent-Definition: FlowForge definiert seinen Block-Agenten je Denktiefe einmal
     (`block`, `block-low` … `block-max`) und wählt beim Start des Blocks den Typ nach
-    der Karte — der Koordinator bleibt unberührt. Sehr sparsam (Haiku) und lokal (Ollama)
-    kennen keine Denktiefe: Dort wird die Wahl ignoriert, Editor und Ticker sagen es, und der
+    der Karte — der Koordinator bleibt unberührt. Sehr sparsam (Haiku), lokal (Ollama)
+    und OpenRouter (die Denktiefe ist ein Claude-Feld, was ein fremdes Modell damit täte,
+    ist ungewiss) kennen keine Denktiefe: Dort wird die Wahl ignoriert, Editor und Ticker sagen es, und der
     Laufbericht schreibt „Denktiefe: gilt hier nicht" statt einer Messung. **Nachweisbar,
     nicht nur gewünscht:** Beim ersten Werkzeugaufruf des Block-Agenten meldet die CLI die
     wirksame Stufe (Hook-Feld `effort.level`, in der Bausession gemessen) — der Ticker
@@ -232,10 +235,50 @@ Sitzungen hinweg Software entsteht — ohne dass dem Agenten der Kontext überl�
     Abnahme, sagt es das Schaubild als Hinweis ohne Sperre; die Vorlage „Feature hinzufügen ·
     lokal" (§4.4) bringt sie mit. Die Metrik „Urteil lokal vs. Abnahme" (§3.4) ist die Zahl,
     an der Georg entscheidet, ob der lokale Prüfer bleibt.
+  - **Klasse „OpenRouter"** (seit Bauschritt 59, Entscheidung Georg 25.08.2026: „freie
+    Modellwahl" — die OpenAI-Sprache ist neben Anthropic die zweite große, einmal
+    angebunden trägt sie jedes künftige Modell; Anlass war das Stealth-Modell Ox Alpha):
+    Ein Block läuft komplett auf einem über OpenRouter bezogenen Fremdmodell — dieselbe
+    Claude-CLI als **eigene Motor-Instanz**, deren `ANTHROPIC_BASE_URL` auf FlowForges
+    eingebauten **Übersetzer** zeigt (In-Process-Weiterleiter nach dem Muster der
+    Zählstelle, §3.5: 127.0.0.1, freier Port, je Motor frisch). Der Übersetzer dolmetscht
+    Anthropic-`/v1/messages` ↔ OpenAI-`/chat/completions` in beide Richtungen — System-Prompt,
+    Werkzeug-Definitionen (mit Schema-Putz), Werkzeug-Aufrufe und -Ergebnisse, Streaming
+    ereignisweise samt ehrlicher Token-Zählung im Antwortstrom (daran hängt der Übertrag
+    bei vollem Kontext, §5) und einem Nicht-Streaming-Rückfallweg der CLI. Eigenständige
+    Neuimplementierung im Repo (Vorbild anthropic-proxy, MIT — bewusst nicht als
+    Abhängigkeit, Entscheidung Georg: selbst pflegen). Der **OpenRouter-Schlüssel wohnt
+    nur im Übersetzer** (Hauptprozess), nie in der Umgebung des Motor-Kindprozesses.
+    Werkzeuge, Hooks, Sperren, Lieferschein und Sicherungspunkte arbeiten unverändert.
+    **Wie Cloud, nicht wie lokal** (Entscheidung Georg, 25.08.2026): OpenRouter-Blöcke
+    laufen parallel ohne Adress-Pool; OpenRouter-Prüfer dürfen Abnahme-Instanz sein,
+    ohne Tor-Anker-Zwang und ohne Steck-Hinweis. Keine Denktiefe (Claude-Feld). Der
+    KI-Assistent des Editors schlägt die Klasse nie von sich aus vor.
+    **Voraussetzung und kein stiller Rückfall:** Häkchen „OpenRouter erlaubt", Schlüssel
+    und Modellname (freies Feld, z. B. `stealth/ox-alpha`) in den Einstellungen (§9);
+    fehlt eines, startet der Lauf mit Klartext-Absage — nie still auf Claude. Das
+    **Kontextfenster** kommt aus der Einstellung (die CLI erfände sonst 200k; gemerkt
+    wird für Fremdmodelle nichts). **Kosten-Wahrheit:** FlowForge kennt keine
+    OpenRouter-Preise — Kosten stehen als „nicht gemessen" (null, nicht 0) in Bericht
+    und Metriken, und es gilt keine Ausgaben-Obergrenze (die CLI-eigenen Zahlen wären
+    erfunden); die echte Preisliste ist Bauschritt 60. **Daten-Ehrlichkeit:** Eingaben
+    und Projektinhalte gehen an den gewählten Anbieter; bei Stealth-Modellen speichert
+    ein anonymer Betreiber mit — der Satz steht sichtbar im Einstellungs-Bereich.
+    **Ehrliche Grenzen:** Die CLI ist auf Claude-Modelle gebaut — ob ein Fremdmodell die
+    Werkzeug-Disziplin der Blöcke trägt, zeigt der Alltag, nicht der Einbau. Kein Weg ins
+    Netz für OpenRouter-Blöcke (die CLI-Websuche läuft über Anthropics Server und ist
+    hart gesperrt statt nach einer Rechte-Frage zu scheitern; die Web-Werkzeuge der
+    lokalen Blöcke folgen in Schritt 60). Bilder wandern nur als Platzhalter durch den
+    Übersetzer. `CLAUDE_CODE_MAX_CONTEXT_TOKENS` wirkt nur für Modellnamen, die nicht mit
+    „claude-" beginnen — für Anthropic-Modelle über OpenRouter griffe die
+    Kontext-Einstellung nicht. Für Messungen ohne Konto gibt es die dokumentierte
+    Prüfstands-Variable `FLOWFORGE_OPENROUTER_ZIEL` (leitet das Übersetzer-Ziel um,
+    mit ehrlicher Ticker-Zeile — nie still).
   - **V2-Motoren:** eigene Agenten-Kreisläufe gegen beliebige Anbieter-APIs. Der
     lokale Weg ist keine V2-Arbeit mehr, sondern die zweite Motor-Instanz mit
-    Ollama-Umgebung (seit Bauschritt 49 gebaut). Die restliche App merkt nicht,
-    welcher Motor dranhängt.
+    Ollama-Umgebung (seit Bauschritt 49 gebaut); die OpenRouter-Klasse deckt seit
+    Bauschritt 59 die OpenAI-Sprache über den eingebauten Übersetzer ab. Die
+    restliche App merkt nicht, welcher Motor dranhängt.
 
 ## 3. Projekte
 
@@ -2935,6 +2978,15 @@ Block-Agenten als Hinweis daneben (§6).
   an (kein Schalter), das abgeleitete Modell lädt nur beim Ändern der Werte neu, ohne
   erreichbare lokale KI startet ein Lauf mit lokalem Block nicht. Ein Wert außerhalb der
   Grenzen wird beim Speichern mit Klartext abgelehnt statt still geklemmt ·
+  **OpenRouter** (seit Bauschritt 59, §2): eigener Bereich mit Häkchen **„OpenRouter
+  erlaubt"**, **Schlüsselfeld** (Passwort-Darstellung; gespeichert im Klartext wie der
+  API-Schlüssel — bewusst konsistent, eine Verschlüsselung wäre ein eigener Schritt für
+  beide), **Modellfeld** (Freitext, z. B. `stealth/ox-alpha`), **Kontextfenster**
+  (Token-Zahl, Standard 200.000; Unsinn wird beim Speichern mit Klartext abgelehnt)
+  und dem immer sichtbaren **Daten-Ehrlichkeits-Hinweis**: Eingaben und Projektinhalte
+  gehen an den gewählten Anbieter, bei Stealth-Modellen speichert ein anonymer
+  Betreiber mit. Ein Speichern-Aufruf ohne diese Felder lässt Schlüssel und Modell
+  unangetastet (dasselbe Sieb-Muster wie die SearXNG-Adresse) ·
   **Websuche der lokalen Blöcke** (seit 0.51.2, §4.3): ein Feld **„SearXNG-Adresse"** —
   **leer heißt eingebaute Quelle**, es gibt bewusst kein zweites Feld für die Quellenwahl
   (ein Feld weniger, das beim Speichern verlorengehen kann). Ein **fehlendes Schema wird

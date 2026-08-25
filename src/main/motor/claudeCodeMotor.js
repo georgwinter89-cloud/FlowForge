@@ -803,8 +803,15 @@ export function unteraufgabenEingabe(eingabe, { lokal = false, unterModell = nul
 // freieKartenOrdner (BAUPLAN 52): die Ordnernamen der von FlowForge abgespielten
 // Prüfkarten, die DIESEM Prüfer zum Anpassen freigegeben sind — eine Liste, kein
 // Muster, und wirksam nur bei darfPruefen: Ein Bauer fasst pruefung/ weiterhin
-// nirgends an. Steht als LETZTER Parameter mit sicherem Standard [].
-export function pruefeWerkzeug(name, eingabe, projektPfad, nurLesen, darfPruefen, lokaleKi = true, nurLesenBefehle = false, darfKartenAnlegen = false, darfVorschlagen = false, darfLaufVorschlag = false, darfZuteilen = false, pruefOrdner = '', lieferscheinFrei = [], dateiListe = null, inWelle = false, freieKartenOrdner = []) {
+// nirgends an.
+// openrouterMotor (Bauschritt 59): true, wenn diese Motor-Instanz gegen den
+// OpenRouter-Übersetzer läuft — dann sind WebSearch/WebFetch der CLI HART
+// gesperrt (Muster lokaleKi-Sperre): Beide laufen über Anthropics Server und
+// endeten für OpenRouter als Anbieter-Fehler NACH Georgs Rechte-Frage — eine
+// Frage, deren „Ja" nur scheitern kann, ist keine Frage. Die gedeckelten
+// Websuche-Werkzeuge folgen für OpenRouter in Schritt 60. Sicherer Standard
+// false: Claude- und Chat-Motoren bleiben unberührt.
+export function pruefeWerkzeug(name, eingabe, projektPfad, nurLesen, darfPruefen, lokaleKi = true, nurLesenBefehle = false, darfKartenAnlegen = false, darfVorschlagen = false, darfLaufVorschlag = false, darfZuteilen = false, pruefOrdner = '', lieferscheinFrei = [], dateiListe = null, inWelle = false, freieKartenOrdner = [], openrouterMotor = false) {
   if (name.startsWith(MENSCH_PRAEFIX)) return { erlaubt: true }
   // Auf den Zusatzbauer warten (Bauschritt 58): frei nur für Prüf-Blöcke —
   // AUCH nur-lesende, deshalb steht dieser Zweig bewusst VOR der harten
@@ -865,6 +872,17 @@ export function pruefeWerkzeug(name, eingabe, projektPfad, nurLesen, darfPruefen
   // „Schreib-Versuch gestoppt" gemeldet — eine unwahre Begründung, gemessen
   // 20.08.2026 an der echten pruefeWerkzeug.
   if (name.startsWith(WEB_PRAEFIX)) return { erlaubt: true }
+  // WebSearch/WebFetch in OpenRouter-Motoren (Bauschritt 59): HARTE Sperre
+  // mit Klartext statt Rückfrage — beide Werkzeuge laufen über Anthropics
+  // Server und enden für einen OpenRouter-Block als Anbieter-Fehler NACH
+  // Georgs Rechte-Frage; die Frage wäre eine Falle, kein Angebot. Vor allen
+  // nur-lesen-Zweigen, damit die Sperre auch für schreibende Blöcke gilt.
+  // Websuche-Werkzeuge für OpenRouter folgen in Schritt 60.
+  if (openrouterMotor && INTERNET_WERKZEUGE.has(name))
+    return {
+      gesperrt: texte.rechteFrage.openrouterInternetFuerAgent,
+      tickerText: texte.ticker.openrouterInternetGesperrt
+    }
   // App-Werkzeuge des Co-Piloten (BAUPLAN 33): Ausgabe lesen ist frei; die
   // App starten/stoppen ändert keine Projektdatei, greift aber in laufende
   // Prozesse ein — im Reparatur-Modus frei, sonst Rückfrage; einen fremden
@@ -1582,6 +1600,20 @@ export function starteLaufMotor(optionen) {
     // true — der Zähler gehört dem Lauf, nicht dieser je Block neu gebauten
     // Instanz.
     lokal = null,
+    // OpenRouter-Block (Bauschritt 59): { modell, kontext, schluessel } — dann
+    // läuft DIESE Motor-Instanz gegen den eingebauten Übersetzer, der die
+    // Anthropic-Anfragen der CLI in OpenAI-Form an OpenRouter weiterreicht.
+    // Der Übersetzer startet je Motor-Instanz frisch (Muster Zählstelle) und
+    // wird in ALLEN Endpfaden geschlossen — kein Server-Leck je Block. Der
+    // Schlüssel wohnt NUR im Übersetzer (Hauptprozess), nie in der Umgebung
+    // des Motor-Kindprozesses. Wie lokal: kein maxBudgetUsd (die CLI ERFINDET
+    // für fremde Modelle Kosten), Fenster fest aus der Einstellung (die CLI
+    // meldet 200000), Kosten bleiben null („nicht gemessen" — nicht 0, das
+    // hieße „gratis gemessen"). Anders als lokal: kein Adress-Pool, keine
+    // Zählstelle, kein Lokal-Wächter, keine VRAM-Prüfung, Websuche-Werkzeuge
+    // folgen in Schritt 60 — und die Helfer-KI bleibt erlaubt wie bei
+    // Claude-Blöcken (die Helfer-GPU ist hier nicht der Engpass).
+    openrouter = null,
     // Websuche lokaler Blöcke (0.51.2): { searxngAdresse } — leer heißt
     // eingebaute Quelle. Die zwei Werkzeuge hängen an `lokal`, nicht an dieser
     // Option: Ein lokaler Block hat sonst gar keinen Weg ins Netz (WebSearch/
@@ -1679,9 +1711,15 @@ export function starteLaufMotor(optionen) {
   // Lokal (BAUPLAN 49): Das Fenster ist das Kontextfenster aus den
   // Einstellungen — fest. Die CLI kennt das Ollama-Modell nicht und meldete
   // 200000; das darf weder hier noch im Motor-Wissen landen.
-  let bekanntesFenster = lokal
-    ? lokal.kontext > 0
-      ? lokal.kontext
+  // OpenRouter (Bauschritt 59): dieselbe Lage — die CLI meldet für fremde
+  // Modelle 200000, das würde Georgs 1M-Einstellung vergiften. Fenster fest
+  // aus der Einstellung, wie beim lokalen Motor.
+  // `fremd` bündelt beide Fremdmodell-Wege (lokal, openrouter): festes
+  // Fenster aus der Einstellung, Modellname für Koordinator und Agenten.
+  const fremd = lokal ?? openrouter
+  let bekanntesFenster = fremd
+    ? fremd.kontext > 0
+      ? fremd.kontext
       : KONTEXT_FENSTER_STANDARD
     : kontextFenster > 0
       ? kontextFenster
@@ -1700,8 +1738,9 @@ export function starteLaufMotor(optionen) {
   // Fenstergrößen. Der Übertrag misst aber den Koordinator — also muss sein
   // Fenster vom Block-Fenster getrennt bleiben. Kommt aus der Startmeldung.
   // Lokal: von Anfang an das Ollama-Modell — Koordinator und Block laufen dort
-  // auf demselben Modell.
-  let koordinatorModell = lokal ? lokal.modell : ''
+  // auf demselben Modell. OpenRouter genauso: In dieser Instanz gibt es kein
+  // Haiku, alles läuft auf Georgs eingetragenem Modell.
+  let koordinatorModell = lokal ? lokal.modell : openrouter ? openrouter.modell : ''
 
   // Der gerade laufende Block-Dispatch — es läuft höchstens einer zugleich.
   // Parallele Zweige bekommen eigene Motoren (lauf.js).
@@ -1858,6 +1897,44 @@ export function starteLaufMotor(optionen) {
     werkstattAbmelden = null
     zaehlstelle?.schliessen()
     zaehlstelle = null
+  }
+
+  // Übersetzer (Bauschritt 59): NUR für OpenRouter-Motoren, je Instanz frisch
+  // (Muster Zählstelle). Anders als die Zählstelle ist er KEIN Messgerät,
+  // sondern der einzige Weg: Scheitert sein Start, scheitert der Motorstart
+  // mit Klartext — es gibt keinen Rückfall auf „direkt zu OpenRouter", die
+  // CLI spricht kein OpenAI. Der Wurf landet im Fänger der Schleife
+  // (blockAufloesen 'fehlgeschlagen'), der Block endet ehrlich statt zu hängen.
+  let uebersetzer = null
+  async function uebersetzerAufbauen() {
+    // Wie das SDK erst hier geladen (Bauer 1 baut die Datei parallel): Ein
+    // Import am Dateikopf zöge den Übersetzer in jeden Motor — gebraucht wird
+    // er nur in OpenRouter-Instanzen.
+    const { uebersetzerStarten } = await import('./uebersetzer.js')
+    // Prüfstands-Weiche (Bauschritt 59): FLOWFORGE_OPENROUTER_ZIEL lenkt den
+    // Übersetzer auf einen Stub oder Ollamas OpenAI-Endpunkt um — so misst der
+    // Ende-zu-Ende-Prüfer die ganze Kette ohne echten OpenRouter-Schlüssel.
+    // Gelesen wird die HAUPTPROZESS-Umgebung, nicht die bereinigte
+    // Kind-Umgebung: Die Variable wirkt nur, wenn die App selbst damit
+    // gestartet wurde. Im Alltag ist sie ungesetzt, dann gilt das feste
+    // OpenRouter-Ziel des Übersetzers. Nie still: Eine gesetzte Umleitung
+    // steht im Ticker und damit im Laufbericht.
+    const pruefstandZiel = process.env.FLOWFORGE_OPENROUTER_ZIEL || undefined
+    if (pruefstandZiel)
+      aufEreignis({ art: 'ticker', text: texte.ticker.openrouterZielUmgeleitet(pruefstandZiel) })
+    const gestartet = await uebersetzerStarten({
+      schluessel: openrouter.schluessel,
+      modell: openrouter.modell,
+      kontext: openrouter.kontext,
+      ziel: pruefstandZiel
+    })
+    if (!gestartet.ok) throw new Error(texte.lauf.openrouterUebersetzerFehler(gestartet.fehler))
+    uebersetzer = gestartet
+  }
+
+  function uebersetzerAbbauen() {
+    uebersetzer?.schliessen()
+    uebersetzer = null
   }
 
   // Der Eintrag, den der Werkstatt-Tab live anzeigt. Bewusst eine Funktion:
@@ -2126,7 +2203,9 @@ export function starteLaufMotor(optionen) {
           art: 'ticker',
           text: lokal
             ? texte.ticker.blockAgentGestartetLokal(block.blockName, block.modellName)
-            : texte.ticker.blockAgentGestartet(block.blockName, block.modellName, block.denktiefeName)
+            : openrouter
+              ? texte.ticker.blockAgentGestartetOpenrouter(block.blockName, block.modellName)
+              : texte.ticker.blockAgentGestartet(block.blockName, block.modellName, block.denktiefeName)
         })
         // Der echte Arbeitsauftrag wird hier eingesetzt — der Koordinator
         // hat nur das Wort AUFTRAG geschrieben und bleibt schlank. Die
@@ -2138,6 +2217,8 @@ export function starteLaufMotor(optionen) {
         // die Claude-Aliase (sonnet/opus/haiku/fable; Schema-Fehler gemessen
         // 19.08.2026), der Block-Agent erbt dann das Modell seiner Definition,
         // und das ist in dieser Instanz das Ollama-Modell (agents unten).
+        // OpenRouter (Bauschritt 59): dieselbe Lage — der Platzhalter
+        // 'openrouter' wäre für das Agent-Werkzeug ein Schema-Fehler.
         return {
           hookSpecificOutput: {
             hookEventName: 'PreToolUse',
@@ -2146,7 +2227,7 @@ export function starteLaufMotor(optionen) {
               description: block.blockName,
               subagent_type: block.agentTyp,
               run_in_background: false,
-              ...(lokal ? {} : { model: block.modell }),
+              ...(fremd ? {} : { model: block.modell }),
               prompt: block.auftrag
             }
           }
@@ -2164,7 +2245,9 @@ export function starteLaufMotor(optionen) {
       // Lokal (BAUPLAN 49): Die CLI meldet hier ihr eigenes Standard-effort
       // (gemessen „high"), das Ollama nie erreicht — keine Messung, nur die
       // ehrliche Ansage, dass die Denktiefe bei der lokalen KI nicht gilt.
-      const stufe = lokal
+      // OpenRouter (Bauschritt 59): dieselbe Lage — das Fremdmodell erreicht
+      // das Claude-Feld nie, eine „Messung" wäre erfunden.
+      const stufe = fremd
         ? null
         : typeof hookDaten.effort?.level === 'string' ? hookDaten.effort.level : null
       block.denktiefeGemessen = stufe
@@ -2194,7 +2277,9 @@ export function starteLaufMotor(optionen) {
       inWelleJetzt(),
       // Freigegebene Kartenordner (BAUPLAN 52) — leer für alle außer dem einen
       // Prüfer, dem eine rot gelaufene Prüfkarte gemeldet wurde.
-      block?.freieKartenOrdner ?? []
+      block?.freieKartenOrdner ?? [],
+      // OpenRouter-Motor (Bauschritt 59): WebSearch/WebFetch hart gesperrt.
+      Boolean(openrouter)
     )
     if (urteil.gesperrt) return nein(urteil.gesperrt, urteil.tickerText)
     if (urteil.erlaubt) {
@@ -2207,8 +2292,11 @@ export function starteLaufMotor(optionen) {
           hookSpecificOutput: {
             hookEventName: 'PreToolUse',
             permissionDecision: 'allow',
+            // OpenRouter (Bauschritt 59): wie lokal — das Modellfeld muss WEG
+            // (das Agent-Werkzeug nimmt nur Claude-Aliase), die Unteraufgabe
+            // erbt Georgs OpenRouter-Modell aus der Agenten-Definition.
             updatedInput: unteraufgabenEingabe(eingabeDaten, {
-              lokal: Boolean(lokal),
+              lokal: Boolean(fremd),
               unterModell: block?.unterModell ?? null
             })
           }
@@ -2394,6 +2482,11 @@ export function starteLaufMotor(optionen) {
     // Zwischenstück gäbe es umsonst.
     if (lokal) await zaehlstelleAufbauen()
 
+    // Übersetzer (Bauschritt 59): NUR für OpenRouter-Motoren — er ist der
+    // einzige Weg zum Anbieter; scheitert er, scheitert der Motorstart mit
+    // Klartext (Wurf → Fänger der Schleife), nie ein stiller Rückfall.
+    if (openrouter) await uebersetzerAufbauen()
+
     // Saubere Umgebung (umgebungBereinigen): ANTHROPIC_*/CLAUDE*-Variablen und
     // die präfixlosen CLI-Schalter fliegen raus — sie könnten Anmeldung,
     // Verhalten oder Messung des Motors umleiten (z.B. wenn FlowForge selbst aus
@@ -2431,6 +2524,25 @@ export function starteLaufMotor(optionen) {
       // kommt danach dazu, wie die Ollama-Adresse darüber. 0 heißt „gar nicht
       // setzen": dann gilt die Vorgabe der Motor-Software.
       if (Number(lokal.geduldMs) > 0) umgebung.API_TIMEOUT_MS = String(Number(lokal.geduldMs))
+    } else if (openrouter) {
+      // OpenRouter (Bauschritt 59): dieselbe Umleitung wie beim lokalen Motor,
+      // nur zum eingebauten Übersetzer. Dieser Zweig steht VOR dem API-Zweig —
+      // sonst landete Georgs Anthropic-Schlüssel in der OpenRouter-Umgebung.
+      // Der Auth-Token ist ein Platzhalter (der Übersetzer prüft ihn nicht):
+      // Der echte OpenRouter-Schlüssel wohnt NUR im Übersetzer im Hauptprozess,
+      // nie in der Umgebung des Kindprozesses. Jeder Modell-Alias zeigt auf
+      // Georgs eingetragenes Modell, damit nichts still zu Anthropic geht; das
+      // Kontextfenster sagt FlowForge der CLI ausdrücklich (sie kennt das
+      // Modell nicht und nähme 200000).
+      umgebung.ANTHROPIC_BASE_URL = uebersetzer.adresse
+      umgebung.ANTHROPIC_AUTH_TOKEN = 'openrouter'
+      umgebung.ANTHROPIC_API_KEY = ''
+      umgebung.ANTHROPIC_DEFAULT_HAIKU_MODEL = openrouter.modell
+      umgebung.ANTHROPIC_DEFAULT_SONNET_MODEL = openrouter.modell
+      umgebung.ANTHROPIC_DEFAULT_OPUS_MODEL = openrouter.modell
+      umgebung.ANTHROPIC_SMALL_FAST_MODEL = openrouter.modell
+      umgebung.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = '1'
+      umgebung.CLAUDE_CODE_MAX_CONTEXT_TOKENS = String(bekanntesFenster)
     } else if (modus === 'api') umgebung.ANTHROPIC_API_KEY = apiSchluessel
 
     // Block-Agenten-Definitionen: je Denktiefe eine (0.48.1). Lokal (BAUPLAN
@@ -2455,9 +2567,12 @@ export function starteLaufMotor(optionen) {
     // Lokal-Wächter (0.51.1): Der Systemtext zählt zur Startschätzung.
     blockAgentSystemZeichen = blockAgentSystemText.length
     const agentDefinitionen = blockAgentDefinitionen(blockAgentSystemText)
-    if (lokal)
+    // OpenRouter (Bauschritt 59): wie lokal — alle Definitionen auf Georgs
+    // Modell und OHNE effort (die Denktiefe ist ein Claude-Feld, ein
+    // Fremdmodell erreicht sie nie).
+    if (fremd)
       for (const def of Object.values(agentDefinitionen)) {
-        def.model = lokal.modell
+        def.model = fremd.modell
         delete def.effort
       }
 
@@ -2480,8 +2595,9 @@ export function starteLaufMotor(optionen) {
         // Session das Billigmodell; jeder Agent-Aufruf MUSS sein Modell
         // ausdrücklich mitbekommen (Hook oben), sonst erbt er es.
         // Lokal (BAUPLAN 49): Der Koordinator läuft ebenfalls auf dem
-        // Ollama-Modell — in dieser Instanz gibt es kein Haiku.
-        model: lokal ? lokal.modell : KOORDINATOR_MODELL,
+        // Ollama-Modell — in dieser Instanz gibt es kein Haiku. OpenRouter
+        // (Bauschritt 59) genauso: alles auf Georgs eingetragenem Modell.
+        model: fremd ? fremd.modell : KOORDINATOR_MODELL,
         // Denk-Ansicht (BAUPLAN 24): Ohne diese Option kämen von den
         // Block-Agenten nur Werkzeug-Blöcke an — ihr Denken bliebe unsichtbar.
         // Die Option leitet nur weiter, was ohnehin entsteht: kein Denk-Budget,
@@ -2516,10 +2632,10 @@ export function starteLaufMotor(optionen) {
         // Eine Session für den ganzen Lauf: Die Koordinator-Runden aller
         // Blöcke zählen zusammen — die echte Grenze ist das Kontextfenster.
         maxTurns: 1000,
-        // Ausgaben-Obergrenze nur im API-Modus — und NIE lokal (BAUPLAN 49):
-        // die CLI erfindet für das unbekannte Ollama-Modell Dollarbeträge,
-        // eine Obergrenze bräche den lokalen Lauf grundlos ab.
-        ...(!lokal && modus === 'api' && ausgabenObergrenzeUsd > 0
+        // Ausgaben-Obergrenze nur im API-Modus — und NIE lokal (BAUPLAN 49)
+        // oder über OpenRouter (Bauschritt 59): die CLI ERFINDET für fremde
+        // Modelle Dollarbeträge, eine Obergrenze bräche den Lauf grundlos ab.
+        ...(!lokal && !openrouter && modus === 'api' && ausgabenObergrenzeUsd > 0
           ? { maxBudgetUsd: ausgabenObergrenzeUsd }
           : {}),
         stderr: (text) => {
@@ -2565,7 +2681,9 @@ export function starteLaufMotor(optionen) {
             // Welle (BAUPLAN 46): je Aufruf frisch, denn Nachbarn kommen und gehen.
             inWelleJetzt(),
             // Freigegebene Kartenordner (BAUPLAN 52).
-            block?.freieKartenOrdner ?? []
+            block?.freieKartenOrdner ?? [],
+            // OpenRouter-Motor (Bauschritt 59): WebSearch/WebFetch hart gesperrt.
+            Boolean(openrouter)
           )
           if (urteil.erlaubt) return { behavior: 'allow', updatedInput: eingabeDaten }
           if (urteil.gesperrt) {
@@ -2740,7 +2858,9 @@ export function starteLaufMotor(optionen) {
                 ? texte.ticker.laufSessionFortgesetzt
                 : lokal
                   ? texte.ticker.lokalSessionGestartet(lokal.modell, bekanntesFenster)
-                  : texte.ticker.laufSessionGestartet(nachricht.model ?? 'Claude')
+                  : openrouter
+                    ? texte.ticker.openrouterSessionGestartet(openrouter.modell, bekanntesFenster)
+                    : texte.ticker.laufSessionGestartet(nachricht.model ?? 'Claude')
             })
           }
           // Das Modell des Hauptfadens ist das des Koordinators (BAUPLAN 37) —
@@ -2752,7 +2872,9 @@ export function starteLaufMotor(optionen) {
           // das Motor-Wissen liefert die gemerkte bzw. an der Modellkennung
           // erkennbare Größe. Vorwissen aus früheren Sessions geht vor.
           // Lokal: Fenster bleibt fest (Einstellungen), kein Motor-Wissen.
-          if (!lokal && kontextFenster === KONTEXT_FENSTER_STANDARD) {
+          // OpenRouter genauso (Bauschritt 59): Das Motor-Wissen kennt nur
+          // Claude-Modelle — für ein fremdes Modell wäre jede Zahl geraten.
+          if (!fremd && kontextFenster === KONTEXT_FENSTER_STANDARD) {
             const bekannt = kontextFensterFuerModell(nachricht.model)
             if (bekannt > 0) {
               bekanntesFenster = bekannt
@@ -2856,8 +2978,13 @@ export function starteLaufMotor(optionen) {
           // Dollarbeträge (gemessen ~0,6 $ je Probe) — verworfen. Lokal kostet
           // kein Kontingent und kein Geld: block.kosten ist ehrlich 0, nicht
           // „unbekannt" (null) — Laufbericht und Metriken zeigen „keine Kosten".
+          // OpenRouter (Bauschritt 59): dieselben erfundenen Beträge, aber die
+          // GEGENTEILIGE Wahrheit — dort kostet es womöglich Geld, nur weiß
+          // FlowForge nicht wie viel. block.kosten bleibt deshalb null („nicht
+          // gemessen"), NICHT 0 („gratis gemessen"); total_cost_usd der CLI
+          // wird nicht addiert. Die echte Preisliste folgt in Schritt 60.
           if (lokal && block) block.kosten = 0
-          if (!lokal && typeof nachricht.total_cost_usd === 'number') {
+          if (!lokal && !openrouter && typeof nachricht.total_cost_usd === 'number') {
             const delta =
               kostenStand === null
                 ? nachricht.total_cost_usd
@@ -2871,7 +2998,9 @@ export function starteLaufMotor(optionen) {
             hatModelUsage = true
             // Lokal: das gemeldete Fenster (200000 für unbekannte Modelle) ist
             // falsch — weder merken noch übernehmen, das Fenster bleibt fest.
-            if (!lokal && m.contextWindow > 0) {
+            // OpenRouter (Bauschritt 59): dieselbe Falschmeldung — sie würde
+            // Georgs eingestelltes Fenster (z.B. 1M) vergiften.
+            if (!fremd && m.contextWindow > 0) {
               kontextFensterMerken(modell, m.contextWindow)
               // Nur das Fenster des Koordinators steuert die Übertrags-
               // Schwelle (BAUPLAN 37): Vorher gewann hier das zuletzt
@@ -2975,6 +3104,9 @@ export function starteLaufMotor(optionen) {
       // Fehler, sanfter und harter Stopp. Ein liegengebliebener Weiterleiter
       // hielte sonst einen Port und einen Verbindungspool offen.
       zaehlstelleAbbauen()
+      // Übersetzer (Bauschritt 59): dieselbe Lebensdauer, derselbe Ausgang —
+      // sonst bliebe je OpenRouter-Block ein Server mit Port offen.
+      uebersetzerAbbauen()
     }
   })()
   // Fehler der Schleife selbst (z.B. beim Server-Aufbau VOR dem try) dürfen
@@ -2988,8 +3120,9 @@ export function starteLaufMotor(optionen) {
       fehlertext: String(fehler?.message ?? texte.fehler.unbekannt)
     })
     // Stirbt die Schleife VOR ihrem try (z.B. beim Server-Aufbau), läuft ihr
-    // finally nie — die Zählstelle bliebe offen.
+    // finally nie — die Zählstelle bliebe offen. Der Übersetzer ebenso.
     zaehlstelleAbbauen()
+    uebersetzerAbbauen()
   })
 
   return {
@@ -3311,7 +3444,9 @@ export function starteChatMotor(optionen) {
       false, // inWelle
       // freieKartenOrdner (BAUPLAN 52): Der Chat spielt keine Prüfkarten ab, ihm
       // ist also nie eine freigegeben — und die Prüfmappe ist ihm ohnehin tabu.
-      []
+      [],
+      // openrouterMotor (Bauschritt 59): Der Chat läuft nie über OpenRouter.
+      false
     )
     // Während ein Lauf läuft, sagt die Abweisung ehrlich, warum: nicht „dieser
     // Block darf nur lesen", sondern „im Projekt läuft gerade ein Lauf".

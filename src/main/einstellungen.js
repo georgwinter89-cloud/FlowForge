@@ -111,6 +111,26 @@ const STANDARD = {
   // die Quellenwahl (Entscheidung Georg, 20.08.2026): ein Feld weniger, das
   // durch die Speicher-Siebe verlorengehen kann.
   searxngAdresse: '',
+  // OpenRouter (Bauschritt 59): freie Modellwahl über den eingebauten
+  // Übersetzer. Ohne dieses Häkchen lehnt der Start einen Block der Klasse
+  // „openrouter" mit Klartext ab — kein stiller Rückfall auf Claude (Muster
+  // lokalBlockAgent). Daten-Ehrlichkeit gehört zum Häkchen: Eingaben und
+  // Projektinhalte gehen an den gewählten Anbieter, und bei Stealth-Modellen
+  // speichert ein ANONYMER Betreiber mit — der Satz steht im Einstellungs-
+  // Dialog, nicht im Kleingedruckten (texte.einstellungen).
+  openRouterAktiv: false,
+  // Der OpenRouter-Schlüssel wohnt nur im Hauptprozess (Übersetzer), nie in
+  // der Umgebung des Motor-Kindprozesses. Gespeichert im Klartext wie
+  // apiSchluessel — bewusst konsistent; safeStorage wäre ein eigener
+  // Bauschritt für BEIDE Schlüssel.
+  openRouterSchluessel: '',
+  // Freies Modellfeld (z. B. stealth/ox-alpha) — die Katalog-Liste von
+  // OpenRouter folgt in Bauschritt 60.
+  openRouterModell: '',
+  // Kontextfenster des gewählten Modells in Token. Die CLI meldet für fremde
+  // Modelle stur 200000 — deshalb sagt FlowForge ihr das Fenster ausdrücklich
+  // (wie beim lokalen Motor). Standard 200000; für Ox Alpha trägt Georg 1M ein.
+  openRouterKontext: 200000,
   // Kosten-Rückfrage „Extra (Fable 5)" (0.48.1): Beim ersten Lauf mit einem
   // Extra-Block fragt FlowForge einmal, ob der Lauf trotz möglicher
   // Guthaben-Abrechnung starten darf. true = Georg hat „trotzdem starten"
@@ -158,6 +178,15 @@ function adressListeBereinigen(liste) {
     if (wert && !sauber.includes(wert)) sauber.push(wert)
   }
   return sauber.length ? sauber : [...STANDARD.lokaleHelferAdressen]
+}
+
+// OpenRouter-Kontextfenster (Bauschritt 59): positive Ganzzahl in Token —
+// alles andere (Text, 0, negativ, Kommazahl) fällt auf den Standard. Eine
+// eigene kleine Regel statt einer Stufenliste: Das Fenster hängt am frei
+// gewählten Modell, eine feste Liste würde jedes neue Modell ausbremsen.
+function openRouterKontextBereinigen(roh) {
+  const zahl = Number(roh)
+  return Number.isInteger(zahl) && zahl > 0 ? zahl : STANDARD.openRouterKontext
 }
 
 function dateiPfad() {
@@ -214,6 +243,13 @@ export function einstellungenLaden() {
   // vor einem Wert stehen, den der Dialog gar nicht anbietet.
   daten.fundeAusserhalb = fundeAusserhalbBereinigen(daten.fundeAusserhalb)
   daten.zusatzbauerMax = zusatzbauerMaxBereinigen(daten.zusatzbauerMax)
+  // OpenRouter (Bauschritt 59): an derselben Stelle bereinigt wie Geduld und
+  // Deckel — Lauf und Übersetzer lesen die Werte direkt aus dieser Antwort
+  // und dürfen nie vor Unsinn aus einer von Hand bearbeiteten Datei stehen.
+  daten.openRouterAktiv = daten.openRouterAktiv === true
+  daten.openRouterSchluessel = String(daten.openRouterSchluessel ?? '').trim()
+  daten.openRouterModell = String(daten.openRouterModell ?? '').trim()
+  daten.openRouterKontext = openRouterKontextBereinigen(daten.openRouterKontext)
   return {
     ok: true,
     einstellungen: daten,
@@ -418,6 +454,31 @@ export function einstellungenSpeichern(neu) {
     lokalFein: lokalFeinBereinigen(neu.lokalFein),
     // Websuche der lokalen Blöcke (0.51.2): leer = eingebaute Quelle.
     searxngAdresse: searxng,
+    // OpenRouter (Bauschritt 59): Häkchen wie lokalBlockAgent; Schlüssel und
+    // Modell nach dem SearXNG-Muster „undefined → Wert aus der DATEI halten"
+    // — und ausdrücklich NICHT nach dem apiSchluessel-Muster, das ein
+    // fehlendes Feld leert: Jeder fremde Aufrufer (älterer Dialog, Erststart)
+    // löschte sonst still Georgs Schlüssel. Leerstring bleibt Georgs
+    // bewusstes Leeren. Der Schlüssel liegt im Klartext wie apiSchluessel —
+    // bewusst konsistent; safeStorage wäre ein eigener Schritt für beide.
+    // Daten-Ehrlichkeit: Was der Motor über den Übersetzer schickt, geht an
+    // den gewählten Anbieter — bei Stealth-Modellen speichert ein anonymer
+    // Betreiber mit (der Hinweis dazu steht im Einstellungs-Dialog).
+    openRouterAktiv: Boolean(neu.openRouterAktiv),
+    openRouterSchluessel:
+      neu.openRouterSchluessel === undefined
+        ? einstellungenLaden().einstellungen.openRouterSchluessel
+        : String(neu.openRouterSchluessel ?? '').trim(),
+    openRouterModell:
+      neu.openRouterModell === undefined
+        ? einstellungenLaden().einstellungen.openRouterModell
+        : String(neu.openRouterModell ?? '').trim(),
+    // Kontextfenster: undefined → Datei-Wert halten (bereinigt), sonst
+    // bereinigen (Unsinn = Standard 200000).
+    openRouterKontext:
+      neu.openRouterKontext === undefined
+        ? openRouterKontextBereinigen(einstellungenLaden().einstellungen.openRouterKontext)
+        : openRouterKontextBereinigen(neu.openRouterKontext),
     // NIE aus `neu` (siehe gemerkteAntworten).
     ...gemerkteAntworten()
   }

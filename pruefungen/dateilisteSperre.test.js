@@ -230,8 +230,9 @@ describe('BAUPLAN 44 · Der Bauer erfährt vor der Arbeit, dass die Dateiliste s
 })
 
 describe('BAUPLAN 44 · Alle Motor-Aufrufstellen reichen die Dateiliste durch', () => {
-  // Fund 12 der Angriffsliste: pruefeWerkzeug hat 16 Positionsparameter (seit
-  // BAUPLAN 52: freieKartenOrdner als letzter, davor inWelle) und drei
+  // Fund 12 der Angriffsliste: pruefeWerkzeug hat 17 Positionsparameter (seit
+  // Bauschritt 59: openrouterMotor als letzter; davor freieKartenOrdner
+  // [BAUPLAN 52] und inWelle) und drei
   // Aufrufstellen im Motor. Ein Neuzugang, der an einer davon vergessen wird,
   // rutscht still an die falsche Stelle — dann landet die Dateiliste z.B. auf
   // `lieferscheinFrei` und der Block kann sein Melde-Werkzeug nicht mehr rufen,
@@ -249,14 +250,17 @@ describe('BAUPLAN 44 · Alle Motor-Aufrufstellen reichen die Dateiliste durch', 
         .split('\n')
         .map((z) => z.trim())
         .filter((z) => z && !z.startsWith('//'))
-      expect(zeilen).toHaveLength(16)
+      expect(zeilen).toHaveLength(17)
       expect(zeilen[13]).toMatch(/dateiListe|null/)
       // BAUPLAN 46: der 15. Parameter ist die Welle — im Lauf frisch abgefragt
       // (inWelleJetzt), im Chat ausdrücklich false.
       expect(zeilen[14]).toMatch(/^inWelleJetzt\(\),$|^false,/)
       // BAUPLAN 52: der 16. sind die freigegebenen Kartenordner — am Block
       // abgelegt, im Chat ausdrücklich leer (er spielt keine Prüfkarten ab).
-      expect(zeilen[15]).toMatch(/^block\?\.freieKartenOrdner \?\? \[\]$|^\[\]$/)
+      expect(zeilen[15]).toMatch(/^block\?\.freieKartenOrdner \?\? \[\],$|^\[\],$/)
+      // Bauschritt 59: der 17. ist der OpenRouter-Motor (WebSearch/WebFetch
+      // hart gesperrt) — im Lauf aus der Motor-Option, im Chat ausdrücklich false.
+      expect(zeilen[16]).toMatch(/^Boolean\(openrouter\)$|^false$/)
     }
   })
 

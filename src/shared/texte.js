@@ -676,6 +676,9 @@ export const texte = {
       standard: 'Standard (Opus)',
       sparsam: 'sparsam (Sonnet)',
       'sehr-sparsam': 'sehr sparsam (Haiku)',
+      // Klasse openrouter (Bauschritt 59): freie Modellwahl über OpenRouter —
+      // im Katalog nirgends vorbelegt; welches Modell, sagt die Einstellung.
+      openrouter: 'OpenRouter',
       // Klasse lokal (BAUPLAN 49): Georgs lokale KI über Ollama — im Katalog
       // nirgends vorbelegt, kostet kein Kontingent.
       lokal: 'lokal (Ollama)'
@@ -683,13 +686,22 @@ export const texte = {
     // Klartext-Name der lokalen Klasse mit dem echten Ollama-Modell — für
     // Ticker und Laufbericht, sobald der Lauf das Modell kennt.
     lokalModellName: (modell) => `lokal (${modell})`,
+    // Dasselbe für OpenRouter (Bauschritt 59): Georgs eingetragener Modellname
+    // im Wortlaut — Ticker und Laufbericht nennen das echte Modell, nicht nur
+    // den Anbieter.
+    openrouterModellName: (modell) => `OpenRouter (${modell})`,
     modellHinweis:
-      'Womit dieser Block arbeitet. „Standard" ist das große Modell — richtig überall, wo wirklich gedacht wird (Bauen, Prüfen, Zuschneiden). Sparsamere Modelle kosten deutlich weniger, machen aber mehr Fehler: Zu sparsam gewählt, siehst du es an mehr Reparatur-Runden in den Metriken. „Extra (Fable 5)" ist noch stärker, kann aber je nach Abo Guthaben statt Kontingent kosten. „lokal (Ollama)" läuft auf deiner eigenen lokalen KI und kostet kein Kontingent.',
+      'Womit dieser Block arbeitet. „Standard" ist das große Modell — richtig überall, wo wirklich gedacht wird (Bauen, Prüfen, Zuschneiden). Sparsamere Modelle kosten deutlich weniger, machen aber mehr Fehler: Zu sparsam gewählt, siehst du es an mehr Reparatur-Runden in den Metriken. „Extra (Fable 5)" ist noch stärker, kann aber je nach Abo Guthaben statt Kontingent kosten. „OpenRouter" läuft auf dem frei gewählten Modell aus den Einstellungen. „lokal (Ollama)" läuft auf deiner eigenen lokalen KI und kostet kein Kontingent.',
     // Klasse lokal (BAUPLAN 49): ehrlicher Hinweis an Karte und Editor — was
     // sie braucht, was sie kostet (nichts), was nicht gilt, und dass FlowForge
     // nie still auf Claude zurückfällt.
     modellLokalHinweis:
       'Läuft auf deiner lokalen KI (Einstellungen → Lokale KI als Block-Agent) und kostet kein Kontingent. Die Denktiefe gilt hier nicht. Ohne eingeschaltete und erreichbare lokale KI startet der Lauf nicht — FlowForge fällt nie still auf Claude zurück.',
+    // Klasse openrouter (Bauschritt 59): derselbe ehrliche Ton — was sie
+    // braucht (Einstellungen), was nicht gilt (Denktiefe, Websuche, gemessene
+    // Kosten), und die Daten-Ehrlichkeit in einem Satz.
+    modellOpenRouterHinweis:
+      'Läuft über OpenRouter auf dem Modell aus den Einstellungen (Bereich „OpenRouter"). Die Denktiefe gilt hier nicht, Websuche gibt es für diese Blöcke noch nicht, und Kosten kann FlowForge nicht messen — der Bericht sagt ehrlich „nicht gemessen". Eingaben und Projektinhalte gehen an den gewählten Anbieter. Ohne Häkchen, Schlüssel und Modell in den Einstellungen startet der Lauf nicht — FlowForge fällt nie still auf Claude zurück.',
     // Kosten-Wahrheit der Klasse Extra (0.48.1, Claude-Code-Doku „Model
     // configuration": über das Agent SDK gibt es keinen Einwilligungs-Dialog —
     // eine Fable-Anfrage, die Guthaben kostet, wird ohne Nachfrage abgerechnet).
@@ -726,6 +738,10 @@ export const texte = {
     // gemessen 19.08.2026).
     denktiefeLokalHinweis:
       '„lokal (Ollama)" kennt keine Denktiefe — die Wahl wird dort ignoriert; das Denken des lokalen Modells bleibt an.',
+    // Klasse openrouter (Bauschritt 59): dieselbe Lage wie lokal — die
+    // Denktiefe ist ein Claude-Feld, ein Fremdmodell erreicht sie nie.
+    denktiefeOpenrouterHinweis:
+      '„OpenRouter" kennt keine Denktiefe — die Wahl wird dort ignoriert; wie gründlich das gewählte Modell denkt, entscheidet sein Anbieter.',
     uebertragGrenzeLabel: 'Überträge höchstens',
     uebertragGrenzeHinweis:
       'Läuft der Kontext eines Blocks voll (~85 %), übergibt der Agent an eine frische Session und arbeitet nahtlos weiter. So oft darf das pro Lauf passieren — Feld leer lassen heißt: unbegrenzt.',
@@ -3357,6 +3373,38 @@ export const texte = {
       'Unter dieser Adresse antwortet gerade nichts. Bis sie erreichbar ist, sucht FlowForge ' +
       'über die eingebaute Quelle.',
     fehlerLokalFein: (feld) => `Feineinstellung „${feld}" liegt außerhalb des erlaubten Bereichs.`,
+    // OpenRouter (Bauschritt 59): freie Modellwahl über den eingebauten
+    // Übersetzer. Der Daten-Hinweis ist Pflichtteil des Bereichs — die
+    // Daten-Ehrlichkeit gehört in die Einstellungen, nicht ins Kleingedruckte
+    // (Entscheidung Georg, 25.08.2026).
+    openRouterUeberschrift: 'OpenRouter',
+    openRouterAktiv: 'OpenRouter-Blöcke erlauben (Modellklasse „OpenRouter")',
+    openRouterAktivHinweis:
+      'An jeder Blockkarte und im Block-Editor gibt es dann die Modellklasse „OpenRouter": ' +
+      'Der Block läuft über deinen OpenRouter-Schlüssel auf dem unten eingetragenen Modell — ' +
+      'mit denselben Werkzeugen, Sperren und Rückfragen wie bei Claude. Websuche gibt es für ' +
+      'diese Blöcke noch nicht, Kosten stehen im Bericht ehrlich auf „nicht gemessen". Ohne ' +
+      'Häkchen, Schlüssel und Modell startet ein Lauf mit einem OpenRouter-Block nicht — ' +
+      'FlowForge fällt nie still auf Claude zurück.',
+    openRouterSchluesselFeld: 'OpenRouter-Schlüssel',
+    openRouterSchluesselPlatzhalter: 'sk-or-…',
+    openRouterModellFeld: 'Modell',
+    openRouterModellPlatzhalter: 'z.B. stealth/ox-alpha',
+    openRouterModellHinweis:
+      'Der Modellname genau so, wie OpenRouter ihn führt. Eine Auswahlliste mit den Modellen ' +
+      'des Katalogs folgt in einem späteren Bauschritt.',
+    openRouterKontextFeld: 'Kontextfenster (Token)',
+    openRouterKontextHinweis:
+      'Wie viel das gewählte Modell auf einmal im Kopf behält — steht auf der Modellseite bei ' +
+      'OpenRouter (z.B. 200000, bei 1M-Modellen 1000000). FlowForge richtet daran den ' +
+      'Kontext-Balken und den Übertrag aus; ein zu großer Wert lässt Blöcke mitten in der ' +
+      'Arbeit am vollen Kontext scheitern.',
+    fehlerOpenRouterKontext:
+      'Das OpenRouter-Kontextfenster muss eine positive Token-Zahl sein (z.B. 200000).',
+    openRouterDatenHinweis:
+      'Ehrlich gesagt: Eingaben und Projektinhalte gehen an den gewählten Anbieter; bei ' +
+      'Stealth-Modellen speichert ein anonymer Betreiber mit. Trage hier nichts ein, was den ' +
+      'Rechner nicht verlassen darf.',
     // Unteraufgaben-Modell (BAUPLAN 37): der Motor-Zwilling der lokalen
     // Helfer-KI — Zuarbeit muss nicht auf dem großen Modell laufen.
     unteraufgabenUeberschrift: 'Modell der Unteraufgaben',
@@ -3552,6 +3600,20 @@ export const texte = {
       `Das Modell „${modell}" ist bei deiner lokalen KI nicht vorhanden. Lade es in Ollama (ollama pull ${modell}) oder trage in den Einstellungen ein vorhandenes Modell ein — FlowForge fällt nie still auf Claude zurück.`,
     lokalModellFehler: (text) =>
       `Das abgeleitete Ollama-Modell für FlowForge konnte nicht angelegt werden: ${text}. Prüfe die Feineinstellungen der lokalen KI und die Ollama-Version — FlowForge fällt nie still auf Claude zurück.`,
+    // Klasse openrouter (Bauschritt 59): Klartext statt stillem Rückfall —
+    // dieselbe Linie wie bei der lokalen Klasse, je fehlendem Stück eine
+    // eigene Absage, damit Georg genau weiß, was zu tun ist.
+    openrouterNichtErlaubt:
+      'In diesem Workflow läuft mindestens ein Block auf „OpenRouter", aber OpenRouter ist in den Einstellungen nicht eingeschaltet. Setze dort im Bereich „OpenRouter" das Häkchen — oder stelle den Block auf eine andere Klasse. FlowForge fällt nie still auf Claude zurück.',
+    openrouterSchluesselFehlt:
+      'In diesem Workflow läuft mindestens ein Block auf „OpenRouter", aber es ist kein OpenRouter-Schlüssel eingetragen. Trage ihn in den Einstellungen im Bereich „OpenRouter" ein — FlowForge fällt nie still auf Claude zurück.',
+    openrouterModellFehlt:
+      'In diesem Workflow läuft mindestens ein Block auf „OpenRouter", aber es ist kein Modell eingetragen. Trage in den Einstellungen im Bereich „OpenRouter" einen Modellnamen ein (z.B. stealth/ox-alpha) — FlowForge fällt nie still auf Claude zurück.',
+    // Der Übersetzer ist der einzige Weg zu OpenRouter — scheitert sein
+    // Start, scheitert der Block mit diesem Klartext (kein direkter Draht:
+    // die CLI spricht kein OpenAI).
+    openrouterUebersetzerFehler: (text) =>
+      `Der eingebaute OpenRouter-Übersetzer konnte nicht starten: ${text || 'unbekannter Fehler'}. Ohne ihn läuft kein OpenRouter-Block — FlowForge fällt nie still auf Claude zurück.`,
     // Adress-Pool (BAUPLAN 51): Wächter-Text — darf im Betrieb nie erscheinen.
     // Ein lokaler Block ohne zugeteilte Adresse bricht hart ab, statt still
     // zur ersten Adresse zu greifen (zwei Motoren auf einer GPU).
@@ -3674,6 +3736,11 @@ export const texte = {
     // Häkchen je Block (BAUPLAN 20): abgewählt = echte Sperre, kein Hinweis.
     lokaleKiGesperrtFuerAgent:
       'Die lokale Helfer-KI ist für diesen Block abgeschaltet (Häkchen an der Block-Karte). Nutze für Unteraufgaben das Agent-Werkzeug.',
+    // OpenRouter-Motor (Bauschritt 59): harte Sperre statt Rückfrage — die
+    // CLI-Websuche läuft über Anthropics Server und endet für einen
+    // OpenRouter-Block als Anbieter-Fehler NACH der Rechte-Frage.
+    openrouterInternetFuerAgent:
+      'WebSearch und WebFetch stehen OpenRouter-Blöcken nicht zur Verfügung — sie laufen über Anthropics Server und würden hier nur mit einem Anbieter-Fehler enden. Arbeite ohne Internet-Zugriff weiter.',
     // Co-Pilot (BAUPLAN 33): App bedienen im nur-lesenden Chat fragt nach;
     // einen fremden Port-Besitzer beenden fragt immer.
     appBedienen:
@@ -3744,6 +3811,20 @@ export const texte = {
       `Motor gestartet gegen deine lokale KI (${modell}${kontext ? ', Kontext ' + Math.round(kontext / 1024) + 'k' : ''}) — kostet kein Kontingent; Kosten und Fenster meldet hier FlowForge, nicht die CLI.`,
     lokalEigeneSession: (blockName, modell) =>
       `„${blockName}" läuft lokal (${modell}) in einer eigenen Session — nie in der Claude-Lauf-Session.`,
+    // OpenRouter (Bauschritt 59): eigene Formulierungen statt der
+    // Ollama-Sätze — hier rechnet kein Rechner von Georg, sondern ein
+    // Anbieter; Kosten und Fenster meldet FlowForge, nicht die CLI.
+    openrouterEigeneSession: (blockName, modell) =>
+      `„${blockName}" läuft über OpenRouter (${modell}) in einer eigenen Session — nie in der Claude-Lauf-Session.`,
+    openrouterSessionGestartet: (modell, kontext = null) =>
+      `Motor gestartet über den eingebauten OpenRouter-Übersetzer (${modell}${kontext ? ', Kontext ' + Math.round(kontext / 1024) + 'k' : ''}) — Kosten kann FlowForge hier nicht messen, das Kontextfenster kommt aus deiner Einstellung.`,
+    blockAgentGestartetOpenrouter: (name, modellName) =>
+      `„${name}" läuft als frischer Agent in seiner eigenen OpenRouter-Session — Modell: ${modellName}.`,
+    // Prüfstands-Weiche (Bauschritt 59): FLOWFORGE_OPENROUTER_ZIEL lenkt den
+    // Übersetzer auf einen Stub/Ollama um — nie still, die Zeile steht im
+    // Ticker und damit im Laufbericht.
+    openrouterZielUmgeleitet: (ziel) =>
+      `OpenRouter-Ziel umgeleitet auf ${ziel} (Prüfstand — Umgebungsvariable FLOWFORGE_OPENROUTER_ZIEL).`,
     // Eine GPU je Ollama-Adresse (BAUPLAN 49/51): je Adresse des Pools läuft
     // ein lokaler Block zur Zeit. Bei einer Adresse der vertraute Wortlaut;
     // bei mehreren nennt die Zeile die ehrliche Adress-Anzahl statt einer
@@ -3968,6 +4049,10 @@ export const texte = {
     // (gesperrt) ändert sich nicht.
     nurLesenInternetGesperrt:
       'Internet-Zugriff gestoppt — dieser Block darf nur lesen; freie Internetzugriffe sind hier gesperrt.',
+    // OpenRouter-Motor (Bauschritt 59): dieselbe Ehrlichkeits-Regel wie die
+    // Zeile darüber — der Ticker nennt den echten Grund, keine Ausrede.
+    openrouterInternetGesperrt:
+      'Internet-Zugriff gestoppt — WebSearch/WebFetch laufen über Anthropics Server und gibt es für OpenRouter-Blöcke nicht.',
     nurLesenBefehleAktiv:
       'Einstellung aktiv: Nur-lesende Blöcke dürfen Befehle ausführen (auf eigene Gefahr).',
     pruefmappeGesperrt:
@@ -5111,6 +5196,11 @@ export const texte = {
     // Klassen ohne Denktiefe (Haiku, lokal) und lokale Kosten (BAUPLAN 49).
     denktiefeGiltNicht: 'gilt hier nicht',
     lokalKeineKosten: 'Kosten: keine — lief auf deiner lokalen KI, kein Kontingent, keine Dollar.',
+    // OpenRouter (Bauschritt 59): dritter Fall neben „keine" und der
+    // API-Zahl. NICHT „keine Kosten" — was das fremde Modell kostet, weiß
+    // FlowForge schlicht nicht (echte Preisliste: Schritt 60).
+    openrouterKosten:
+      'Kosten: nicht gemessen — lief über OpenRouter; was das Modell dort kostet, weiß FlowForge (noch) nicht.',
     klasseZeile: (klasseName, denktiefeName, gemessen) =>
       `Klasse: ${klasseName}` +
       (denktiefeName ? ` · Denktiefe: ${denktiefeName}` : '') +

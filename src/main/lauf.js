@@ -27,6 +27,7 @@ import {
   blockAnzeigeName,
   klasseHatKostenHinweis,
   klasseIstLokal,
+  klasseIstOpenRouter,
   pruefOrdnerFuer,
   zusatznameBereinigen,
   sdkModell,
@@ -1540,6 +1541,24 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         return { ok: false, fehler: texte.lauf.lokalModellFehlt(einstellungen.lokaleHelferModell) }
       return { ok: false, fehler: texte.lauf.lokalNichtErreichbar(adressen.join(', ')) }
     }
+  }
+
+  // OpenRouter-Klasse (Bauschritt 59): Trägt die Kette einen Block der Klasse
+  // „openrouter", startet der Lauf NUR mit gesetztem Häkchen, Schlüssel UND
+  // Modell — je fehlendem Stück eine eigene Klartext-Absage, kein stiller
+  // Rückfall auf Claude (Muster der lokalen Klasse oben). Rein klassenbasiert
+  // und ohne Erreichbarkeits-Probe: Ob der Schlüssel stimmt, sagt der
+  // Übersetzer beim Motorstart ehrlich. Zusatzbauer brauchen hier keinen
+  // eigenen Fall — sie erben die Modellklasse ihres Melders und kommen erst
+  // NACH dem Start dazu; ein openrouter-Melder ist an dieser Stelle also
+  // schon geprüft.
+  if (kette.some((e) => klasseIstOpenRouter(blockModellKlasse(defVon(e.blockId), e)))) {
+    if (!einstellungen.openRouterAktiv)
+      return { ok: false, fehler: texte.lauf.openrouterNichtErlaubt }
+    if (!String(einstellungen.openRouterSchluessel ?? '').trim())
+      return { ok: false, fehler: texte.lauf.openrouterSchluesselFehlt }
+    if (!String(einstellungen.openRouterModell ?? '').trim())
+      return { ok: false, fehler: texte.lauf.openrouterModellFehlt }
   }
 
   // Kosten-Rückfrage „Extra (Fable 5)" (0.48.1): Im Abo-Modus kann Fable je
@@ -4313,7 +4332,10 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     // lokalOption (BAUPLAN 49): { adresse, modell, kontext } — dann läuft
     // dieser Motor gegen Georgs lokale KI (Ollama) statt gegen Claude; nur für
     // Blöcke der Klasse „lokal", immer als eigene Instanz, nie die Lauf-Session.
-    function motorBauen(fortsetzen, holeInstanz, holeName, lokalOption = null) {
+    // openrouterOption (Bauschritt 59): { modell, kontext, schluessel } — dann
+    // läuft dieser Motor gegen den eingebauten Übersetzer (OpenRouter); nur für
+    // Blöcke der Klasse „openrouter", immer als eigene Instanz.
+    function motorBauen(fortsetzen, holeInstanz, holeName, lokalOption = null, openrouterOption = null) {
       return starteLaufMotor({
         projektPfad,
         modus: einstellungen.motorModus,
@@ -4327,6 +4349,9 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         // der Agent alles selbst und blähte dabei seinen Kontext. Mit
         // `lokaleHelfer: null` entfallen im Motor Helfer-Server UND
         // System-Zusatz — der Auftrag verspricht dann nichts, was es nicht gibt.
+        // OpenRouter-Motoren (Bauschritt 59) BEHALTEN die Helfer-KI wie
+        // Claude-Motoren: Der Block rechnet beim Anbieter, die Helfer-GPU ist
+        // hier nicht der Engpass.
         lokaleHelfer: lokalOption ? null : lokaleHelfer,
         // ACHTUNG (Fund 4, 20.08.2026): `lokal` ist ein NEUES Objekt-Literal
         // aus einzeln aufgezählten Feldern, kein Spread — ein neues Feld muss
@@ -4358,6 +4383,21 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
               // WebSearch/WebFetch der CLI. Leere Adresse heißt eingebaute
               // Quelle (kein eigenes Quellen-Wahlfeld, Entscheidung Georg).
               websuche: { searxngAdresse: einstellungen.searxngAdresse ?? '' }
+            }
+          : {}),
+        // OpenRouter (Bauschritt 59): dieselbe Fund-4-Regel wie bei `lokal`
+        // oben — ein NEUES Objekt-Literal aus einzeln aufgezählten Feldern,
+        // kein Spread. Ein neues Feld muss hier von Hand nachgetragen werden,
+        // sonst kommt es im Motor nie an. Kein Adress-Pool und keine
+        // Websuche-Option: OpenRouter-Blöcke laufen parallel wie
+        // Claude-Blöcke, die Websuche-Werkzeuge folgen in Schritt 60.
+        ...(openrouterOption
+          ? {
+              openrouter: {
+                modell: openrouterOption.modell,
+                kontext: openrouterOption.kontext,
+                schluessel: openrouterOption.schluessel
+              }
             }
           : {}),
         nurLesenBefehle: Boolean(einstellungen.nurLesenBefehle),
@@ -4584,6 +4624,7 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       }
       const klasse = blockModellKlasse(k.def, k.eintrag)
       const istLokal = klasseIstLokal(klasse)
+      const istOpenRouter = klasseIstOpenRouter(klasse)
       let motor
       let haupt = false
       if (istLokal) {
@@ -4610,6 +4651,28 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           () => instanzId,
           () => k.name,
           k.lokalZuteilung
+        )
+      } else if (istOpenRouter) {
+        // OpenRouter-Klasse (Bauschritt 59): IMMER eine eigene Motor-Instanz
+        // gegen den eingebauten Übersetzer — nie die Lauf-Session (deren
+        // Koordinator läuft auf Haiku gegen Claude), nie `haupt`. KEIN
+        // Adress-Pool und keine lokale Startregel: Der Pool gehört der einen
+        // GPU; OpenRouter-Blöcke laufen parallel wie Claude-Blöcke (die
+        // Wellen-Planung sieht sie als gewöhnliche Blöcke, weil
+        // klasseIstLokal false bleibt). Die Werte kommen frisch aus den
+        // Einstellungen des Laufstarts; die Startprüfung hat Häkchen,
+        // Schlüssel und Modell schon erzwungen.
+        tickern(texte.ticker.openrouterEigeneSession(k.name, einstellungen.openRouterModell))
+        motor = motorBauen(
+          null,
+          () => instanzId,
+          () => k.name,
+          null,
+          {
+            modell: einstellungen.openRouterModell,
+            kontext: einstellungen.openRouterKontext,
+            schluessel: einstellungen.openRouterSchluessel
+          }
         )
       } else if (!laufMotorBelegt) {
         motor = laufMotorBesorgen()
@@ -4708,13 +4771,19 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           // an der Einstellung „Unteraufgaben der Block-Agenten".
           // Lokal (BAUPLAN 49): Platzhalter 'lokal' — der lokale Motor setzt
           // den Ollama-Namen selbst ein; der Klartext nennt ihn schon hier.
-          modell: istLokal ? 'lokal' : sdkModell(klasse),
+          // OpenRouter (Bauschritt 59): Platzhalter 'openrouter' nach
+          // demselben Muster; der Klartext nennt Georgs Modell im Wortlaut.
+          modell: istLokal ? 'lokal' : istOpenRouter ? 'openrouter' : sdkModell(klasse),
           unterModell: istLokal
             ? 'lokal'
-            : unterModellFuer(k.def, klasse, einstellungen.unteraufgabenModell),
+            : istOpenRouter
+              ? 'openrouter'
+              : unterModellFuer(k.def, klasse, einstellungen.unteraufgabenModell),
           modellName: istLokal
             ? texte.kette.lokalModellName(k.lokalZuteilung.modell)
-            : (texte.kette.modellNamen[klasse] ?? ''),
+            : istOpenRouter
+              ? texte.kette.openrouterModellName(einstellungen.openRouterModell)
+              : (texte.kette.modellNamen[klasse] ?? ''),
           uebertrag,
           // Denktiefe (0.48.1): die Wahl an der Karte (sonst Voreinstellung des
           // Blocks), ihr Kurzname für den Ticker — nur genannt, was Georg
@@ -4888,6 +4957,9 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       // („davon lokal") und Kontextfenster-Wächter unten brauchen sie je
       // Schleifenrunde.
       const knotenLokal = klasseIstLokal(blockModellKlasse(k.def, k.eintrag))
+      // OpenRouter (Bauschritt 59): für den Kontextfenster-Wächter unten —
+      // auch dieses Fenster ist fest eingestellt, nicht von Claude gemeldet.
+      const knotenOpenRouter = klasseIstOpenRouter(blockModellKlasse(k.def, k.eintrag))
       const blockAufschluesselung = { eingabe: 0, ausgabe: 0, cacheLesen: 0, cacheSchreiben: 0 }
       let blockHatAufschluesselung = false
       // Modell je Block (BAUPLAN 36): über alle Anläufe dieses Block-Anlaufs
@@ -5300,7 +5372,10 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           // Claude-Blöcke und Abnahmen ihre Übertrags-Schwelle mit dem
           // kleinen Fenster statt 200k — Überträge kämen rund dreimal zu
           // früh. Gelernt wird das Fenster darum NUR von Claude-Sessions.
-          if (ergebnis.verbrauch.kontextFenster > 0 && !knotenLokal)
+          // OpenRouter (Bauschritt 59): dieselbe Falle andersherum — ein
+          // eingestelltes 1M-Fenster machte die Übertrags-Schwelle der
+          // Claude-Blöcke fünfmal zu spät; ihr Kontext liefe voll.
+          if (ergebnis.verbrauch.kontextFenster > 0 && !knotenLokal && !knotenOpenRouter)
             bekanntesKontextFenster = ergebnis.verbrauch.kontextFenster
         }
 

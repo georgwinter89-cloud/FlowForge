@@ -122,7 +122,9 @@ describe('BAUPLAN 50 · lokalerPrueferOhneAbnahme', () => {
     const pfeile = kette(bloecke)
     expect(lokalerPrueferOhneAbnahme(bloecke, pfeile, 't')).toBe(false)
     expect(schaubildHinweise(bloecke, pfeile)).toEqual([])
-    for (const klasse of ['extra', 'standard', 'sparsam', 'sehr-sparsam'])
+    // openrouter mit dabei (Bauschritt 59, Entscheidung Georg): Ein
+    // OpenRouter-Prüfer zählt wie jedes Cloud-Modell — kein Abnahme-Hinweis.
+    for (const klasse of ['extra', 'standard', 'sparsam', 'sehr-sparsam', 'openrouter'])
       expect(lokalerPrueferOhneAbnahme(bloecke.map((b) => (b.instanzId === 't' ? { ...b, modell: klasse } : b)), pfeile, 't')).toBe(false)
   })
 

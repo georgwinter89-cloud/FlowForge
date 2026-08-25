@@ -53,9 +53,9 @@ beforeEach(() => {
 })
 
 describe('BAUPLAN 49 · Klasse lokal im Katalog', () => {
-  it('steht ganz hinten als fünfte, „billigste" Klasse', () => {
+  it('steht ganz hinten als „billigste" Klasse (seit Bauschritt 59 die sechste)', () => {
     expect(MODELL_KLASSEN.at(-1)).toBe('lokal')
-    expect(MODELL_KLASSEN.length).toBe(5)
+    expect(MODELL_KLASSEN.length).toBe(6)
     expect(MODELL_KLASSE_LOKAL).toBe('lokal')
     expect(modellKlasseGueltig('lokal')).toBe('lokal')
   })

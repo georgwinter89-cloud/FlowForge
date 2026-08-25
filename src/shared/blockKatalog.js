@@ -77,10 +77,18 @@ export const BEREICH_EIGENE = 'eigene'
 // letzte ist, gibt unterModellFuer für lokal automatisch „eigen" zurück (kein
 // Herabstufen unter lokal). Ohne eingeschaltete und erreichbare lokale KI
 // startet der Lauf nicht (lauf.js) — nie stiller Rückfall auf Claude.
-export const MODELL_KLASSEN = ['extra', 'standard', 'sparsam', 'sehr-sparsam', 'lokal']
+// Seit Bauschritt 59 steht „openrouter" ZWISCHEN „sehr-sparsam" und „lokal":
+// ein frei gewähltes Fremdmodell über OpenRouter (eingebauter Übersetzer,
+// eigene Motor-Instanz je Block). Die Einordnung ist Absicht, keine Ästhetik —
+// unterModellFuer arbeitet mit indexOf, und hinter „sparsam" heißt automatisch:
+// Unteraufgaben bleiben auf dem eigenen Modell, nichts wird herabgestuft oder
+// verteuert. Ohne Häkchen, Schlüssel und Modell in den Einstellungen startet
+// der Lauf nicht (lauf.js) — nie stiller Rückfall auf Claude.
+export const MODELL_KLASSEN = ['extra', 'standard', 'sparsam', 'sehr-sparsam', 'openrouter', 'lokal']
 export const MODELL_KLASSE_STANDARD = 'standard'
 export const MODELL_KLASSE_EXTRA = 'extra'
 export const MODELL_KLASSE_LOKAL = 'lokal'
+export const MODELL_KLASSE_OPENROUTER = 'openrouter'
 
 // Übersetzung in die Modell-Aliase des Motors (SDK: sonnet/opus/haiku/fable).
 // „Standard" ist bewusst fest auf Opus genagelt statt „was die CLI gerade als
@@ -90,7 +98,10 @@ export const MODELL_KLASSE_LOKAL = 'lokal'
 // Variante, und er macht Läufe über Monate hinweg vergleichbar.
 // 'lokal' ist ein Platzhalter-Alias (BAUPLAN 49): der lokale Motor ersetzt ihn
 // beim Start durch den Ollama-Modellnamen (abgeleitetes Modell flowforge-<basis>).
-const SDK_MODELL = { extra: 'fable', standard: 'opus', sparsam: 'sonnet', 'sehr-sparsam': 'haiku', lokal: 'lokal' }
+// 'openrouter' ebenso (Bauschritt 59): der OpenRouter-Motor setzt Georgs
+// eingetragenen Modellnamen ein. Ohne den Eintrag hier fiele sdkModell für die
+// Klasse still auf Opus zurück — genau der stille Rückfall, den es nie gibt.
+const SDK_MODELL = { extra: 'fable', standard: 'opus', sparsam: 'sonnet', 'sehr-sparsam': 'haiku', openrouter: 'openrouter', lokal: 'lokal' }
 
 // Denktiefe je Block (0.48.1, Georgs „Effort bei den Cloud-Modellen einstellen").
 // Das SDK kennt effort low…max je Agent-Definition; FlowForge definiert den
@@ -128,14 +139,17 @@ export const BLOCK_AGENT_TYPEN = DENKTIEFEN.map(blockAgentTyp)
 
 // Haiku („sehr sparsam") kennt keine Denktiefe — und lokal auch nicht (BAUPLAN
 // 49: die Denktiefe ist ein Claude-Feld; beim Ollama-Modell bleibt das Denken
-// an, gemessen 19.08.2026). Bei beiden wird die Wahl ignoriert, Editor und
-// Ticker sagen es.
+// an, gemessen 19.08.2026). OpenRouter ebenso wenig (Bauschritt 59: dasselbe
+// Claude-Feld, ein Fremdmodell erreicht es nie). Überall wird die Wahl
+// ignoriert, Editor und Ticker sagen es.
 export function klasseKenntDenktiefe(klasse) {
-  return klasse !== 'sehr-sparsam' && !klasseIstLokal(klasse)
+  return klasse !== 'sehr-sparsam' && !klasseIstLokal(klasse) && !klasseIstOpenRouter(klasse)
 }
 
 // Nur „extra" kann Guthaben statt Kontingent kosten (BAUPLAN 0.48.1). Lokal
-// kostet gar kein Kontingent — kein Kosten-Hinweis.
+// kostet gar kein Kontingent — kein Kosten-Hinweis. OpenRouter (Bauschritt 59)
+// auch nicht: Was das gewählte Modell dort kostet, weiß FlowForge nicht — der
+// Bericht sagt ehrlich „nicht gemessen" statt hier eine Warnung zu erfinden.
 export function klasseHatKostenHinweis(klasse) {
   return klasse === MODELL_KLASSE_EXTRA
 }
@@ -144,6 +158,14 @@ export function klasseHatKostenHinweis(klasse) {
 // immer in einer eigenen Motor-Instanz mit Ollama-Umgebung (lauf.js).
 export function klasseIstLokal(klasse) {
   return klasse === MODELL_KLASSE_LOKAL
+}
+
+// Läuft diese Klasse über OpenRouter (Bauschritt 59)? Solche Blöcke laufen wie
+// lokale Blöcke in einer eigenen Motor-Instanz — aber gegen den eingebauten
+// Übersetzer statt gegen Ollama, und parallel wie Claude-Blöcke (kein
+// Adress-Pool: der galt der einen GPU).
+export function klasseIstOpenRouter(klasse) {
+  return klasse === MODELL_KLASSE_OPENROUTER
 }
 
 // Nebenrollen billigst (BAUPLAN 37): Der Koordinator der Lauf-Session schreibt

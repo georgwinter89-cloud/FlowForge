@@ -51,17 +51,18 @@ describe('Welche Modellklasse gilt für eine Blockkarte', () => {
     expect(blockModellKlasse(null, null)).toBe(MODELL_KLASSE_STANDARD)
   })
 
-  it('lässt nur die fünf bekannten Klassen durch', () => {
+  it('lässt nur die sechs bekannten Klassen durch', () => {
     expect(modellKlasseGueltig('sehr-sparsam')).toBe('sehr-sparsam')
     expect(modellKlasseGueltig('extra')).toBe('extra')
     expect(modellKlasseGueltig('lokal')).toBe('lokal')
+    expect(modellKlasseGueltig('openrouter')).toBe('openrouter')
     expect(modellKlasseGueltig('ollama')).toBe(null)
     expect(modellKlasseGueltig('opus')).toBe(null)
     expect(modellKlasseGueltig('fable')).toBe(null)
   })
 
-  it('kennt seit Bauschritt 49 genau fünf Klassen — Extra ganz vorn als teuerste, lokal ganz hinten', () => {
-    expect(MODELL_KLASSEN).toEqual(['extra', 'standard', 'sparsam', 'sehr-sparsam', 'lokal'])
+  it('kennt seit Bauschritt 59 genau sechs Klassen — Extra ganz vorn, openrouter zwischen sehr-sparsam und lokal', () => {
+    expect(MODELL_KLASSEN).toEqual(['extra', 'standard', 'sparsam', 'sehr-sparsam', 'openrouter', 'lokal'])
     expect(MODELL_KLASSE_EXTRA).toBe('extra')
     expect(blockModellKlasse(blockDefinition('bauer'), { modell: 'extra' })).toBe('extra')
   })

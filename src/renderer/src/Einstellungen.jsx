@@ -127,6 +127,13 @@ export default function Einstellungen({ onSchliessen }) {
   // Lokale KI als Block-Agent (BAUPLAN 49): Häkchen + Feineinstellungen (als
   // Text je Feld, damit sich halb getippte Zahlen nicht sofort wegrunden).
   const [lokalBlockAgent, setLokalBlockAgent] = useState(false)
+  // OpenRouter (Bauschritt 59): Häkchen, Schlüssel (Passwort-Feld wie der
+  // API-Schlüssel), freies Modellfeld und Kontextfenster als Text — geprüft
+  // beim Speichern, damit kein Tippfehler still zum Standard wird.
+  const [openRouterAktiv, setOpenRouterAktiv] = useState(false)
+  const [openRouterSchluessel, setOpenRouterSchluessel] = useState('')
+  const [openRouterModell, setOpenRouterModell] = useState('')
+  const [openRouterKontext, setOpenRouterKontext] = useState('200000')
   const [lokalFeinText, setLokalFeinText] = useState(() =>
     feinAlsText(LOKAL_FEIN_VORLAGEN['ollama-standard'])
   )
@@ -187,6 +194,10 @@ export default function Einstellungen({ onSchliessen }) {
       )
       setLokalBlockAgent(Boolean(e.einstellungen.lokalBlockAgent))
       setLokalFeinText(feinAlsText(lokalFeinBereinigen(e.einstellungen.lokalFein)))
+      setOpenRouterAktiv(Boolean(e.einstellungen.openRouterAktiv))
+      setOpenRouterSchluessel(e.einstellungen.openRouterSchluessel ?? '')
+      setOpenRouterModell(e.einstellungen.openRouterModell ?? '')
+      setOpenRouterKontext(String(e.einstellungen.openRouterKontext ?? 200000))
       setSearxngAdresse(e.einstellungen.searxngAdresse ?? '')
       setAboErlaubt(e.aboErlaubt)
       setGeladen(true)
@@ -278,6 +289,11 @@ export default function Einstellungen({ onSchliessen }) {
     // versteht, sagt es — statt den Wert wortlos fallen zu lassen und weiter
     // über die eingebaute Quelle zu suchen.
     if (searxngUnbrauchbar) return setFehler(t.fehlerSearxngAdresse)
+    // OpenRouter-Kontextfenster (Bauschritt 59): Der Hauptprozess zöge Unsinn
+    // still auf den Standard — hier sagt FlowForge es lieber vorher.
+    const openRouterKontextZahl = Number(String(openRouterKontext).trim())
+    if (!Number.isInteger(openRouterKontextZahl) || openRouterKontextZahl <= 0)
+      return setFehler(t.fehlerOpenRouterKontext)
     const ergebnis = await window.flowforge.einstellungenSpeichern({
       motorModus: modus,
       apiSchluessel,
@@ -311,6 +327,14 @@ export default function Einstellungen({ onSchliessen }) {
       lokaleAntwortGeduldMs,
       lokalBlockAgent,
       lokalFein: lokalFeinBereinigt,
+      // OpenRouter (Bauschritt 59): Diese Liste ist handgeschrieben — ein hier
+      // vergessenes Feld ließe sich im Dialog verstellen und stünde beim
+      // nächsten Öffnen wieder auf dem alten Wert (der Hauptprozess hält bei
+      // fehlendem Feld bewusst den Datei-Wert).
+      openRouterAktiv,
+      openRouterSchluessel,
+      openRouterModell,
+      openRouterKontext: openRouterKontextZahl,
       // Websuche der lokalen Blöcke (0.51.2): Diese Liste ist handgeschrieben —
       // ein hier vergessenes Feld verschwindet still beim nächsten Speichern.
       searxngAdresse
@@ -685,6 +709,59 @@ export default function Einstellungen({ onSchliessen }) {
                 ))}
               </div>
               <span className="feld-hinweis">{t.lokalBlockDenkenHinweis}</span>
+            </>
+          )}
+        </div>
+        {/* OpenRouter (Bauschritt 59): freie Modellwahl über den eingebauten
+            Übersetzer — Muster des Lokal-Bereichs. Der Daten-Hinweis steht
+            IMMER da (er gehört zur Entscheidung, das Häkchen zu setzen);
+            Schlüssel, Modell und Kontext erscheinen mit dem Häkchen. */}
+        <p className="bericht-abschnitt">{t.openRouterUeberschrift}</p>
+        <div className="feld">
+          <label className="wahl-zeile">
+            <input
+              type="checkbox"
+              checked={openRouterAktiv}
+              onChange={(e) => setOpenRouterAktiv(e.target.checked)}
+            />
+            <span>
+              {t.openRouterAktiv}
+              <span className="feld-hinweis"> — {t.openRouterAktivHinweis}</span>
+            </span>
+          </label>
+          <span className="feld-hinweis">{t.openRouterDatenHinweis}</span>
+          {openRouterAktiv && (
+            <>
+              <label className="feld">
+                <span>{t.openRouterSchluesselFeld}</span>
+                <input
+                  type="password"
+                  placeholder={t.openRouterSchluesselPlatzhalter}
+                  value={openRouterSchluessel}
+                  onChange={(e) => setOpenRouterSchluessel(e.target.value)}
+                />
+              </label>
+              <label className="feld">
+                <span>{t.openRouterModellFeld}</span>
+                <input
+                  type="text"
+                  placeholder={t.openRouterModellPlatzhalter}
+                  value={openRouterModell}
+                  onChange={(e) => setOpenRouterModell(e.target.value)}
+                />
+                <span className="feld-hinweis">{t.openRouterModellHinweis}</span>
+              </label>
+              <label className="feld">
+                <span>{t.openRouterKontextFeld}</span>
+                <input
+                  type="number"
+                  min="1024"
+                  step="1024"
+                  value={openRouterKontext}
+                  onChange={(e) => setOpenRouterKontext(e.target.value)}
+                />
+                <span className="feld-hinweis">{t.openRouterKontextHinweis}</span>
+              </label>
             </>
           )}
         </div>
