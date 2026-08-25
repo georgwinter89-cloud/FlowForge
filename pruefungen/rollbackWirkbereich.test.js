@@ -1907,9 +1907,10 @@ describe('BAUPLAN 45 · Das Sicherheitsnetz am Laufende schließt jeden Strang',
     expect(lauf).toMatch(
       /if \(!lauf\.hart\) await strangSchliessenFuer\(knoten\.get\(id\)\)[\s\S]{0,400}await nachlaeufeAbarbeiten\(\)[\s\S]{0,60}standSpeichern\(\)\s*\n\s*\}/
     )
-    // … das Sicherheitsnetz am Laufende schon.
+    // … das Sicherheitsnetz am Laufende schon — über die LIVE-Kette, damit
+    // auch die Stränge der Zusatz-Knoten (Bauschritt 57) geschlossen werden.
     expect(lauf).toMatch(
-      /for \(const kid of kettenIds\) await strangEndgueltigSchliessenFuer\(knoten\.get\(kid\)\)/
+      /for \(const eintrag of kette\) await strangEndgueltigSchliessenFuer\(knoten\.get\(eintrag\.instanzId\)\)/
     )
     expect(lauf).toMatch(/endgueltig: true/)
     // Und das Kennzeichen wird an genau einer Stelle gesetzt: der Nachprüfung

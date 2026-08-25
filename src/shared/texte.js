@@ -4601,7 +4601,48 @@ export const texte = {
     // Steck-Hinweis beim Laufstart (keine Sperre): Ein lokaler Prüfer ohne
     // Claude-Prüfer dahinter prüft ohne Abnahme — der Lauf startet trotzdem.
     lokalerPrueferOhneAbnahme: (name) =>
-      `Hinweis: Hinter dem lokalen Prüfer „${name}" nimmt kein Claude-Prüfer ab — sein Urteil hängt nur am Tor-Anker (Prüfbefehl). Der Lauf startet trotzdem.`
+      `Hinweis: Hinter dem lokalen Prüfer „${name}" nimmt kein Claude-Prüfer ab — sein Urteil hängt nur am Tor-Anker (Prüfbefehl). Der Lauf startet trotzdem.`,
+    // Zusatzbauer für Funde des Angreifers (Bauschritt 57): eigene Zeilen ohne
+    // Blocknummer — der Zusatzbauer trägt keine; die Zeilen nennen den Melder,
+    // aus dessen Fund er entstand. `soll` heißt für Georg nie „soll", sondern
+    // „woran man erkennt, dass es behoben ist".
+    zusatzbauerStartet: (name, melderName) =>
+      `Zusatzbauer „${name}" startet — er behebt einen Fund von „${melderName}" außerhalb der Dateilisten dieses Laufs (er läuft allein, ohne Schreibsperre).`,
+    zusatzAngreiferStartet: (name, melderName) =>
+      `Zusatz-Angreifer „${name}" startet — er untersucht die Fundstelle aus dem Fund von „${melderName}", bevor der Zusatzbauer baut (Fundschwere hoch).`,
+    zusatzbauerAngelegt: (name, melderName, fundpfad) =>
+      `Aus einem Fund von „${melderName}" entsteht der Zusatzbauer „${name}" (Fundstelle: ${fundpfad}).`,
+    zusatzbauerKarteAngelegt: (titel, melderName) =>
+      `Aufgaben-Karte zum Fund von „${melderName}" angelegt: „${titel}".`,
+    zusatzbauerKarteGescheitert: (grund) =>
+      `Die Aufgaben-Karte zum Fund ließ sich nicht anlegen${grund ? ` — ${grund}` : ''}. Der Fund steht trotzdem im Laufbericht.`,
+    zusatzbauerKarteAbgehakt: (titel) =>
+      `Aufgaben-Karte „${titel}" abgehakt — der Zusatzbauer hat geliefert.`,
+    zusatzbauerFertig: (name) =>
+      `Zusatzbauer „${name}" hat geliefert — seine angefassten Dateien werden gleich an seinen Punkten gemessen; ob es behoben ist, beurteilt der nächste Prüfer der Kette.`,
+    zusatzbauerFundNurBericht: (melderName) =>
+      `Ein Fund von „${melderName}" liegt außerhalb der Dateilisten — er bleibt laut Einstellung nur im Laufbericht vermerkt.`,
+    zusatzbauerSollErfuellt: (name, prueferName) =>
+      `„${prueferName}" bestätigt: Der Fund des Zusatzbauers „${name}" ist behoben.`,
+    zusatzbauerSollVerfehlt: (name, prueferName) =>
+      `„${prueferName}" urteilt: Der Fund des Zusatzbauers „${name}" ist NICHT behoben — die Aufgaben-Karte ist wieder offen.`,
+    zusatzbauerReparatur: (name, runde, gesamt) =>
+      `Zusatzbauer „${name}" bessert nach — Reparatur-Runde ${runde} von ${gesamt}.`,
+    zusatzbauerRundenErschoepft: (name) =>
+      `Keine Reparatur-Runde mehr für den Zusatzbauer „${name}" — die Aufgaben-Karte bleibt offen, der Lauf macht ehrlich vermerkt weiter.`,
+    zusatzbauerNachpruefung: (prueferName) =>
+      `„${prueferName}" urteilt nach der Nacharbeit des Zusatzbauers erneut über dessen Fund.`,
+    zusatzbauerVerloren: (name, titel) =>
+      `Ein Zurücksetzen hat Dateien des Zusatzbauers „${name}" getroffen — die Aufgaben-Karte „${titel}" ist wieder offen.`,
+    zusatzbauerNichtWiederbelebt: (name) =>
+      `Der Zusatzbauer „${name}" war beim Abbruch nicht fertig — er wird nicht wiederbelebt; seine Aufgaben-Karte bleibt offen und sagt damit die Wahrheit.`
+  },
+  // Zusatzbauer (Bauschritt 57): Bausteine der mechanisch angelegten
+  // Aufgaben-Karte. Das Feld `soll` erscheint nirgends unter seinem Feldnamen.
+  zusatzbauer: {
+    thema: 'Funde',
+    karteZeileFundort: (fundort) => `Fundort: ${fundort}`,
+    karteZeileErkennen: (soll) => `Woran man erkennt, dass es behoben ist: ${soll}`
   },
   sicherungen: {
     ueberschrift: 'Sicherungspunkte',

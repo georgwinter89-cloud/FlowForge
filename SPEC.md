@@ -278,6 +278,18 @@ Prüfdateien und den Stempel mit weg** — eine gelöschte Karte spielt FlowForg
 Agenten können Prüfkarten weder anlegen noch
 ändern (die Übersicht listet sie mit). Wiederholungsprüfung per Ziehen auf den Prüfer: §4.3.
 
+**Fund-Karten** (seit Bauschritt 57): Für Funde außerhalb der Dateilisten (§5) legt
+**FlowForge selbst** — mechanisch, ohne Agent — eine **Aufgaben-Karte** an: Sorte
+Aufgabe, Thema fest **„Funde"**, Herkunft FlowForge; Titel aus dem Fund-Text, Text aus
+Fund-Text, Fundort und dem Satz, woran man die Behebung erkennt — beides mechanisch mit
+Ellipse auf die Karten-Grenzen gekürzt (eine Abweisung wäre exakt das Loch, das der
+Schritt stopft). Grund: Der Appell im Sessionende-Auftrag („lege für Offenes Karten an")
+hat im gemessenen Lauf nicht gehalten — ein Auftragssatz ist kein Mechanismus. Abgehakt
+und wieder geöffnet wird die Karte mechanisch (§5); zu jedem Zeitpunkt sagt sie die
+Wahrheit. Ehrlich benannt: Die früh angelegte Karte steht im Karten-Verzeichnis, das
+auch der Prüfer bekommt, der über dieselbe Sache urteilt — eine kleine Vorwegnahme, für
+den Nutzer harmlos.
+
 **Ordnung in der Karten-Seitenleiste** (seit Bauschritt 30): Die Karten stehen in vier
 festen, ausklappbaren **Gruppen**, die sich aus der Sorte ergeben (nichts zu pflegen):
 „Arbeit" (Status-Karte obenauf + offene Aufgaben) · „Wissen" (Entscheidungen + Wissen) ·
@@ -396,6 +408,12 @@ angefasst" dargestellt. Der Ticker nennt jede Messung („Dateiliste gemessen: N
 angefasst · Abweichung: …"). Ehrliche Grenzen: Gemessen wird der **Strang**, nicht die
 Absicht — eine geänderte und wieder zurückgeänderte Datei taucht nicht auf; und die Messung
 geht nicht in die Übergabe an Nachfolger, sie ist für den Nutzer.
+**Zusatzbauer im Bericht** (seit Bauschritt 57): Je Zusatzbauer (§5) führt der Bericht
+einen eigenen Abschnitt — aus wessen Fund er entstand, **woran man erkennt, dass es
+behoben ist**, das Urteil des prüfenden Blocks (erfüllt · verfehlt · ungeprüft) samt
+Beleg, ob eine Angriffsliste vorgeschaltet war, die **gemessene Zahl der angefassten
+Dateien**, seine Kosten und der Karten-Status (offen/abgehakt). Berichte von vor
+Bauschritt 57 tragen das Feld nicht und rendern unverändert.
 Der Verbrauch steht je Block und für den ganzen Lauf im Bericht — seit 13.08.2026 mit
 **Token-Aufschlüsselung** (Eingabe, Ausgabe, Cache gelesen, Cache geschrieben) und den
 **theoretischen API-Kosten**, die der Motor aus den Preisen der genutzten Modelle berechnet
@@ -1205,10 +1223,16 @@ letzten Block widerspräche sie dem Vorspann („geht an niemanden") im selben
 Auftrag. Darunter je Etikett ein eigener Teil: Arbeitspaket (Ziel,
 Fertig-Kriterien, Schritte, Fundstellen, nicht
 dabei), Prüfbeleg (Urteil als Auswahl, Beanstandungen mit Einstufung und Fundort,
-Rot-vor-Grün, geprüfte Kriterien, Prüfkarte), Umsetzungsbericht (je Kriterium wie
+Rot-vor-Grün, geprüfte Kriterien, Prüfkarte — und seit Bauschritt 57 die optionale
+Liste `zusatzUrteile` für die benannten Ausnahmen der Zusatzbauer, §5: je Eintrag
+Fundpfad, Urteil erfüllt/verfehlt und Beleg als Pflicht, ausdrücklich **außerhalb**
+der Urteil/Beanstandungs-Kopplung — „bestanden" mit verfehltem Zusatz-Urteil ist
+gültig), Umsetzungsbericht (je Kriterium wie
 umgesetzt, Dateiliste mit Art, Angriffsliste behandelt — die Dateiliste wird seit
 Bauschritt 55 gegen die Sicherungspunkte nachgemessen, §3.2) und Angriffs-/Befundliste
-(Funde mit Schwere und Fundort). **Bewusst locker** bleiben Spec-Interview,
+(Funde mit Schwere und Fundort; bei der Angriffsliste seit Bauschritt 57 dazu das
+optionale Feld `soll` — der prüfbare Satz, woran man erkennt, dass der Fund behoben
+ist, §5). **Bewusst locker** bleiben Spec-Interview,
 Kontext laden, Frage an den Menschen und der Karten-Prüfer: Rahmen plus ein
 Freitext-Feld — enge Schemata kosten Nuance bei explorativer Arbeit.
 **Drei Durchsetzungs-Ebenen:** das Schema (Struktur, Typen, Auswahlwerte),
@@ -1280,7 +1304,13 @@ Kürzung sichtbar im Text.
 Daneben gibt es
 **optionale Bedarfe** („falls da"): Der Bauer verlangt nur das Arbeitspaket;
 eine Angriffsliste wird mitgereicht und muss eingearbeitet werden, wenn ein
-Block davor eine liefert — so kommt „Bug jagen" ohne Angreifer aus.
+Block davor eine liefert — so kommt „Bug jagen" ohne Angreifer aus. Auch das
+**Sessionende nimmt die Angriffsliste optional** (seit Bauschritt 57): Es
+übernimmt unerledigte Funde als Aufgaben-Karten — FlowForge hakt selbst ab, was
+schon behoben ist, vergleichen muss der Block nichts. Vorher sah das Sessionende
+die Angriffsliste nie, und ein Angreifer-Fund, den kein Bauer ausräumen durfte,
+fiel wortlos aus dem Gedächtnis (gemessen am Nachstellungs-Lauf vom 23.08.2026);
+das gilt jetzt auch für Läufe ganz ohne Zusatzbauer (§5).
 
 **Prüfer:** prüft **nur das aktuelle Arbeitspaket** gegen dessen Fertig-Kriterien
 (Entscheidung Georg, 12.08.2026) — nicht das ganze Projekt. Schreibt wenige, robuste
@@ -1476,6 +1506,12 @@ Wartelimit: Ob eine Unteraufgabe noch rechnet oder tot ist, kann er nicht wissen
 für eine Angriffsliste, weil vier Späher je das ganze Projekt einlasen): höchstens
 zwei Unteraufgaben pro Angreifer-Lauf, jede eng umrissen; gelesen werden nur die im
 Arbeitspaket genannten Stellen und ihre direkte Nachbarschaft, nicht das ganze Projekt.
+Sein Auftrag verlangt seit Bauschritt 57, dass der **Fundort den Dateipfad nennt**, und
+erklärt das Feld `soll`: Kann der Angreifer in einem prüfbaren Satz sagen, woran man
+erkennt, dass ein Fund behoben ist, schreibt er ihn hinein — kann er es nicht, lässt er
+das Feld ehrlich leer (der Fund wird dann eine Aufgaben-Karte statt eines Zusatzbauers,
+§5). Ein erzwungenes Freitextfeld würde mit Brei gefüllt; der Agent bekommt einen Grund,
+es leer zu lassen.
 
 **Lokale Helfer-KI** (Experiment, Wunsch Georg, 13.08.2026): In den Einstellungen
 zuschaltbar (Standard: aus) — Recherche-Aufträge gehen dann an eine lokale KI über
@@ -2253,6 +2289,60 @@ umstellbar wie jede Karte.
   wiederherstellen" die halbfertige Arbeit eines Nachbarn mitnehmen. Der Co-Pilot-Chat
   passt in keine Welle: Er kennt weder Datenvertrag noch Strang und startet keinen Lauf,
   solange er arbeitet.
+- **Zusatzbauer — Funde außerhalb der Dateilisten** (seit Bauschritt 57): Meldet ein
+  Angriffslisten-Lieferant einen Fund an einer Stelle, die **kein schreibender Empfänger
+  seiner Liste anfassen darf** (der Fundpfad liegt außerhalb jeder Dateiliste — ein
+  Empfänger ohne Dateiliste darf immer), entsteht dafür mit der Einstellung **„jetzt
+  mitnehmen"** (§9; Standard ist „als Karte festhalten") ein **Zusatzbauer** im
+  laufenden Lauf. Die Auswertung läuft **mechanisch beim Blockende des Melders** (seine Liste ist
+  dann final), ohne urteilendes Modell: Zuständigkeit aus der Kette, Fundstelle als
+  längstes pfadartiges Token aus dem Fundort (normalisiert), Zulassung aus zwei Feldern —
+  der Fund braucht einen **Dateipfad im Fundort** und den prüfbaren Satz, **woran man
+  erkennt, dass er behoben ist** (Werkzeugfeld `soll`, bewusst optional: ein leeres Feld
+  ist die ehrliche Antwort „nur als Aufgabe übernehmen"). **Kein Fund wird je abgewiesen**
+  — was keinen Zusatzbauer bekommt (Einstellung §9, fehlende Felder, erreichte
+  Höchstzahl, gar kein Empfänger im Lauf), wird eine **offene Aufgaben-Karte** (§3.1)
+  oder steht mindestens im Laufbericht. Mehrere Funde mit gleichem normalisiertem
+  Fundpfad und gleichem Melder-Typ werden **ein** Zusatzbauer (die Sätze zusammengeführt,
+  je Zeile einer). Der Zusatzbauer wird direkt hinter seinem Melder in die Live-Kette
+  gehängt; jeder prüfende Block dahinter urteilt erst nach ihm. Er ist ein normaler
+  Umsetzer mit interner Blockdefinition (kein Katalog-Block, keine Palette, nie in
+  workflow.json), sein **einziges Fertig-Kriterium ist der Satz aus dem Fund**, er
+  **erbt die Modellklasse seines Melders** (eine Kette auf „sparsam" bekommt keinen
+  stillen Opus-Zusatzbauer; der Zusatz-Angreifer erbt genauso), und er
+  **läuft immer allein** — die Wellenregel trägt das heute schon: ein Umsetzer ohne
+  Dateiliste startet nur, wenn nichts läuft, und lässt nichts neben sich starten
+  (benannte Lücke: **nur-lesende Blöcke starten immer** und laufen damit auch neben
+  ihm). Er bekommt einen **eigenen Sicherungsstrang trotz fehlenden Wirkbereichs** —
+  daraus misst FlowForge seine echte Dateiliste (§3.3, „gemessen statt geglaubt"); die
+  Begrenzung vorab ist bewusst aufgegeben (§7). Bei Fundschwere **hoch** läuft ein
+  nur-lesender **Zusatz-Angreifer** davor, der den geplanten Fix angreift (zählt nicht
+  gegen die Höchstzahl); seine Angriffsliste ist Arbeitsgrundlage des Zusatzbauers.
+  **Karte sofort, mechanisch:** Beim Anlegen des Zusatzbauers legt FlowForge selbst die
+  Aufgaben-Karte an (§3.1, Thema „Funde") — abgehakt, sobald der Zusatzbauer erfolgreich
+  geliefert hat; wieder geöffnet, wenn sein Satz verfehlt bleibt oder ein Rückroll **im
+  Lauf** seine gemessenen Dateien trifft. Ein Rückroll **nach** dem Laufende öffnet sie
+  nicht — ehrliche Grenze. Zu jedem Zeitpunkt sagt die Karte damit die Wahrheit.
+  **Abnahme:** Der erste prüfende Block nach dem Zusatzbauer bekommt den Satz als
+  **benannte Ausnahme** in den Auftrag — beurteilt wird er **außerhalb des
+  Paket-Urteils** im eigenen Prüfbeleg-Feld `zusatzUrteile` (je Eintrag Fundpfad, Urteil
+  erfüllt/verfehlt, **Beleg als Pflicht**); alle prüfenden Blöcke dahinter bekommen die
+  gemessene Dateiliste als Ausnahme für ihre Grenz-Kriterien, der Diff bleibt
+  ungefiltert und jede Änderung beanstandbar. Ein verfehlter Satz kippt **nie** das
+  Paket-Urteil; er löst eine Reparatur-Runde des Zusatzbauers aus (Budget: die
+  Reparatur-Runden der Kette, gezählt je Rückführungs-Ziel wie überall), danach die
+  gewohnte Nachprüfung. Erschöpft bleibt die Karte offen, der Bericht sagt es. Kein
+  prüfender Block in der Kette → die Arbeit steht als **ungeprüft** im Bericht, die
+  Karte wird bei Erfolg trotzdem abgehakt (Entscheidung Georg, 24.08.2026 — eine offene
+  Karte für erledigte Arbeit wäre eine Lüge im Gedächtnis); schweigt ein Prüfer zu einem
+  Satz, zählt das ebenfalls als ungeprüft, ohne Nachforderung. **Sichtbarkeit:** eigene
+  Ticker-Zeile ohne Blocknummer („Block n von gesamt" zählt die beim Start gerechnete
+  Kette), im Laufbericht ein eigener Abschnitt (§3.2). **Wiederaufnahme belebt einen
+  nicht fertigen Zusatzbauer nicht wieder** — eine Ticker-Zeile sagt es, die Karte
+  bleibt offen und damit wahr; ein fertiger bleibt im Laufstand erhalten (Bericht und
+  benannte Ausnahme brauchen seine gemessenen Dateien), und die persistierte Kette
+  selbst bleibt frei von Zusatz-Knoten (ein alter Laufstand kennt das Feld nicht und
+  fällt still auf „keine" zurück).
 
 ## 6. Live-Ansicht & Eingriff
 
@@ -2592,6 +2682,17 @@ sie ist dort eine sichtbare Meldung, keine Bremse. Die einzige harte Grenze an
 Befehlen bleibt die Umleitungs-Sperre der Dateiliste. Der Chat ist nie Teil
 einer Welle: Er schreibt nicht, solange ein Lauf läuft.
 
+**Der Zusatzbauer läuft ohne Schreibsperre** (§5, Entscheidung Georg,
+24.08.2026: „Wozu braucht der Zusatzbauer überhaupt eine Sperre? Er darf doch eh
+nicht parallel laufen."): Eine Dateiliste erfüllt zwei Aufgaben im selben Feld —
+Reviertrennung und Begrenzung. Die Reviertrennung ist für einen Block, der immer
+allein läuft, gegenstandslos; die Begrenzung vorab ist bewusst aufgegeben —
+**Kontrolle später statt früher**: Sein Fertig-Kriterium ist ein einziger
+schmaler Satz, der prüfende Block sieht seinen kompletten, ungefilterten Diff
+und darf jede Änderung beanstanden, und der Bericht nennt die **gemessene** Zahl
+der angefassten Dateien (§3.2). Alle übrigen harten Sperren (Git,
+Verwaltungsdateien, Prüfmappe, Projektgrenze) gelten für ihn unverändert.
+
 **Melde-Werkzeuge** (Lieferschein, §4.3, seit Bauschritt 42): Sein Ergebnis zu
 melden ändert nichts am Projekt — FlowForge nimmt nur entgegen. Das Werkzeug zum
 eigenen liefert-Etikett ist deshalb frei, auch unter „darf nur lesen" (gerade
@@ -2782,7 +2883,17 @@ Block-Agenten als Hinweis daneben (§6).
   geprüft. **Alle** Live-Status-Abfragen des Dialogs (auch die der Ollama-Adressen) sind seit
   0.51.2 **entprellt**: Vorher ging je Tastendruck eine echte Anfrage an den fremden Rechner
   hinaus (gemessen: 19 getippte Zeichen = 19 Anfragen) — ausgerechnet an eine Quelle, die auf
-  Häufung mit Drosselung reagiert · **Sessions & Übertrag** (Test-Schalter, §5).
+  Häufung mit Drosselung reagiert · **Funde außerhalb der Dateilisten** (seit
+  Bauschritt 57, §5): drei Wege — **als Karte festhalten** (Standard) · **jetzt
+  mitnehmen** (Zusatzbauer im laufenden Lauf) · **nur im Laufbericht nennen**; ein
+  „Ignorieren" gibt es bewusst nicht, und ein „bei jedem Fund fragen" auch nicht (die
+  Fragen-Mechanik hat keine Zeitgrenze — ein Nachtlauf stünde unbegrenzt). Darunter die
+  **Höchstzahl Zusatzbauer je Lauf** (ganze Zahl, Standard 1, 0 = nie mitnehmen; nur
+  bei „jetzt mitnehmen" sichtbar), mit dem ehrlichen Hinweis, was jede weitere Zahl
+  bedeutet: Je Zusatzbauer kommen seine Nacharbeits-Runden und die erneuten Abnahmen
+  dazu, und er läuft allein. Nirgends steht das Wort „soll" — für den Nutzer heißt das
+  Feld „woran man erkennt, dass es behoben ist" ·
+  **Sessions & Übertrag** (Test-Schalter, §5).
   **Ehrliche Grenze aller Einstellungen:** Ein Lauf friert sie beim Start ein — eine mitten
   im Lauf geänderte Adresse oder Wahl wirkt erst beim nächsten Laufstart.
 - **Projektübersicht** beim Start: Läuft gerade ein Lauf, liegt er als große

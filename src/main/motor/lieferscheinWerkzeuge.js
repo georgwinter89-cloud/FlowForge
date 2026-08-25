@@ -23,6 +23,7 @@ import {
   EINSTUFUNGEN,
   URTEILE,
   SCHWEREN,
+  ZUSATZ_URTEILE,
   DATEI_ARTEN,
   artFuerWerkzeug,
   etikettFuerWerkzeug,
@@ -31,6 +32,25 @@ import {
   meldungPruefen
 } from '../../shared/lieferschein.js'
 import { etikettKlartext } from '../../shared/etikettRegeln.js'
+
+// Feld-Beschreibungen des Zusatzbauer-Wegs (BAUPLAN 57). Sie stehen hier statt
+// in texte.lieferschein.param, solange die Bausession 57 parallel läuft — der
+// Integrator darf sie dorthin ziehen.
+const ZUSATZ_BESCHREIBUNGEN = {
+  soll:
+    'Kannst du in einem prüfbaren Satz sagen, woran man erkennt, dass dieser Fund behoben ' +
+    'ist, schreib ihn hierher und nenne im Fundort den Dateipfad. Kannst du es nicht, lass ' +
+    'das Feld leer — der Fund wird dann als Aufgabe ins Projektgedächtnis übernommen statt ' +
+    'sofort repariert.',
+  zusatzUrteile:
+    'Nur wenn dein Auftrag benannte Ausnahmen eines Zusatzbauers nennt: je Ausnahme ein ' +
+    'Eintrag mit deinem Urteil darüber. Es gehört hierher und NIE ins Feld urteil deines ' +
+    'Pakets — ein verfehltes zusatzUrteil kippt das Paket-Urteil nicht.',
+  zusatzFundpfad: 'Der fundpfad aus deinem Auftrag — er ordnet das Urteil dem Fund zu.',
+  zusatzUrteil:
+    'erfüllt = das Genannte trifft nachweislich zu · verfehlt = es trifft nicht zu.',
+  zusatzBeleg: 'Woran du das Urteil gemessen hast, kurz zitiert. Das Feld ist Pflicht.'
+}
 
 // Der gemeinsame Rahmen — identisch in jedem Werkzeug.
 function rahmenFelder() {
@@ -88,6 +108,20 @@ function teilFelder(art) {
         .describe(p.beanstandungen),
       rotVorGruen: z.string().optional().describe(p.rotVorGruen),
       geprueft: liste(z.string()).optional().describe(p.geprueft),
+      // zusatzUrteile (BAUPLAN 57): die Urteile über benannte Ausnahmen der
+      // Zusatzbauer — außerhalb der Urteil/Beanstandungs-Kopplung. Der beleg
+      // ist im Schema BEWUSST optional, obwohl er Pflicht ist: Die Pflicht
+      // sitzt in Ebene 2 (lieferschein.pruefbelegPruefen) und antwortet in
+      // Klartext statt mit einem stummen Schema-Fehler (Muster kurzname).
+      zusatzUrteile: liste(
+          z.object({
+            fundpfad: z.string().describe(ZUSATZ_BESCHREIBUNGEN.zusatzFundpfad),
+            urteil: z.enum(ZUSATZ_URTEILE).describe(ZUSATZ_BESCHREIBUNGEN.zusatzUrteil),
+            beleg: z.string().optional().describe(ZUSATZ_BESCHREIBUNGEN.zusatzBeleg)
+          })
+        )
+        .optional()
+        .describe(ZUSATZ_BESCHREIBUNGEN.zusatzUrteile),
       pruefkarteTitel: z.string().optional().describe(p.pruefkarteTitel),
       pruefkarteText: z.string().optional().describe(p.pruefkarteText)
     }
@@ -124,7 +158,8 @@ function teilFelder(art) {
           z.object({
             text: z.string().describe(p.fundText),
             schwere: z.enum(SCHWEREN).describe(p.schwere),
-            fundort: z.string().optional().describe(p.fundort)
+            fundort: z.string().optional().describe(p.fundort),
+            soll: z.string().optional().describe(ZUSATZ_BESCHREIBUNGEN.soll)
           })
         )
         .describe(p.funde)

@@ -18,6 +18,12 @@ import {
   pruefkartenDeckelMesspunktBereinigen,
   pruefkartenDeckelLaufBereinigen
 } from '../shared/pruefkartenRegeln.js'
+import {
+  FUNDE_AUSSERHALB_STANDARD,
+  ZUSATZBAUER_MAX_STANDARD,
+  fundeAusserhalbBereinigen,
+  zusatzbauerMaxBereinigen
+} from '../shared/blockKatalog.js'
 
 // Abo-Regel (SPEC §2, neu seit 0.46.4 — Entscheidung Georg, 19.08.2026): Der
 // Abo-Modus bleibt auch in veröffentlichten Versionen an. Anthropic sagt seit
@@ -120,7 +126,18 @@ const STANDARD = {
   // Stufe an zwei Orten heißt, der Dialog bietet an, was das Speichern
   // stillschweigend zurückdreht).
   pruefkartenDeckelMesspunktMs: PRUEFKARTEN_DECKEL_MESSPUNKT_STANDARD,
-  pruefkartenDeckelLaufMs: PRUEFKARTEN_DECKEL_LAUF_STANDARD
+  pruefkartenDeckelLaufMs: PRUEFKARTEN_DECKEL_LAUF_STANDARD,
+  // Funde außerhalb der Dateilisten (BAUPLAN 57): 'karte' hält jeden solchen
+  // Fund als offene Aufgaben-Karte fest, 'mitnehmen' setzt einen Zusatzbauer
+  // in den laufenden Lauf (wenn der Fund fundpfad und „woran man erkennt, dass
+  // es behoben ist" trägt), 'bericht' nennt ihn nur im Laufbericht. Standard
+  // 'karte': verliert nichts, ändert nichts am Lauf-Umfang, läuft ohne
+  // Menschen durch. „Ignorieren" gibt es bewusst nicht.
+  fundeAusserhalb: FUNDE_AUSSERHALB_STANDARD,
+  // Höchstzahl Zusatzbauer je Lauf (0 = nie mitnehmen). Je Zusatzbauer kommen
+  // seine Nacharbeits-Runden und erneute Abnahmen dazu; oberhalb der Grenze
+  // wird jeder weitere Fund eine Karte.
+  zusatzbauerMax: ZUSATZBAUER_MAX_STANDARD
 }
 
 // Die Stufenliste hat seit 0.51.3 genau einen Wohnort (src/shared/lokalRegeln.js) —
@@ -192,6 +209,11 @@ export function einstellungenLaden() {
     daten.pruefkartenDeckelMesspunktMs
   )
   daten.pruefkartenDeckelLaufMs = pruefkartenDeckelLaufBereinigen(daten.pruefkartenDeckelLaufMs)
+  // Zusatzbauer (BAUPLAN 57): an derselben Stelle bereinigt wie Geduld und
+  // Deckel — der Lauf liest die Werte direkt aus dieser Antwort und darf nie
+  // vor einem Wert stehen, den der Dialog gar nicht anbietet.
+  daten.fundeAusserhalb = fundeAusserhalbBereinigen(daten.fundeAusserhalb)
+  daten.zusatzbauerMax = zusatzbauerMaxBereinigen(daten.zusatzbauerMax)
   return {
     ok: true,
     einstellungen: daten,
@@ -378,6 +400,18 @@ export function einstellungenSpeichern(neu) {
       neu.pruefkartenDeckelLaufMs === undefined
         ? pruefkartenDeckelLaufBereinigen(einstellungenLaden().einstellungen.pruefkartenDeckelLaufMs)
         : pruefkartenDeckelLaufBereinigen(neu.pruefkartenDeckelLaufMs),
+    // Zusatzbauer (BAUPLAN 57) — nach dem Muster der Geduld, NICHT nach dem
+    // des Kontextfensters: Ein Aufrufer, der die Felder gar nicht kennt
+    // (undefined), darf Georgs Wahl nicht still auf den Standard zurückdrehen;
+    // alles andere wird bereinigt (unbekannter Wert = Standard).
+    fundeAusserhalb:
+      neu.fundeAusserhalb === undefined
+        ? fundeAusserhalbBereinigen(einstellungenLaden().einstellungen.fundeAusserhalb)
+        : fundeAusserhalbBereinigen(neu.fundeAusserhalb),
+    zusatzbauerMax:
+      neu.zusatzbauerMax === undefined
+        ? zusatzbauerMaxBereinigen(einstellungenLaden().einstellungen.zusatzbauerMax)
+        : zusatzbauerMaxBereinigen(neu.zusatzbauerMax),
     // Lokale KI als Block-Agent (BAUPLAN 49): Häkchen und Feineinstellungen.
     // Fehlt lokalFein (ältere Aufrufer), bleibt alles Ollama-Standard.
     lokalBlockAgent: Boolean(neu.lokalBlockAgent),

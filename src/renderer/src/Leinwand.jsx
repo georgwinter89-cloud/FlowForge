@@ -749,6 +749,71 @@ function dauerText(bericht) {
   return tb.dauerMinuten(Math.round(sekunden / 60))
 }
 
+// Zusatzbauer im Laufbericht (BAUPLAN 57): je Zusatzbauer eine kleine Gruppe —
+// aus wessen Fund er entstand, woran man die Behebung erkennt, Urteil samt
+// Beleg, Angriffsliste ja/nein, gemessene Dateizahl, Kosten, Karten-Status.
+// Die Texte stehen hier statt in texte.laufberichte, solange die Bausession 57
+// parallel läuft — der Integrator darf sie dorthin ziehen.
+const tzb = {
+  label: 'Funde außerhalb der Dateilisten',
+  herkunft: (name, melder) => `${name} — aus einem Fund von ${melder}`,
+  woran: (soll) => `Woran man erkennt, dass es behoben ist: ${soll}`,
+  urteilZeile: 'Urteil',
+  mitAngriffsliste: 'mit vorgeschalteter Angriffsliste',
+  ohneAngriffsliste: 'ohne vorgeschaltete Angriffsliste',
+  dateien: (zahl) => (zahl === 1 ? '1 Datei angefasst' : `${zahl ?? 0} Dateien angefasst`),
+  karteOffen: 'Karte offen',
+  karteErledigt: 'Karte abgehakt',
+  // Funde, aus denen KEIN Zusatzbauer wurde (Feld `weg`): eine Zeile je Fund.
+  fundVon: (melder) => `Fund von ${melder}`,
+  wege: {
+    karte: 'als Aufgaben-Karte festgehalten (offen)',
+    bericht: 'nur hier im Laufbericht genannt',
+    normal: 'normaler Weg — ein Bauer des Laufs darf die Stelle anfassen',
+    vorhanden: 'schon von einem Zusatzbauer dieses Laufs abgedeckt'
+  }
+}
+
+// Eine Fund-Zeile ohne Zusatzbauer: wer meldete, wo, welcher Weg.
+function FundZeile({ eintrag }) {
+  return (
+    <div>
+      <p className="bericht-zeile">
+        <strong>{tzb.fundVon(eintrag.melderName)}</strong>
+        {eintrag.fundort ? ` (${eintrag.fundort})` : ''} —{' '}
+        {tzb.wege[eintrag.weg] ?? eintrag.weg}
+      </p>
+      {eintrag.soll ? <p className="feld-hinweis">{tzb.woran(eintrag.soll)}</p> : null}
+    </div>
+  )
+}
+
+function ZusatzbauerZeile({ eintrag }) {
+  // Zeilen mit `weg` ungleich 'zusatzbauer' sind Funde ohne eigenen Bauer —
+  // sie bekommen die schlanke Darstellung statt der vollen Gruppe.
+  if (eintrag.weg && eintrag.weg !== 'zusatzbauer') return <FundZeile eintrag={eintrag} />
+  const meta = [
+    eintrag.angriffsliste ? tzb.mitAngriffsliste : tzb.ohneAngriffsliste,
+    tzb.dateien(eintrag.dateien),
+    eintrag.kostenUsd != null ? tb.apiKosten(eintrag.kostenUsd) : null,
+    eintrag.karteOffen ? tzb.karteOffen : tzb.karteErledigt
+  ].filter(Boolean)
+  return (
+    <div>
+      <p className="bericht-zeile">
+        <strong>{tzb.herkunft(eintrag.name, eintrag.melderName)}</strong>
+        {eintrag.fundort ? ` (${eintrag.fundort})` : ''}
+      </p>
+      <p className="bericht-zeile">{tzb.woran(eintrag.soll)}</p>
+      <p className="bericht-zeile">
+        {tzb.urteilZeile}: <strong>{eintrag.urteil}</strong>
+        {eintrag.beleg ? ` — ${eintrag.beleg}` : ''}
+      </p>
+      <p className="feld-hinweis">{meta.join(' · ')}</p>
+    </div>
+  )
+}
+
 // aufklappen (BAUPLAN 30): Sprung aus der Herkunfts-Kopfzeile einer Karte —
 // der Bericht öffnet sich und rollt ins Bild.
 function Laufbericht({ bericht, aufklappen = null }) {
@@ -839,6 +904,16 @@ function Laufbericht({ bericht, aufklappen = null }) {
               <p className="bericht-abschnitt">{tb.blockErgebnisseLabel}</p>
               {bericht.blockErgebnisse.map((eintrag, i) => (
                 <BlockErgebnisZeile key={i} eintrag={eintrag} />
+              ))}
+            </div>
+          )}
+          {/* Zusatzbauer (BAUPLAN 57): Berichte ohne das Feld (alle vor 0.58)
+              rendern unverändert — dann fehlt der Abschnitt einfach. */}
+          {(bericht.zusatzbauer ?? []).length > 0 && (
+            <div>
+              <p className="bericht-abschnitt">{tzb.label}</p>
+              {bericht.zusatzbauer.map((eintrag, i) => (
+                <ZusatzbauerZeile key={i} eintrag={eintrag} />
               ))}
             </div>
           )}

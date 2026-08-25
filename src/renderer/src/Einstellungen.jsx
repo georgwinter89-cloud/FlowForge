@@ -19,8 +19,40 @@ import {
   PRUEFKARTEN_DECKEL_LAUF_WAHL,
   PRUEFKARTEN_DECKEL_LAUF_STANDARD
 } from '../../shared/pruefkartenRegeln.js'
+import {
+  FUNDE_AUSSERHALB_STANDARD,
+  ZUSATZBAUER_MAX_STANDARD,
+  fundeAusserhalbBereinigen,
+  zusatzbauerMaxBereinigen
+} from '../../shared/blockKatalog.js'
 
 const t = texte.einstellungen
+
+// Texte des Zusatzbauer-Abschnitts (BAUPLAN 57). Sie stehen hier statt in
+// texte.einstellungen, solange die Bausession 57 parallel läuft — der
+// Integrator darf sie dorthin ziehen. Nirgends das Wort „soll": Für Georg
+// heißt das Feld „woran man erkennt, dass es behoben ist".
+const tz = {
+  ueberschrift: 'Funde außerhalb der Dateilisten',
+  erklaerung:
+    'Meldet die laufende Prüfung einen Fund an einer Stelle, die keinem Block des Laufs ' +
+    'gehört, entscheidet diese Wahl, was damit passiert.',
+  karte: 'als Karte festhalten (Standard)',
+  karteHinweis:
+    'jeder solche Fund wird eine offene Aufgaben-Karte — nichts geht verloren, der Lauf ' +
+    'bleibt wie geplant',
+  mitnehmen: 'jetzt mitnehmen',
+  mitnehmenHinweis:
+    'FlowForge setzt einen Zusatzbauer in den laufenden Lauf, wenn der Fund den Dateipfad ' +
+    'nennt und sagt, woran man erkennt, dass er behoben ist — sonst wird er eine Karte',
+  bericht: 'nur im Laufbericht nennen',
+  berichtHinweis: 'kein Zusatzbauer und keine Karte — der Fund steht nur im Laufbericht',
+  maxFeld: 'Höchstzahl Zusatzbauer je Lauf',
+  maxHinweis:
+    'Jeder Zusatzbauer macht den Lauf spürbar länger und teurer: Er läuft allein, und dazu ' +
+    'kommen seine Nacharbeits-Runden und die erneuten Abnahmen durch die prüfenden Blöcke. ' +
+    'Ist die Zahl erreicht, wird jeder weitere Fund eine Karte; 0 heißt: nie mitnehmen.'
+}
 
 // Feineinstellungen der lokalen KI (BAUPLAN 49): Eingabegrenzen je Feld für
 // die Zahlenfelder — dieselben Grenzen wie lokalFeinBereinigen im Hauptprozess
@@ -78,6 +110,11 @@ export default function Einstellungen({ onSchliessen }) {
     PRUEFKARTEN_DECKEL_MESSPUNKT_STANDARD
   )
   const [deckelLaufMs, setDeckelLaufMs] = useState(PRUEFKARTEN_DECKEL_LAUF_STANDARD)
+  // Zusatzbauer (BAUPLAN 57): was aus Funden außerhalb der Dateilisten wird,
+  // und wie viele Zusatzbauer je Lauf. Die Höchstzahl als Text, damit sich
+  // halb getippte Zahlen nicht sofort wegrunden — bereinigt wird beim Speichern.
+  const [fundeAusserhalb, setFundeAusserhalb] = useState(FUNDE_AUSSERHALB_STANDARD)
+  const [zusatzbauerMax, setZusatzbauerMax] = useState(String(ZUSATZBAUER_MAX_STANDARD))
   const [lokaleHelferAktiv, setLokaleHelferAktiv] = useState(false)
   const [lokaleHelferQuote, setLokaleHelferQuote] = useState(true)
   const [lokaleHelferModell, setLokaleHelferModell] = useState('')
@@ -129,6 +166,8 @@ export default function Einstellungen({ onSchliessen }) {
           ? Number(e.einstellungen.pruefkartenDeckelLaufMs)
           : PRUEFKARTEN_DECKEL_LAUF_STANDARD
       )
+      setFundeAusserhalb(fundeAusserhalbBereinigen(e.einstellungen.fundeAusserhalb))
+      setZusatzbauerMax(String(zusatzbauerMaxBereinigen(e.einstellungen.zusatzbauerMax)))
       setLokaleHelferAktiv(Boolean(e.einstellungen.lokaleHelferAktiv))
       setLokaleHelferQuote(e.einstellungen.lokaleHelferQuote !== false)
       setLokaleHelferModell(e.einstellungen.lokaleHelferModell ?? '')
@@ -252,6 +291,12 @@ export default function Einstellungen({ onSchliessen }) {
       // nächsten Öffnen wieder auf dem alten Wert.
       pruefkartenDeckelMesspunktMs: deckelMesspunktMs,
       pruefkartenDeckelLaufMs: deckelLaufMs,
+      // Zusatzbauer (BAUPLAN 57): Diese Liste ist handgeschrieben — ein hier
+      // vergessenes Feld ließe sich im Dialog verstellen und stünde beim
+      // nächsten Öffnen wieder auf dem alten Wert. Die Höchstzahl wird mit
+      // derselben Regel bereinigt wie im Hauptprozess (leer/Unsinn = Standard).
+      fundeAusserhalb,
+      zusatzbauerMax: zusatzbauerMaxBereinigen(zusatzbauerMax),
       lokaleHelferAktiv,
       lokaleHelferQuote,
       lokaleHelferModell,
@@ -674,6 +719,62 @@ export default function Einstellungen({ onSchliessen }) {
             </select>
             <span className="feld-hinweis">{t.pruefkartenDeckelLaufHinweis}</span>
           </label>
+        </div>
+        {/* Funde außerhalb der Dateilisten (BAUPLAN 57): drei Wege, keiner
+            heißt „ignorieren". Das Zahlenfeld erscheint nur bei „jetzt
+            mitnehmen" — sein Wert bleibt beim Speichern trotzdem erhalten. */}
+        <p className="bericht-abschnitt">{tz.ueberschrift}</p>
+        <div className="feld">
+          <span className="feld-hinweis">{tz.erklaerung}</span>
+          <label className="wahl-zeile">
+            <input
+              type="radio"
+              name="fundeAusserhalb"
+              checked={fundeAusserhalb === 'karte'}
+              onChange={() => setFundeAusserhalb('karte')}
+            />
+            <span>
+              {tz.karte}
+              <span className="feld-hinweis"> — {tz.karteHinweis}</span>
+            </span>
+          </label>
+          <label className="wahl-zeile">
+            <input
+              type="radio"
+              name="fundeAusserhalb"
+              checked={fundeAusserhalb === 'mitnehmen'}
+              onChange={() => setFundeAusserhalb('mitnehmen')}
+            />
+            <span>
+              {tz.mitnehmen}
+              <span className="feld-hinweis"> — {tz.mitnehmenHinweis}</span>
+            </span>
+          </label>
+          <label className="wahl-zeile">
+            <input
+              type="radio"
+              name="fundeAusserhalb"
+              checked={fundeAusserhalb === 'bericht'}
+              onChange={() => setFundeAusserhalb('bericht')}
+            />
+            <span>
+              {tz.bericht}
+              <span className="feld-hinweis"> — {tz.berichtHinweis}</span>
+            </span>
+          </label>
+          {fundeAusserhalb === 'mitnehmen' && (
+            <label className="feld">
+              <span>{tz.maxFeld}</span>
+              <input
+                type="number"
+                min="0"
+                step="1"
+                value={zusatzbauerMax}
+                onChange={(e) => setZusatzbauerMax(e.target.value)}
+              />
+              <span className="feld-hinweis">{tz.maxHinweis}</span>
+            </label>
+          )}
         </div>
         <p className="bericht-abschnitt">{t.uebertragUeberschrift}</p>
         <div className="feld">

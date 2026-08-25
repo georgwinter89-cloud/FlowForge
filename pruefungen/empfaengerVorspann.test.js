@@ -70,16 +70,34 @@ describe('BAUPLAN 43 · Wer nichts abgibt, bekommt das gesagt', () => {
   })
 
   it('liefert die Ursache mit, wenn Nachfahren da sind, aber keiner das Etikett will', () => {
-    // Ein Angreifer vor dem Sessionende: Der nimmt Umsetzungsbericht und
-    // Prüfbeleg — eine Angriffsliste verlangt er nicht. Genau so sieht ein
-    // vertipptes Etikett an einem selbstgebauten Block aus.
-    const eigen = [block('a', 'angreifer'), block('s', 'sessionende')]
+    // Ein Audit vor dem Sessionende: Der nimmt Umsetzungsbericht, Prüfbeleg
+    // und (seit BAUPLAN 57) optional die Angriffsliste — eine Befundliste
+    // verlangt er nicht. Genau so sieht ein vertipptes Etikett an einem
+    // selbstgebauten Block aus. (Bis Bauschritt 57 stand hier der Angreifer —
+    // dessen Angriffsliste kommt seither beim Sessionende an, siehe unten.)
+    const eigen = [block('a', 'audit'), block('s', 'sessionende')]
     const kanten = [pfeil('a', 's')]
     const lage = empfaengerLage(eigen, kanten, 'a')
     expect(lage.empfaenger).toEqual([])
     expect(lage.nachfahren.map((n) => n.name)).toEqual(['Sessionende'])
     expect(vorspannText(eigen, kanten, 'a')).toContain(
       v.keinerTrotzNachfahren(bezeichnung(2, 'Sessionende'))
+    )
+  })
+
+  it('Angriffsliste vor dem Sessionende kommt seit BAUPLAN 57 dort an — optional', () => {
+    // E16: Genau daran ist Saatkorn 3 gestorben — der Angreifer-Fund fiel aus
+    // dem Gedächtnis, weil das Sessionende die Angriffsliste nie sah.
+    const eigen = [block('a', 'angreifer'), block('s', 'sessionende')]
+    const kanten = [pfeil('a', 's')]
+    const lage = empfaengerLage(eigen, kanten, 'a')
+    expect(lage.empfaenger.map((e) => [e.etikett, e.optional])).toEqual([['Angriffsliste', true]])
+    expect(vorspannText(eigen, kanten, 'a')).toContain(
+      v.empfaengerOptional(
+        bezeichnung(2, 'Sessionende'),
+        'Angriffsliste',
+        blockDefinition('sessionende').brauchtWozu.Angriffsliste
+      )
     )
   })
 })
@@ -405,7 +423,9 @@ describe('BAUPLAN 43 · Der Tippfehler-Hinweis zählt, statt alles aufzuzählen'
 
   it('lässt kurze Listen unangetastet', () => {
     // Zwei Nachfahren: Beide gehören genannt — ein „und 0 weitere" wäre Unsinn.
-    const kurz = [block('a', 'angreifer'), block('s1', 'sessionende', 'A'), block('s2', 'sessionende', 'B')]
+    // Audit statt Angreifer (seit BAUPLAN 57): Die Angriffsliste hat am
+    // Sessionende jetzt einen optionalen Abnehmer, die Befundliste nicht.
+    const kurz = [block('a', 'audit'), block('s1', 'sessionende', 'A'), block('s2', 'sessionende', 'B')]
     const kanten = [pfeil('a', 's1'), pfeil('s1', 's2')]
     expect(vorspannText(kurz, kanten, 'a')).toContain(
       v.keinerTrotzNachfahren(
@@ -443,10 +463,12 @@ describe('BAUPLAN 43 · Wer gar keine Etiketten hat, wird nicht auf Tippfehler-S
   })
 
   it('lässt den Tippfehler-Hinweis dort stehen, wo er hingehört', () => {
-    // Derselbe Block-Typ, aber MIT Etiketten: Ein Angreifer vor dem Sessionende
-    // liefert eine Angriffsliste, die dort niemand verlangt — genau der Fall,
+    // Derselbe Block-Typ, aber MIT Etiketten: Ein Audit vor dem Sessionende
+    // liefert eine Befundliste, die dort niemand verlangt — genau der Fall,
     // für den der Satz gedacht ist (selbstgebaute Blöcke, vertipptes Etikett).
-    const eigen = [block('a', 'angreifer'), block('s', 'sessionende')]
+    // (Angreifer taugt seit BAUPLAN 57 nicht mehr als Beispiel: Seine
+    // Angriffsliste kommt am Sessionende an.)
+    const eigen = [block('a', 'audit'), block('s', 'sessionende')]
     const kanten = [pfeil('a', 's')]
     expect(vorspannText(eigen, kanten, 'a')).toContain(
       v.keinerTrotzNachfahren(bezeichnung(2, 'Sessionende'))

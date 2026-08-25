@@ -249,8 +249,12 @@ function stempeln(karte, herkunft, jetzt, { neu = false } = {}) {
   }
 }
 
+// Liefert im Erfolgsfall zusätzlich die id der neuen Karte (Bauschritt 57):
+// Der Zusatzbauer-Weg muss „seine" Karte später abhaken und wieder öffnen
+// können. Bestehende Aufrufer lesen das Feld schlicht nicht.
 export function karteAnlegen(projektPfad, { sorte, titel, text, thema }, herkunft = HERKUNFT_NUTZER) {
-  return mitKarten(projektPfad, (karten) => {
+  let neueId = null
+  const ergebnis = mitKarten(projektPfad, (karten) => {
     // Prüfkarten legt nur FlowForge selbst an (BAUPLAN 18).
     if (sorte === 'pruefung')
       return { ok: false, fehler: texte.kartenRegeln.pruefkarteNurFlowForge }
@@ -274,7 +278,9 @@ export function karteAnlegen(projektPfad, { sorte, titel, text, thema }, herkunf
     }
     stempeln(karte, herkunft, jetzt, { neu: true })
     karten.push(karte)
+    neueId = karte.id
   })
+  return ergebnis.ok ? { ...ergebnis, id: neueId } : ergebnis
 }
 
 // thema: undefined = unverändert lassen; '' = (nur bei Karten ohne Thema

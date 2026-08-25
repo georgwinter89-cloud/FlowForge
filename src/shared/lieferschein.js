@@ -63,6 +63,23 @@ export const EINSTUFUNGEN = ['mechanisch', 'grundsaetzlich']
 export const URTEILE = ['bestanden', 'fehlgeschlagen']
 export const SCHWEREN = ['hoch', 'mittel', 'niedrig']
 export const DATEI_ARTEN = ['neu', 'geaendert', 'geloescht']
+// Urteil über das „woran man erkennt, dass es behoben ist" eines Zusatzbauers
+// (BAUPLAN 57) — bewusst eigene Werte neben URTEILE: Das Paket-Urteil und die
+// zusatzUrteile dürfen einander nie ersetzen oder kippen.
+export const ZUSATZ_URTEILE = ['erfüllt', 'verfehlt']
+
+// Klartexte der zusatzUrteile-Abweisung (BAUPLAN 57). Sie stehen hier statt in
+// texte.js, solange die Bausession 57 parallel läuft — der Integrator darf sie
+// nach texte.lieferschein ziehen.
+export const ZUSATZ_URTEIL_TEXTE = {
+  fundpfadFehlt:
+    'Jedes zusatzUrteil braucht den fundpfad aus deinem Auftrag — ohne ihn kann FlowForge ' +
+    'das Urteil keinem Zusatzbauer zuordnen.',
+  urteilFehlt: `Jedes zusatzUrteil braucht ein urteil: ${ZUSATZ_URTEILE.join(' oder ')}.`,
+  belegFehlt:
+    'Ein zusatzUrteil ohne beleg ist nicht prüfbar — schreibe ins Feld beleg, woran du das ' +
+    'Urteil gemessen hast (kurz zitiert). Das Feld ist Pflicht.'
+}
 
 // Der Teil eines Etiketts: fest aus dem Katalog — oder, seit der Etiketten-
 // Bibliothek (BAUPLAN 48), ein eigenes Etikett MIT Feldern: Es trägt sein
@@ -823,6 +840,24 @@ function pruefbelegPruefen(roh) {
     return { fehler: tl.urteilOhneBeanstandung }
   if (urteil === 'bestanden' && beanstandungen.length > 0)
     return { fehler: tl.bestandenMitBeanstandung }
+  // zusatzUrteile (BAUPLAN 57): je Zusatzbauer ein eigenes Urteil über sein
+  // „woran man erkennt, dass es behoben ist" — ausdrücklich AUSSERHALB der
+  // Urteil/Beanstandungs-Kopplung oben: „bestanden" MIT verfehltem zusatzUrteil
+  // ist gültig, sonst fiele das Paket durch und die Reparatur ginge an den
+  // ausgesperrten Bauer statt an den Zusatzbauer. Der Beleg ist Pflicht —
+  // hier in Ebene 2 mit Klartext (Muster kurzname), denn der übrige Nachweis
+  // ist nirgends erzwungen: „derselbe Nachweis wie sonst" hieße keiner.
+  const zusatzUrteile = []
+  for (const eintrag of Array.isArray(roh?.zusatzUrteile) ? roh.zusatzUrteile : []) {
+    const fundpfad = einzeilig(eintrag?.fundpfad)
+    const zusatzUrteil = String(eintrag?.urteil ?? '').trim().toLowerCase()
+    const beleg = einzeilig(eintrag?.beleg)
+    if (!fundpfad && !zusatzUrteil && !beleg) continue
+    if (!fundpfad) return { fehler: ZUSATZ_URTEIL_TEXTE.fundpfadFehlt }
+    if (!ZUSATZ_URTEILE.includes(zusatzUrteil)) return { fehler: ZUSATZ_URTEIL_TEXTE.urteilFehlt }
+    if (!beleg) return { fehler: ZUSATZ_URTEIL_TEXTE.belegFehlt }
+    zusatzUrteile.push({ fundpfad, urteil: zusatzUrteil, beleg })
+  }
   const rotVorGruen = freierText(roh?.rotVorGruen, false)
   const geprueft = zeilenListe(roh?.geprueft)
   // Prüfkarte: dieselben harten Längengrenzen wie für jede andere Karte —
@@ -845,7 +880,8 @@ function pruefbelegPruefen(roh) {
       beanstandungen,
       rotVorGruen,
       geprueft,
-      pruefkarte
+      pruefkarte,
+      zusatzUrteile
     }
   }
 }
@@ -888,7 +924,12 @@ function fundePruefen(roh) {
     const schwere = String(eintrag?.schwere ?? '').trim().toLowerCase()
     if (!SCHWEREN.includes(schwere)) return { fehler: tl.schwereFehlt(SCHWEREN) }
     const fundort = einzeilig(eintrag?.fundort)
-    funde.push({ schwere, text, fundort })
+    // soll (BAUPLAN 57): der prüfbare Satz, woran man erkennt, dass der Fund
+    // behoben ist — bewusst optional, ohne Abweisung: Ein erzwungenes
+    // Freitextfeld würde mit Brei gefüllt; leer heißt ehrlich „nur als
+    // Aufgaben-Karte übernehmen".
+    const soll = einzeilig(eintrag?.soll)
+    funde.push({ schwere, text, fundort, soll })
   }
   // Eine leere Fundliste ist ein gutes Ergebnis, kein Fehler — der Auftrag
   // verlangt ausdrücklich Ehrlichkeit statt erfundener Funde.

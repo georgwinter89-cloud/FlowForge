@@ -317,9 +317,11 @@ describe('Quelltext-Zusicherungen: die Messung hängt an jeder Schließstelle', 
   it('diffBasis bleibt unangetastet — die Messung läuft über basisId je Anlauf', () => {
     // Kein neuer Schreibzugriff auf k.diffBasis durch die Messung: Die
     // einzigen Zuweisungen sind die bestehenden (erster Start, Prüfer-Reset,
-    // Wiederaufnahme).
+    // Wiederaufnahme) plus der Prüfer-Reset der Zusatzbauer-Nachprüfung
+    // (Bauschritt 57, E9) — derselbe „seit meinem Urteil"-Reset, nur für das
+    // erneute soll-Urteil nach der Nacharbeit des Zusatzbauers.
     const zuweisungen = laufQuelle.match(/k\.diffBasis = |nk\.diffBasis = /g) ?? []
-    expect(zuweisungen.length).toBeLessThanOrEqual(3)
+    expect(zuweisungen.length).toBeLessThanOrEqual(4)
     expect(laufQuelle).not.toMatch(/umsetzungNachmessenFuer[\s\S]{0,3000}\.diffBasis\s*=/)
   })
 })

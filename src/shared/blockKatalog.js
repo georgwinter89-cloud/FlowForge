@@ -538,7 +538,20 @@ export const BLOCK_KATALOG = [
       'Abhängigkeiten; Rand- und Fehlerfällen; Konflikten mit bestehendem Verhalten. ' +
       PRUEFMAPPE_HINWEIS +
       'Deine Meldung ist die Angriffsliste: je Fund ein Eintrag mit ein bis zwei ' +
-      'Sätzen, Schwere und Fundort (Datei), nach Gefahr sortiert. Findest du nach gründlicher ' +
+      'Sätzen, Schwere und Fundort — nenne im Fundort den Dateipfad —, nach Gefahr sortiert. ' +
+      // soll (BAUPLAN 57): Der Agent bekommt einen Grund, das Feld ehrlich leer
+      // zu lassen — ein erzwungenes Freitextfeld würde mit Brei gefüllt.
+      'Kannst du in einem prüfbaren Satz sagen, woran man erkennt, dass ein Fund behoben ' +
+      'ist, schreib ihn in dessen Feld soll; kannst du es nicht, lass das Feld leer — der ' +
+      'Fund wird dann als Aufgabe ins Projektgedächtnis übernommen statt sofort repariert. ' +
+      // Gemessen (P2, 25.08.2026): In 2 von 3 Läufen verschwieg der Angreifer
+      // einen Defekt, weil er schon im Arbeitspaket erwähnt oder ein
+      // Karten-Vorschlag dazu abgelehnt worden war — mechanisch existierte der
+      // Fund damit nie, und weder Karte noch Zusatzbauer entstanden.
+      'Melde auch Defekte als Fund, die im Arbeitspaket, in Karten oder in abgelehnten ' +
+      'Vorschlägen schon erwähnt sind — nur deine Angriffsliste erreicht die Mechanik, die ' +
+      'sie behebt oder festhält; eine Erwähnung anderswo tut es nicht. ' +
+      'Findest du nach gründlicher ' +
       'Suche nichts, melde ehrlich eine leere Fundliste — erfinde keine Funde.'
   },
   {
@@ -1149,13 +1162,21 @@ export const BLOCK_KATALOG = [
     beschreibung:
       'Bringt das Projektgedächtnis auf Stand: Status-Karte aktualisieren, Erledigtes abhaken, Offenes festhalten — und deckt den Tisch für den nächsten Lauf.',
     braucht: ['Umsetzungsbericht', 'Prüfbeleg'],
+    // Angriffsliste optional (BAUPLAN 57, E16): Genau daran ist Saatkorn 3
+    // gestorben — ein Angreifer-Fund fiel aus dem Gedächtnis, weil das
+    // Sessionende die Angriffsliste nie zu sehen bekam. FlowForge hakt selbst
+    // ab, was ein Zusatzbauer erledigt hat; vergleichen muss der Block nichts.
+    brauchtOptional: ['Angriffsliste'],
     brauchtWozu: {
       Umsetzungsbericht:
         'hakt daran die erledigten Aufgaben-Karten ab und schreibt die Status-Karte fort — ' +
         'nenne klar, was wirklich fertig wurde und was offen blieb',
       'Prüfbeleg':
         'schreibt das Prüfungs-Ergebnis in die Status-Karte und hält offene Beanstandungen ' +
-        'als Aufgaben fest — Urteil und Beanstandungen gehören deshalb unverkürzt hinein'
+        'als Aufgaben fest — Urteil und Beanstandungen gehören deshalb unverkürzt hinein',
+      Angriffsliste:
+        'übernimmt unerledigte Funde als Aufgaben-Karten — FlowForge hakt selbst ab, was ' +
+        'schon behoben ist; je Fund braucht er Schwere und Fundort'
     },
     liefert: [],
     nurLesen: false,
@@ -1556,4 +1577,200 @@ export function blockKategorie(def) {
   if (def.prueft) return 'pruefer'
   if (def.nurLesen) return 'leser'
   return 'bauer'
+}
+
+// ——— Zusatzbauer (BAUPLAN 57) ————————————————————————————————————————————————
+// Ein Fund außerhalb der Dateilisten mit fundpfad und „woran man erkennt, dass
+// es behoben ist" bekommt einen Zusatzbauer im laufenden Lauf. Die Definitionen
+// hier sind INTERN — bewusst kein Katalog-Eintrag: Der Zusatzbauer steht nie in
+// der Palette und nie in workflow.json; der Lauf verankert die Definition nach
+// dem Muster der Sonderläufe direkt am Knoten (k.def).
+
+// Was aus einem Fund außerhalb der Dateilisten wird: 'karte' hält ihn als
+// offene Aufgaben-Karte fest, 'mitnehmen' setzt einen Zusatzbauer in den Lauf,
+// 'bericht' nennt ihn nur im Laufbericht. Werte und Bereinigung wohnen an
+// EINEM Ort (die 0.51.3-Lehre): Einstellungen-Dialog und einstellungenSpeichern
+// ziehen beide hierher — sonst bietet der eine an, was der andere still
+// zurückdreht.
+export const FUNDE_AUSSERHALB_WAHL = ['karte', 'mitnehmen', 'bericht']
+export const FUNDE_AUSSERHALB_STANDARD = 'karte'
+export const ZUSATZBAUER_MAX_STANDARD = 1
+
+export function fundeAusserhalbBereinigen(roh) {
+  return FUNDE_AUSSERHALB_WAHL.includes(roh) ? roh : FUNDE_AUSSERHALB_STANDARD
+}
+
+// Höchstzahl Zusatzbauer je Lauf: ganze Zahl ≥ 0 (0 = nie mitnehmen), ohne
+// Deckel nach oben — die Beschriftung im Dialog sagt ehrlich, was jede weitere
+// Zahl kostet (Nacharbeits-Runden, erneute Abnahmen).
+export function zusatzbauerMaxBereinigen(roh) {
+  // Leer ist NICHT die Zahl 0: Number('') und Number(null) wären 0 — ein leer
+  // gelassenes Feld hieße dann still „nie mitnehmen" statt Standard.
+  if (roh == null || String(roh).trim() === '') return ZUSATZBAUER_MAX_STANDARD
+  const zahl = Number(roh)
+  return Number.isInteger(zahl) && zahl >= 0 ? zahl : ZUSATZBAUER_MAX_STANDARD
+}
+
+const zusatzZeile = (wert) => String(wert ?? '').replace(/\s+/g, ' ').trim()
+
+// Die Fundstelle im Auftragstext: der Freitext-Fundort, dazu der normalisierte
+// fundpfad, wenn der Fundort ihn nicht ohnehin wörtlich trägt.
+function zusatzFundstelle(fundort, fundpfad) {
+  const ort = zusatzZeile(fundort)
+  const pfad = zusatzZeile(fundpfad)
+  if (!pfad || ort.toLowerCase().includes(pfad.toLowerCase())) return ort || pfad
+  return ort ? `${ort} (Datei: ${pfad})` : pfad
+}
+
+// Der Zusatzbauer: ein Umsetzer mit genau EINEM Fertig-Kriterium — dem soll
+// seines Funds. Er läuft ohne Dateiliste (Entscheidung Georg, 24.08.2026:
+// Kontrolle später statt früher — der Bericht nennt die gemessene Dateizahl,
+// der prüfende Block sieht den ungefilterten Diff). braucht bleibt leer (ein
+// Pflicht-Etikett zöge meldungVollstaendig/fehlendeLieferungen nach sich); die
+// Angriffsliste eines vorgeschalteten Zusatz-Angreifers kommt als OPTIONALER
+// Bedarf an — nur für Etiketten aus braucht/brauchtOptional bildet
+// uebergabenAuswahl überhaupt eine Übergabe-Gruppe.
+export function zusatzbauerDefinition({ soll, fundort, fundpfad, melderName, schwere }) {
+  const melder = zusatzZeile(melderName) || 'einem prüfenden Block'
+  // Die Schweren-Werte wörtlich statt lieferschein.SCHWEREN: Diese Datei darf
+  // lieferschein.js nicht importieren (Kreis über kettenRegeln.js) — eine
+  // Prüfung hält beide Mengen gleich (Muster FESTE_ETIKETTEN).
+  const schwereText = ['hoch', 'mittel', 'niedrig'].includes(schwere)
+    ? ` (Schwere: ${schwere})`
+    : ''
+  return {
+    id: 'zusatzbauer',
+    modell: 'standard',
+    name: 'Zusatzbauer',
+    symbol: '🧩',
+    beschreibung:
+      'Behebt einen gemeldeten Fund außerhalb der Dateilisten — entsteht im Lauf, nicht im Schaubild.',
+    braucht: [],
+    brauchtOptional: ['Angriffsliste'],
+    brauchtWozu: {
+      Angriffsliste:
+        'nimmt deine Funde als Arbeitsgrundlage für seinen Fix — jeder Fund braucht Schwere ' +
+        'und Fundort'
+    },
+    liefert: ['Umsetzungsbericht'],
+    nurLesen: false,
+    prueft: false,
+    uebung: false,
+    bereich: 'bauen',
+    felder: [],
+    auftrag:
+      'Du bist der Zusatzbauer: Du behebst genau EINEN gemeldeten Fund — nicht mehr und ' +
+      'nicht weniger. Antworte auf Deutsch. ' +
+      `Der Fund stammt von ${melder}${schwereText}. ` +
+      `Fundstelle: ${zusatzFundstelle(fundort, fundpfad)}. ` +
+      'Woran man erkennt, dass es behoben ist — dein EINZIGES Fertig-Kriterium:\n' +
+      zusatzZeile(soll) +
+      '\n' +
+      'Liegt dir eine Angriffsliste zu diesem Fix vor, arbeite sie von Anfang an ein: Räume ' +
+      'jeden Fund aus oder begründe, warum er diesen Fix nicht trifft. ' +
+      'Halte dich an Stil und Aufbau des bestehenden Codes und bleibe im Projektordner. ' +
+      'Ändere nur, was für diesen Fix nötig ist — keine Umbauten nebenbei: Der Bericht ' +
+      'nennt jede Datei, die du angefasst hast, und ein prüfender Block darf jede Änderung ' +
+      'beanstanden. ' +
+      'Projektkarten sind nicht dein Gegenstand: FlowForge pflegt sie über eigene Blöcke — ' +
+      'du fasst sie nicht an. Die Prüfmappe im Ordner pruefung/ gehört den Prüf-Blöcken: Du ' +
+      'änderst dort nie etwas (das ist gesperrt) — hältst du eine Prüfung für falsch, ' +
+      'schreibe das ins Feld anmerkung deiner Meldung. ' +
+      PRUEFMAPPE_HINWEIS +
+      'Prüfen ist nicht deine Aufgabe: Kontrolliere deine Arbeit mit eigenen Prüfungen, ' +
+      'bevor du meldest. Eigene Hilfsskripte und Probedateien legst du im Ordner ' +
+      'arbeitsablage/ ab — FlowForge leert ihn nach dem Lauf von selbst. ' +
+      'Deine Meldung ist der Umsetzungsbericht, und gemessen wird deine Arbeit ' +
+      'AUSSCHLIESSLICH an dem Satz oben: kriterien (genau dieser Satz und wie du ihn ' +
+      'erfüllt hast), dateien (jede angelegte, geänderte oder gelöschte Datei mit ihrer ' +
+      'Art), angriffsliste (falls es eine gab: je Fund, wie du ihn ausgeräumt hast oder ' +
+      'warum er diesen Fix nicht trifft) und offen (was du bewusst nicht getan hast).'
+  }
+}
+
+// Der vorgeschaltete Zusatz-Angreifer (nur bei Fundschwere 'hoch'): nur lesend,
+// greift den GEPLANTEN Fix an, bevor der Zusatzbauer baut. Seine Angriffsliste
+// erreicht den Zusatzbauer über die normale Übergabe-Maschinerie.
+export function zusatzAngreiferDefinition({ soll, fundort, fundpfad, melderName }) {
+  const melder = zusatzZeile(melderName) || 'einem prüfenden Block'
+  return {
+    id: 'zusatz-angreifer',
+    modell: 'standard',
+    name: 'Zusatz-Angreifer',
+    symbol: '⚔️',
+    beschreibung:
+      'Greift den geplanten Fix eines schweren Fundes an, bevor gebaut wird. Darf nichts verändern.',
+    braucht: [],
+    liefert: ['Angriffsliste'],
+    nurLesen: true,
+    prueft: false,
+    uebung: false,
+    bereich: 'pruefen',
+    felder: [],
+    auftrag:
+      'Du greifst einen GEPLANTEN Fix an, BEVOR gebaut wird. Antworte auf Deutsch. ' +
+      `Der zugrunde liegende Fund stammt von ${melder}. ` +
+      `Fundstelle: ${zusatzFundstelle(fundort, fundpfad)}. ` +
+      'Woran man erkennen soll, dass der Fund behoben ist:\n' +
+      zusatzZeile(soll) +
+      '\n' +
+      'Du darfst nichts verändern — nur lesen: Rein lesende Befehle (Ordner auflisten, ' +
+      'suchen, Dateien ansehen) laufen durch; ' +
+      BEFEHLS_SPERRE_SATZ +
+      ' Lies die Fundstelle und ihre direkte Nachbarschaft (was sie aufruft, was sie ' +
+      'verwenden) — nicht das ganze Projekt. Suche gezielt nach Rand- und Variantenfällen ' +
+      'rund um den Satz oben: Annahmen, die nicht stimmen; Stellen, die mitgeändert werden ' +
+      'müssen; versteckte Abhängigkeiten; Konflikte mit bestehendem Verhalten. ' +
+      PRUEFMAPPE_HINWEIS +
+      'Deine Meldung ist die Angriffsliste: je Fund ein Eintrag mit ein bis zwei Sätzen, ' +
+      'Schwere und Fundort — nenne im Fundort den Dateipfad —, nach Gefahr sortiert. ' +
+      'Findest du nach gründlicher Suche nichts, melde ehrlich eine leere Fundliste — ' +
+      'erfinde keine Funde.'
+  }
+}
+
+// Die benannte Ausnahme für prüfende Blöcke (BAUPLAN 57, E8): je Zusatzbauer
+// sein „woran man erkennt, dass es behoben ist" mit der Pflicht, es in
+// zusatzUrteile zu beantworten — ausdrücklich AUSSERHALB des Paket-Urteils —,
+// dazu seine GEMESSENE Dateiliste als Ausnahme für Grenz-Kriterien. Der Diff
+// bleibt ungefiltert: Beanstanden darf der Prüfende jede Änderung trotzdem.
+// `zusatzbauerListe`: je Eintrag { name, melderName, soll, fundpfad, dateien,
+// urteilen } — urteilen: false heißt: ein früherer Prüfender urteilt schon über
+// das soll; dieser Block bekommt nur die Datei-Ausnahme (E8).
+export function zusatzAusnahmeTextFuerPruefer({ zusatzbauerListe }) {
+  const liste = Array.isArray(zusatzbauerListe) ? zusatzbauerListe : []
+  if (liste.length === 0) return ''
+  const teile = [
+    // Mit Absatz davor — der Text wird hinter andere Auftrags-Zusätze gehängt.
+    '\n\nBENANNTE AUSNAHMEN — Arbeit von Zusatzbauern dieses Laufs. Sie ist KEIN Teil deines ' +
+      'Arbeitspakets: Dein Urteil im Feld urteil bleibt davon unberührt, egal wie die ' +
+      'Ausnahmen ausgehen.'
+  ]
+  for (const z of liste) {
+    const name = zusatzZeile(z?.name) || 'Zusatzbauer'
+    const melder = zusatzZeile(z?.melderName)
+    const fundpfad = zusatzZeile(z?.fundpfad)
+    const dateien = (Array.isArray(z?.dateien) ? z.dateien : []).map(zusatzZeile).filter(Boolean)
+    const urteilsPflicht =
+      z?.urteilen === false
+        ? 'Über das soll urteilt ein anderer prüfender Block dieses Laufs — melde dazu KEIN zusatzUrteil. '
+        : 'Beurteile GENAU diesen Satz und melde dein Urteil PFLICHTGEMÄSS im Feld ' +
+          // „erfüllt oder verfehlt" wörtlich statt lieferschein.ZUSATZ_URTEILE:
+          // kein Import möglich (Kreis, siehe oben) — die Prüfung hält die
+          // Werte mit lieferschein.js gleich.
+          `zusatzUrteile deines Prüfbelegs: ein Eintrag mit fundpfad „${fundpfad}", urteil ` +
+          '(erfüllt oder verfehlt) und beleg (Pflicht — woran du es gemessen ' +
+          'hast, kurz zitiert). Es gehört NICHT ins Feld urteil und NICHT in die ' +
+          'Beanstandungen deines Pakets. '
+    teile.push(
+      `— ${name}${melder ? ` (aus einem Fund von ${melder})` : ''}, fundpfad: ${fundpfad}. ` +
+        `Woran man erkennt, dass es behoben ist: ${zusatzZeile(z?.soll)} ` +
+        urteilsPflicht +
+        `Diese ${dateien.length} ${dateien.length === 1 ? 'Datei hat' : 'Dateien hat'} der ` +
+        'Zusatzbauer geändert — sie zählen nicht gegen Grenz-Kriterien deines Pakets ' +
+        '(„keine Datei unter … verändert"), beanstanden darfst du jede Änderung trotzdem' +
+        (dateien.length ? `: ${dateien.join(' · ')}` : '.')
+    )
+  }
+  return teile.join('\n')
 }

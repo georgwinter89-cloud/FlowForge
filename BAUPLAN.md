@@ -15,8 +15,8 @@ gehört repariert (der Rückstand aus 14 — eigene Blöcke durften nur `nurLese
 `fuehrtZusammen` setzen — ist seit Schritt 48 aufgeholt; einzig `uebung` bleibt Katalog-Sache,
 weil es kein Können ist, sondern „Demo-Block").
 
-**Abgeschlossen sind die Bauschritte 1–56** (39 wurde gestrichen); der jüngste Commit
-ist „Bauschritt 56". Davon sind die Schritte **1–49 ausgelagert** ins
+**Abgeschlossen sind die Bauschritte 1–57** (39 wurde gestrichen); der jüngste Commit
+ist „Bauschritt 57". Davon sind die Schritte **1–49 ausgelagert** ins
 [BAUPLAN-ARCHIV.md](BAUPLAN-ARCHIV.md) — Verweise wie „BAUPLAN 19" oder „BAUPLAN 44"
 zeigen dorthin. Hier stehen die fertigen Schritte 50–55 und alles Offene ab 56.
 
@@ -1134,6 +1134,56 @@ das erkennt, wer es geurteilt hat und wie viele Dateien angefasst wurden. Gegenp
 eins: Dieselbe Kette mit Einstellung „als Karte" — nichts wird gebaut, die Karte bleibt
 offen. Gegenprobe zwei: Dieselbe Kette, aber die fehlerhafte Datei **steht** in der
 Dateiliste des Bauers — dann darf kein Zusatzbauer entstehen.
+
+- **Gebaut (25.08.2026, Version 0.58.0):** Wie geplant, ohne neue Motor-Mechanik —
+  aber auf frisch vermessenen Ankern: Die Angriffsliste (21 Funde, 6 blockierend)
+  wies nach, dass fast alle Zeilenanker des Entwurfs veraltet waren und fünf
+  Mechanik-Fragen VOR den Verträgen entschieden werden mussten. Die Entscheidungen:
+  Zusatz-Knoten leben nur im Lauf (eigenes, tolerant gelesenes Laufstand-Feld
+  `zusatzbauer`; kettenIds/zusaetze/fertigIds bleiben der reine Vergleichsanker der
+  Wiederaufnahme — die belebt einen nicht fertigen Zusatzbauer NICHT wieder, Karte
+  bleibt offen, Ticker sagt es); eine zentrale `zusatzKnotenRegistrieren` befüllt
+  alle acht per-id-Maps des Planers und hängt den Zusatzbauer als Vorgänger in jeden
+  prüfenden Block hinter dem Melder (der Prüfer gewinnt sonst das Startrennen und
+  urteilte vor dem Fix); der Strang wird per Knoten-Flag vom Wirkbereich entkoppelt,
+  der Rückroll-eigenerBereich ist die GEMESSENE Dateiliste; die Fundstelle wird als
+  reine Funktion `fundpfadAus` aus dem Freitext-Fundort gezogen (URLs/Schemata
+  zählen nicht — Prüfer-1-Fund); „darf anfassen" verlangt einen Umsetzer MIT
+  Arbeitspaket-Bedarf (sonst zählte das Sessionende als „darf alles" und kein Fund
+  bekäme je einen Zusatzbauer). Wellenregel unangetastet — sie trägt „läuft allein"
+  schon. Interne Blockdefinitionen (kein Katalog, keine Palette), zusatzUrteile mit
+  Beleg-Pflicht in Ebene 2 außerhalb der Urteil/Beanstandungs-Kopplung, Einstellungen
+  nach dem Geduld-Muster, Sessionende mit brauchtOptional Angriffsliste (Loch 2 auch
+  ohne Zusatzbauer zu). Reihenfolge im Bericht: JEDER Fund steht mit seinem Weg im
+  Laufbericht (zusatzbauer/karte/bericht/normal/vorhanden), gleiche Fundstelle bekommt
+  keine zweite Karte.
+- **Messwerte der Bausession (25.08.2026, 1 Angreifer, 2 Bauer mit Vertrag, 2 Prüfer,
+  Integrator):** Prüfer 1 (Mechanik, 41 Wegwerf-Prüfungen am echten Ablaufplaner):
+  0 blockierend, 2 wichtig, 4 klein — nachgearbeitet: URLs als Schein-Fundpfad,
+  `vorhanden`-Funde fehlten im Bericht, Duplikat-Karten beim Melder-Wiederanlauf,
+  fehlender Absatz vor den benannten Ausnahmen; dazu eine Integrationslücke
+  (Renderer stellte Karten-Weg-Funde als volle Zusatzbauer-Gruppe mit „null" dar —
+  jetzt schlanke Fund-Zeile). Prüfer 2 (Ende-zu-Ende, gebaute App, CDP, eigener
+  Datenordner, echter Abo-Motor): Alltagstest in allen drei Teilen bestanden —
+  Kernlauf 593 s/2,63 $ (Fund Schwere hoch → Zusatz-Angreifer 140 s davor, Fix
+  gemessen richtig, Prüfer wartete und urteilte in zusatzUrteile getrennt vom
+  bestandenen Paket, Karte sofort da und am Ende abgehakt, Berichtstab zeigt alles);
+  Gegenproben „als Karte" (Karte offen, nichts gebaut) und „Datei in der Liste"
+  (kein Zusatzbauer, normaler Weg) bestanden; workflow.json unberührt, „Block n von
+  5" trotz 7 gelaufener Blöcke. Zwei wichtige P2-Befunde nachgearbeitet:
+  (a) **Der Auslöser ist zerbrechlich** — in 2 von 3 Anläufen verschwieg der
+  Angreifer einen im Paket schon erwähnten oder per abgelehntem Vorschlag bekannten
+  Defekt (`funde: []` → mechanisch existiert der Fund nie); der Angreifer-Auftrag
+  sagt jetzt ausdrücklich, dass auch bekannte Defekte als Fund gehören. (b) Zusatz-
+  Knoten liefen still auf Opus (39 % der Laufkosten einer sparsam-Kette) — sie
+  **erben jetzt die Modellklasse des Melders** (Regel-Prüfung misst es).
+  Bewusst offen (klein): Der Zweig-Rückroll-Ast des Karten-Wiederöffnens ist
+  strukturell schwer erreichbar und ungemessen (die Karten-Wahrheit hielt in beiden
+  feindlichen Rückroll-Messungen); die Wiederaufnahme mit nicht fertigem Zusatzbauer
+  ist regel-, nicht laufgeprüft; der neue Angreifer-Satz gegen das Verschweigen ist
+  ein Auftragssatz und damit ungemessen (bekannte Grenze seit dem Zugsimulator);
+  „erster prüfender Block" zählt in Ketten-Reihenfolge, bei parallelen Prüf-Zweigen
+  nicht zwingend der zuerst laufende. 1834 Prüfungen grün.
 
 ### 58 — Der wartende Prüfer: Zusatzbauer auch für Funde des Prüfers
 *(Version **0.59.0**.)*

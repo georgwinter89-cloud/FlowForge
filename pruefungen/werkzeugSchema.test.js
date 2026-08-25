@@ -78,6 +78,21 @@ describe('Werkzeug-Server lassen sich wirklich bauen (BAUPLAN 50)', () => {
     await pruefbefehlWerkzeugServer({ projektPfad: 'x', aufEreignis: () => {} })
     const { lieferscheinWerkzeugServer } = await import('../src/main/motor/lieferscheinWerkzeuge.js')
     await lieferscheinWerkzeugServer({ werkzeuge: [], holeBlock: () => null, aufMeldung: leer })
+    // Mit ALLEN festen Melde-Werkzeugen (BAUPLAN 57): Erst hier werden die
+    // Teil-Schemata wirklich konstruiert — ein kaputtes Feld (soll,
+    // zusatzUrteile) würfe beim Aufbau, nicht erst im Lauf.
+    await lieferscheinWerkzeugServer({
+      werkzeuge: [
+        'melde_ergebnis',
+        'melde_arbeitspaket',
+        'melde_pruefbeleg',
+        'melde_umsetzungsbericht',
+        'melde_angriffsliste',
+        'melde_befundliste'
+      ],
+      holeBlock: () => null,
+      aufMeldung: leer
+    })
     const { vorschlagWerkzeugServer } = await import('../src/main/motor/vorschlagWerkzeuge.js')
     await vorschlagWerkzeugServer({ projektPfad: 'x', aufKartenVorschlag: leer })
     const { laufVorschlagWerkzeugServer } = await import('../src/main/motor/laufVorschlagWerkzeuge.js')

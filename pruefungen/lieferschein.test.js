@@ -23,7 +23,9 @@ import {
   beanstandungenAusMeldungen,
   beanstandungenEinstufen,
   pruefkarteAusMeldungen,
-  dateilistenUeberschneidung
+  dateilistenUeberschneidung,
+  ZUSATZ_URTEILE,
+  ZUSATZ_URTEIL_TEXTE
 } from '../src/shared/lieferschein.js'
 import { blockDefinition, BLOCK_KATALOG } from '../src/shared/blockKatalog.js'
 import { pruefeWerkzeug } from '../src/main/motor/claudeCodeMotor.js'
@@ -472,5 +474,117 @@ describe('BAUPLAN 46 · Überschneidung zweier Dateilisten', () => {
     expect(dateilistenUeberschneidung(['Makefile'], ['Makefile/x.txt']).ueberschneidet).toBe(true)
     expect(dateilistenUeberschneidung(['Makefile'], ['Makefile']).ueberschneidet).toBe(true)
     expect(dateilistenUeberschneidung(['Makefile'], ['Makefile.bak']).ueberschneidet).toBe(false)
+  })
+})
+
+// BAUPLAN 57: der Zusatzbauer-Weg am Lieferschein — das soll am Fund und die
+// zusatzUrteile im Prüfbeleg. Rot vor Grün: Vor dem Bauschritt kannte
+// fundePruefen kein soll (das Feld fiel stumm weg) und pruefbelegPruefen kein
+// zusatzUrteile; ZUSATZ_URTEILE existierte nicht (Import undefined).
+describe('BAUPLAN 57 · soll am Fund und zusatzUrteile im Prüfbeleg', () => {
+  it('nimmt das soll am Fund an und reicht es einzeilig durch', () => {
+    const ergebnis = meldungPruefen(
+      'funde',
+      {
+        ...rahmen,
+        funde: [
+          {
+            text: 'aufgabenRotieren() hebelt die Entscheidungs-Karte aus.',
+            schwere: 'hoch',
+            fundort: 'js/daten/aufgaben.js',
+            soll: '  Jede   Rotation legt je Aufgabe\neine eigene Karte an. '
+          }
+        ]
+      },
+      'Angriffsliste'
+    )
+    expect(ergebnis.fehler).toBeUndefined()
+    expect(ergebnis.meldung.funde[0].soll).toBe('Jede Rotation legt je Aufgabe eine eigene Karte an.')
+  })
+
+  it('lässt das soll ehrlich leer — der Fund wird trotzdem angenommen', () => {
+    const ergebnis = meldungPruefen(
+      'funde',
+      { ...rahmen, funde: [{ text: 'Fund ohne Rezept.', schwere: 'mittel' }] },
+      'Angriffsliste'
+    )
+    expect(ergebnis.fehler).toBeUndefined()
+    expect(ergebnis.meldung.funde[0].soll).toBe('')
+  })
+
+  const zusatzUrteil = {
+    fundpfad: 'js/daten/aufgaben.js',
+    urteil: 'verfehlt',
+    beleg: 'aufgabenRotieren() legt weiterhin keine Karte an (js/daten/aufgaben.js:12).'
+  }
+
+  // Der Kern von E9: „bestanden" MIT verfehltem zusatzUrteil ist GÜLTIG — ein
+  // verfehltes soll darf das Paket-Urteil nie kippen, sonst ginge die
+  // Reparatur an den ausgesperrten Bauer (Loch 1 des Anlassfalls).
+  it('„bestanden" mit verfehltem zusatzUrteil ist gültig — die Kopplung bleibt unberührt', () => {
+    const ergebnis = meldungPruefen(
+      'pruefbeleg',
+      { ...rahmen, urteil: 'bestanden', zusatzUrteile: [zusatzUrteil] },
+      'Prüfbeleg'
+    )
+    expect(ergebnis.fehler).toBeUndefined()
+    expect(ergebnis.meldung.urteil).toBe('bestanden')
+    expect(ergebnis.meldung.zusatzUrteile).toEqual([zusatzUrteil])
+    // Und umgekehrt bleibt die Kopplung selbst scharf: fehlgeschlagen ohne
+    // Beanstandung wird weiter abgewiesen, zusatzUrteile hin oder her.
+    const gekoppelt = meldungPruefen(
+      'pruefbeleg',
+      { ...rahmen, urteil: 'fehlgeschlagen', zusatzUrteile: [zusatzUrteil] },
+      'Prüfbeleg'
+    )
+    expect(gekoppelt.fehler).toBe(tl.urteilOhneBeanstandung)
+  })
+
+  it('der beleg ist Pflicht — Abweisung in Klartext, nicht als Schema-Fehler', () => {
+    const ohneBeleg = meldungPruefen(
+      'pruefbeleg',
+      { ...rahmen, urteil: 'bestanden', zusatzUrteile: [{ ...zusatzUrteil, beleg: '  ' }] },
+      'Prüfbeleg'
+    )
+    expect(ohneBeleg.fehler).toBe(ZUSATZ_URTEIL_TEXTE.belegFehlt)
+  })
+
+  it('fundpfad und gültiges urteil sind Pflicht je Eintrag', () => {
+    const ohnePfad = meldungPruefen(
+      'pruefbeleg',
+      { ...rahmen, urteil: 'bestanden', zusatzUrteile: [{ ...zusatzUrteil, fundpfad: '' }] },
+      'Prüfbeleg'
+    )
+    expect(ohnePfad.fehler).toBe(ZUSATZ_URTEIL_TEXTE.fundpfadFehlt)
+    const falschesUrteil = meldungPruefen(
+      'pruefbeleg',
+      { ...rahmen, urteil: 'bestanden', zusatzUrteile: [{ ...zusatzUrteil, urteil: 'passt' }] },
+      'Prüfbeleg'
+    )
+    expect(falschesUrteil.fehler).toBe(ZUSATZ_URTEIL_TEXTE.urteilFehlt)
+    // Groß-/Kleinschreibung des Urteils zählt nicht — wie beim Paket-Urteil.
+    const gross = meldungPruefen(
+      'pruefbeleg',
+      { ...rahmen, urteil: 'bestanden', zusatzUrteile: [{ ...zusatzUrteil, urteil: 'ERFÜLLT' }] },
+      'Prüfbeleg'
+    )
+    expect(gross.meldung.zusatzUrteile[0].urteil).toBe('erfüllt')
+  })
+
+  it('ohne das Feld bleibt alles beim Alten — leere Einträge fliegen raus', () => {
+    const alt = meldungPruefen('pruefbeleg', { ...rahmen, urteil: 'bestanden' }, 'Prüfbeleg')
+    expect(alt.fehler).toBeUndefined()
+    expect(alt.meldung.zusatzUrteile).toEqual([])
+    const leer = meldungPruefen(
+      'pruefbeleg',
+      { ...rahmen, urteil: 'bestanden', zusatzUrteile: [{}, { fundpfad: '', urteil: '', beleg: '' }] },
+      'Prüfbeleg'
+    )
+    expect(leer.fehler).toBeUndefined()
+    expect(leer.meldung.zusatzUrteile).toEqual([])
+  })
+
+  it('die Urteilswerte sind eigene neben dem Paket-Urteil', () => {
+    expect(ZUSATZ_URTEILE).toEqual(['erfüllt', 'verfehlt'])
   })
 })
