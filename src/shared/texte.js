@@ -2983,7 +2983,24 @@ export const texte = {
       umgang: 'Wie du damit umgegangen bist.',
       funde: 'Je Fund ein Eintrag — nach Schwere sortiert, mit Fundort. Leere Liste ist erlaubt.',
       fundText: 'Der Fund in ein bis zwei Sätzen.',
-      schwere: 'hoch, mittel oder niedrig.'
+      schwere: 'hoch, mittel oder niedrig.',
+      // Zusatzbauer-Weg (BAUPLAN 57): Feld-Beschreibungen von soll und
+      // zusatzUrteile. Sie standen während der parallelen Bausession 57 als
+      // ZUSATZ_BESCHREIBUNGEN in lieferscheinWerkzeuge.js — der dortige
+      // Kommentar erlaubte den Umzug hierher ausdrücklich (Bauschritt 58).
+      soll:
+        'Kannst du in einem prüfbaren Satz sagen, woran man erkennt, dass dieser Fund behoben ' +
+        'ist, schreib ihn hierher und nenne im Fundort den Dateipfad. Kannst du es nicht, lass ' +
+        'das Feld leer — der Fund wird dann als Aufgabe ins Projektgedächtnis übernommen statt ' +
+        'sofort repariert.',
+      zusatzUrteile:
+        'Nur wenn dein Auftrag benannte Ausnahmen eines Zusatzbauers nennt: je Ausnahme ein ' +
+        'Eintrag mit deinem Urteil darüber. Es gehört hierher und NIE ins Feld urteil deines ' +
+        'Pakets — ein verfehltes zusatzUrteil kippt das Paket-Urteil nicht.',
+      zusatzFundpfad: 'Der fundpfad aus deinem Auftrag — er ordnet das Urteil dem Fund zu.',
+      zusatzUrteil:
+        'erfüllt = das Genannte trifft nachweislich zu · verfehlt = es trifft nicht zu.',
+      zusatzBeleg: 'Woran du das Urteil gemessen hast, kurz zitiert. Das Feld ist Pflicht.'
     }
   },
   // Tor ohne KI (BAUPLAN 35): FlowForge spielt Prüfbefehl und Rauchtest selbst
@@ -4634,8 +4651,27 @@ export const texte = {
       `„${prueferName}" urteilt nach der Nacharbeit des Zusatzbauers erneut über dessen Fund.`,
     zusatzbauerVerloren: (name, titel) =>
       `Ein Zurücksetzen hat Dateien des Zusatzbauers „${name}" getroffen — die Aufgaben-Karte „${titel}" ist wieder offen.`,
+    zusatzbauerKarteNeuAngelegt: (titel) =>
+      `Das Zurücksetzen hat die Fund-Karte „${titel}" mitgenommen — FlowForge hat sie neu angelegt, damit der Fund nicht aus dem Gedächtnis fällt.`,
     zusatzbauerNichtWiederbelebt: (name) =>
-      `Der Zusatzbauer „${name}" war beim Abbruch nicht fertig — er wird nicht wiederbelebt; seine Aufgaben-Karte bleibt offen und sagt damit die Wahrheit.`
+      `Der Zusatzbauer „${name}" war beim Abbruch nicht fertig — er wird nicht wiederbelebt; seine Aufgaben-Karte bleibt offen und sagt damit die Wahrheit.`,
+    // Der wartende Prüfer (Bauschritt 58): Meldet der Prüfer selbst einen Fund
+    // außerhalb der Dateilisten, wartet er im Werkzeugaufruf auf den
+    // Zusatzbauer und urteilt danach über den fertigen Stand.
+    prueferRuftZusatzbauer: (prueferName) =>
+      `„${prueferName}" meldet einen Fund außerhalb der Dateilisten und wartet auf den Zusatzbauer.`,
+    prueferWartenAufgeloest: (prueferName) =>
+      `„${prueferName}" hat das Ergebnis des Zusatzbauers erhalten und urteilt jetzt.`,
+    // Rückfall (Bauschritt 58): Der Prüfer hat funde gemeldet, ohne das
+    // Warte-Werkzeug zu rufen — ein Auftragssatz hält nicht (Zugsimulator-
+    // Befund, 12.08.2026). Dann läuft der Zusatzbauer danach und der Prüfer
+    // wird zur Nachprüfung neu gerufen.
+    prueferFundRueckfall: (prueferName) =>
+      `„${prueferName}" hat Funde gemeldet, ohne zu warten — der Zusatzbauer läuft jetzt, danach prüft „${prueferName}" erneut.`,
+    // Hartes Nein für Nicht-Prüfer (pruefeWerkzeug) — dieselbe Familie wie die
+    // übrigen …Gesperrt-Zeilen.
+    zusatzWartenGesperrt:
+      'Warten auf den Zusatzbauer gestoppt — das Werkzeug gehört den Prüf-Blöcken.'
   },
   // Zusatzbauer (Bauschritt 57): Bausteine der mechanisch angelegten
   // Aufgaben-Karte. Das Feld `soll` erscheint nirgends unter seinem Feldnamen.
@@ -4643,6 +4679,97 @@ export const texte = {
     thema: 'Funde',
     karteZeileFundort: (fundort) => `Fundort: ${fundort}`,
     karteZeileErkennen: (soll) => `Woran man erkennt, dass es behoben ist: ${soll}`
+  },
+  // Der wartende Prüfer (Bauschritt 58): das Werkzeug auf_zusatzbauer_warten
+  // und alle Texte des Wartewegs. Der Prüfer ist der Letzte in der Kette —
+  // hinter ihm urteilt niemand mehr. Meldet ER einen Fund außerhalb der
+  // Dateilisten, blockiert er deshalb im Werkzeugaufruf, bis der Zusatzbauer
+  // fertig ist, und urteilt danach über einen fertigen Stand. Das Feld `soll`
+  // heißt gegenüber dem Agenten nie „soll", sondern immer „woran man erkennt,
+  // dass es behoben ist".
+  zusatzWarten: {
+    werkzeug:
+      'Nur für einen Fund AUSSERHALB der Dateilisten deines Auftrags, der eine Fundstelle ' +
+      '(Dateipfad) und einen prüfbaren Satz hat, woran man erkennt, dass er behoben ist. Der ' +
+      'Aufruf blockiert, bis der Zusatzbauer fertig ist; das Ergebnis enthält seinen ' +
+      'Umsetzungsbericht und den Diff. Danach urteilst du darüber im Feld zusatzUrteile deines ' +
+      'Prüfbelegs — dein Urteil über dein Paket bleibt davon unberührt. Funde OHNE prüfbaren ' +
+      'Satz meldest du stattdessen im Feld funde deines Prüfbelegs.',
+    param: {
+      text: 'Was kaputt ist — ein bis zwei Sätze.',
+      fundort: 'Wo genau — muss den Dateipfad enthalten.',
+      soll: 'Der prüfbare Satz, woran man erkennt, dass es behoben ist.',
+      schwere: 'hoch, mittel oder niedrig — fehlt sie, gilt mittel.'
+    },
+    // Kurzer Server-Hinweis (Muster menschWerkzeuge): steht als instructions
+    // am Werkzeugkasten, nicht im Blockauftrag.
+    serverHinweis:
+      'Mit auf_zusatzbauer_warten lässt du als Prüfer einen Fund außerhalb der Dateilisten ' +
+      'noch in diesem Lauf beheben — du wartest im Aufruf und urteilst danach über das Ergebnis.',
+    // Ehrlicher Fehlertext, wenn der Warte-Auflöser dieser Motor-Instanz nicht
+    // gereicht wurde (Chat, Prüfskripte, selbstgebaute Wege).
+    nichtVerdrahtet:
+      'Dieses Werkzeug ist in dieser Session nicht angeschlossen — FlowForge kann hier keinen ' +
+      'Zusatzbauer starten. Nimm den Fund stattdessen ins Feld funde deines Prüfbelegs auf.',
+    // Hartes Nein für Blöcke ohne prueft (pruefeWerkzeug): Hinter jedem
+    // anderen Block urteilt der Prüfer der Kette ohnehin noch — nur der
+    // Prüfer selbst hat niemanden mehr hinter sich.
+    nurPruefer:
+      'auf_zusatzbauer_warten gehört den Prüf-Blöcken: Nur wer prüft, wartet auf den ' +
+      'Zusatzbauer und urteilt danach über dessen Ergebnis. Hinter deinem Block urteilt der ' +
+      'Prüfer der Kette ohnehin — melde deinen Fund in deiner Ergebnis-Meldung (Feld funde ' +
+      'oder anmerkung) und arbeite weiter.',
+    // Feldbeschreibung des funde-Felds im Prüfbeleg (lieferscheinWerkzeuge.js).
+    prueferFunde:
+      'Funde außerhalb deines Prüfauftrags und der Dateilisten — sie gehören NICHT in die ' +
+      'beanstandungen und kippen dein Urteil nicht. Mit einem Dateipfad im Fundort und einem ' +
+      'prüfbaren Satz, woran man erkennt, dass es behoben ist (soll), können sie noch in ' +
+      'diesem Lauf behoben werden; sonst werden sie Aufgaben-Karten im Projektgedächtnis.',
+    // --- Bausteine des Werkzeug-Ergebnisses (schreibt die Lauf-Verwaltung) ---
+    ergebnisKopf: (zbName) =>
+      `Der Zusatzbauer „${zbName}" ist fertig. Sein Umsetzungsbericht:`,
+    ergebnisDiffKopf: 'Seine Änderungen als Diff:',
+    // Ehrlicher Hinweis statt stillem Abschneiden — die Dateien liegen ohnehin
+    // vor dem Prüfer auf der Platte.
+    ergebnisDiffGekuerzt: (zeichen) =>
+      `— hier gekürzt: Der vollständige Diff ist ${zeichen} Zeichen lang. Die geänderten ` +
+      'Dateien liegen im Projektordner — lies sie bei Bedarf direkt.',
+    ergebnisUrteilspflicht: (fundpfad) =>
+      `Urteile jetzt über dieses Ergebnis: im Feld zusatzUrteile deines Prüfbelegs, mit genau ` +
+      `diesem fundpfad: ${fundpfad}. Dein Urteil über dein Paket bleibt davon unberührt.`,
+    ergebnisKarteAbgehakt: (titel) =>
+      `Die Aufgaben-Karte dazu („${titel}") wurde angelegt und ist abgehakt.`,
+    ergebnisKarteOffen: (titel) =>
+      `Die Aufgaben-Karte dazu („${titel}") wurde angelegt und ist noch offen.`,
+    // --- Auflösungs-Texte, wenn KEIN Zusatzbauer läuft ---
+    normalerWeg: (zielName) =>
+      `Kein Zusatzbauer nötig: „${zielName}" darf diese Stelle ohnehin anfassen. Nimm den ` +
+      'Fund als Beanstandung in deinen Prüfbeleg auf — die Reparatur-Runde erreicht ihn.',
+    alsKarte: (titel) =>
+      `Die Einstellung steht auf „als Karte festhalten": FlowForge hat die Aufgaben-Karte ` +
+      `„${titel}" angelegt; gebaut wird in diesem Lauf nichts. Urteile über dein Paket wie geplant.`,
+    nurBericht:
+      'Die Einstellung steht auf „nur im Laufbericht nennen": Der Fund wird dort vermerkt; ' +
+      'gebaut wird nichts, und eine Karte entsteht nicht. Urteile über dein Paket wie geplant.',
+    obergrenze: (max) =>
+      `Die Höchstzahl an Zusatzbauern für diesen Lauf (${max}) ist erreicht: Der Fund wurde ` +
+      'als Aufgaben-Karte festgehalten; gebaut wird er in diesem Lauf nicht mehr.',
+    keinPfad:
+      'Im Fundort ist kein Dateipfad erkennbar — ohne Fundstelle kann kein Zusatzbauer ' +
+      'arbeiten. Der Fund wurde als Aufgaben-Karte festgehalten.',
+    schonVorhanden: (zbName) =>
+      `Für diese Fundstelle lief in diesem Lauf schon der Zusatzbauer „${zbName}" — ein ` +
+      'zweiter wird nicht angesetzt.',
+    // --- Auflösungs-Texte der Fehlschlag-Pfade (der Prüfer hängt nie) ---
+    nichtWiederbelebt: (titel) =>
+      `Der frühere Zusatzbauer wurde nach der Wiederaufnahme nicht wiederbelebt — seine ` +
+      `Aufgaben-Karte „${titel}" ist offen. Urteile NICHT über einen Fix, den es nicht gibt.`,
+    gescheitert: (zbName) =>
+      `Der Zusatzbauer „${zbName}" ist gescheitert oder abgestürzt — die Aufgaben-Karte ` +
+      'bleibt offen. Urteile über dein Paket wie geplant; über diesen Fund urteilst du nicht.',
+    laufEndet:
+      'Der Lauf wird beendet oder abgebrochen — das Warten wird aufgelöst. Es gibt kein ' +
+      'Zusatzbauer-Ergebnis, über das du urteilen könntest.'
   },
   sicherungen: {
     ueberschrift: 'Sicherungspunkte',

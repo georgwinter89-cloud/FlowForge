@@ -1208,7 +1208,12 @@ Laufstart steht das Schaubild fest, also registriert FlowForge genau die
 Melde-Werkzeuge, die diese Kette braucht — **eines je liefert-Etikett**
 (`melde_arbeitspaket`, `melde_pruefbeleg`, `melde_umsetzungsbericht`,
 `melde_angriffsliste`, `melde_befundliste`), für alles Übrige den Rahmen
-`melde_ergebnis`. Eigene Etiketten **mit Feldern** (§4.5 Etiketten-Bibliothek, seit
+`melde_ergebnis`. Steht ein Angriffslisten-Lieferant in der Kette, ist
+`melde_umsetzungsbericht` von Anfang an mitregistriert (im Lauf kann ein
+Zusatzbauer entstehen, §5, und der Werkzeug-Server wird einmal je Motor gebaut);
+steht ein prüfender Block darin, zusätzlich `melde_angriffsliste` — der
+Zusatz-Angreifer eines hohen Prüfer-Fundes könnte seine Liste sonst in Ketten
+ohne Angreifer nicht strukturiert liefern (seit Bauschritt 58). Eigene Etiketten **mit Feldern** (§4.5 Etiketten-Bibliothek, seit
 Bauschritt 48) bekommen ein eigenes Werkzeug (`melde_<name>`), das den Rahmen plus
 ihre Felder trägt; Pflichtfelder und Auswahlwerte prüft FlowForge wie bei den festen
 Teilen (Abweisung im Ticker, der Agent korrigiert), und die Meldung bleibt
@@ -1223,11 +1228,15 @@ letzten Block widerspräche sie dem Vorspann („geht an niemanden") im selben
 Auftrag. Darunter je Etikett ein eigener Teil: Arbeitspaket (Ziel,
 Fertig-Kriterien, Schritte, Fundstellen, nicht
 dabei), Prüfbeleg (Urteil als Auswahl, Beanstandungen mit Einstufung und Fundort,
-Rot-vor-Grün, geprüfte Kriterien, Prüfkarte — und seit Bauschritt 57 die optionale
+Rot-vor-Grün, geprüfte Kriterien, Prüfkarte — seit Bauschritt 57 die optionale
 Liste `zusatzUrteile` für die benannten Ausnahmen der Zusatzbauer, §5: je Eintrag
 Fundpfad, Urteil erfüllt/verfehlt und Beleg als Pflicht, ausdrücklich **außerhalb**
 der Urteil/Beanstandungs-Kopplung — „bestanden" mit verfehltem Zusatz-Urteil ist
-gültig), Umsetzungsbericht (je Kriterium wie
+gültig —, und seit Bauschritt 58 die optionale Liste `funde` für Funde **außerhalb**
+des Prüfauftrags und der Dateilisten, in derselben Form wie bei der Angriffsliste
+(Text, Schwere, Fundort, optionales `soll`), ebenfalls außerhalb der
+Urteil/Beanstandungs-Kopplung: Sie gehören nicht in die Beanstandungen und kippen
+das Urteil nie — „bestanden" mit Funden ist gültig, §5), Umsetzungsbericht (je Kriterium wie
 umgesetzt, Dateiliste mit Art, Angriffsliste behandelt — die Dateiliste wird seit
 Bauschritt 55 gegen die Sicherungspunkte nachgemessen, §3.2) und Angriffs-/Befundliste
 (Funde mit Schwere und Fundort; bei der Angriffsliste seit Bauschritt 57 dazu das
@@ -1319,7 +1328,10 @@ beim Laufstart geleert, §unten), führt sie aus und liefert einen Rot-vor-Grün
 mindestens ein Test wird einmal mit absichtlich verfälschter Erwartung ausgeführt
 (Rot) und danach unverändert echt (Grün) — ein Test, der nie rot war, beweist nichts.
 Überstrenge Fallen (pixelgenaue Vergleiche, Wortverbote, Datei-Inventuren) sind per
-Auftrag untersagt.
+Auftrag untersagt. Einen Fund **außerhalb** seines Prüfauftrags und der Dateilisten
+meldet er seit Bauschritt 58 über das Werkzeug `auf_zusatzbauer_warten` oder das Feld
+`funde` seines Prüfbelegs — beides kippt sein Paket-Urteil nie (§5, der wartende
+Prüfer).
 Jede Beanstandung meldet er einzeln — mit Fundort und der Einstufung
 **mechanisch** (Tippfehler, falscher Wert, vergessener Randfall) oder
 **grundsätzlich** (braucht Umbau oder Entscheidungen); diese Vorsortierung
@@ -2289,16 +2301,24 @@ umstellbar wie jede Karte.
   wiederherstellen" die halbfertige Arbeit eines Nachbarn mitnehmen. Der Co-Pilot-Chat
   passt in keine Welle: Er kennt weder Datenvertrag noch Strang und startet keinen Lauf,
   solange er arbeitet.
-- **Zusatzbauer — Funde außerhalb der Dateilisten** (seit Bauschritt 57): Meldet ein
-  Angriffslisten-Lieferant einen Fund an einer Stelle, die **kein schreibender Empfänger
-  seiner Liste anfassen darf** (der Fundpfad liegt außerhalb jeder Dateiliste — ein
-  Empfänger ohne Dateiliste darf immer), entsteht dafür mit der Einstellung **„jetzt
+- **Zusatzbauer — Funde außerhalb der Dateilisten** (seit Bauschritt 57; seit
+  Bauschritt 58 auch für Funde der prüfenden Blöcke): Meldet ein
+  Angriffslisten-Lieferant oder ein prüfender Block einen Fund an einer Stelle, die
+  **kein zuständiger schreibender Empfänger anfassen darf** (der Fundpfad liegt
+  außerhalb seiner Dateiliste — ein Empfänger ohne Dateiliste darf immer; zuständig
+  sind beim Angriffslisten-Lieferanten die schreibenden Empfänger seiner Liste,
+  vorwärts gerechnet, beim Prüfer sein **Rückführungs-Ziel**, rückwärts — dieselbe
+  Quelle wie die Reparatur-Runde; darf es die Stelle ohnehin anfassen, geht der Fund
+  den normalen Weg über die Beanstandungen), entsteht dafür mit der Einstellung **„jetzt
   mitnehmen"** (§9; Standard ist „als Karte festhalten") ein **Zusatzbauer** im
-  laufenden Lauf. Die Auswertung läuft **mechanisch beim Blockende des Melders** (seine Liste ist
-  dann final), ohne urteilendes Modell: Zuständigkeit aus der Kette, Fundstelle als
+  laufenden Lauf. Die Auswertung läuft **mechanisch**, ohne urteilendes Modell — beim
+  Angriffslisten-Lieferanten **an seinem Blockende** (seine Liste ist dann final), beim
+  Prüfer sofort im Werkzeugaufruf bzw. an seinem Blockende (der wartende Prüfer,
+  unten): Zuständigkeit aus der Kette, Fundstelle als
   längstes pfadartiges Token aus dem Fundort (normalisiert), Zulassung aus zwei Feldern —
   der Fund braucht einen **Dateipfad im Fundort** und den prüfbaren Satz, **woran man
-  erkennt, dass er behoben ist** (Werkzeugfeld `soll`, bewusst optional: ein leeres Feld
+  erkennt, dass er behoben ist** (Werkzeugfeld `soll`, in der Angriffsliste und im
+  `funde`-Feld des Prüfbelegs bewusst optional: ein leeres Feld
   ist die ehrliche Antwort „nur als Aufgabe übernehmen"). **Kein Fund wird je abgewiesen**
   — was keinen Zusatzbauer bekommt (Einstellung §9, fehlende Felder, erreichte
   Höchstzahl, gar kein Empfänger im Lauf), wird eine **offene Aufgaben-Karte** (§3.1)
@@ -2313,7 +2333,11 @@ umstellbar wie jede Karte.
   **läuft immer allein** — die Wellenregel trägt das heute schon: ein Umsetzer ohne
   Dateiliste startet nur, wenn nichts läuft, und lässt nichts neben sich starten
   (benannte Lücke: **nur-lesende Blöcke starten immer** und laufen damit auch neben
-  ihm). Er bekommt einen **eigenen Sicherungsstrang trotz fehlenden Wirkbereichs** —
+  ihm). Einzige Ausnahme (seit Bauschritt 58): Ein Schreiber, der im Warte-Werkzeug
+  hängt und gerade nichts schreibt (der wartende Prüfer, unten), ist **nur für
+  Zusatz-Knoten** unsichtbar — genau der Zusatzbauer, auf den er wartet, darf neben
+  ihm starten; für jeden anderen Kandidaten zählt er unverändert, sein Revier (die
+  Prüfmappe) und seine Zugehörigkeit zur Welle bleiben bestehen. Er bekommt einen **eigenen Sicherungsstrang trotz fehlenden Wirkbereichs** —
   daraus misst FlowForge seine echte Dateiliste (§3.3, „gemessen statt geglaubt"); die
   Begrenzung vorab ist bewusst aufgegeben (§7). Bei Fundschwere **hoch** läuft ein
   nur-lesender **Zusatz-Angreifer** davor, der den geplanten Fix angreift (zählt nicht
@@ -2321,12 +2345,20 @@ umstellbar wie jede Karte.
   **Karte sofort, mechanisch:** Beim Anlegen des Zusatzbauers legt FlowForge selbst die
   Aufgaben-Karte an (§3.1, Thema „Funde") — abgehakt, sobald der Zusatzbauer erfolgreich
   geliefert hat; wieder geöffnet, wenn sein Satz verfehlt bleibt oder ein Rückroll **im
-  Lauf** seine gemessenen Dateien trifft. Ein Rückroll **nach** dem Laufende öffnet sie
+  Lauf** seine gemessenen Dateien trifft. Rollt ein Rückroll im Lauf (harter Stopp,
+  „Stand wiederherstellen", Zweig-Rückroll) die karten.json selbst auf einen Stand von
+  **vor** der Karte zurück, legt FlowForge die verlorene Fund-Karte **mechanisch neu an**
+  (offen), zieht ihre Kennung in Laufstand und Bericht nach, und eine Ticker-Zeile sagt
+  es (seit Bauschritt 58). Ein Rückroll **nach** dem Laufende öffnet sie
   nicht — ehrliche Grenze. Zu jedem Zeitpunkt sagt die Karte damit die Wahrheit.
   **Abnahme:** Der erste prüfende Block nach dem Zusatzbauer bekommt den Satz als
   **benannte Ausnahme** in den Auftrag — beurteilt wird er **außerhalb des
   Paket-Urteils** im eigenen Prüfbeleg-Feld `zusatzUrteile` (je Eintrag Fundpfad, Urteil
-  erfüllt/verfehlt, **Beleg als Pflicht**); alle prüfenden Blöcke dahinter bekommen die
+  erfüllt/verfehlt, **Beleg als Pflicht**); ist der **Melder selbst ein Prüfer**
+  (Bauschritt 58), schuldet **er** das Urteil — nach dem Warte-Werkzeug im selben
+  Anlauf, nach dem Rückfallweg in seiner Nachprüfung — und ebenso seine Abnahme;
+  spätere prüfende Blöcke bekommen dann nur die Datei-Ausnahme. Alle prüfenden Blöcke
+  hinter einem Zusatzbauer bekommen die
   gemessene Dateiliste als Ausnahme für ihre Grenz-Kriterien, der Diff bleibt
   ungefiltert und jede Änderung beanstandbar. Ein verfehlter Satz kippt **nie** das
   Paket-Urteil; er löst eine Reparatur-Runde des Zusatzbauers aus (Budget: die
@@ -2335,7 +2367,34 @@ umstellbar wie jede Karte.
   prüfender Block in der Kette → die Arbeit steht als **ungeprüft** im Bericht, die
   Karte wird bei Erfolg trotzdem abgehakt (Entscheidung Georg, 24.08.2026 — eine offene
   Karte für erledigte Arbeit wäre eine Lüge im Gedächtnis); schweigt ein Prüfer zu einem
-  Satz, zählt das ebenfalls als ungeprüft, ohne Nachforderung. **Sichtbarkeit:** eigene
+  Satz, zählt das ebenfalls als ungeprüft, ohne Nachforderung.
+  **Der wartende Prüfer** (seit Bauschritt 58): Hinter dem Prüfer urteilt niemand
+  mehr — deshalb wartet er selbst. Steht ein prüfender Block in der Kette, existiert
+  das Werkzeug **`auf_zusatzbauer_warten`** (frei nur für Prüf-Blöcke, §7; die Felder
+  Text, Fundort und der Satz, woran man erkennt, dass es behoben ist, sind Pflicht,
+  die Schwere optional — ohne Angabe mittel): Der Aufruf **blockiert**, FlowForge legt
+  Karte und Zusatzbauer an, weckt die Planer-Schleife, und der Zusatzbauer läuft,
+  **während der Prüfer wartet** (Wellen-Ausnahme oben). Das Warten löst erst **nach
+  der Strang-Zusammenführung** des Zusatzbauers auf; das Werkzeug-Ergebnis trägt
+  seinen Umsetzungsbericht, die gemessene Dateiliste, den Diff (gedeckelt auf 30.000
+  Zeichen — die Kürzung steht sichtbar im Text und nennt die gemessene
+  Originallänge), den Karten-Stand und die Urteilspflicht mit dem Fundpfad; derselbe
+  Prüfer urteilt danach im selben Anlauf (`zusatzUrteile`). Startet kein Zusatzbauer,
+  antwortet das Werkzeug **sofort und ehrlich** (kein Dateipfad im Fundort,
+  Einstellung „als Karte" oder „nur Bericht", das Rückführungs-Ziel darf ohnehin
+  anfassen, Höchstzahl erreicht, für dieselbe Fundstelle lief schon einer, nach einer
+  Wiederaufnahme nicht wiederbelebt — „urteile nicht über einen Fix, den es nicht
+  gibt"); scheitert der Zusatzbauer oder endet der Lauf (harter wie sanfter Stopp),
+  löst jedes offene Warten mit einem ehrlichen Text auf und die Karte bleibt offen —
+  **der Prüfer hängt nie**. **Rückfallweg:** Ruft der Prüfer das Werkzeug nicht und
+  meldet Funde stattdessen im Prüfbeleg-Feld `funde` (§4.3), wertet FlowForge sie an
+  seinem Blockende aus: Bei bestandenem Paket läuft der Zusatzbauer danach und der
+  Prüfer wird als **Nachprüfung** erneut gerufen (der Zusatzbauer hängt dafür als
+  Vorgänger auch am Melder selbst); bei fehlgeschlagenem Paket gehen die Funde den
+  Karten-Weg — kein Zusatzbauer parallel zur Reparatur-Runde, der erneute
+  Prüfer-Anlauf kann neu melden. Laufstand und Bericht führen je Zusatzbauer den
+  **Melder-Typ** (Angreifer/Prüfer, tolerant gelesen — ein alter Stand fällt auf
+  Angreifer zurück). **Sichtbarkeit:** eigene
   Ticker-Zeile ohne Blocknummer („Block n von gesamt" zählt die beim Start gerechnete
   Kette), im Laufbericht ein eigener Abschnitt (§3.2). **Wiederaufnahme belebt einen
   nicht fertigen Zusatzbauer nicht wieder** — eine Ticker-Zeile sagt es, die Karte
@@ -2686,7 +2745,9 @@ einer Welle: Er schreibt nicht, solange ein Lauf läuft.
 24.08.2026: „Wozu braucht der Zusatzbauer überhaupt eine Sperre? Er darf doch eh
 nicht parallel laufen."): Eine Dateiliste erfüllt zwei Aufgaben im selben Feld —
 Reviertrennung und Begrenzung. Die Reviertrennung ist für einen Block, der immer
-allein läuft, gegenstandslos; die Begrenzung vorab ist bewusst aufgegeben —
+allein läuft (einziger Nachbar ist seit Bauschritt 58 ein Prüfer, der im
+Warte-Werkzeug hängt und gerade nichts schreibt, §5), gegenstandslos; die
+Begrenzung vorab ist bewusst aufgegeben —
 **Kontrolle später statt früher**: Sein Fertig-Kriterium ist ein einziger
 schmaler Satz, der prüfende Block sieht seinen kompletten, ungefilterten Diff
 und darf jede Änderung beanstanden, und der Bericht nennt die **gemessene** Zahl
@@ -2699,6 +2760,16 @@ eigenen liefert-Etikett ist deshalb frei, auch unter „darf nur lesen" (gerade
 Angreifer und Audit melden ja etwas). Ruft ein Block ein **fremdes**
 Melde-Werkzeug, folgt die übliche Rechte-Rückfrage — dasselbe Muster wie bei
 `karte_vorschlagen` (Rückfrage statt Sperre).
+
+**Auf den Zusatzbauer warten** (`auf_zusatzbauer_warten`, §5, seit Bauschritt 58):
+Das Werkzeug existiert nur, wenn ein prüfender Block in der Kette steht, und ist
+**frei nur für Prüf-Blöcke** — auch nur-lesende, deshalb greift seine Einstufung
+bewusst **vor** der Sperre „darf nur lesen" (warten und urteilen schreibt nichts;
+sonst hieße die Abweisung irreführend „Schreib-Versuch"). Für alle anderen Blöcke
+ist es ein **hartes Nein statt einer Rückfrage**: Im Automodus wäre die Rückfrage
+wirkungslos, und hinter jedem Nicht-Prüfer urteilt der Prüfer der Kette ohnehin
+noch — die Abweisung sagt ihm, dass sein Fund in die eigene Ergebnis-Meldung
+gehört und er weiterarbeiten soll.
 
 ## 8. Ergebnis erleben
 

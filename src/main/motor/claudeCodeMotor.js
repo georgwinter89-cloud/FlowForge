@@ -40,6 +40,7 @@ import {
   lokaleKontextSchaetzung
 } from '../../shared/lokalRegeln.js'
 import { menschWerkzeugServer } from './menschWerkzeuge.js'
+import { zusatzWartenWerkzeugServer } from './zusatzWartenWerkzeug.js'
 import { kontextFensterFuerModell, kontextFensterMerken } from './motorWissen.js'
 import { startWerkzeugServer } from './startWerkzeuge.js'
 import { pruefbefehlWerkzeugServer } from './pruefbefehlWerkzeuge.js'
@@ -185,6 +186,16 @@ export function kartenAnzahl(ids) {
 // erlaubt ohne Rückfrage, auch unter der Sperre „darf nur lesen" (der
 // Frage-Block ist selbst nur-lesend).
 const MENSCH_PRAEFIX = 'mcp__mensch__'
+
+// Auf den Zusatzbauer warten (Bauschritt 58): der Meldeweg des Prüfers für
+// einen Fund außerhalb der Dateilisten — wie die Lieferschein-Werkzeuge eine
+// Meldung an FlowForge, keine Rechte-Frage. Frei nur für Prüf-Blöcke
+// (def.prueft), AUCH unter „darf nur lesen": Der Prüfer ist nur-lesend, und
+// warten schreibt nichts — es schreibt der Zusatzbauer in seiner eigenen
+// Session. Blöcke ohne prueft bekommen ein hartes Nein: Hinter ihnen urteilt
+// der Prüfer der Kette ohnehin noch, ein wartender Bauer wartete auf sich
+// selbst.
+const ZUSATZ_WARTEN_PRAEFIX = 'mcp__zusatz__'
 
 // Startanleitungs-Werkzeug (BAUPLAN 10): schreibt validiert ins Projekt —
 // unter der Sperre „darf nur lesen" deshalb tabu.
@@ -795,6 +806,17 @@ export function unteraufgabenEingabe(eingabe, { lokal = false, unterModell = nul
 // nirgends an. Steht als LETZTER Parameter mit sicherem Standard [].
 export function pruefeWerkzeug(name, eingabe, projektPfad, nurLesen, darfPruefen, lokaleKi = true, nurLesenBefehle = false, darfKartenAnlegen = false, darfVorschlagen = false, darfLaufVorschlag = false, darfZuteilen = false, pruefOrdner = '', lieferscheinFrei = [], dateiListe = null, inWelle = false, freieKartenOrdner = []) {
   if (name.startsWith(MENSCH_PRAEFIX)) return { erlaubt: true }
+  // Auf den Zusatzbauer warten (Bauschritt 58): frei nur für Prüf-Blöcke —
+  // AUCH nur-lesende, deshalb steht dieser Zweig bewusst VOR der harten
+  // nurLesen-Sperre weiter unten (dort fiele das Werkzeug sonst als
+  // „Schreib-Versuch" durch, eine unwahre Begründung — Muster WEB_PRAEFIX).
+  // Für Blöcke ohne prueft ein hartes Nein statt einer Rückfrage: Im Automodus
+  // wäre sie wirkungslos, und der Prüfer der Kette urteilt hinter ihnen ohnehin.
+  if (name.startsWith(ZUSATZ_WARTEN_PRAEFIX)) {
+    if (!darfPruefen)
+      return { gesperrt: texte.zusatzWarten.nurPruefer, tickerText: texte.ticker.zusatzWartenGesperrt }
+    return { erlaubt: true }
+  }
   // Lieferschein (BAUPLAN 42): frei ist je Block genau das Werkzeug zu seinem
   // liefert-Etikett — die anderen fragen nach.
   if (name.startsWith(LIEFERSCHEIN_PRAEFIX)) {
@@ -1572,6 +1594,12 @@ export function starteLaufMotor(optionen) {
     aufEreignis,
     aufRechteFrage,
     aufMenschFrage,
+    // Auf den Zusatzbauer warten (Bauschritt 58): löst IMMER mit { text } auf —
+    // auch wenn der Zusatzbauer scheitert oder der Lauf abgebrochen wird; der
+    // wartende Prüfer hängt nie. Kommt aus der Lauf-Verwaltung und NUR dort:
+    // Chat- und Helfer-Motoren lassen die Option weg, dann gibt es das
+    // Werkzeug in ihrer Instanz gar nicht.
+    aufZusatzbauerWarten = null,
     // Karten-Vorschläge (BAUPLAN 26): löst mit der Entscheidung des Nutzers
     // auf — oder mit null, wenn der Lauf angehalten wurde.
     aufKartenVorschlag,
@@ -2205,6 +2233,13 @@ export function starteLaufMotor(optionen) {
     // Frage an den Menschen (BAUPLAN 9): pausiert den Lauf, bis der Nutzer
     // im Gespräch geantwortet hat.
     const menschServer = await menschWerkzeugServer({ aufMenschFrage })
+    // Auf den Zusatzbauer warten (Bauschritt 58): nur wenn die Lauf-Verwaltung
+    // den Warte-Auflöser reicht — dieselbe Durchreich-Mechanik wie
+    // aufMenschFrage, aber optional: Ohne die Option gibt es das Werkzeug in
+    // dieser Instanz nicht (Chat, Helfer, lokale Motoren ohne Zusatzbauer).
+    const zusatzServer = aufZusatzbauerWarten
+      ? await zusatzWartenWerkzeugServer({ aufZusatzbauerWarten })
+      : null
     // Startanleitung (BAUPLAN 10): das Pflicht-Artefakt der Bau-Blöcke wird
     // ausschließlich über dieses validierende Werkzeug geschrieben.
     // gesetztVon (0.46.2): der Block, der die Anleitung setzt — in der Welle
@@ -2455,6 +2490,9 @@ export function starteLaufMotor(optionen) {
         mcpServers: {
           karten: kartenServer,
           mensch: menschServer,
+          // Auf den Zusatzbauer warten (Bauschritt 58): nur mit gereichtem
+          // Warte-Auflöser — und nur an der Lauf-Session.
+          ...(zusatzServer ? { zusatz: zusatzServer } : {}),
           start: startServer,
           pruefbefehl: pruefbefehlServer,
           ...(vorschlagServer ? { vorschlaege: vorschlagServer } : {}),

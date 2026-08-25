@@ -91,7 +91,10 @@ import {
   messungVereinen,
   arbeitsablageAbgleich,
   MESSUNG_VERWALTUNGSDATEIEN,
-  RAHMEN_WERKZEUG
+  RAHMEN_WERKZEUG,
+  // Der wartende Prüfer (Bauschritt 58): der schwere-Rückfall des
+  // Warte-Werkzeugs prüft gegen dieselbe Liste wie das Schema.
+  SCHWEREN
 } from '../shared/lieferschein.js'
 // Zusatzbauer für Funde des Angreifers (Bauschritt 57): die reinen Regeln —
 // welcher Fund welchen Weg nimmt, der Dateipfad aus dem Fundort, die Karte.
@@ -188,6 +191,10 @@ import { prozessgruppeAnlegen, prozessgruppeAbraeumen } from './prozesse.js'
 
 const BERICHTE_ORDNER = 'laufberichte'
 const PRUEFMAPPE = 'pruefung'
+// Der wartende Prüfer (Bauschritt 58): Deckel für den Diff im Ergebnis von
+// auf_zusatzbauer_warten. Darüber wird hart gekürzt und ehrlich gesagt, wie
+// lang das Original war — die gemessene Dateiliste steht immer vollständig davor.
+const ZUSATZ_DIFF_MAX = 30000
 
 // ——— Wirkbereich je Block-Instanz (BAUPLAN 45) ————————————————————————————
 // „Welche Dateien gehören diesem Schreiber?" — die eine Antwort, aus der
@@ -438,6 +445,14 @@ export function welleStehtVon(eigeneInstanzId, knotenListe) {
 // grund ∈ 'ueberschneidung' (dazu paare: [{a,b}]) | 'ohneVertrag' (dazu
 // selbstOhne: fehlt die Liste dem Kandidaten selbst?) | 'prueferWartet' |
 // 'umsetzerWartet' | 'frageOffen'. Der Ablaufplaner macht daraus die Ticker-Zeile.
+//
+// Der wartende Prüfer (Bauschritt 58): Ein laufender Schreiber mit
+// `wartetImWerkzeug` (er hängt in auf_zusatzbauer_warten und schreibt gerade
+// nichts) ist unsichtbar AUSSCHLIESSLICH für Kandidaten mit `zusatz: true`
+// (Zusatz-Knoten des Laufs) — genau der Zusatzbauer, auf den er wartet, darf
+// neben ihm starten. Für jeden anderen Kandidaten zählt er unverändert:
+// Sein Revier (die Prüfmappe) gehört ihm weiter, und schreiberBelegt /
+// inWelleVon lesen das Flag bewusst NICHT.
 export function wellenStartRegel(kandidat, laufende, offeneZweige = []) {
   if (!kandidat || kandidat.def?.nurLesen) return { darf: true }
   const namen = (liste) => liste.map((l) => l.name ?? l.instanzId ?? '?')
@@ -451,7 +466,11 @@ export function wellenStartRegel(kandidat, laufende, offeneZweige = []) {
     if (belegt.length) return { darf: false, grund: 'frageOffen', worauf: namen(belegt) }
   }
   const schreiber = (laufende ?? []).filter(
-    (l) => l && !l.def?.nurLesen && l.instanzId !== kandidat.instanzId
+    (l) =>
+      l &&
+      !l.def?.nurLesen &&
+      l.instanzId !== kandidat.instanzId &&
+      !(kandidat.zusatz === true && l.wartetImWerkzeug === true)
   )
   if (schreiber.length === 0) return { darf: true }
   if (kandidat.def?.prueft) {
@@ -1581,6 +1600,15 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     menschFragen: new Map(),
     // Karten-Vorschläge (BAUPLAN 26): der Abnahme-Dialog des Karten-Prüfers.
     vorschlaege: new Map(),
+    // Der wartende Prüfer (Bauschritt 58): offene Warte-Auflöser je
+    // Zusatzbauer (instanzId → aufloesen({ art })). Liegt am Lauf-Objekt,
+    // damit laufHartStoppen sie wie die Mensch-Fragen sofort auflösen kann —
+    // ein hängender Werkzeug-Aufruf hielte den Prüfer-Motor sonst ewig.
+    zusatzWarten: new Map(),
+    // Und der Weckruf des Planers (Bauschritt 58): laufSanftStoppen stößt ihn
+    // an, damit ein wartender Prüfer mit nie gestartetem Zusatzbauer nicht
+    // über das Stoppen hinaus hängt. Gesetzt, sobald die Planer-Schleife steht.
+    planerWecken: null,
     sanft: false,
     hart: false,
     // Offene Dialoge als Warteschlangen: Zwei parallele Blöcke können
@@ -2808,13 +2836,68 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       }
     }
 
+    // Ein Rückroll kann mehr als den Fix nehmen: Setzt er die karten.json auf
+    // den Stand VOR dem Lauf zurück, existiert eine im Lauf angelegte
+    // Fund-Karte gar nicht mehr — der Fund fiele aus dem Gedächtnis, während
+    // der Bericht „Karte offen" behauptet (gemessen, Befund P2-2, 25.08.2026).
+    // Deshalb nach jedem Rückroll: fehlende Fund-Karten mechanisch neu
+    // anlegen (offen — der Fix ist ja gefallen), Kennungen in Stand und
+    // Bericht nachziehen. Existierende Karten fasst das nicht an; für die
+    // gilt zusatzKartenWiederOeffnen.
+    function zusatzKartenNachRueckrollSichern() {
+      if (!zusatzKartenAngelegt.size) return
+      const geladen = kartenLaden(projektPfad)
+      if (!geladen.ok) return
+      const vorhanden = new Set((geladen.karten ?? []).map((karte) => karte.id))
+      for (const karte of zusatzKartenAngelegt.values()) {
+        if (vorhanden.has(karte.id)) continue
+        const neu = karteAnlegen(
+          projektPfad,
+          { sorte: 'aufgabe', titel: karte.titel, text: karte.text ?? karte.titel, thema: texte.zusatzbauer.thema },
+          { quelle: 'flowforge' }
+        )
+        if (!neu.ok || !neu.id) continue
+        const alteId = karte.id
+        karte.id = neu.id
+        if (!ausgewaehlt.includes(neu.id)) ausgewaehlt.push(neu.id)
+        for (const z of zusatzbauerStand) {
+          if (z.karteId !== alteId) continue
+          z.karteId = neu.id
+          z.karteOffen = true
+          if (z.berichtZeile) {
+            z.berichtZeile.karteId = neu.id
+            z.berichtZeile.karteOffen = true
+          }
+        }
+        for (const zeile of bericht.zusatzbauer ?? []) {
+          if (zeile.karteId !== alteId) continue
+          zeile.karteId = neu.id
+          zeile.karteOffen = true
+        }
+        tickern(texte.ticker.zusatzbauerKarteNeuAngelegt(karte.titel))
+      }
+    }
+
     // Registriert einen Zusatz-Knoten (E2): Knoten aus derselben Fabrik wie
     // die Kette (ALLE Felder), Eintrag direkt hinter `einfuegenNach` in der
     // Live-Kette, und alle acht per-id-Maps — Vorgänger/Vorfahren gezielt,
     // der Rest leer (keine Nummer, kein Vorspann, keine Ziele). Jeder
     // prüfende Block, der in der Kette nach dem Melder steht, bekommt den
     // ZusatzBAUER zusätzlich als Vorgänger: kein Prüfer urteilt vor dem Fix.
-    function zusatzKnotenRegistrieren({ def, melderEintrag, melderName, vorgaengerId, einfuegenNach }) {
+    // Bauschritt 58: `vorgaengerId` darf null sein (der Prüfer-Melder läuft
+    // bzw. wartet gerade — als Start-Vorgänger hielte er den Zusatzbauer fest,
+    // und beide warteten aufeinander); `melderVorgaenger` hängt den Knoten
+    // ZUSÄTZLICH als Vorgänger in den Melder selbst — er steht in der Kette
+    // VOR dem Zusatz-Knoten und fiele sonst durch die Schleife unten
+    // (Angriffsfund 9): Sein nächster Anlauf (Nachprüfung) wartet auf den Fix.
+    function zusatzKnotenRegistrieren({
+      def,
+      melderEintrag,
+      melderName,
+      vorgaengerId,
+      einfuegenNach,
+      melderVorgaenger = false
+    }) {
       const instanzId = crypto.randomUUID()
       const eintrag = {
         instanzId,
@@ -2847,9 +2930,9 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       // über sie erreicht dessen Angriffsliste den Zusatzbauer durch die
       // normale Übergabe-Maschinerie (E17).
       nummerVon.set(instanzId, null)
-      vorgaengerVon.set(instanzId, [vorgaengerId])
+      vorgaengerVon.set(instanzId, vorgaengerId ? [vorgaengerId] : [])
       const vorfahren =
-        vorgaengerId === melderEintrag.instanzId
+        !vorgaengerId || vorgaengerId === melderEintrag.instanzId
           ? [{ instanzId: melderEintrag.instanzId }]
           : [{ instanzId: melderEintrag.instanzId }, { instanzId: vorgaengerId }]
       vorfahrenVon.set(instanzId, vorfahren)
@@ -2867,6 +2950,13 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           const liste = vorgaengerVon.get(e.instanzId)
           if (liste && !liste.includes(instanzId)) liste.push(instanzId)
         })
+        // Der Melder-Prüfer selbst (Bauschritt 58, Angriffsfund 9): Beim
+        // laufenden (wartenden) Prüfer ist der Eintrag wirkungslos — die
+        // Startprüfung liest ihn erst, wenn er auf 'offen' zurückgeht.
+        if (melderVorgaenger) {
+          const liste = vorgaengerVon.get(melderEintrag.instanzId)
+          if (liste && !liste.includes(instanzId)) liste.push(instanzId)
+        }
       }
       return { instanzId, eintrag, k }
     }
@@ -2898,9 +2988,136 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       tickern(
         texte.ticker.zusatzbauerKarteAngelegt(inhalt.titel, knoten.get(melderId)?.name ?? '?')
       )
-      const karte = { id: angelegt.id, titel: inhalt.titel }
+      // text und thema wandern mit in den Merker: Rollt ein harter Stopp die
+      // karten.json auf den Stand vor dem Lauf zurück, legt
+      // zusatzKartenNachRueckrollSichern die Karte daraus neu an (Befund P2-2).
+      const karte = { id: angelegt.id, titel: inhalt.titel, text: inhalt.text }
       zusatzKartenAngelegt.set(schluessel, karte)
       return karte
+    }
+
+    // Die Bericht-Zeile eines Fundes, aus dem KEIN Zusatzbauer wurde (E13) —
+    // der Laufbericht nennt jeden Fund und seinen Weg. Bis Bauschritt 58 lag
+    // sie als zeileFuer im Blockende des Angriffslisten-Lieferanten; jetzt
+    // schreiben auch das Warte-Werkzeug und der Rückfallweg des Prüfers Zeilen.
+    // melderTyp ('angreifer'|'pruefer') steht tolerant daran, damit die
+    // Anzeige später unterscheiden KANN — sie muss es heute nicht.
+    function zusatzFundZeile(fund, weg, karte, melderName, melderTyp = 'angreifer') {
+      const zeile = {
+        name: null,
+        melderName,
+        melderTyp,
+        soll: fund.soll || null,
+        fundort: fund.fundort,
+        urteil: 'ungeprüft',
+        beleg: '',
+        angriffsliste: false,
+        dateien: 0,
+        kostenUsd: null,
+        karteId: karte?.id ?? null,
+        karteOffen: Boolean(karte),
+        weg
+      }
+      ;(bericht.zusatzbauer ??= []).push(zeile)
+      return zeile
+    }
+
+    // Setzt für eine Fund-Gruppe (zusatzbauerEntscheidung) den Zusatzbauer an:
+    // Karte sofort (E7), bei Schwere „hoch" ein Zusatz-Angreifer davor (E17),
+    // Knoten registrieren, Stand- und Bericht-Eintrag. Eine Stelle für beide
+    // Melder-Typen (Bauschritt 58): 'angreifer' (Blockende der Angriffsliste)
+    // und 'pruefer' (Warte-Werkzeug bzw. Rückfallweg). Rückgabe { karte, z } —
+    // z ist null, wenn die Definitions-Seite (blockKatalog) fehlt: dann bleibt
+    // es ehrlich bei der Karte, und der Aufrufer schreibt die Karten-Zeile.
+    function zusatzbauerAnsetzen(gruppe, melderK, melderId, melderTyp) {
+      const karte = zusatzKarteAnlegen(gruppe, melderId)
+      const melderName = melderK.name
+      const def =
+        typeof zusatzbauerDefinition === 'function'
+          ? zusatzbauerDefinition({
+              soll: gruppe.soll,
+              fundort: gruppe.fundort,
+              fundpfad: gruppe.fundpfad,
+              melderName,
+              schwere: gruppe.schwere
+            })
+          : null
+      if (!def) return { karte, z: null }
+      // Start-Vorgänger: Der Angreifer-Melder ist am Blockende fertig und darf
+      // den Zusatzbauer halten. Der Prüfer-Melder NICHT — er wartet selbst im
+      // Werkzeug bzw. geht für die Nachprüfung auf 'offen' zurück; als
+      // Start-Vorgänger hielten beide einander fest (Bauschritt 58).
+      let vorgaengerId = melderTyp === 'pruefer' ? null : melderId
+      let angreiferInstanzId = null
+      if (gruppe.schwere === 'hoch' && typeof zusatzAngreiferDefinition === 'function') {
+        const zaDef = zusatzAngreiferDefinition({
+          soll: gruppe.soll,
+          fundort: gruppe.fundort,
+          fundpfad: gruppe.fundpfad,
+          melderName
+        })
+        if (zaDef) {
+          const za = zusatzKnotenRegistrieren({
+            def: zaDef,
+            melderEintrag: melderK.eintrag,
+            melderName,
+            vorgaengerId,
+            einfuegenNach: melderId
+          })
+          vorgaengerId = za.instanzId
+          angreiferInstanzId = za.instanzId
+        }
+      }
+      const zb = zusatzKnotenRegistrieren({
+        def,
+        melderEintrag: melderK.eintrag,
+        melderName,
+        vorgaengerId,
+        einfuegenNach: angreiferInstanzId ?? melderId,
+        // Der Prüfer-Melder urteilt nach dem Zusatzbauer erneut — der Knoten
+        // hält ihn als zusätzlicher Vorgänger (Angriffsfund 9).
+        melderVorgaenger: melderTyp === 'pruefer'
+      })
+      tickern(texte.ticker.zusatzbauerAngelegt(zb.k.name, melderName, gruppe.fundpfad))
+      const z = {
+        instanzId: zb.instanzId,
+        name: zb.k.name,
+        melderInstanzId: melderId,
+        melderName,
+        melderTyp,
+        soll: gruppe.soll,
+        fundort: gruppe.fundort,
+        fundpfad: gruppe.fundpfad,
+        schwere: gruppe.schwere,
+        karteId: karte?.id ?? null,
+        karteTitel: karte?.titel ?? '',
+        karteOffen: Boolean(karte),
+        status: 'offen',
+        gemesseneDateien: [],
+        angriffsliste: angreiferInstanzId != null,
+        angreiferInstanzId,
+        kostenUsd: null,
+        urteil: null,
+        beleg: ''
+      }
+      zusatzbauerStand.push(z)
+      z.berichtZeile = {
+        name: z.name,
+        melderName,
+        melderTyp,
+        soll: z.soll,
+        fundort: z.fundort,
+        urteil: 'ungeprüft',
+        beleg: '',
+        angriffsliste: z.angriffsliste,
+        dateien: 0,
+        kostenUsd: null,
+        karteId: z.karteId,
+        karteOffen: z.karteOffen,
+        weg: 'zusatzbauer'
+      }
+      ;(bericht.zusatzbauer ??= []).push(z.berichtZeile)
+      return { karte, z }
     }
 
     // Blockende eines Angriffslisten-Lieferanten (E6): Die Liste ist final —
@@ -2940,25 +3157,9 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       const melderName = melderK.name
       // Der Laufbericht nennt JEDEN Fund und seinen Weg (E13) — auch die, aus
       // denen kein Zusatzbauer wird. `weg` steht zusätzlich zur E13-Form daran,
-      // damit die Anzeige nicht raten muss.
-      const zeileFuer = (fund, weg, karte) => {
-        const zeile = {
-          name: null,
-          melderName,
-          soll: fund.soll || null,
-          fundort: fund.fundort,
-          urteil: 'ungeprüft',
-          beleg: '',
-          angriffsliste: false,
-          dateien: 0,
-          kostenUsd: null,
-          karteId: karte?.id ?? null,
-          karteOffen: Boolean(karte),
-          weg
-        }
-        ;(bericht.zusatzbauer ??= []).push(zeile)
-        return zeile
-      }
+      // damit die Anzeige nicht raten muss. (Seit Bauschritt 58 die
+      // verallgemeinerte Stelle zusatzFundZeile oben.)
+      const zeileFuer = (fund, weg, karte) => zusatzFundZeile(fund, weg, karte, melderName)
       const inZusatzbauer = new Set(entscheidung.zusatzbauer.flatMap((g) => g.funde))
       for (const { fund, fundpfad, weg } of entscheidung.wege) {
         if (weg === 'zusatzbauer' && inZusatzbauer.has(fund)) continue // Zeile kommt je Gruppe
@@ -2987,91 +3188,10 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         zeileFuer(fund, 'normal', null)
       }
       for (const gruppe of entscheidung.zusatzbauer) {
-        const karte = zusatzKarteAnlegen(gruppe, melderId)
-        // Bei Fundschwere „hoch" schaut ein nur-lesender Zusatz-Angreifer
-        // zuerst auf die Stelle (E17); seine Angriffsliste erreicht den
-        // Zusatzbauer über den Vorfahren-Eintrag.
-        // Ohne die Definitions-Seite (blockKatalog) gibt es keinen Agenten —
-        // dann bleibt es ehrlich bei der Karte, die schon angelegt ist.
-        const def =
-          typeof zusatzbauerDefinition === 'function'
-            ? zusatzbauerDefinition({
-                soll: gruppe.soll,
-                fundort: gruppe.fundort,
-                fundpfad: gruppe.fundpfad,
-                melderName,
-                schwere: gruppe.schwere
-              })
-            : null
-        if (!def) {
-          zeileFuer(gruppe.funde[0], 'karte', karte)
-          continue
-        }
-        let vorgaengerId = melderId
-        let angreiferInstanzId = null
-        if (gruppe.schwere === 'hoch' && typeof zusatzAngreiferDefinition === 'function') {
-          const zaDef = zusatzAngreiferDefinition({
-            soll: gruppe.soll,
-            fundort: gruppe.fundort,
-            fundpfad: gruppe.fundpfad,
-            melderName
-          })
-          if (zaDef) {
-            const za = zusatzKnotenRegistrieren({
-              def: zaDef,
-              melderEintrag: melderK.eintrag,
-              melderName,
-              vorgaengerId: melderId,
-              einfuegenNach: melderId
-            })
-            vorgaengerId = za.instanzId
-            angreiferInstanzId = za.instanzId
-          }
-        }
-        const zb = zusatzKnotenRegistrieren({
-          def,
-          melderEintrag: melderK.eintrag,
-          melderName,
-          vorgaengerId,
-          einfuegenNach: angreiferInstanzId ?? melderId
-        })
-        tickern(texte.ticker.zusatzbauerAngelegt(zb.k.name, melderName, gruppe.fundpfad))
-        const z = {
-          instanzId: zb.instanzId,
-          name: zb.k.name,
-          melderInstanzId: melderId,
-          melderName,
-          soll: gruppe.soll,
-          fundort: gruppe.fundort,
-          fundpfad: gruppe.fundpfad,
-          schwere: gruppe.schwere,
-          karteId: karte?.id ?? null,
-          karteTitel: karte?.titel ?? '',
-          karteOffen: Boolean(karte),
-          status: 'offen',
-          gemesseneDateien: [],
-          angriffsliste: angreiferInstanzId != null,
-          angreiferInstanzId,
-          kostenUsd: null,
-          urteil: null,
-          beleg: ''
-        }
-        zusatzbauerStand.push(z)
-        z.berichtZeile = {
-          name: z.name,
-          melderName,
-          soll: z.soll,
-          fundort: z.fundort,
-          urteil: 'ungeprüft',
-          beleg: '',
-          angriffsliste: z.angriffsliste,
-          dateien: 0,
-          kostenUsd: null,
-          karteId: z.karteId,
-          karteOffen: z.karteOffen,
-          weg: 'zusatzbauer'
-        }
-        ;(bericht.zusatzbauer ??= []).push(z.berichtZeile)
+        // Karte, Zusatz-Angreifer bei „hoch" (E17), Registrierung, Stand und
+        // Bericht — die gemeinsame Stelle mit dem Prüfer-Weg (Bauschritt 58).
+        const erg = zusatzbauerAnsetzen(gruppe, melderK, melderId, 'angreifer')
+        if (!erg.z) zeileFuer(gruppe.funde[0], 'karte', erg.karte)
       }
       standSpeichern()
     }
@@ -3093,15 +3213,30 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         // dann zählt die Position seines Melders.
         const ankerIdx =
           zIdx >= 0 ? zIdx : kette.findIndex((e) => e.instanzId === z.melderInstanzId)
-        if (ankerIdx < 0 || prueferIdx <= ankerIdx) continue
+        // Prüfer-Melder (Bauschritt 58, Angriffsfund 10): Sein Zusatzbauer
+        // steht in der Kette HINTER ihm — die Positionsregel unten schlösse
+        // genau den Melder aus, der urteilen soll. Er zählt deshalb immer.
+        const istPrueferMelder = z.melderTyp === 'pruefer'
+        const istMelder = istPrueferMelder && k.eintrag.instanzId === z.melderInstanzId
+        if (!istMelder && (ankerIdx < 0 || prueferIdx <= ankerIdx)) continue
         const dateien = zusatzGemessenePfade(z)
         if (z.status !== 'fertig' && dateien.length === 0) continue
-        const ersterPrueferIdx = kette.findIndex(
-          (e, i) => i > ankerIdx && knoten.get(e.instanzId)?.def?.prueft
-        )
-        const urteilen =
-          z.status === 'fertig' &&
-          (prueferIdx === ersterPrueferIdx || (k.abnahmeQuellen?.length ?? 0) > 0)
+        let urteilen
+        if (istPrueferMelder) {
+          // Das soll-Urteil schuldet der MELDER selbst (beide Wege — nach dem
+          // Warte-Werkzeug wie nach dem Rückfallweg läuft er über diese
+          // Stelle) und eine Abnahme; ein SPÄTERER prüfender Block bekommt
+          // nur die Datei-Ausnahme für die Grenz-Kriterien.
+          urteilen =
+            z.status === 'fertig' && (istMelder || (k.abnahmeQuellen?.length ?? 0) > 0)
+        } else {
+          const ersterPrueferIdx = kette.findIndex(
+            (e, i) => i > ankerIdx && knoten.get(e.instanzId)?.def?.prueft
+          )
+          urteilen =
+            z.status === 'fertig' &&
+            (prueferIdx === ersterPrueferIdx || (k.abnahmeQuellen?.length ?? 0) > 0)
+        }
         liste.push({
           name: z.name,
           melderName: z.melderName,
@@ -3189,6 +3324,285 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         nachpruefungNoetig = true
         tickern(texte.ticker.zusatzbauerReparatur(z.name, budget.genutzt, rundenStandard))
       }
+      return nachpruefungNoetig
+    }
+
+    // ——— Der wartende Prüfer (Bauschritt 58) ————————————————————————————————
+    // Der Prüfer ist der Letzte in der Kette — hinter ihm urteilt niemand
+    // mehr. Meldet ER einen Fund außerhalb der Dateilisten, wartet er selbst:
+    // auf_zusatzbauer_warten blockiert, bis der Zusatzbauer fertig ist, und
+    // das Werkzeug-Ergebnis trägt Umsetzungsbericht und Diff. Danach urteilt
+    // er über einen fertigen Stand (zusatzUrteile, getrennt vom Paket).
+
+    // Empfänger-Regel des Prüfers: sein Rückführungs-Ziel, rückwärts — exakt
+    // dieselbe Quelle wie die Rückführung selbst (verarbeiteEnde), keine
+    // zweite Rechnung (Angriffsfund 3). Die Dateiliste ist die JETZT geltende.
+    function prueferEmpfaengerFuer(prueferId) {
+      const zielId = rueckfuehrungsZiel(workflow.bloecke, workflow.pfeile, prueferId)
+      const zielK = zielId ? knoten.get(zielId) : null
+      if (!zielK) return { zielK: null, empfaenger: [] }
+      return {
+        zielK,
+        empfaenger: [{ instanzId: zielId, dateiListe: dateiListeFuer(zielK) }]
+      }
+    }
+
+    // Der Handler des Werkzeugs auf_zusatzbauer_warten — mechanisch, KEIN
+    // urteilendes Modell: Auslöser aus Feldern, Zuständigkeit aus der Kette,
+    // Grenze aus einer Zahl, Ausgang aus einer Einstellung. Löst IMMER mit
+    // { text } auf (auch bei Absturz des Zusatzbauers und beim Laufende) —
+    // der wartende Prüfer hängt nie.
+    async function zusatzWartenBehandeln({ text, fundort, soll, schwere }, ruferInstanzId) {
+      const tz = texte.zusatzWarten
+      const k = ruferInstanzId ? knoten.get(ruferInstanzId) : null
+      // Doppelnetz: Der Motor sperrt Blöcke ohne prueft schon (pruefeWerkzeug).
+      if (!k?.def?.prueft) return { text: tz.nurPruefer }
+      const fund = {
+        text: String(text ?? '').trim(),
+        fundort: String(fundort ?? '').trim(),
+        soll: String(soll ?? '').trim(),
+        // Rückfall wie im Schema-Text angekündigt: fehlt die schwere, gilt mittel.
+        schwere: SCHWEREN.includes(schwere) ? schwere : 'mittel'
+      }
+      const zeile = (weg, karte) => zusatzFundZeile(fund, weg, karte, k.name, 'pruefer')
+      // Ohne Fundstelle kann kein Zusatzbauer arbeiten — Karte (E4/E6).
+      const fundpfad = fundpfadAus(fund.fundort)
+      if (!fundpfad) {
+        const karte = zusatzKarteAnlegen(fund, ruferInstanzId)
+        zeile('karte', karte)
+        standSpeichern()
+        return { text: tz.keinPfad }
+      }
+      // Darf das Rückführungs-Ziel die Stelle ohnehin anfassen (keine Liste
+      // oder Liste deckt den fundpfad), geht der Fund den normalen Weg — die
+      // Reparatur-Runde erreicht ihn, ein Zusatzbauer wäre Doppelarbeit.
+      const { zielK, empfaenger } = prueferEmpfaengerFuer(ruferInstanzId)
+      if (zielK) {
+        const dateiListe = empfaenger[0].dateiListe
+        if (
+          !dateiListe?.length ||
+          dateilistenUeberschneidung(dateiListe, [fundpfad]).ueberschneidet
+        ) {
+          zeile('normal', null)
+          standSpeichern()
+          return { text: tz.normalerWeg(zielK.name) }
+        }
+      }
+      // Dieselbe Mechanik wie am Blockende des Angreifers (E6) — Einstellung,
+      // Obergrenze und schon angelegte Zusatzbauer entscheiden den Weg.
+      const einstellung = einstellungen.fundeAusserhalb ?? 'karte'
+      const obergrenze = einstellungen.zusatzbauerMax ?? 1
+      const entscheidung = zusatzbauerEntscheidung({
+        funde: [fund],
+        empfaenger,
+        einstellung,
+        obergrenze,
+        bereitsAngelegt: zusatzbauerStand.map((z) => ({ fundpfad: z.fundpfad }))
+      })
+      const weg = entscheidung.wege[0]?.weg ?? 'karte'
+      if (weg === 'vorhanden') {
+        // Für diese Fundstelle lief in diesem Lauf schon einer — nie ein
+        // Schein-Erfolg (Angriffsfund 14): Ein nicht wiederbelebter
+        // ('gescheitert' aus der Wiederaufnahme) wird ausdrücklich benannt.
+        const z = zusatzbauerStand.find((e) => e.fundpfad && e.fundpfad === fundpfad)
+        const bz = zeile('vorhanden', null)
+        if (z?.karteId) {
+          bz.karteId = z.karteId
+          bz.karteOffen = z.karteOffen
+        }
+        standSpeichern()
+        return {
+          text:
+            z?.status === 'gescheitert'
+              ? tz.nichtWiederbelebt(z.karteTitel)
+              : tz.schonVorhanden(z?.name ?? '')
+        }
+      }
+      if (weg === 'bericht') {
+        tickern(texte.ticker.zusatzbauerFundNurBericht(k.name))
+        zeile('bericht', null)
+        standSpeichern()
+        return { text: tz.nurBericht }
+      }
+      if (weg === 'karte' || !entscheidung.zusatzbauer.length) {
+        const karte = zusatzKarteAnlegen(fund, ruferInstanzId)
+        zeile('karte', karte)
+        standSpeichern()
+        // Unterscheidung nur für den Antwort-Text: Bei „jetzt mitnehmen" mit
+        // Empfänger, Fundstelle UND soll heißt Karte, dass die Obergrenze
+        // erreicht ist (dieselbe Rechnung wie in zusatzbauerEntscheidung:
+        // frei = Obergrenze minus schon angelegte). Ohne Empfänger oder ohne
+        // soll ist es der gewöhnliche Karten-Weg.
+        const obergrenzeErreicht =
+          einstellung === 'mitnehmen' &&
+          Boolean(fund.soll) &&
+          empfaenger.length > 0 &&
+          zusatzbauerStand.length >= obergrenze
+        return {
+          text: obergrenzeErreicht ? tz.obergrenze(obergrenze) : tz.alsKarte(karte?.titel ?? '')
+        }
+      }
+      // Weg 'zusatzbauer': Karte sofort, Registrierung, dann warten. Der
+      // Basis-Punkt für den Diff fällt VOR der Registrierung (Angriffsfund 13:
+      // erst die Zusammenführung NACH dem Lauf des Zusatzbauers löst auf, dann
+      // klammern Basis- und Endpunkt exakt seine Arbeit ein).
+      const basisPunkt = await letzterPunktId(projektPfad, null)
+      const gruppe = entscheidung.zusatzbauer[0]
+      const erg = zusatzbauerAnsetzen(gruppe, k, ruferInstanzId, 'pruefer')
+      if (!erg.z) {
+        // Keine Definitions-Seite: ehrlich bei der Karte bleiben.
+        zeile('karte', erg.karte)
+        standSpeichern()
+        return { text: tz.alsKarte(erg.karte?.titel ?? '') }
+      }
+      const z = erg.z
+      // Zähler statt Boolean (Befund P1-B1, 25.08.2026): Ruft der Prüfer das
+      // Werkzeug zweimal ÜBERLAPPEND, setzte das finally des ersten Aufrufs
+      // ein Boolean zurück, während der zweite noch wartete — die Startregel
+      // sah wieder einen „lebenden" Schreiber, der zweite Zusatzbauer startete
+      // nie, der Prüfer hing bis zum harten Stopp.
+      k.wartetImWerkzeug = (k.wartetImWerkzeug ?? 0) + 1
+      tickern(texte.ticker.prueferRuftZusatzbauer(k.name))
+      standSpeichern()
+      let ausgang
+      try {
+        ausgang = await new Promise((aufloesen) => {
+          lauf.zusatzWarten.set(z.instanzId, aufloesen)
+          // Die Planer-Schleife schläft über einen Schnappschuss — ohne den
+          // Weckruf würde der eben registrierte Knoten nie bedient (Fund 1).
+          planerWecken()
+        })
+      } finally {
+        k.wartetImWerkzeug = Math.max(0, (k.wartetImWerkzeug ?? 1) - 1)
+        lauf.zusatzWarten.delete(z.instanzId)
+      }
+      if (ausgang?.art === 'fertig') {
+        tickern(texte.ticker.prueferWartenAufgeloest(k.name))
+        return { text: await zusatzWartenErgebnisText(z, basisPunkt) }
+      }
+      if (ausgang?.art === 'gescheitert')
+        return {
+          text: [tz.gescheitert(z.name), z.karteTitel ? tz.ergebnisKarteOffen(z.karteTitel) : '']
+            .filter(Boolean)
+            .join('\n\n')
+        }
+      return { text: tz.laufEndet }
+    }
+
+    // Das Werkzeug-Ergebnis nach erfolgreichem Zusatzbauer: Umsetzungsbericht
+    // (dieselbe Quelle wie die Übergabe-Maschinerie: die geprüften Meldungen),
+    // die GEMESSENE Dateiliste immer vollständig, der Diff aus der bestehenden
+    // Diff-Maschinerie (punkteVergleichen, wie der Prüfer-Diff ungefiltert) —
+    // hart gedeckelt mit gemessener Originallänge (Angriffsfund 18) —, der
+    // Karten-Stand und die Urteilspflicht mit dem fundpfad.
+    async function zusatzWartenErgebnisText(z, basisPunkt) {
+      const tz = texte.zusatzWarten
+      const zk = knoten.get(z.instanzId)
+      const teile = [tz.ergebnisKopf(z.name)]
+      const umsetzungsbericht = zk?.lieferung ?? meldungenText(zk?.meldungen ?? [])
+      if (umsetzungsbericht) teile.push(umsetzungsbericht)
+      teile.push(tz.ergebnisDiffKopf)
+      const dateien = zusatzGemessenePfade(z)
+      if (dateien.length) teile.push(dateien.map((pfad) => '- ' + pfad).join('\n'))
+      const bis = await letzterPunktId(projektPfad, null)
+      let diffText = ''
+      if (basisPunkt && bis && basisPunkt !== bis) {
+        const vergleich = await punkteVergleichen(projektPfad, basisPunkt, bis, {
+          nurDateien: null
+        })
+        if (vergleich.ok) diffText = diffAuftragsText(vergleich.dateien, vergleich.ausserhalb ?? 0)
+      }
+      if (diffText.length > ZUSATZ_DIFF_MAX) {
+        const originalLaenge = diffText.length
+        diffText = diffText.slice(0, ZUSATZ_DIFF_MAX) + '\n' + tz.ergebnisDiffGekuerzt(originalLaenge)
+      }
+      if (diffText) teile.push(diffText)
+      teile.push(
+        z.karteOffen ? tz.ergebnisKarteOffen(z.karteTitel) : tz.ergebnisKarteAbgehakt(z.karteTitel)
+      )
+      teile.push(tz.ergebnisUrteilspflicht(z.fundpfad))
+      return teile.join('\n\n')
+    }
+
+    // Der Rückfallweg (Bauschritt 58, Angriffsfunde 2/9/11): Der Prüfer hat
+    // funde im Prüfbeleg gemeldet, ohne das Warte-Werkzeug zu rufen — ein
+    // Auftragssatz hält nicht (Zugsimulator-Befund, 12.08.2026). Dieselben
+    // Regeln wie im Handler, mit zwei Unterschieden: Ein Zusatzbauer entsteht
+    // NUR bei bestandenem Paket (bei fehlgeschlagenem gehen die Funde den
+    // Karten-Weg — kein Zusatzbauer parallel zur Reparatur-Runde; der erneute
+    // Prüfer-Anlauf kann neu melden), und der Prüfer läuft danach als
+    // Nachprüfung erneut (der Zusatzbauer hält ihn als Vorgänger).
+    // Rückgabe true, wenn der Prüfer dafür erneut laufen muss.
+    function prueferFundeVerarbeiten(k, prueferId, paketBestanden) {
+      const beleg = pruefbelegAusMeldungen(k.meldungen)
+      const gemeldet = (Array.isArray(beleg?.funde) ? beleg.funde : []).filter((f) => f.text)
+      if (!gemeldet.length) return false
+      // Dedupe gegen die eigenen früheren Meldungen (Werkzeug-Weg bzw. der
+      // vorige Anlauf der Nachprüfung): dieselbe Fundstelle bekommt keine
+      // zweite Bericht-Zeile und erst recht keinen zweiten Zusatzbauer.
+      const schonGemeldet = new Set(
+        zusatzbauerStand
+          .filter((z) => z.melderTyp === 'pruefer' && z.melderInstanzId === prueferId && z.fundpfad)
+          .map((z) => z.fundpfad)
+      )
+      const frisch = gemeldet.filter((fund) => {
+        const pfad = fundpfadAus(fund.fundort)
+        return !(pfad && schonGemeldet.has(pfad))
+      })
+      if (!frisch.length) return false
+      const { empfaenger } = prueferEmpfaengerFuer(prueferId)
+      const entscheidung = zusatzbauerEntscheidung({
+        funde: frisch,
+        empfaenger,
+        einstellung: einstellungen.fundeAusserhalb ?? 'karte',
+        obergrenze: einstellungen.zusatzbauerMax ?? 1,
+        bereitsAngelegt: zusatzbauerStand.map((z) => ({ fundpfad: z.fundpfad }))
+      })
+      const melderName = k.name
+      const zeileFuer = (fund, weg, karte) => zusatzFundZeile(fund, weg, karte, melderName, 'pruefer')
+      const inZusatzbauer = new Set(entscheidung.zusatzbauer.flatMap((g) => g.funde))
+      for (const { fund, fundpfad, weg } of entscheidung.wege) {
+        if (weg === 'zusatzbauer') {
+          if (paketBestanden && inZusatzbauer.has(fund)) continue // Zeile kommt je Gruppe
+          // Fehlgeschlagenes Paket: der Fund geht den Karten-Weg.
+          const karte = zusatzKarteAnlegen(fund, prueferId)
+          zeileFuer(fund, 'karte', karte)
+          continue
+        }
+        if (weg === 'vorhanden') {
+          const z = zusatzbauerStand.find((e) => e.fundpfad && e.fundpfad === fundpfad)
+          const bz = zeileFuer(fund, 'vorhanden', null)
+          if (z?.karteId) {
+            bz.karteId = z.karteId
+            bz.karteOffen = z.karteOffen
+          }
+          continue
+        }
+        if (weg === 'karte') {
+          const karte = zusatzKarteAnlegen(fund, prueferId)
+          zeileFuer(fund, 'karte', karte)
+          continue
+        }
+        if (weg === 'bericht') {
+          tickern(texte.ticker.zusatzbauerFundNurBericht(melderName))
+          zeileFuer(fund, 'bericht', null)
+          continue
+        }
+        zeileFuer(fund, 'normal', null)
+      }
+      let nachpruefungNoetig = false
+      if (paketBestanden) {
+        for (const gruppe of entscheidung.zusatzbauer) {
+          const erg = zusatzbauerAnsetzen(gruppe, k, prueferId, 'pruefer')
+          if (!erg.z) {
+            zeileFuer(gruppe.funde[0], 'karte', erg.karte)
+            continue
+          }
+          nachpruefungNoetig = true
+          tickern(texte.ticker.prueferFundRueckfall(k.name))
+        }
+      }
+      standSpeichern()
       return nachpruefungNoetig
     }
 
@@ -3395,6 +3809,9 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           name: z.name,
           melderInstanzId: z.melderInstanzId,
           melderName: z.melderName,
+          // Bauschritt 58: wer gemeldet hat — tolerant gelesen, ein Stand
+          // von vor diesem Schritt trägt das Feld nicht (dann 'angreifer').
+          melderTyp: z.melderTyp === 'pruefer' ? 'pruefer' : 'angreifer',
           soll: z.soll,
           fundort: z.fundort,
           fundpfad: z.fundpfad,
@@ -3643,6 +4060,8 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           name: String(roh.name ?? ''),
           melderInstanzId: typeof roh.melderInstanzId === 'string' ? roh.melderInstanzId : null,
           melderName: String(roh.melderName ?? ''),
+          // Bauschritt 58, tolerant: fehlt das Feld (alter Stand), gilt 'angreifer'.
+          melderTyp: roh.melderTyp === 'pruefer' ? 'pruefer' : 'angreifer',
           soll: String(roh.soll ?? ''),
           fundort: String(roh.fundort ?? ''),
           fundpfad: String(roh.fundpfad ?? ''),
@@ -3666,6 +4085,7 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         z.berichtZeile = {
           name: z.name,
           melderName: z.melderName,
+          melderTyp: z.melderTyp,
           soll: z.soll,
           fundort: z.fundort,
           urteil: z.urteil ?? 'ungeprüft',
@@ -3947,12 +4367,23 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         // in der Kette, kann im Lauf ein Zusatzbauer entstehen — sein
         // Liefer-Werkzeug (Umsetzungsbericht) wird von Anfang an
         // mitregistriert, denn der Werkzeug-Server wird EINMAL je Motor gebaut.
+        // Seit Bauschritt 58 auch bei einem prüfenden Block in der Kette:
+        // Dessen Funde können per Warte-Werkzeug oder Rückfallweg einen
+        // Zusatzbauer erzeugen — ohne Registrierung könnte der nicht melden
+        // (Angriffsfund 6). Und bei Fundschwere hoch stellt ihm ein
+        // nur-lesender Zusatz-Angreifer seine Angriffsliste voran — deren
+        // Melde-Werkzeug braucht die Registrierung auch in Ketten OHNE
+        // Angreifer, sonst weicht er auf den Freitext aus und der Zusatzbauer
+        // bekommt die Liste nie strukturiert (Befund P2, 25.08.2026).
         lieferscheinWerkzeuge: werkzeugeFuerKette([
           ...kette.map((eintrag) => defVon(eintrag.blockId)),
           ...(kette.some((eintrag) =>
             (defVon(eintrag.blockId)?.liefert ?? []).includes(ANGRIFFSLISTE_ETIKETT)
           )
             ? [{ liefert: [UMSETZUNGSBERICHT_ETIKETT] }]
+            : []),
+          ...(kette.some((eintrag) => defVon(eintrag.blockId)?.prueft)
+            ? [{ liefert: [UMSETZUNGSBERICHT_ETIKETT, ANGRIFFSLISTE_ETIKETT] }]
             : [])
         ]),
         ...(bekanntesKontextFenster > 0 ? { kontextFenster: bekanntesKontextFenster } : {}),
@@ -4084,6 +4515,16 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         },
         aufRechteFrage: rechteFrageStellen,
         aufMenschFrage: (daten) => menschFrageStellen(daten, holeName()),
+        // Der wartende Prüfer (Bauschritt 58): Das Werkzeug existiert NUR,
+        // wenn ein prüfender Block in der Kette steht — sonst null, dann baut
+        // der Motor den zusatz-Server gar nicht. Gilt für JEDE Instanz aus
+        // dieser Fabrik (Lauf-Session, parallele Zweige, lokale Motoren) —
+        // welcher Block gerade ruft, sagt holeInstanz() beim Aufruf, dieselbe
+        // Mechanik wie bei aufMenschFrage. Nicht-Prüfer stoppt der Motor
+        // selbst hart (pruefeWerkzeug), das Doppelnetz sitzt im Handler.
+        aufZusatzbauerWarten: kette.some((eintrag) => defVon(eintrag.blockId)?.prueft)
+          ? (daten) => zusatzWartenBehandeln(daten, holeInstanz())
+          : null,
         aufKartenVorschlag: (vorschlag) => vorschlagStellen(vorschlag, holeName()),
         aufLaufVorschlag: laufVorschlagAnnehmen,
         aufKartenZuteilung: kartenZuteilungAnnehmen,
@@ -5554,6 +5995,9 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     }
 
     // Ein Knoten in der einfachen Form, die die Wellen-Regeln oben lesen.
+    // wartetImWerkzeug (Bauschritt 58): Der Prüfer hängt in
+    // auf_zusatzbauer_warten — nur die wellenStartRegel liest das Feld, und
+    // auch sie nur für Zusatz-Kandidaten.
     function wellenKnoten(nk) {
       return {
         instanzId: nk.eintrag.instanzId,
@@ -5561,6 +6005,9 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         def: nk.def,
         status: nk.status,
         schreibtGerade: nk.schreibtGerade === true,
+        // Am Knoten ist es seit Befund P1-B1 ein Zähler offener Aufrufe —
+        // die reine Regel liest weiter ein Boolean.
+        wartetImWerkzeug: Boolean(nk.wartetImWerkzeug),
         dateiListe: nk.dateiListeAktiv ?? null
       }
     }
@@ -6094,7 +6541,13 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           // jetzt schon los, schriebe der in genau dieses geschützte Revier
           // hinein — der Punkt „Nach Block D" nähme seine Arbeit dann nicht
           // auf, und der Punkt „Nach Block A" trüge sie fälschlich (gemessen).
-          const kandidat = { ...wellenKnoten(k), dateiListe: dateiListeFuer(k) }
+          // zusatz (Bauschritt 58): Nur für Zusatz-Knoten ist ein wartender
+          // Prüfer (wartetImWerkzeug) in der Startregel unsichtbar.
+          const kandidat = {
+            ...wellenKnoten(k),
+            dateiListe: dateiListeFuer(k),
+            zusatz: zusatzKnotenIds.has(eintrag.instanzId)
+          }
           const urteil = wellenStartRegel(
             kandidat,
             [...knoten.values()]
@@ -6841,6 +7294,10 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         if (k.status === 'fertig') await verarbeiteEnde(k, id, blockErgebnis)
         nachgeholteRueckfuehrung(k)
         await strangSchliessenFuer(k)
+        // Der wartende Prüfer (Bauschritt 58): Ein Zusatzbauer nimmt den Weg
+        // über den Nachlauf — sein Fertig-Signal fällt auch hier erst NACH
+        // der Zusammenführung, wenn sein Stand auf der Platte liegt.
+        zusatzWartenAufloesenNach(id)
         standSpeichern()
       }
     }
@@ -6932,6 +7389,11 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         const bestanden = urteilAusMeldungen(k.meldungen)
         blockErgebnis.zustand = bestanden === true ? 'pruefung-bestanden' : 'pruefung-nicht-bestanden'
         abnahmeVermerken(k, id, blockErgebnis, bestanden === true ? 'bestanden' : 'fehlgeschlagen')
+        // Rückfallweg des Prüfers (Bauschritt 58): funde aus seinem Prüfbeleg
+        // — VOR allen frühen returns, damit kein Fund verlorengeht, ganz
+        // gleich, wie das Paket-Urteil ausfällt. Ein Zusatzbauer entsteht nur
+        // bei bestandenem Paket; dann läuft dieser Prüfer danach erneut.
+        const rueckfallNachpruefung = prueferFundeVerarbeiten(k, id, bestanden === true)
         // Zusatzbauer (Bauschritt 57, E9): Die zusatzUrteile des Belegs werden
         // AUSSERHALB des Paket-Urteils ausgewertet — ein verfehltes soll kippt
         // nie das Paket. Ein verfehltes soll schickt den Zusatzbauer in seine
@@ -6939,16 +7401,18 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         // danach erneut (Statuswechsel unten), sonst läuft er ohnehin wieder.
         const zusatzNachpruefung = zusatzUrteileVerarbeiten(k, id)
         if (bestanden === true) {
-          if (zusatzNachpruefung) {
+          if (zusatzNachpruefung || rueckfallNachpruefung) {
             // Erst nach der Nacharbeit gelten Prüfkarte, Archiv und Punkt —
             // der letzte, dann endgültige Anlauf dieses Prüfers erledigt sie.
             // Sein nächster Anlauf ist eine Nachprüfung: „was sich seit
             // meinem Urteil geändert hat" ab HIER, und der Auftrag trägt die
             // frischen Ausnahmen samt Urteilspflicht (zusatzAusnahmenFuer).
+            // Im Rückfall-Fall hält der Zusatzbauer diesen Prüfer als
+            // Vorgänger — er urteilt erst, wenn der Fix auf der Platte liegt.
             k.diffBasis = await letzterPunktId(projektPfad, k.strang ?? null)
             k.diffAnfordern = true
             k.status = 'offen'
-            tickern(texte.ticker.zusatzbauerNachpruefung(k.name))
+            if (zusatzNachpruefung) tickern(texte.ticker.zusatzbauerNachpruefung(k.name))
             return
           }
           // Bestandene Nachprüfung einer lokalen Reparatur (BAUPLAN 20):
@@ -7448,7 +7912,10 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           // Zusatzbauer (Bauschritt 57, E7): Trifft dieser Zweig-Rückroll die
           // gemessenen Dateien eines Zusatzbauers, ist sein Fix gefallen —
           // die Karte geht wieder auf und sagt damit die Wahrheit.
-          if (zurueck.ok) zusatzKartenWiederOeffnen(zweig.pfade)
+          if (zurueck.ok) {
+            zusatzKartenWiederOeffnen(zweig.pfade)
+            zusatzKartenNachRueckrollSichern()
+          }
         } else {
           tickern(texte.ticker.entscheidungWiederhergestelltGanz(k.name))
           wiederherstellenNachLauf = true
@@ -7470,13 +7937,82 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       endZustand = 'fehlgeschlagen'
       fehlertext = lokalFehler
     }
+    // Weckruf des Planers (Bauschritt 58, Angriffsfund 1): Die Schleife
+    // schläft im Race über einen SCHNAPPSCHUSS der laufenden Promises — ein
+    // Werkzeug-Handler, der mittendrin einen Zusatz-Knoten registriert
+    // (auf_zusatzbauer_warten), würde ohne Weckruf nie bedient. Je
+    // Durchgang wird ein frischer Wecker als zusätzlicher Race-Teilnehmer
+    // gespannt — bewusst NICHT in der laufende-Map, sonst bräche
+    // `laufende.size === 0`. Wecken ohne gespannten Wecker (zwischen zwei
+    // Durchgängen) hält der Merker fest — kein Wecken geht verloren.
+    let planerWeckerAufloeser = null
+    let planerGeweckt = false
+    function planerWecken() {
+      planerGeweckt = true
+      const aufloesen = planerWeckerAufloeser
+      planerWeckerAufloeser = null
+      aufloesen?.({ id: 'wecker', ergebnis: { zustand: 'wecker' } })
+    }
+    function planerWeckerBauen() {
+      if (planerGeweckt) {
+        planerGeweckt = false
+        return Promise.resolve({ id: 'wecker', ergebnis: { zustand: 'wecker' } })
+      }
+      return new Promise((aufloesen) => {
+        planerWeckerAufloeser = aufloesen
+      })
+    }
+    lauf.planerWecken = planerWecken
+
+    // Fertig-Signal an den wartenden Prüfer (Bauschritt 58, Angriffsfund 13):
+    // NICHT beim Statuswechsel auf 'fertig', sondern erst NACH
+    // strangSchliessenFuer — erst dann liegt der Stand des Zusatzbauers auf
+    // der Platte, die der Prüfer liest, und der Diff stimmt mit ihr überein.
+    // Ein Knoten im Nachlauf ist noch nicht endgültig (sein Signal kommt aus
+    // nachlaeufeAbarbeiten); einer, der auf 'offen' zurückging und noch
+    // laufen darf (Nachforderung, Reparatur-Runde), läuft weiter.
+    function zusatzWartenAufloesenNach(id) {
+      const aufloesen = lauf.zusatzWarten.get(id)
+      if (!aufloesen) return
+      const nk = knoten.get(id)
+      if (nk?.status === 'nachlauf' || nk?.status === 'wartet-entscheidung') return
+      if (nk?.status === 'fertig') {
+        lauf.zusatzWarten.delete(id)
+        aufloesen({ art: 'fertig' })
+        return
+      }
+      if (nk?.status === 'offen' && !endZustand && !lauf.sanft && !lauf.hart) return
+      lauf.zusatzWarten.delete(id)
+      aufloesen({ art: lauf.hart || lauf.sanft ? 'laufEndet' : 'gescheitert' })
+    }
+
+    // Nie startende Zusatzbauer (Bauschritt 58): Hält ein Stopp oder ein
+    // Endzustand einen registrierten Zusatz-Knoten für immer auf 'offen'
+    // (bereiteStarten startet dann nichts mehr), darf sein wartender Prüfer
+    // nicht mithängen — der Lauf käme sonst nie zu seinem Ende.
+    function zusatzWartenNieStartende() {
+      if (!lauf.sanft && !lauf.hart && !endZustand) return
+      for (const [id, aufloesen] of [...lauf.zusatzWarten]) {
+        if (knoten.get(id)?.status !== 'offen') continue
+        lauf.zusatzWarten.delete(id)
+        aufloesen({ art: 'laufEndet' })
+      }
+    }
+
     // Die Planer-Schleife: Bereites starten, auf den nächsten fertigen Block
-    // (oder die nächste beantwortete Folgen-Frage) warten, Ergebnis
-    // verarbeiten, ausstehende Nachläufe abarbeiten — bis nichts mehr läuft.
+    // (oder die nächste beantwortete Folgen-Frage, oder den Weckruf) warten,
+    // Ergebnis verarbeiten, ausstehende Nachläufe abarbeiten — bis nichts mehr läuft.
     while (true) {
       bereiteStarten()
+      zusatzWartenNieStartende()
       if (laufende.size === 0) break
-      const { id, ergebnis } = await Promise.race(laufende.values())
+      const { id, ergebnis } = await Promise.race([...laufende.values(), planerWeckerBauen()])
+      if (ergebnis?.zustand === 'wecker') {
+        // Geweckt (Bauschritt 58): nichts weiter tun — bereiteStarten läuft
+        // am Schleifenkopf ohnehin, und der nächste Wecker wird dort gespannt.
+        planerGeweckt = false
+        continue
+      }
       laufende.delete(id)
       if (ergebnis?.zustand === 'entscheidung') {
         // Eine beantwortete Folgen-Frage (BAUPLAN 46) — kein Block-Ergebnis.
@@ -7495,12 +8031,15 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         // Nachlauf oder wartet er auf seine Folgen-Frage (BAUPLAN 46), ist sein
         // Anlauf nicht zu Ende, und strangSchliessenAn lässt den Strang stehen.
         if (!lauf.hart) await strangSchliessenFuer(knoten.get(id))
+        // Der wartende Prüfer (Bauschritt 58): erst NACH der Zusammenführung.
+        zusatzWartenAufloesenNach(id)
       }
       // Nachlauf-Phase (BAUPLAN 46): Steht die Welle, kommt der EINE Rauchtest
       // für alle wartenden Blöcke dran (0.46.2) — VOR dem nächsten Start.
       await nachlaeufeAbarbeiten()
       standSpeichern()
     }
+    lauf.planerWecken = null
 
     // Aufhol-Messpunkt (BAUPLAN 52): Ein sanfter Stopp bricht mitten in der
     // Kette ab — Karten, die in diesem Lauf noch gar nicht dran waren, würden
@@ -7553,6 +8092,12 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         geschuetztFuer: geschuetzteBereicheFuer,
         tickern
       })
+      // Zusatzbauer (Bauschritt 58, Befund P2-2): Der Rückroll kann die im
+      // Lauf angelegten Fund-Karten mitgenommen haben — erst wieder öffnen,
+      // was noch existiert, dann neu anlegen, was fehlt. Kein Fund fällt
+      // aus dem Gedächtnis.
+      zusatzKartenWiederOeffnen(null)
+      zusatzKartenNachRueckrollSichern()
       endZustand = 'hart-abgebrochen'
     }
     // Sicherheitsnetz: Kein Strang dieses Laufs bleibt offen — ein
@@ -7577,7 +8122,12 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       // Zusatzbauer (Bauschritt 57, E7): Der ganze Ordner fällt — jeder
       // abgehakte Zusatzbauer-Fix fällt mit, seine Karte geht wieder auf.
       // Der IPC-Rückroll NACH dem Laufende bleibt bewusst außen vor.
-      if (zurueck.ok) zusatzKartenWiederOeffnen(null)
+      if (zurueck.ok) {
+        zusatzKartenWiederOeffnen(null)
+        // Und was der Rückroll aus der karten.json gerissen hat, kommt
+        // mechanisch zurück (Befund P2-2).
+        zusatzKartenNachRueckrollSichern()
+      }
     }
 
     // Offene Fragen auflösen, damit nichts ewig hängt.
@@ -7585,6 +8135,10 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     for (const aufloesen of [...lauf.entscheidungen.values()]) aufloesen('zurueckstellen')
     for (const antworten of [...lauf.menschFragen.values()]) antworten(null)
     for (const antworten of [...lauf.vorschlaege.values()]) antworten(null)
+    // Der wartende Prüfer (Bauschritt 58): Kein Warte-Werkzeug hängt über das
+    // Laufende hinaus — dasselbe Muster wie die Mensch-Fragen.
+    for (const aufloesen of [...lauf.zusatzWarten.values()]) aufloesen({ art: 'laufEndet' })
+    lauf.zusatzWarten.clear()
 
     // Prozess-Hygiene (BAUPLAN 32): Alles, was aus dem Lauf heraus gestartet
     // wurde und noch lebt (Server des Prüfers, vergessene Shells), wird jetzt
@@ -7677,6 +8231,10 @@ export function laufSanftStoppen(projektPfad) {
   if (!lauf.sanft && !lauf.hart) {
     lauf.sanft = true
     lauf.tickern?.(texte.ticker.sanftAngefordert)
+    // Der wartende Prüfer (Bauschritt 58): Der Planer wacht auf und löst
+    // Warte-Werkzeuge auf, deren Zusatzbauer jetzt nie mehr startet — sonst
+    // hinge der Prüfer über das sanfte Stoppen hinaus im Werkzeugaufruf.
+    lauf.planerWecken?.()
   }
   return { ok: true }
 }
@@ -7689,6 +8247,10 @@ export function laufHartStoppen(projektPfad) {
   // Werkzeug-Aufruf im FlowForge-Prozess ewig hängen lassen — sofort auflösen.
   for (const antworten of [...lauf.menschFragen.values()]) antworten(null)
   for (const antworten of [...lauf.vorschlaege.values()]) antworten(null)
+  // Ebenso ein wartender Prüfer (Bauschritt 58): auf_zusatzbauer_warten löst
+  // mit „der Lauf endet" auf, die Karte des Zusatzbauers bleibt offen.
+  for (const aufloesen of [...lauf.zusatzWarten.values()]) aufloesen({ art: 'laufEndet' })
+  lauf.zusatzWarten.clear()
   // Ebenso eine offene Folgen-Frage (BAUPLAN 46): Sie hängt im Race der
   // Planer-Schleife — unbeantwortet käme der Lauf nie zum Rückroll des harten
   // Stopps. „Zurückstellen" ist die Wahl ohne eigene Wirkung; zurückgesetzt

@@ -15,10 +15,10 @@ gehört repariert (der Rückstand aus 14 — eigene Blöcke durften nur `nurLese
 `fuehrtZusammen` setzen — ist seit Schritt 48 aufgeholt; einzig `uebung` bleibt Katalog-Sache,
 weil es kein Können ist, sondern „Demo-Block").
 
-**Abgeschlossen sind die Bauschritte 1–57** (39 wurde gestrichen); der jüngste Commit
-ist „Bauschritt 57". Davon sind die Schritte **1–49 ausgelagert** ins
+**Abgeschlossen sind die Bauschritte 1–58** (39 wurde gestrichen); der jüngste Commit
+ist „Bauschritt 58". Davon sind die Schritte **1–49 ausgelagert** ins
 [BAUPLAN-ARCHIV.md](BAUPLAN-ARCHIV.md) — Verweise wie „BAUPLAN 19" oder „BAUPLAN 44"
-zeigen dorthin. Hier stehen die fertigen Schritte 50–55 und alles Offene ab 56.
+zeigen dorthin. Hier stehen die fertigen Schritte 50–58.
 
 ## Bauschritte
 
@@ -1239,4 +1239,70 @@ Erwartung: Der Prüfer meldet den Fund, im Ticker startet ein Zusatzbauer, danac
 Beleg zum `soll` getrennt vom Urteil über sein Paket. Gegenprobe: Denselben Lauf mitten
 im Zusatzbauer hart stoppen — der Prüfer darf nicht hängenbleiben, und die Karte muss
 offen sein.
+
+- **Gebaut (25.08.2026, Version 0.59.0):** Wie geplant — der Prüfer wartet im
+  Werkzeug `auf_zusatzbauer_warten` (eigener Server „zusatz"; text, fundort und soll
+  sind Pflicht, schwere optional → mittel), FlowForge registriert den Zusatzbauer
+  (Empfänger-Regel rückwärts: sein Rückführungs-Ziel — darf das die Fundstelle
+  ohnehin anfassen, geht der Fund den normalen Weg), weckt die schlafende
+  Planer-Schleife über einen eigenen Weckruf-Teilnehmer im Race, und der Zusatzbauer
+  läuft, WÄHREND der Prüfer wartet: `wartetImWerkzeug` (Zähler offener Aufrufe) macht
+  den Schreiber in der wellenStartRegel NUR für Zusatz-Knoten-Kandidaten unsichtbar —
+  schreiberBelegt und inWelleVon zählen ihn unverändert weiter. Das Warte-Promise
+  löst erst NACH der Strang-Zusammenführung auf; das Ergebnis trägt
+  Umsetzungsbericht, gemessene Dateiliste, Diff (gedeckelt auf 30.000 Zeichen, mit
+  gemessener Originallänge), Karten-Stand und Urteilspflicht (zusatzUrteile mit
+  fundpfad) — derselbe Prüfer urteilt im selben Anlauf. Urteils-Zuordnung: Bei
+  melderTyp „pruefer" schuldet der MELDER selbst das zusatzUrteil (und seine
+  Abnahme), spätere Prüfer bekommen nur die Datei-Ausnahme; melderTyp wandert
+  tolerant durch Laufstand und Bericht (Rückfall „angreifer"). Nie-Start-Antworten
+  sofort und ehrlich: kein Dateipfad im Fundort · Einstellung „als Karte" ·
+  „nur Bericht" · Rückführungs-Ziel darf anfassen (normaler Weg) · Obergrenze
+  erreicht · dieselbe Fundstelle schon vorhanden · nach Wiederaufnahme nicht
+  wiederbelebt („urteile nicht über einen Fix, den es nicht gibt"). Fehlschlag-Pfade:
+  Zusatzbauer scheitert → ehrlicher Text, Karte offen; harter/sanfter Stopp und
+  Laufende lösen alle Warte-Promises auf — der Prüfer hängt nie. Rückfallweg: neues
+  optionales Feld `funde` im Prüfbeleg (Form der Angreifer-Funde, AUSSERHALB der
+  Urteil/Beanstandungs-Kopplung — „bestanden" mit funde ist gültig); ruft der Prüfer
+  das Werkzeug nicht, wertet FlowForge die Beleg-Funde am Blockende aus — bei
+  bestandenem Paket läuft der Zusatzbauer danach und der Prüfer wird per
+  Nachprüfungs-Muster erneut gerufen (Zusatzbauer als zusätzlicher Vorgänger des
+  Melders); bei fehlgeschlagenem Paket gehen die Funde den Karten-Weg (kein
+  Zusatzbauer parallel zur Reparatur-Runde). Werkzeug-Registrierung: nur wenn ein
+  prüfender Block in der Kette steht; erlaubt ohne Rückfrage nur für prüfende Blöcke
+  (auch nur-lesende), sonst hartes Nein; in Ketten mit prüfendem Block sind
+  melde_umsetzungsbericht UND melde_angriffsliste von Anfang an mitregistriert
+  (Befund P2-1: der Zusatz-Angreifer eines hohen Prüfer-Fundes konnte sonst nicht
+  liefern). Karten-Wahrheit nach Rückroll (Befund P2-2): Rollt ein harter
+  Stopp/„Stand wiederherstellen"/Zweig-Rückroll die karten.json zurück, legt
+  FlowForge verlorene Fund-Karten mechanisch neu an (offen), zieht die Kennungen in
+  Stand und Bericht nach, eine Ticker-Zeile sagt es.
+- **Messwerte der Bausession (25.08.2026, 1 Angreifer, 2 Bauer mit Vertrag, 2 Prüfer,
+  Integrator):** Angriffsliste 21 Funde, davon 6 blockierend. Kernerkenntnis: Die
+  zwei wirklich neuen Mechaniken waren das Aufwecken der schlafenden Planer-Schleife
+  über einen Weckruf-Teilnehmer im Race und der Fund-Kanal im Prüfbeleg außerhalb
+  der Urteils-Kopplung — nicht das blockierende Werkzeug, dessen Muster mit
+  mensch_fragen produktionserprobt ist. Prüfer 1 (Mechanik, 36 Messungen am echten
+  Ablaufplaner): 35 bestanden, 1 wichtiger Befund nachgearbeitet — ein überlappender
+  Doppel-Aufruf des Warte-Werkzeugs führte in den Deadlock (das finally des ersten
+  Aufrufs löschte das Boolean, jetzt ein Zähler; Rot-vor-Grün gemessen).
+  Prüfer 2 (Ende-zu-Ende, gebaute App, CDP, eigener Datenordner, echter Abo-Motor,
+  4 Läufe ≈ 11,5 $): Kernlauf 1b 821 s/3,82 $ bestanden — der Prüfer rief das
+  Werkzeug von selbst, EIN Prüfer-Anlauf (574 s inkl. Warten), Zusatz-Angreifer
+  (Schwere hoch) und Zusatzbauer liefen, während der Prüfer wartete, Urteil
+  „erfüllt" mit eigenem Beleg getrennt vom Paket-Urteil, 1 gemessene Datei, Fehler
+  real behoben, Karte abgehakt. Gegenprobe harter Stopp 5 s nach Zusatzbauer-Start:
+  kein Hänger, App bedienbar — aber Befund P2-2: der Rückroll riss die Fund-Karte
+  aus der karten.json, während der Bericht „offen" sagte → nachgearbeitet
+  (mechanische Neu-Anlage nach jedem Rückroll, gemessen). Gegenprobe „als Karte":
+  sofortige Antwort, kein Zusatzbauer, Karte offen, Urteil ehrlich fehlgeschlagen.
+  Befund P2-1 (während der Session behoben und per Neubau real bestätigt): In Ketten
+  ohne Angreifer fehlte melde_angriffsliste — der Zusatz-Angreifer konnte nicht
+  liefern und lief doppelt. Bewusst offen: Der Rückfallweg („hat Funde gemeldet,
+  ohne zu warten") ist regel-, nicht E2E-gemessen (der echte Prüfer nutzte das
+  Werkzeug in allen Läufen von selbst); der Prüfer war nie unvorbereitet
+  (Paketschneider/Bauer erwähnten den gepflanzten Fehler in Paket bzw. Bericht);
+  Übertrag/Wiederaufnahme mit wartendem Prüfer nur regelgeprüft; eine erste
+  Angreifer-Runde ohne Werkzeug kostet einen doppelten Anlauf (nur relevant, falls
+  der Ausweich je wieder abgewiesen wird). 1863 Prüfungen grün.
 

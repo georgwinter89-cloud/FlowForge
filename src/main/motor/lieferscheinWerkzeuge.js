@@ -33,25 +33,6 @@ import {
 } from '../../shared/lieferschein.js'
 import { etikettKlartext } from '../../shared/etikettRegeln.js'
 
-// Feld-Beschreibungen des Zusatzbauer-Wegs (BAUPLAN 57). Sie stehen hier statt
-// in texte.lieferschein.param, solange die Bausession 57 parallel läuft — der
-// Integrator darf sie dorthin ziehen.
-const ZUSATZ_BESCHREIBUNGEN = {
-  soll:
-    'Kannst du in einem prüfbaren Satz sagen, woran man erkennt, dass dieser Fund behoben ' +
-    'ist, schreib ihn hierher und nenne im Fundort den Dateipfad. Kannst du es nicht, lass ' +
-    'das Feld leer — der Fund wird dann als Aufgabe ins Projektgedächtnis übernommen statt ' +
-    'sofort repariert.',
-  zusatzUrteile:
-    'Nur wenn dein Auftrag benannte Ausnahmen eines Zusatzbauers nennt: je Ausnahme ein ' +
-    'Eintrag mit deinem Urteil darüber. Es gehört hierher und NIE ins Feld urteil deines ' +
-    'Pakets — ein verfehltes zusatzUrteil kippt das Paket-Urteil nicht.',
-  zusatzFundpfad: 'Der fundpfad aus deinem Auftrag — er ordnet das Urteil dem Fund zu.',
-  zusatzUrteil:
-    'erfüllt = das Genannte trifft nachweislich zu · verfehlt = es trifft nicht zu.',
-  zusatzBeleg: 'Woran du das Urteil gemessen hast, kurz zitiert. Das Feld ist Pflicht.'
-}
-
 // Der gemeinsame Rahmen — identisch in jedem Werkzeug.
 function rahmenFelder() {
   const p = texte.lieferschein.param
@@ -115,13 +96,27 @@ function teilFelder(art) {
       // Klartext statt mit einem stummen Schema-Fehler (Muster kurzname).
       zusatzUrteile: liste(
           z.object({
-            fundpfad: z.string().describe(ZUSATZ_BESCHREIBUNGEN.zusatzFundpfad),
-            urteil: z.enum(ZUSATZ_URTEILE).describe(ZUSATZ_BESCHREIBUNGEN.zusatzUrteil),
-            beleg: z.string().optional().describe(ZUSATZ_BESCHREIBUNGEN.zusatzBeleg)
+            fundpfad: z.string().describe(p.zusatzFundpfad),
+            urteil: z.enum(ZUSATZ_URTEILE).describe(p.zusatzUrteil),
+            beleg: z.string().optional().describe(p.zusatzBeleg)
           })
         )
         .optional()
-        .describe(ZUSATZ_BESCHREIBUNGEN.zusatzUrteile),
+        .describe(p.zusatzUrteile),
+      // funde im Prüfbeleg (Bauschritt 58): Funde AUSSERHALB des Prüfauftrags —
+      // exakt dieselbe Form wie beim funde-Teil unten. Sie gehören nicht in
+      // die Beanstandungen und koppeln nie ans Urteil (lieferschein.js lässt
+      // „bestanden" MIT funde ausdrücklich durch).
+      funde: liste(
+          z.object({
+            text: z.string().describe(p.fundText),
+            schwere: z.enum(SCHWEREN).describe(p.schwere),
+            fundort: z.string().optional().describe(p.fundort),
+            soll: z.string().optional().describe(p.soll)
+          })
+        )
+        .optional()
+        .describe(texte.zusatzWarten.prueferFunde),
       pruefkarteTitel: z.string().optional().describe(p.pruefkarteTitel),
       pruefkarteText: z.string().optional().describe(p.pruefkarteText)
     }
@@ -159,7 +154,7 @@ function teilFelder(art) {
             text: z.string().describe(p.fundText),
             schwere: z.enum(SCHWEREN).describe(p.schwere),
             fundort: z.string().optional().describe(p.fundort),
-            soll: z.string().optional().describe(ZUSATZ_BESCHREIBUNGEN.soll)
+            soll: z.string().optional().describe(p.soll)
           })
         )
         .describe(p.funde)

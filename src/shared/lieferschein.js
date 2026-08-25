@@ -858,6 +858,22 @@ function pruefbelegPruefen(roh) {
     if (!beleg) return { fehler: ZUSATZ_URTEIL_TEXTE.belegFehlt }
     zusatzUrteile.push({ fundpfad, urteil: zusatzUrteil, beleg })
   }
+  // funde im Prüfbeleg (Bauschritt 58): Funde AUSSERHALB des Prüfauftrags —
+  // tolerant gelesen wie im funde-Teil (fundePruefen unten, gespiegelt):
+  // text ist Pflicht je Eintrag, eine unbekannte schwere wird mit Klartext
+  // abgewiesen, fundort und soll bleiben optional. Sie koppeln NIE ans
+  // Urteil — die Plausibilität oben bleibt unberührt: „bestanden" MIT funde
+  // ist gültig, denn diese Funde liegen außerhalb des geprüften Pakets.
+  const funde = []
+  for (const eintrag of Array.isArray(roh?.funde) ? roh.funde : []) {
+    const text = einzeilig(eintrag?.text)
+    if (!text) continue
+    const schwere = String(eintrag?.schwere ?? '').trim().toLowerCase()
+    if (!SCHWEREN.includes(schwere)) return { fehler: tl.schwereFehlt(SCHWEREN) }
+    const fundort = einzeilig(eintrag?.fundort)
+    const soll = einzeilig(eintrag?.soll)
+    funde.push({ schwere, text, fundort, soll })
+  }
   const rotVorGruen = freierText(roh?.rotVorGruen, false)
   const geprueft = zeilenListe(roh?.geprueft)
   // Prüfkarte: dieselben harten Längengrenzen wie für jede andere Karte —
@@ -881,7 +897,8 @@ function pruefbelegPruefen(roh) {
       rotVorGruen,
       geprueft,
       pruefkarte,
-      zusatzUrteile
+      zusatzUrteile,
+      funde
     }
   }
 }
@@ -1163,7 +1180,21 @@ export function urteilAusMeldungen(meldungen) {
 
 export function pruefbelegAusMeldungen(meldungen) {
   const treffer = (meldungen ?? []).filter((m) => m?.art === 'pruefbeleg')
-  return treffer.length ? treffer[treffer.length - 1] : null
+  const beleg = treffer.length ? treffer[treffer.length - 1] : null
+  if (!beleg) return null
+  // funde im Prüfbeleg (Bauschritt 58): immer als Array dabei, in derselben
+  // normalisierten Form wie angriffsFundeAus (zusatzbauerRegeln.js) — tolerant
+  // je Eintrag, damit Meldungen von vor dem Feld und alte Laufstände lesbar
+  // bleiben (dann ist die Liste schlicht leer).
+  return {
+    ...beleg,
+    funde: (Array.isArray(beleg.funde) ? beleg.funde : []).map((fund) => ({
+      text: String(fund?.text ?? '').trim(),
+      fundort: String(fund?.fundort ?? '').trim(),
+      schwere: SCHWEREN.includes(fund?.schwere) ? fund.schwere : 'mittel',
+      soll: String(fund?.soll ?? '').trim()
+    }))
+  }
 }
 
 export function beanstandungenAusMeldungen(meldungen) {
