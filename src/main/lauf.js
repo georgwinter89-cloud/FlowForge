@@ -1362,7 +1362,14 @@ const TOR_BEANSTANDUNG_ZEILE_MAX = 400
 // sonderlauf (BAUPLAN 30): { art, instanzId } — statt des Schaubilds läuft ein
 // fester Ein-Block-Workflow (SONDERLAEUFE); die Leinwand bleibt unangetastet.
 export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung = null, ausWarteschlange = false, sonderlauf = null) {
-  if (!fs.existsSync(projektPfad)) return { ok: false, fehler: texte.fehler.projektNichtGefunden }
+  if (typeof projektPfad !== 'string' || !projektPfad.trim() || !fs.existsSync(projektPfad))
+    return { ok: false, fehler: texte.fehler.projektNichtGefunden }
+  // Kanonische Schreibweise, bevor der Pfad in den Lauf wandert: Ein
+  // Schrägstrich-Pfad existiert fürs Dateisystem, fiel aber durch jeden
+  // String-Vergleich dahinter (Registry der Karten-Werkzeuge, Schlüssel der
+  // Ablagen) — die Karten-Werkzeuge meldeten dann den ganzen Lauf lang
+  // „Der Projektordner ist nicht mehr da" (Befund 24.08.2026).
+  projektPfad = path.resolve(projektPfad)
   if (sonderlauf && !SONDERLAEUFE[sonderlauf.art])
     return { ok: false, fehler: texte.fehler.unbekannt }
   // Blockdefinition je Block dieses Laufs — bei Sonderläufen ggf. mit

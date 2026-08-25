@@ -49,8 +49,20 @@ function speichereRegistry(liste) {
   schreibeJsonAtomar(registryPfad(), liste)
 }
 
+// Ein Projektpfad kommt in mehreren Schreibweisen an — der Ordner-Dialog
+// liefert Backslashes, über die IPC-Brücke oder von Werkzeugen kann dieselbe
+// Adresse mit Schrägstrichen kommen. Das Dateisystem behandelt beide gleich,
+// ein roher String-Vergleich nicht: Die Karten-Werkzeuge eines Laufs meldeten
+// dann fälschlich „Der Projektordner ist nicht mehr da" (Befund 24.08.2026).
+// Deshalb vergleicht JEDER Registry-Abgleich über diesen einen Schlüssel;
+// Groß/Klein zählt nicht (Windows-Dateisystem).
+export function projektPfadSchluessel(pfad) {
+  return path.resolve(String(pfad ?? '')).toLowerCase()
+}
+
 function istBekanntesProjekt(pfad) {
-  return ladeRegistry().some((eintrag) => eintrag.pfad === pfad)
+  const schluessel = projektPfadSchluessel(pfad)
+  return ladeRegistry().some((eintrag) => projektPfadSchluessel(eintrag.pfad) === schluessel)
 }
 
 function ladeKarten(projektPfad) {
@@ -134,7 +146,10 @@ export function projekteLaden() {
 }
 
 export function projektVergessen(pfad) {
-  speichereRegistry(ladeRegistry().filter((eintrag) => eintrag.pfad !== pfad))
+  const schluessel = projektPfadSchluessel(pfad)
+  speichereRegistry(
+    ladeRegistry().filter((eintrag) => projektPfadSchluessel(eintrag.pfad) !== schluessel)
+  )
   return { ok: true }
 }
 
