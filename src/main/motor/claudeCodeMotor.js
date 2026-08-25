@@ -283,10 +283,22 @@ const LESE_BEFEHLE = new Set([
   'get-childitem', 'get-content', 'select-string', 'get-location', 'measure-object', 'select-object', 'sort-object'
 ])
 
-const BEFEHLE_OHNE_RUECKFRAGE = new Set([
+// Bewusst NICHT aus PRUEFBEFEHL_WERKZEUGE (torRegeln.js) abgeleitet, obwohl
+// sich die Listen überlappen: PRUEFBEFEHL_WERKZEUGE ist die kürzere Leine —
+// FlowForge führt selbst aus; eine Ableitung würde jede künftige Erweiterung
+// der strengeren Liste still auf die laxere durchschlagen lassen. Stattdessen
+// hält eine Prüfung fest, dass diese Liste nie enger ist als die erste
+// (Bauschritt 56). Exportiert, damit die Prüfung sie messen kann.
+export const BEFEHLE_OHNE_RUECKFRAGE = new Set([
   // Entwickler-Werkzeuge: bauen, testen, installieren
-  'node', 'npm', 'npx', 'pnpm', 'yarn', 'tsc', 'vitest', 'jest',
+  'node', 'npm', 'npx', 'pnpm', 'yarn', 'tsc', 'vitest', 'jest', 'mocha',
   'python', 'python3', 'py', 'pip', 'pip3', 'pytest',
+  'deno', 'bun', 'go', 'cargo', 'dotnet', 'mvn', 'gradle', 'make',
+  'rspec', 'phpunit',
+  // Projekt-Wrapper (Bauschritt 56, Fund D-4): In Java-Projekten ist
+  // `./gradlew test` bzw. `.\mvnw.cmd test` der Alltagsfall — befehlsNamen
+  // schneidet Pfad und .exe/.cmd/.bat ab, übrig bleibt der nackte Name.
+  'gradlew', 'mvnw',
   ...LESE_BEFEHLE
 ])
 

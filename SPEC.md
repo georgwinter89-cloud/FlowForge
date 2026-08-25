@@ -2449,8 +2449,11 @@ ohne Rückfrage durch (Befehls-Einstufung, unten), ein aus Fremdtext übernommen
 Befehl also auch. Das einzige Gegenmittel dort ist die Sichtbarkeit im Ticker.
 
 Befehls-Einstufung (seit Bauschritt 8): Kommandozeilen-Befehle, die mit einem bekannten
-Entwickler-Werkzeug beginnen (node, npm, npx, pnpm, yarn, tsc, vitest, jest, python,
-pip, pytest), laufen ohne Rückfrage — das deckt „Tests ausführen" und „Programm-
+Entwickler-Werkzeug beginnen (node, npm, npx, pnpm, yarn, tsc, vitest, jest, mocha,
+python, python3, py, pip, pip3, pytest, deno, bun, go, cargo, dotnet, mvn, gradle,
+make, rspec, phpunit —
+seit Bauschritt 56 auch die Projekt-Wrapper gradlew und mvnw), laufen ohne Rückfrage —
+das deckt „Tests ausführen" und „Programm-
 bibliotheken installieren" ab. Rein lesende Befehle (dir, type, findstr …) ebenso.
 Verkettete Befehle laufen nur durch, wenn jedes Teilstück bekannt ist — als
 Trenner zählen `&&`, `||`, `;`, `|`, Zeilenumbruch und auch das **einzelne `&`**
@@ -2500,10 +2503,15 @@ dürfen Befehle ausführen (auf eigene Gefahr)"** ist an (Entscheidung Georg,
 14.08.2026; Standard: aus): Dann durchlaufen Befehle nur-lesender Blöcke die
 normale Befehls-Einstufung wie beim Bauer (Git und Prüfmappe bleiben gesperrt,
 Unbekanntes fragt) — Angreifer und Diagnose können so z.B. Prüfskripte laufen
-lassen, um ihre Funde zu belegen. Damit der Agent das auch versucht, bekommt
-jeder nur-lesende Block bei aktiver Einstellung einen Auftrags-Zusatz, der das
-kategorische Befehls-Verbot seines Katalog-Auftrags aufhebt (seit dem
-Zweit-Audit vom 14.08.2026). Die Schreib-Werkzeuge (Dateien, Karten,
+lassen, um ihre Funde zu belegen. Damit der Agent das auch versucht, schaltet
+bei den Katalog-Blöcken mit dem Standard-Sperr-Satz („Programme oder Tests
+auszuführen ist für diesen Block gesperrt — versuche es gar nicht erst") der
+Satz selbst um: Bei aktiver Einstellung steht an seiner Stelle die Erlaubnis
+samt der geltenden Regeln im Auftrag. Eigene nur-lesende Blöcke sowie die
+Katalog-Blöcke mit eigener Formulierung ohne den Standard-Satz (Audit,
+Karten-Prüfer, Späher, Frage an den Menschen, die zwei Übungs-Prüfer) behalten
+den bisherigen Auftrags-Zusatz, der das kategorische Befehls-Verbot aufhebt
+(seit dem Zweit-Audit vom 14.08.2026). Die Schreib-Werkzeuge (Dateien, Karten,
 Startanleitung) bleiben für diese Blöcke gesperrt; ein ausgeführtes Skript kann
 aber Dateien verändern — deshalb steht die aktive Einstellung sichtbar am
 Laufstart im Ticker.

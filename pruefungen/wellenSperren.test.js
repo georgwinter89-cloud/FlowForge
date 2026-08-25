@@ -85,8 +85,10 @@ describe('BAUPLAN 46 · Befehle in einer Welle fragen nach', () => {
     expect(bauer('Bash', { command: 'npm run build' }).erlaubt).toBe(true)
     expect(bauer('Bash', { command: 'npx vitest run' }, { inWelle: false }).erlaubt).toBe(true)
     // Ein unbekannter Befehl fragt wie immer — mit dem alten Text, nicht dem Wellen-Text.
-    expect(bauer('Bash', { command: 'make all' }, { inWelle: true }).frage).toBe(
-      texte.rechteFrage.befehl('make all')
+    // (Bis Bauschritt 56 stand hier `make all` — make ist seither ein bekanntes
+    // Entwickler-Werkzeug und taugt nicht mehr als Beispiel für „unbekannt".)
+    expect(bauer('Bash', { command: 'terraform apply' }, { inWelle: true }).frage).toBe(
+      texte.rechteFrage.befehl('terraform apply')
     )
   })
 

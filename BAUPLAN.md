@@ -15,8 +15,8 @@ gehört repariert (der Rückstand aus 14 — eigene Blöcke durften nur `nurLese
 `fuehrtZusammen` setzen — ist seit Schritt 48 aufgeholt; einzig `uebung` bleibt Katalog-Sache,
 weil es kein Können ist, sondern „Demo-Block").
 
-**Abgeschlossen sind die Bauschritte 1–55** (39 wurde gestrichen); der jüngste Commit
-ist „Bauschritt 55". Davon sind die Schritte **1–49 ausgelagert** ins
+**Abgeschlossen sind die Bauschritte 1–56** (39 wurde gestrichen); der jüngste Commit
+ist „Bauschritt 56". Davon sind die Schritte **1–49 ausgelagert** ins
 [BAUPLAN-ARCHIV.md](BAUPLAN-ARCHIV.md) — Verweise wie „BAUPLAN 19" oder „BAUPLAN 44"
 zeigen dorthin. Hier stehen die fertigen Schritte 50–55 und alles Offene ab 56.
 
@@ -1023,6 +1023,47 @@ Die Einstellung „Nur-lesende Blöcke dürfen Befehle ausführen" einschalten u
 Lauf mit Angreifer fahren — im Liveticker muss zu sehen sein, dass der Angreifer einen
 Befehl ausführt. Gegenprobe: Einstellung aus, derselbe Lauf — dann führt er keinen aus
 und schreibt in keinem Fall eine Datei.
+*(Richtigstellung beim Bauen: Ein Python-Projekt beweist für Teil 1 nichts —
+`python`/`pytest` liefen schon vorher ohne Rückfrage. Die echte Gegenprobe ist Go,
+Rust, Java, .NET oder Make.)*
+
+- **Gebaut (25.08.2026):** Kernfund der Angriffsliste: **Punkt 2 war funktional schon
+  gebaut** — seit Zweitaudit D-01 (14.08.2026) hängt bei aktiver Einstellung ein
+  Nachsatz an jedem nur-lesenden Block, der „abweichend von deinem Auftrag" erlaubt,
+  was der Auftrag vorn kategorisch verbietet; der Bauplan-Punkt war gegen einen Stand
+  von davor geschrieben. Und der Sperr-Satz steht nicht nur im Angreifer, sondern in
+  **fünf** Blöcken (Kontext laden, Paket schneiden, Angreifer, Diagnose,
+  Integrator-Recherche). Deshalb umgesetzt als: gemeinsame Konstante
+  `BEFEHLS_SPERRE_SATZ` in allen fünf (Muster PRUEFMAPPE_HINWEIS), reine Funktion
+  `auftragMitBefehlsRecht` ersetzt sie bei aktiver Einstellung durch
+  `BEFEHLS_ERLAUBNIS_SATZ` — angewandt auf das KATALOG-Teilstück vor der Verkettung,
+  damit ein zitierter Sperr-Satz in Übergaben/Kartentexten stehen bleibt; der
+  D-01-Nachsatz bleibt Rückfallweg für eigene nur-lesende Blöcke und die
+  Katalog-Blöcke mit eigener Formulierung (Audit, Karten-Prüfer, Späher, Frage an den
+  Menschen, Übungs-Prüfer), nie beides zugleich. Punkt 1: elf Werkzeuge plus die
+  Projekt-Wrapper `gradlew`/`mvnw` (Angriffsfund: in Java-Projekten ist der Wrapper
+  der Alltagsfall) in `BEFEHLE_OHNE_RUECKFRAGE`; die Listen bleiben getrennt —
+  eine Ableitung ließe jede Erweiterung der kürzeren Leine (FlowForge führt selbst
+  aus) still auf die laxere durchschlagen —, stattdessen nagelt eine neue Prüfung die
+  Obermengen-Invariante fest. SPEC §7 an beiden Stellen nachgezogen.
+- **Messwerte der Bausession (25.08.2026, 1 Angreifer, 2 Bauer mit Vertrag, 2 Prüfer,
+  Integrator):** Angriffsliste 20 Funde, davon 3 blockierend (alle vor dem Bauen in
+  die Verträge eingearbeitet). Prüfer 1 (Mechanik, 38 Wegwerf-Prüfungen +
+  1753 Regressionsprüfungen): bestanden; 5 kleine Befunde, 3 nachgearbeitet
+  (auftragMitBefehlsRecht wirft nicht mehr bei fehlendem Auftrag; SPEC-Aufzählung der
+  Nachsatz-Blöcke vervollständigt; python3/py/pip3 in der SPEC-Liste ergänzt).
+  Bewusst offen: Ein wörtlich in ein Feld ({{wunsch}}/{{fehlerbild}}) geschriebener
+  Sperr-Satz würde mit umgeschaltet — rein textlich, die Rechte setzt der Motor durch.
+  Prüfer 2 (Ende-zu-Ende, gebaute App, CDP, eigener Datenordner, 3 echte Läufe):
+  Einstellung an → beide Aufträge tragen den Erlaubnis-Satz (kein Sperr-Satz, kein
+  Nachsatz), der Angreifer belegt seinen Fund per Skriptlauf, `rechteFragen: []`;
+  Einstellung aus → Sperr-Satz, null Befehle, nichts geschrieben; `go version`/
+  `cargo --version` laufen ohne Rückfrage und scheitern ehrlich mit „nicht gefunden"
+  (vorher/nachher an pruefeWerkzeug gemessen: alt Rückfrage, neu erlaubt; Unbekanntes
+  fragt in beiden Ständen). Ehrliche Grenzen: Der Nachsatz-Rückfallweg ist mechanisch
+  gemessen, nicht Ende-zu-Ende; keines der neuen Werkzeuge ist auf dem Testrechner
+  installiert — der volle Beleg „echter Testlauf in einem Go-Projekt" ist Georgs
+  Alltagstest.
 
 ### 57 — Zusatzbauer für Funde des Angreifers
 *(Version **0.58.0**.)*

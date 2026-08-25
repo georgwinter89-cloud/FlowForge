@@ -244,6 +244,46 @@ export const PRUEFMAPPE_HINWEIS =
   'ist deshalb kein Fund und kein Mangel: Das Gedächtnis der Prüfungen steckt in den ' +
   'Prüfkarten, nicht im Ordner. '
 
+// Der Sperr-Satz liest die Einstellung mit (Bauschritt 56): Fünf nur-lesende
+// Katalog-Blöcke tragen wörtlich denselben Befehls-Sperr-Satz. Seit Zweitaudit
+// D-01 hängte lauf.js bei aktiver Einstellung „Nur-lesende Blöcke dürfen
+// Befehle ausführen" einen Nachsatz an, der hinten „abweichend" erlaubte, was
+// der Auftrag vorn kategorisch verbot — das funktionierte, las sich aber als
+// Widerspruch. Jetzt schaltet der Satz selbst um: auftragMitBefehlsRecht
+// (unten) ersetzt die Sperre durch die Erlaubnis; der Nachsatz bleibt nur
+// Rückfallweg für Aufträge ohne den Standard-Satz.
+export const BEFEHLS_SPERRE_SATZ =
+  'Programme oder Tests auszuführen ist für diesen Block gesperrt — versuche es gar nicht erst.'
+// WICHTIG: Dieser Satz darf keinen Katalog-Blocknamen nennen — er landet
+// wörtlich in Blockaufträgen (pruefungen/empfaengerTexte.test.js, BAUPLAN 43).
+export const BEFEHLS_ERLAUBNIS_SATZ =
+  'Programme oder Tests auszuführen ist für diesen Block ERLAUBT — die Einstellung ' +
+  '„Nur-lesende Blöcke dürfen Befehle ausführen" ist an. Es gelten die normalen ' +
+  'Befehls-Regeln: Git und die Prüfmappe bleiben gesperrt, Unbekanntes löst eine ' +
+  'Rückfrage aus. Die Schreib-Werkzeuge für Dateien bleiben gesperrt.'
+
+// Schaltet das Befehls-Recht im Katalog-Auftrag um (Bauschritt 56). Die
+// Ersetzung läuft bewusst über den KATALOG-Auftrag (das Ergebnis von
+// auftragMitFeldern), nie über den zusammengesetzten Gesamttext — sonst träfe
+// sie denselben Satz auch dort, wo er in Übergaben oder Kartentexten nur
+// zitiert wird (Angriffslisten-Fund C-1). Enthält der Auftrag den
+// Standard-Satz nicht (eigene Blöcke und die Katalog-Blöcke mit eigener
+// Formulierung), bleibt er unverändert und zusatzNoetig sagt dem Aufrufer,
+// dass der bisherige Nachsatz (texte.agentenUebergabe.nurLesenBefehleZusatz)
+// für ihn der Weg bleibt.
+export function auftragMitBefehlsRecht(auftrag, befehleErlaubt) {
+  // Kein Wurf bei fehlendem Auftrag (Prüfer-Befund K-1): In lauf.js kommt
+  // immer ein String an, aber eine reine Rechenfunktion verlässt sich nicht
+  // auf ihre Aufrufer.
+  const text = typeof auftrag === 'string' ? auftrag : ''
+  if (!befehleErlaubt) return { auftrag: text, zusatzNoetig: false }
+  if (!text.includes(BEFEHLS_SPERRE_SATZ)) return { auftrag: text, zusatzNoetig: true }
+  return {
+    auftrag: text.replaceAll(BEFEHLS_SPERRE_SATZ, BEFEHLS_ERLAUBNIS_SATZ),
+    zusatzNoetig: false
+  }
+}
+
 export const BLOCK_KATALOG = [
   {
     // Seit 12.08.2026 (Entscheidung Georg) nicht mehr Teil der Vorlagen: Jeder
@@ -275,9 +315,9 @@ export const BLOCK_KATALOG = [
       'ankommt, liest du mit karten_lesen nach (mehrere Kennungen je Aufruf). ' +
       PRUEFMAPPE_HINWEIS +
       'Du darfst nichts verändern — nur lesen: Rein lesende Befehle ' +
-      '(Ordner auflisten, suchen, Dateien ansehen) laufen durch; Programme oder Tests ' +
-      'auszuführen ist für diesen Block gesperrt — versuche es gar nicht erst. ' +
-      'Ins Feld inhalt deiner Meldung gehört der ' +
+      '(Ordner auflisten, suchen, Dateien ansehen) laufen durch; ' +
+      BEFEHLS_SPERRE_SATZ +
+      ' Ins Feld inhalt deiner Meldung gehört der ' +
       'Projekt-Überblick, kompakt (höchstens etwa 30 Zeilen) und mit diesen Punkten: ' +
       '1. Was für ein Projekt das ist und wie es aufgebaut ist. ' +
       '2. Womit es gebaut, getestet und gestartet wird (falls erkennbar). ' +
@@ -396,8 +436,11 @@ export const BLOCK_KATALOG = [
     ],
     auftrag:
       'Du schneidest das nächste Arbeitspaket — du baust selbst nichts und veränderst nichts ' +
-      '(nur lesen; rein lesende Befehle laufen durch, Programme oder Tests auszuführen ist ' +
-      'gesperrt — versuche es gar nicht erst). Antworte auf Deutsch. ' +
+      // Bauschritt 56: Klammer vor dem Sperr-Satz geschlossen, damit der
+      // Standard-Satz wörtlich (und damit umschaltbar) im Auftrag steht.
+      '(nur lesen; rein lesende Befehle laufen durch). ' +
+      BEFEHLS_SPERRE_SATZ +
+      ' Antworte auf Deutsch. ' +
       'Der Wunsch des Nutzers steht in diesem Feld:\n' +
       '{{wunsch}}\n' +
       'Ist das Feld leer, sind die offenen Aufgaben-Karten der Wunsch — wähle daraus die ' +
@@ -478,8 +521,9 @@ export const BLOCK_KATALOG = [
     auftrag:
       'Du bist der Angreifer: Du suchst, woran dieses Arbeitspaket scheitern könnte — BEVOR ' +
       'gebaut wird. Du darfst nichts verändern — nur lesen: Rein lesende Befehle (Ordner ' +
-      'auflisten, suchen, Dateien ansehen) laufen durch; Programme oder Tests auszuführen ist ' +
-      'für diesen Block gesperrt — versuche es gar nicht erst. Antworte auf Deutsch. ' +
+      'auflisten, suchen, Dateien ansehen) laufen durch; ' +
+      BEFEHLS_SPERRE_SATZ +
+      ' Antworte auf Deutsch. ' +
       'Halte dein eigenes Arbeitsgedächtnis schlank: Delegiere das Durchsuchen und Einlesen ' +
       'an Unteraufgaben (bevorzugt lokal_recherchieren, falls es bereitsteht — sonst das ' +
       'Agent-Werkzeug) — aber SPARSAM: höchstens ZWEI Unteraufgaben in ' +
@@ -539,8 +583,9 @@ export const BLOCK_KATALOG = [
     auftrag:
       'Du bist die Diagnose: Du belegst die Ursache eines Fehlers, BEVOR irgendetwas ' +
       'angefasst wird. Du darfst nichts verändern — nur lesen: Rein lesende Befehle laufen ' +
-      'durch; Programme oder Tests auszuführen ist für diesen Block gesperrt — versuche es ' +
-      'gar nicht erst. Antworte auf Deutsch. ' +
+      'durch; ' +
+      BEFEHLS_SPERRE_SATZ +
+      ' Antworte auf Deutsch. ' +
       'Das Fehlerbild steht in diesem Feld:\n' +
       '{{fehlerbild}}\n' +
       'Ist das Feld leer, beschreiben die offenen Aufgaben-Karten den Fehler — wähle die ' +
@@ -773,8 +818,8 @@ export const BLOCK_KATALOG = [
       'Teil des Projekts angesehen und einen Projekt-Überblick geschrieben — du führst diese ' +
       'Überblicke zu EINEM zusammen. Antworte auf Deutsch. Du darfst nichts verändern — nur ' +
       'lesen: Rein lesende Befehle (Ordner auflisten, suchen, Dateien ansehen) laufen durch; ' +
-      'Programme oder Tests auszuführen ist für diesen Block gesperrt — versuche es gar nicht ' +
-      'erst. Drei Regeln: Nichts erfinden — was in keinem Überblick steht, steht auch in deinem ' +
+      BEFEHLS_SPERRE_SATZ +
+      ' Drei Regeln: Nichts erfinden — was in keinem Überblick steht, steht auch in deinem ' +
       'nicht, es sei denn, du hast es selbst an der genannten Stelle nachgelesen. Nichts verlieren ' +
       '— jede Aussage, die nur einer der Überblicke trägt, bleibt erhalten. Widersprüche benennen ' +
       'statt glätten — sagen zwei Überblicke Verschiedenes, stehen beide Aussagen mit ihrer ' +

@@ -21,6 +21,7 @@ import { BrowserWindow, Notification } from 'electron'
 import { texte } from '../shared/texte.js'
 import {
   blockDefinition,
+  auftragMitBefehlsRecht,
   blockDenktiefe,
   blockModellKlasse,
   blockAnzeigeName,
@@ -3970,6 +3971,14 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         // Übergaben und der Katalog-Auftrag lesen sich erst richtig, wenn klar
         // ist, für wen gearbeitet wird. Weiter hinten stünde er zwischen zwei
         // Inhaltsblöcken und läse sich wie ein Nachtrag.
+        // Bauschritt 56: Das Befehls-Recht schaltet im KATALOG-Teilstück um —
+        // BEVOR Vorspann, Karten und Übergaben dazukommen. Liefe die Ersetzung
+        // über den Gesamttext, träfe sie denselben Sperr-Satz auch dort, wo er
+        // in Übergaben oder Kartentexten nur zitiert wird (Fund C-1).
+        const befehlsRecht = auftragMitBefehlsRecht(
+          auftragMitFeldern(k.def, k.eintrag.feldWerte),
+          Boolean(einstellungen.nurLesenBefehle && k.def.nurLesen)
+        )
         let auftrag =
           (vorspannVon.get(k.eintrag.instanzId) ?? '') +
           kartenKontext(
@@ -3981,7 +3990,7 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           ) +
           uebergabenText(k) +
           texte.agentenUebergabe.auftragEinleitung +
-          auftragMitFeldern(k.def, k.eintrag.feldWerte)
+          befehlsRecht.auftrag
         // Auftragsquellen-Blöcke (Kennzeichen kartenZuteilung) bekommen das
         // Werkzeug samt der Namen ihrer Nachfahren erklärt — ohne Nachfahren
         // (Ein-Block-Lauf) gibt es nichts zuzuteilen, der Zusatz entfällt.
@@ -4177,7 +4186,11 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         // Audit D-01): Die Katalog-Aufträge verbieten Befehle kategorisch
         // („versuche es gar nicht erst") — bei aktiver Einstellung lockert
         // dieser Zusatz den Auftrag, sonst bleibt die Sperre im Motor Theorie.
-        if (einstellungen.nurLesenBefehle && k.def.nurLesen)
+        // Seit Bauschritt 56 nur noch Rückfallweg: Trägt der Katalog-Auftrag
+        // den Standard-Sperr-Satz, hat auftragMitBefehlsRecht (oben) ihn schon
+        // durch die Erlaubnis ersetzt — der Nachsatz bleibt für Aufträge ohne
+        // den Satz (eigene Blöcke und Katalog-Blöcke mit eigener Formulierung).
+        if (einstellungen.nurLesenBefehle && k.def.nurLesen && befehlsRecht.zusatzNoetig)
           auftrag += texte.agentenUebergabe.nurLesenBefehleZusatz
         // Häkchen je Block (BAUPLAN 20): Ist die lokale KI für diesen Block
         // abgewählt, fliegt ihr Hinweis aus dem Auftrag — die harte Sperre
