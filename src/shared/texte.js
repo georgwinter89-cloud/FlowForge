@@ -3389,7 +3389,7 @@ export const texte = {
     openRouterSchluesselFeld: 'OpenRouter-Schlüssel',
     openRouterSchluesselPlatzhalter: 'sk-or-…',
     openRouterModellFeld: 'Modell',
-    openRouterModellPlatzhalter: 'z.B. stealth/ox-alpha',
+    openRouterModellPlatzhalter: 'z.B. anbieter/modell',
     openRouterModellHinweis:
       'Der Modellname genau so, wie OpenRouter ihn führt. Eine Auswahlliste mit den Modellen ' +
       'des Katalogs folgt in einem späteren Bauschritt.',
@@ -3401,10 +3401,6 @@ export const texte = {
       'Arbeit am vollen Kontext scheitern.',
     fehlerOpenRouterKontext:
       'Das OpenRouter-Kontextfenster muss eine positive Token-Zahl sein (z.B. 200000).',
-    openRouterDatenHinweis:
-      'Ehrlich gesagt: Eingaben und Projektinhalte gehen an den gewählten Anbieter; bei ' +
-      'Stealth-Modellen speichert ein anonymer Betreiber mit. Trage hier nichts ein, was den ' +
-      'Rechner nicht verlassen darf.',
     // Unteraufgaben-Modell (BAUPLAN 37): der Motor-Zwilling der lokalen
     // Helfer-KI — Zuarbeit muss nicht auf dem großen Modell laufen.
     unteraufgabenUeberschrift: 'Modell der Unteraufgaben',
@@ -3608,7 +3604,7 @@ export const texte = {
     openrouterSchluesselFehlt:
       'In diesem Workflow läuft mindestens ein Block auf „OpenRouter", aber es ist kein OpenRouter-Schlüssel eingetragen. Trage ihn in den Einstellungen im Bereich „OpenRouter" ein — FlowForge fällt nie still auf Claude zurück.',
     openrouterModellFehlt:
-      'In diesem Workflow läuft mindestens ein Block auf „OpenRouter", aber es ist kein Modell eingetragen. Trage in den Einstellungen im Bereich „OpenRouter" einen Modellnamen ein (z.B. stealth/ox-alpha) — FlowForge fällt nie still auf Claude zurück.',
+      'In diesem Workflow läuft mindestens ein Block auf „OpenRouter", aber es ist kein Modell eingetragen. Trage in den Einstellungen im Bereich „OpenRouter" einen Modellnamen ein (z.B. anbieter/modell) — FlowForge fällt nie still auf Claude zurück.',
     // Der Übersetzer ist der einzige Weg zu OpenRouter — scheitert sein
     // Start, scheitert der Block mit diesem Klartext (kein direkter Draht:
     // die CLI spricht kein OpenAI).

@@ -289,8 +289,9 @@ describe('Bauschritt 59 · Texte, auf die die Oberfläche baut', () => {
     ])
       expect(typeof te[schluessel], schluessel).toBe('string')
     expect(te.openRouterAktivHinweis).toMatch(/nie still/)
-    expect(te.openRouterDatenHinweis).toMatch(/gewählten Anbieter/)
-    expect(te.openRouterDatenHinweis).toMatch(/anonymer Betreiber/)
+    // Neutrale Anbieterwahl (Entscheidung Georg, 25.08.2026): keine Warn-
+    // oder Anbieterhinweise im Dialog — der frühere Daten-Hinweis ist raus.
+    expect(te.openRouterDatenHinweis).toBeUndefined()
   })
 })
 
@@ -351,7 +352,8 @@ describe('Bauschritt 59 · Lauf und Motor (am Quelltext)', () => {
     const dialog = lesen('src/renderer/src/Einstellungen.jsx')
     expect(dialog).toMatch(/checked=\{openRouterAktiv\}/)
     expect(dialog).toMatch(/value=\{openRouterSchluessel\}/)
-    expect(dialog).toMatch(/t\.openRouterDatenHinweis/)
+    // Neutrale Anbieterwahl (0.60.1): der Dialog rendert KEINEN Daten-Hinweis.
+    expect(dialog).not.toMatch(/openRouterDatenHinweis/)
     const speichern = dialog.slice(dialog.indexOf('async function speichern()'))
     for (const feld of ['openRouterAktiv', 'openRouterSchluessel', 'openRouterModell', 'openRouterKontext'])
       expect(speichern).toContain(feld)

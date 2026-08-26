@@ -1440,6 +1440,21 @@ stehen ehrlich auf „nicht gemessen". Ohne Schlüssel: Klartext-Absage statt La
   Platzhalter durch den Übersetzer; thinking-Historie geht nicht an den Anbieter
   zurück.
 
+### Zwischenschritt 0.60.1 — Neutrale Anbieterwahl
+(Entscheidung Georg, 25.08.2026, direkt nach Abschluss von 59: „Es soll einfach
+eine komplett neutrale Anbieterwahl sein, wie in vielen anderen Apps auch."
+Ox Alpha war nur der Anlass der Idee, nicht das Ziel.)
+- Der Daten-Ehrlichkeits-Hinweis („bei Stealth-Modellen speichert ein anonymer
+  Betreiber mit") ist aus dem Einstellungs-Bereich entfernt — Text, Anzeige und
+  Prüfung; die Prüfung hält jetzt fest, dass es den Hinweis NICHT mehr gibt.
+- Alle `stealth/ox-alpha`-Beispiele aus Platzhaltern, Absage-Texten und
+  Kommentaren ersetzt durch die neutrale Schreibweise `anbieter/modell`.
+- SPEC §2/§9 entsprechend neutralisiert. Der 59er-Eintrag hier oben bleibt als
+  Geschichte unverändert — was gebaut und wieder entfernt wurde, gehört ins Log.
+**Alltagstest:** Einstellungen öffnen — der OpenRouter-Bereich zeigt nur noch
+Häkchen, Schlüssel, Modell und Kontextfenster, ohne Warntext; der Platzhalter
+im Modellfeld heißt „anbieter/modell".
+
 ### 60 — Anbieter-Öffnung II: OpenRouter im Alltag (geplant)
 - Kosten aus OpenRouters Preisliste je Modell (statt „nicht gemessen");
   Metriken „davon OpenRouter" je Lauf analog „davon lokal".

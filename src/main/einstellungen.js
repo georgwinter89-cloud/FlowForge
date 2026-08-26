@@ -114,22 +114,20 @@ const STANDARD = {
   // OpenRouter (Bauschritt 59): freie Modellwahl über den eingebauten
   // Übersetzer. Ohne dieses Häkchen lehnt der Start einen Block der Klasse
   // „openrouter" mit Klartext ab — kein stiller Rückfall auf Claude (Muster
-  // lokalBlockAgent). Daten-Ehrlichkeit gehört zum Häkchen: Eingaben und
-  // Projektinhalte gehen an den gewählten Anbieter, und bei Stealth-Modellen
-  // speichert ein ANONYMER Betreiber mit — der Satz steht im Einstellungs-
-  // Dialog, nicht im Kleingedruckten (texte.einstellungen).
+  // lokalBlockAgent). Die Anbieterwahl ist bewusst neutral gehalten
+  // (Entscheidung Georg, 25.08.2026) — keine Warn- oder Anbieterhinweise.
   openRouterAktiv: false,
   // Der OpenRouter-Schlüssel wohnt nur im Hauptprozess (Übersetzer), nie in
   // der Umgebung des Motor-Kindprozesses. Gespeichert im Klartext wie
   // apiSchluessel — bewusst konsistent; safeStorage wäre ein eigener
   // Bauschritt für BEIDE Schlüssel.
   openRouterSchluessel: '',
-  // Freies Modellfeld (z. B. stealth/ox-alpha) — die Katalog-Liste von
-  // OpenRouter folgt in Bauschritt 60.
+  // Freies Modellfeld (Schreibweise „anbieter/modell", wie OpenRouter die
+  // Modelle führt) — die Katalog-Liste von OpenRouter folgt in Bauschritt 60.
   openRouterModell: '',
   // Kontextfenster des gewählten Modells in Token. Die CLI meldet für fremde
   // Modelle stur 200000 — deshalb sagt FlowForge ihr das Fenster ausdrücklich
-  // (wie beim lokalen Motor). Standard 200000; für Ox Alpha trägt Georg 1M ein.
+  // (wie beim lokalen Motor). Standard 200000; bei 1M-Modellen 1000000.
   openRouterKontext: 200000,
   // Kosten-Rückfrage „Extra (Fable 5)" (0.48.1): Beim ersten Lauf mit einem
   // Extra-Block fragt FlowForge einmal, ob der Lauf trotz möglicher
@@ -461,9 +459,6 @@ export function einstellungenSpeichern(neu) {
     // löschte sonst still Georgs Schlüssel. Leerstring bleibt Georgs
     // bewusstes Leeren. Der Schlüssel liegt im Klartext wie apiSchluessel —
     // bewusst konsistent; safeStorage wäre ein eigener Schritt für beide.
-    // Daten-Ehrlichkeit: Was der Motor über den Übersetzer schickt, geht an
-    // den gewählten Anbieter — bei Stealth-Modellen speichert ein anonymer
-    // Betreiber mit (der Hinweis dazu steht im Einstellungs-Dialog).
     openRouterAktiv: Boolean(neu.openRouterAktiv),
     openRouterSchluessel:
       neu.openRouterSchluessel === undefined

@@ -237,7 +237,8 @@ Sitzungen hinweg Software entsteht — ohne dass dem Agenten der Kontext überl�
     an der Georg entscheidet, ob der lokale Prüfer bleibt.
   - **Klasse „OpenRouter"** (seit Bauschritt 59, Entscheidung Georg 25.08.2026: „freie
     Modellwahl" — die OpenAI-Sprache ist neben Anthropic die zweite große, einmal
-    angebunden trägt sie jedes künftige Modell; Anlass war das Stealth-Modell Ox Alpha):
+    angebunden trägt sie jedes künftige Modell; die Anbieterwahl ist bewusst
+    **neutral** gehalten, ohne Warn- oder Anbieterhinweise — wie in anderen Apps):
     Ein Block läuft komplett auf einem über OpenRouter bezogenen Fremdmodell — dieselbe
     Claude-CLI als **eigene Motor-Instanz**, deren `ANTHROPIC_BASE_URL` auf FlowForges
     eingebauten **Übersetzer** zeigt (In-Process-Weiterleiter nach dem Muster der
@@ -255,15 +256,14 @@ Sitzungen hinweg Software entsteht — ohne dass dem Agenten der Kontext überl�
     ohne Tor-Anker-Zwang und ohne Steck-Hinweis. Keine Denktiefe (Claude-Feld). Der
     KI-Assistent des Editors schlägt die Klasse nie von sich aus vor.
     **Voraussetzung und kein stiller Rückfall:** Häkchen „OpenRouter erlaubt", Schlüssel
-    und Modellname (freies Feld, z. B. `stealth/ox-alpha`) in den Einstellungen (§9);
+    und Modellname (freies Feld in der Schreibweise `anbieter/modell`) in den
+    Einstellungen (§9);
     fehlt eines, startet der Lauf mit Klartext-Absage — nie still auf Claude. Das
     **Kontextfenster** kommt aus der Einstellung (die CLI erfände sonst 200k; gemerkt
     wird für Fremdmodelle nichts). **Kosten-Wahrheit:** FlowForge kennt keine
     OpenRouter-Preise — Kosten stehen als „nicht gemessen" (null, nicht 0) in Bericht
     und Metriken, und es gilt keine Ausgaben-Obergrenze (die CLI-eigenen Zahlen wären
-    erfunden); die echte Preisliste ist Bauschritt 60. **Daten-Ehrlichkeit:** Eingaben
-    und Projektinhalte gehen an den gewählten Anbieter; bei Stealth-Modellen speichert
-    ein anonymer Betreiber mit — der Satz steht sichtbar im Einstellungs-Bereich.
+    erfunden); die echte Preisliste ist Bauschritt 60.
     **Ehrliche Grenzen:** Die CLI ist auf Claude-Modelle gebaut — ob ein Fremdmodell die
     Werkzeug-Disziplin der Blöcke trägt, zeigt der Alltag, nicht der Einbau. Kein Weg ins
     Netz für OpenRouter-Blöcke (die CLI-Websuche läuft über Anthropics Server und ist
@@ -2981,12 +2981,11 @@ Block-Agenten als Hinweis daneben (§6).
   **OpenRouter** (seit Bauschritt 59, §2): eigener Bereich mit Häkchen **„OpenRouter
   erlaubt"**, **Schlüsselfeld** (Passwort-Darstellung; gespeichert im Klartext wie der
   API-Schlüssel — bewusst konsistent, eine Verschlüsselung wäre ein eigener Schritt für
-  beide), **Modellfeld** (Freitext, z. B. `stealth/ox-alpha`), **Kontextfenster**
-  (Token-Zahl, Standard 200.000; Unsinn wird beim Speichern mit Klartext abgelehnt)
-  und dem immer sichtbaren **Daten-Ehrlichkeits-Hinweis**: Eingaben und Projektinhalte
-  gehen an den gewählten Anbieter, bei Stealth-Modellen speichert ein anonymer
-  Betreiber mit. Ein Speichern-Aufruf ohne diese Felder lässt Schlüssel und Modell
-  unangetastet (dasselbe Sieb-Muster wie die SearXNG-Adresse) ·
+  beide), **Modellfeld** (Freitext in der Schreibweise `anbieter/modell`) und
+  **Kontextfenster** (Token-Zahl, Standard 200.000; Unsinn wird beim Speichern mit
+  Klartext abgelehnt). Bewusst **neutral** — keine Warn- oder Anbieterhinweise
+  (Entscheidung Georg, 25.08.2026). Ein Speichern-Aufruf ohne diese Felder lässt
+  Schlüssel und Modell unangetastet (dasselbe Sieb-Muster wie die SearXNG-Adresse) ·
   **Websuche der lokalen Blöcke** (seit 0.51.2, §4.3): ein Feld **„SearXNG-Adresse"** —
   **leer heißt eingebaute Quelle**, es gibt bewusst kein zweites Feld für die Quellenwahl
   (ein Feld weniger, das beim Speichern verlorengehen kann). Ein **fehlendes Schema wird

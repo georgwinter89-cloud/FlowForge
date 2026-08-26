@@ -729,7 +729,6 @@ export default function Einstellungen({ onSchliessen }) {
               <span className="feld-hinweis"> — {t.openRouterAktivHinweis}</span>
             </span>
           </label>
-          <span className="feld-hinweis">{t.openRouterDatenHinweis}</span>
           {openRouterAktiv && (
             <>
               <label className="feld">
