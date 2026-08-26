@@ -119,6 +119,27 @@ export function katalogStatusZeilen(katalog) {
   return zeilen
 }
 
+// Welche Modelle die Aufklapp-Liste zeigt (0.61.1, Bugbefund Georg,
+// 26.08.2026): Die native datalist filtert ihre Vorschläge am aktuellen
+// Feldinhalt — nach einer Auswahl steht das vollständige Modell im Feld, nur
+// noch genau dieses passt, und die Liste wirkt beim erneuten Öffnen leer.
+// Deshalb eine eigene Liste mit dieser Regel: Ein leeres Feld und ein Feld,
+// dessen Wert GENAU ein Katalog-Modell ist (der Zustand nach jeder Auswahl),
+// zeigen ALLE Modelle; nur während des Tippens (kein exakter Treffer) wird
+// nach Teiltext über Kennung und Name gefiltert.
+export function katalogVorschlaege(katalog, modell) {
+  if (!katalog?.ok) return []
+  const genau = String(modell ?? '').trim()
+  if (!genau) return katalog.modelle
+  if (katalog.modelle.some((m) => m.id === genau)) return katalog.modelle
+  const wert = genau.toLowerCase()
+  return katalog.modelle.filter(
+    (m) =>
+      String(m.id ?? '').toLowerCase().includes(wert) ||
+      String(m.name ?? '').toLowerCase().includes(wert)
+  )
+}
+
 // Globale Einstellungen: Motor-Modus (Abo/API), API-Schlüssel, Ausgaben-Obergrenze.
 export default function Einstellungen({ onSchliessen }) {
   // '' = noch nicht gewählt (Erststart-Wahl, 0.46.4) — dann ist kein Radio an.
@@ -328,6 +349,12 @@ export default function Einstellungen({ onSchliessen }) {
   // Der Katalog-Eintrag zum aktuellen Feldwert — Info-Zeile mit Kontext und
   // Preisen (Katalog führt USD je Token, die Anzeige spricht in $/Mio).
   const openRouterEintrag = katalogEintragFuer(openRouterKatalog, openRouterModell)
+
+  // Eigene Aufklapp-Liste statt datalist (0.61.1, Begründung an
+  // katalogVorschlaege). Offen/zu lebt hier, die Vorschlags-Regel ist die
+  // reine Funktion oben.
+  const [modellListeOffen, setModellListeOffen] = useState(false)
+  const modellVorschlaege = katalogVorschlaege(openRouterKatalog, openRouterModell)
 
   // Aktive Vorlage (Markierung der Knöpfe) und der Wert, der gespeichert
   // wird — beides aus denselben Feldern gerechnet.
@@ -816,23 +843,58 @@ export default function Einstellungen({ onSchliessen }) {
               </label>
               <label className="feld">
                 <span>{t.openRouterModellFeld}</span>
-                {/* Auswahlliste aus dem Katalog (Bauschritt 60): datalist statt
-                    select — Freitext bleibt möglich, der ehrliche Rückfall,
-                    wenn die Liste nicht erreichbar ist. */}
-                <input
-                  type="text"
-                  list="openrouter-modelle"
-                  placeholder={t.openRouterModellPlatzhalter}
-                  value={openRouterModell}
-                  onChange={(e) => openRouterModellSetzen(e.target.value)}
-                />
-                <datalist id="openrouter-modelle">
-                  {(openRouterKatalog?.ok ? openRouterKatalog.modelle : []).map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name}
-                    </option>
-                  ))}
-                </datalist>
+                {/* Auswahlliste aus dem Katalog (Bauschritt 60, umgebaut
+                    0.61.1): eigene Aufklapp-Liste statt datalist — die native
+                    filtert am Feldinhalt und wirkte nach einer Auswahl leer
+                    (Bugbefund Georg, 26.08.2026; Regel: katalogVorschlaege).
+                    Freitext bleibt möglich, der ehrliche Rückfall, wenn die
+                    Liste nicht erreichbar ist. */}
+                <div className="modellwahl">
+                  <input
+                    type="text"
+                    placeholder={t.openRouterModellPlatzhalter}
+                    value={openRouterModell}
+                    onChange={(e) => {
+                      openRouterModellSetzen(e.target.value)
+                      setModellListeOffen(true)
+                    }}
+                    onFocus={() => setModellListeOffen(true)}
+                    // Auch der Klick ins bereits fokussierte Feld öffnet —
+                    // nach einer Auswahl bleibt der Fokus ja im Feld, ein
+                    // zweites Fokus-Ereignis kommt nie.
+                    onClick={() => setModellListeOffen(true)}
+                    onBlur={() => setModellListeOffen(false)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') setModellListeOffen(false)
+                    }}
+                  />
+                  {modellListeOffen && modellVorschlaege.length > 0 && (
+                    <div className="modellwahl-liste">
+                      {modellVorschlaege.map((m) => (
+                        <button
+                          type="button"
+                          key={m.id}
+                          className={
+                            'modellwahl-eintrag' +
+                            (m.id === openRouterModell.trim() ? ' modellwahl-gewaehlt' : '')
+                          }
+                          // preventDefault hält den Fokus im Feld — sonst
+                          // schlösse das blur die Liste, bevor der Klick zieht.
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => {
+                            openRouterModellSetzen(m.id)
+                            setModellListeOffen(false)
+                          }}
+                        >
+                          <span>{m.name || m.id}</span>
+                          {m.name && m.name !== m.id && (
+                            <span className="modellwahl-kennung">{m.id}</span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 {katalogStatusZeilen(openRouterKatalog).map((zeile) => (
                   <span className="feld-hinweis" key={zeile}>
                     {zeile}

@@ -3572,3 +3572,59 @@ body {
   color: var(--signal-text);
   font-size: 11px;
 }
+
+/* --------------------------------------------------------------------------
+   OpenRouter-Modellwahl (0.61.1): eigene Aufklapp-Liste statt datalist.
+   Die native datalist filtert ihre Vorschläge am Feldinhalt — nach einer
+   Auswahl steht das ganze Modell im Feld und die Liste wirkte leer
+   (Bugbefund Georg, 26.08.2026). */
+.modellwahl {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.modellwahl-liste {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 30;
+  max-height: 260px;
+  overflow-y: auto;
+  margin-top: 4px;
+  background: var(--flaeche-tief);
+  border: 1px solid var(--rand-kontrolle);
+  border-radius: var(--radius-knopf);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+.modellwahl-eintrag {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 6px 10px;
+  border: 0;
+  background: none;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.modellwahl-eintrag:hover {
+  background: var(--flaeche-hervor);
+}
+
+.modellwahl-gewaehlt {
+  background: var(--flaeche-gewaehlt);
+}
+
+.modellwahl-kennung {
+  font-size: 11px;
+  color: var(--text-leise);
+  font-family: ui-monospace, Consolas, monospace;
+}

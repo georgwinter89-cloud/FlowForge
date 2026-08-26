@@ -14,7 +14,11 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { texte } from '../src/shared/texte.js'
 import { kostenTeil } from '../src/renderer/src/VerbrauchZeile.jsx'
-import { katalogEintragFuer, katalogStatusZeilen } from '../src/renderer/src/Einstellungen.jsx'
+import {
+  katalogEintragFuer,
+  katalogStatusZeilen,
+  katalogVorschlaege
+} from '../src/renderer/src/Einstellungen.jsx'
 
 const wurzel = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const lesen = (rel) => fs.readFileSync(path.join(wurzel, rel), 'utf8')
@@ -230,11 +234,48 @@ describe('Bauschritt 60 · Einstellungen: Katalog, Auswahlliste, Kontext-Automat
     expect(umgeleitet[1]).toContain('http://127.0.0.1:11434/v1')
   })
 
-  it('das Modellfeld hängt an einer datalist aus dem Katalog — Freitext bleibt', () => {
-    expect(dialog).toContain('list="openrouter-modelle"')
-    expect(dialog).toContain('<datalist id="openrouter-modelle">')
-    // Kein select: Die Liste ist Angebot, nicht Zwang.
-    expect(dialog).toMatch(/onChange=\{\(e\) => openRouterModellSetzen\(e\.target\.value\)\}/)
+  // 0.61.1 (Bugbefund Georg, 26.08.2026): datalist → eigene Aufklapp-Liste.
+  // Die native filterte am Feldinhalt — nach einer Auswahl wirkte die Liste
+  // beim erneuten Öffnen leer. Die Vorschlags-Regel ist die reine Funktion
+  // katalogVorschlaege und wird unten GEMESSEN, nicht gelesen.
+  it('das Modellfeld hängt an der eigenen Aufklapp-Liste aus dem Katalog — Freitext bleibt', () => {
+    expect(dialog).not.toContain('<datalist')
+    expect(dialog).toContain('katalogVorschlaege(openRouterKatalog, openRouterModell)')
+    expect(dialog).toContain('modellwahl-liste')
+    // Kein select: Die Liste ist Angebot, nicht Zwang — getippt wird weiter
+    // über openRouterModellSetzen (Kontext-Automatik hängt daran).
+    expect(dialog).toContain('openRouterModellSetzen(e.target.value)')
+    // Der Klick auf einen Eintrag wählt über dieselbe Funktion (Automatik
+    // gilt auch für die Maus-Auswahl).
+    expect(dialog).toContain('openRouterModellSetzen(m.id)')
+  })
+
+  it('die Vorschlags-Regel zeigt nach einer Auswahl wieder ALLE Modelle (Bugbefund 26.08.2026)', () => {
+    const katalog = {
+      ok: true,
+      modelle: [
+        { id: 'anbieter/gross', name: 'Großes Modell' },
+        { id: 'anbieter/klein', name: 'Kleines Modell' },
+        { id: 'andere/mini', name: 'Mini' }
+      ]
+    }
+    // Leeres Feld: alle.
+    expect(katalogVorschlaege(katalog, '').length).toBe(3)
+    // GENAU das gewählte Modell im Feld (der Zustand nach jeder Auswahl):
+    // wieder alle — genau das konnte die datalist nicht.
+    expect(katalogVorschlaege(katalog, 'anbieter/gross').length).toBe(3)
+    expect(katalogVorschlaege(katalog, '  anbieter/gross  ').length).toBe(3)
+    // Beim Tippen (kein exakter Treffer): Teiltext-Filter über Kennung UND
+    // Namen, Groß-/Kleinschreibung egal.
+    expect(katalogVorschlaege(katalog, 'anbieter/').map((m) => m.id)).toEqual([
+      'anbieter/gross',
+      'anbieter/klein'
+    ])
+    expect(katalogVorschlaege(katalog, 'MINI').map((m) => m.id)).toEqual(['andere/mini'])
+    expect(katalogVorschlaege(katalog, 'gibtsnicht').length).toBe(0)
+    // Ohne Katalog keine Vorschläge — das Feld ist dann ehrlicher Freitext.
+    expect(katalogVorschlaege({ ok: false, fehler: 'weg' }, 'x').length).toBe(0)
+    expect(katalogVorschlaege(null, 'x').length).toBe(0)
   })
 
   it('die Kontext-Automatik setzt das Feld HART auf den Katalogwert (Fund 20) — und sperrt es nie', () => {
