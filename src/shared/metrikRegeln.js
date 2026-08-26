@@ -13,7 +13,7 @@
 // Block-Tokens — solche Einträge zählen als „ohne Kosten"/„ohne Verbrauch"
 // und fallen aus den Durchschnitten heraus, statt sie zu verfälschen.
 
-import { klasseIstLokal, klasseKenntDenktiefe } from './blockKatalog.js'
+import { klasseIstLokal, klasseIstOpenRouter, klasseKenntDenktiefe } from './blockKatalog.js'
 
 export const BEREICHE = ['recherche', 'entwurf', 'reparatur', 'bauen']
 export const AUSGAENGE = ['uebernommen', 'verworfen', 'gehalten', 'nicht-gehalten', 'gescheitert']
@@ -252,6 +252,41 @@ export function laufExtraktAusBericht(bericht, projektPfad) {
       lokalDauerMs = lokalBloecke.reduce((summe, b) => summe + b.dauerMs, 0)
     else lokalDauerMs = null
   }
+  // „Davon OpenRouter" je Lauf (Bauschritt 60, Muster lokal): bevorzugt
+  // bericht.verbrauch.openrouter — der Topf im Hauptprozess zählt auch
+  // Anläufe ohne blockErgebnis. Rückfall für 0.60-Berichte (OpenRouter-
+  // Blöcke, aber kein Topf): Summe der Blöcke mit Klasse „openrouter".
+  // Kosten sind dort die GEMESSENEN Anbieter-Beträge — null heißt „nie
+  // gemeldet" (0.60-Blöcke tragen durchweg null), nie eine erfundene 0.
+  const verbrauchOpenrouter =
+    verbrauch && verbrauch.openrouter && typeof verbrauch.openrouter === 'object'
+      ? verbrauch.openrouter
+      : null
+  let openrouterTokens
+  let openrouterDauerMs
+  let openrouterKostenUsd
+  if (verbrauchOpenrouter && Number.isFinite(verbrauchOpenrouter.tokens)) {
+    openrouterTokens = verbrauchOpenrouter.tokens
+    openrouterDauerMs = Number.isFinite(verbrauchOpenrouter.dauerMs)
+      ? verbrauchOpenrouter.dauerMs
+      : null
+    openrouterKostenUsd = Number.isFinite(verbrauchOpenrouter.kostenUsd)
+      ? verbrauchOpenrouter.kostenUsd
+      : null
+  } else {
+    const openrouterBloecke = bloecke.filter((b) => klasseIstOpenRouter(b.klasse))
+    openrouterTokens = 0
+    for (const b of openrouterBloecke) if (b.tokens != null) openrouterTokens += b.tokens
+    if (openrouterBloecke.length === 0) openrouterDauerMs = 0
+    else if (openrouterBloecke.every((b) => b.dauerMs != null))
+      openrouterDauerMs = openrouterBloecke.reduce((summe, b) => summe + b.dauerMs, 0)
+    else openrouterDauerMs = null
+    // Nur ECHT gemessene Blockkosten summieren — kein Block mit Betrag heißt
+    // ehrlich null („nicht gemessen"), nicht 0.
+    openrouterKostenUsd = null
+    for (const b of openrouterBloecke)
+      if (b.kostenUsd != null) openrouterKostenUsd = (openrouterKostenUsd ?? 0) + b.kostenUsd
+  }
   return {
     id: String(bericht.id ?? gestartetAm),
     projektPfad: String(projektPfad ?? ''),
@@ -264,6 +299,9 @@ export function laufExtraktAusBericht(bericht, projektPfad) {
     kostenUsd: verbrauch && Number.isFinite(verbrauch.kostenUsd) ? verbrauch.kostenUsd : null,
     lokalTokens,
     lokalDauerMs,
+    openrouterTokens,
+    openrouterDauerMs,
+    openrouterKostenUsd,
     lokaleHelfer: Boolean(bericht.lokaleHelfer),
     // Harness-Kennzahlen (BAUPLAN 36): Diese Zahlen liegen in jedem Bericht
     // schon vor — auch rückwirkend. Nur die Zusammenfassungen sind neu; ältere
@@ -298,6 +336,17 @@ function eimer(extra = {}) {
     lokalDauerMs: 0,
     mitLokalDauer: 0,
     ohneLokalDauer: 0,
+    // „Davon OpenRouter" je Lauf (Bauschritt 60): exakt das Lokal-Muster —
+    // plus die Summe der GEMESSENEN Anbieter-Kosten (nur gemeldete Beträge;
+    // Läufe ohne Meldung tragen nichts bei, die Summe bleibt eine Summe über
+    // echte Messungen). Die Texte (gesamtZeile/wocheZeile) lesen GENAU diese
+    // Feldnamen.
+    openrouterTokens: 0,
+    openrouterLaeufe: 0,
+    openrouterDauerMs: 0,
+    mitOpenrouterDauer: 0,
+    ohneOpenrouterDauer: 0,
+    openrouterKostenUsd: 0,
     ...extra
   }
 }
@@ -334,6 +383,22 @@ function lokalEinwerfen(e, lauf) {
     } else e.ohneLokalDauer++
   }
 }
+// „Davon OpenRouter" eines Laufs in den Eimer (Bauschritt 60, Muster lokal).
+// Kosten: nur GEMELDETE Beträge summieren — ein Lauf ohne Meldung ist keine
+// 0-Messung und drückt die Summe nicht.
+function openrouterEinwerfen(e, lauf) {
+  const tokens = Number.isFinite(lauf.openrouterTokens) ? lauf.openrouterTokens : 0
+  e.openrouterTokens += tokens
+  if (lauf.openrouterKostenUsd != null && Number.isFinite(lauf.openrouterKostenUsd))
+    e.openrouterKostenUsd += lauf.openrouterKostenUsd
+  if (tokens > 0) {
+    e.openrouterLaeufe++
+    if (lauf.openrouterDauerMs != null) {
+      e.openrouterDauerMs += lauf.openrouterDauerMs
+      e.mitOpenrouterDauer++
+    } else e.ohneOpenrouterDauer++
+  }
+}
 function mitDurchschnitt(e) {
   return {
     ...e,
@@ -353,14 +418,17 @@ export function motorAuswerten(extrakte) {
   for (const lauf of extrakte) {
     einwerfen(gesamt, lauf.tokens, lauf.kostenUsd)
     lokalEinwerfen(gesamt, lauf)
+    openrouterEinwerfen(gesamt, lauf)
     const kettenName = lauf.workflow
     if (!jeKette.has(kettenName)) jeKette.set(kettenName, eimer({ kette: kettenName }))
     einwerfen(jeKette.get(kettenName), lauf.tokens, lauf.kostenUsd)
     lokalEinwerfen(jeKette.get(kettenName), lauf)
+    openrouterEinwerfen(jeKette.get(kettenName), lauf)
     if (!jeProjekt.has(lauf.projektPfad))
       jeProjekt.set(lauf.projektPfad, eimer({ projektPfad: lauf.projektPfad }))
     einwerfen(jeProjekt.get(lauf.projektPfad), lauf.tokens, lauf.kostenUsd)
     lokalEinwerfen(jeProjekt.get(lauf.projektPfad), lauf)
+    openrouterEinwerfen(jeProjekt.get(lauf.projektPfad), lauf)
     const woche = wocheVon(lauf.gestartetAm)
     if (woche) {
       if (!jeWoche.has(woche.schluessel))
@@ -376,6 +444,7 @@ export function motorAuswerten(extrakte) {
         )
       einwerfen(jeWoche.get(woche.schluessel), lauf.tokens, lauf.kostenUsd)
       lokalEinwerfen(jeWoche.get(woche.schluessel), lauf)
+      openrouterEinwerfen(jeWoche.get(woche.schluessel), lauf)
     }
     for (const b of lauf.bloecke) {
       if (!jeBlock.has(b.block))

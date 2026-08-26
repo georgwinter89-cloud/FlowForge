@@ -18,6 +18,7 @@ import {
 import { einstellungenLaden, einstellungenSpeichern, extraKostenBestaetigen } from './einstellungen.js'
 import { lokaleHelferPruefen } from './motor/lokaleHelfer.js'
 import { searxngStatus } from './motor/websuche.js'
+import { katalogHolen } from './motor/openrouterKatalog.js'
 import {
   laufStarten,
   sonderlaufStarten,
@@ -161,6 +162,18 @@ function registriereIpc() {
     const wert = String(adresse ?? '').trim()
     if (!wert) return { erreichbar: false, jsonDa: false, gedrosselt: false }
     return searxngStatus(wert)
+  })
+  // OpenRouter-Modellkatalog (Bauschritt 60): Modellliste samt Anzeige-Preisen
+  // für die Einstellungen. Das Ziel folgt derselben Prüfstands-Weiche wie der
+  // Übersetzer (FLOWFORGE_OPENROUTER_ZIEL) — und eine Umleitung wird der
+  // Oberfläche gemeldet, nie verschwiegen.
+  ipcMain.handle('openrouter-katalog', async () => {
+    const pruefstandZiel = process.env.FLOWFORGE_OPENROUTER_ZIEL || ''
+    const ziel = pruefstandZiel || 'https://openrouter.ai/api/v1'
+    const ergebnis = await katalogHolen({ ziel })
+    return ergebnis.ok
+      ? { ok: true, ziel, umgeleitet: Boolean(pruefstandZiel), modelle: ergebnis.modelle }
+      : { ok: false, fehler: ergebnis.fehler }
   })
 
   // Block-Editor mit KI-Assistent (SPEC §4.5, BAUPLAN 14).

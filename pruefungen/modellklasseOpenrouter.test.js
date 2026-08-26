@@ -199,6 +199,10 @@ describe('Bauschritt 59 · WebSearch/WebFetch sind in OpenRouter-Motoren HART ge
       expect(u.tickerText).toBe(texte.ticker.openrouterInternetGesperrt)
       expect(u.frage).toBeUndefined()
     }
+    // Seit Bauschritt 60 zeigt die Sperre den ECHTEN Ersatzweg: Die zwei
+    // Nachschlage-Werkzeuge gibt es in OpenRouter-Motoren jetzt wirklich.
+    expect(texte.rechteFrage.openrouterInternetFuerAgent).toMatch(/web_suche und webseite_lesen/)
+    expect(texte.ticker.openrouterInternetGesperrt).toMatch(/web_suche und webseite_lesen/)
   })
 
   it('die Sperre gilt auch unter „darf nur lesen" — mit dem OpenRouter-Grund, keiner Ausrede', () => {
@@ -272,7 +276,17 @@ describe('Bauschritt 59 · Texte, auf die die Oberfläche baut', () => {
     // Prüfstands-Weiche: Eine gesetzte Umleitung wird nie verschwiegen.
     expect(tt.openrouterZielUmgeleitet('http://127.0.0.1:11434/v1')).toMatch(/http:\/\/127\.0\.0\.1:11434\/v1/)
     expect(tt.openrouterZielUmgeleitet('x')).toMatch(/Prüfstand/)
+    // Bauschritt 60: Die Session-Zeile verspricht keine Preisliste mehr,
+    // sondern die MESSUNG — Kosten kommen aus den Antworten des Anbieters.
+    expect(tt.openrouterSessionGestartet('m', 200000)).toMatch(
+      /Kosten übernimmt FlowForge aus den Antworten des Anbieters/
+    )
+    // „Nicht gemessen" bleibt der Rückfall, wenn der Anbieter nichts meldet —
+    // daneben gibt es jetzt die Zeile für den GEMESSENEN Betrag.
     expect(texte.laufberichte.openrouterKosten).toMatch(/nicht gemessen/)
+    expect(texte.laufberichte.openrouterKostenGemessen(0.0042)).toMatch(/0,0042/)
+    expect(texte.laufberichte.openrouterKostenGemessen(0.0042)).toMatch(/echtes Geld/)
+    expect(texte.laufberichte.openrouterKostenGemessen(0.0042)).not.toMatch(/Abo-Kontingent[^,]*enthalten/)
   })
 
   it('Einstellungen: Bereich, Felder und der ehrliche Daten-Hinweis', () => {
@@ -357,5 +371,76 @@ describe('Bauschritt 59 · Lauf und Motor (am Quelltext)', () => {
     const speichern = dialog.slice(dialog.indexOf('async function speichern()'))
     for (const feld of ['openRouterAktiv', 'openRouterSchluessel', 'openRouterModell', 'openRouterKontext'])
       expect(speichern).toContain(feld)
+  })
+})
+
+// ———————————————————————————————————————————————————————————————————————————
+// Bauschritt 60 · OpenRouter im Alltag: Websuche, gemessene Kosten, eigener
+// Verbrauchs-Topf. Die Mess-Prüfungen dazu fahren echte HTTP-Runden
+// (uebersetzer.test.js: usage:{include:true}, usage.cost; webWerkzeuge.test.js:
+// der openrouter-Motor trägt mcp__web__*; openrouterKatalog.test.js: der
+// Katalog gegen Stub-Anbieter). Hier stehen die Quelltext-Anker der
+// Verdrahtung — die Stellen, die keine reine Funktion hergibt.
+//
+// Rot vor Grün: Vor Bauschritt 60 hieß das Gate `const webServer = lokal`,
+// blockVerbrauch kannte kein openrouter-Feld, lauf.js keinen
+// gesamtVerbrauch.openrouter-Topf und keine websuche-Option für
+// OpenRouter-Motoren, und einen Katalog-Handler gab es nicht.
+// ———————————————————————————————————————————————————————————————————————————
+describe('Bauschritt 60 · Verdrahtung (am Quelltext)', () => {
+  it('Motor: webServer-Gate umfasst openrouter — holeLuft bleibt ein reines Lokal-Thema', () => {
+    const motor = lesen('src/main/motor/claudeCodeMotor.js')
+    expect(motor).toMatch(/const webServer = fremd/)
+    expect(motor).toMatch(/holeLuft: lokal\s*\n?\s*\?/)
+    // Der System-Zusatz der Websuche hängt an `fremd`, nicht an `lokal`.
+    expect(motor).toMatch(/\(fremd \? '\\n' \+ texte\.agentenWebsuche\.systemZusatz : ''\)/)
+  })
+
+  it('Motor: blockVerbrauch trägt das openrouter-Kennzeichen und die Delta-Buchung der gemessenen Kosten', () => {
+    const motor = lesen('src/main/motor/claudeCodeMotor.js')
+    expect(motor).toMatch(/openrouter: Boolean\(openrouter\)/)
+    // Delta-Buchung (Muster kostenStand): stand().kostenUsd ist je Instanz
+    // kumuliert — mehrere result-Nachrichten je Anlauf buchen nur den Zuwachs.
+    expect(motor).toMatch(/let openrouterKostenStand = null/)
+    expect(motor).toMatch(/gemessen - openrouterKostenStand/)
+    // Die Werkstatt bekommt den Übersetzer-Verkehr als eigene Art — mit
+    // EIGENER Abmelde-Variable, nicht der der Zählstelle.
+    expect(motor).toMatch(/art: 'openrouter'/)
+    expect(motor).toMatch(/let uebersetzerWerkstattAbmelden = null/)
+    expect(motor).toMatch(/uebersetzerWerkstattAbmelden\?\.\(\)/)
+  })
+
+  it('lauf.js: eigener Topf verbrauch.openrouter — echte Anbieter-Kosten nie im Abo-Feld', () => {
+    const lauf = lesen('src/main/lauf.js')
+    expect(lauf).toMatch(/openrouter: \{ tokens: 0, dauerMs: 0, kostenUsd: null \}/)
+    expect(lauf).toMatch(/gesamtVerbrauch\.openrouter\.dauerMs \+= anlaufDauerMs/)
+    expect(lauf).toMatch(/gesamtVerbrauch\.openrouter\.tokens \+= zaehlTokens/)
+    // Die Weiche: OpenRouter-Kosten in den Topf, alle anderen wie bisher in
+    // die theoretische API-Kosten-Anzeige — blockKosten trägt beide weiter.
+    expect(lauf).toMatch(/if \(knotenOpenRouter\)\s*\n\s*gesamtVerbrauch\.openrouter\.kostenUsd =/)
+  })
+
+  it('lauf.js: OpenRouter-Motoren bekommen die websuche-Option — feldweise neben dem openrouter-Literal', () => {
+    const lauf = lesen('src/main/lauf.js')
+    const openrouterZweig = lauf.slice(
+      lauf.indexOf('...(openrouterOption'),
+      lauf.indexOf('nurLesenBefehle: Boolean')
+    )
+    expect(openrouterZweig).toMatch(/websuche: \{ searxngAdresse: einstellungen\.searxngAdresse \?\? '' \}/)
+  })
+
+  it('index.js: Katalog-Handler mit derselben Prüfstands-Weiche wie der Übersetzer', () => {
+    const index = lesen('src/main/index.js')
+    expect(index).toMatch(/ipcMain\.handle\('openrouter-katalog'/)
+    expect(index).toMatch(/process\.env\.FLOWFORGE_OPENROUTER_ZIEL \|\| ''/)
+    expect(index).toMatch(/https:\/\/openrouter\.ai\/api\/v1/)
+    expect(index).toMatch(/umgeleitet: Boolean\(pruefstandZiel\)/)
+  })
+
+  it('Werkstatt-Texte: eigene Art, neutrales Ziel, sechs ehrliche Grenzen', () => {
+    expect(texte.werkstatt.artOpenrouter).toBe('OpenRouter')
+    expect(texte.werkstatt.spalteZiel).toBe('Ziel')
+    expect(texte.werkstatt.grenzen).toHaveLength(6)
+    expect(texte.werkstatt.grenzen[5]).toMatch(/Übersetzer/)
   })
 })

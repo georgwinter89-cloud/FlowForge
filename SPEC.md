@@ -1,6 +1,6 @@
 # FlowForge — Produkt-Spezifikation V1
 
-Stand: 24.08.2026 (Bauschritt 55) · Ursprung: Grilling-Session vom 07.08.2026 (von Georg freigegeben) ·
+Stand: 26.08.2026 (Bauschritt 60) · Ursprung: Grilling-Session vom 07.08.2026 (von Georg freigegeben) ·
 fortlaufend gepflegt — dieses Dokument beschreibt die Gegenwart, Verhaltensänderungen
 werden hier nachgezogen (Historie liefert git).
 
@@ -224,10 +224,11 @@ Sitzungen hinweg Software entsteht — ohne dass dem Agenten der Kontext überl�
     viele lokale Blöcke parallel (§5). Der Ticker nennt „lokal (<Ollama-Modell>)";
     Laufbericht und Metriken führen die Klasse „lokal (Ollama)" und das Ollama-Modell als
     eigene Modellzeile, mit „Denktiefe: gilt hier nicht" und „Kosten: keine" (§3, §3.4).
-    **Eigener Weg ins Netz** (seit 0.51.2): Nur die lokale Motor-Instanz bekommt zusätzlich
+    **Eigener Weg ins Netz** (seit 0.51.2): Die lokale Motor-Instanz bekommt zusätzlich
     die zwei rein lesenden Web-Werkzeuge `web_suche` und `webseite_lesen` (§4.3) — die
     Internet-Werkzeuge der CLI laufen über Anthropics Server und gibt es gegen Ollama nicht.
-    Claude-Blöcke behalten `WebSearch`/`WebFetch` unverändert.
+    Seit Bauschritt 60 gilt dasselbe für OpenRouter-Motoren (unten); Claude-Blöcke
+    behalten `WebSearch`/`WebFetch` unverändert.
     **Lokaler Prüfer mit Opus-Abnahme** (seit Bauschritt 50): Auch der Prüfer darf lokal
     laufen — sein Urteil hängt dann an zwei Ankern: dem **Tor-Anker** (sein Prüfbefehl wird
     nach einem „bestanden" mechanisch nachgespielt, Rot dreht das Urteil; §4.1) und der
@@ -260,20 +261,35 @@ Sitzungen hinweg Software entsteht — ohne dass dem Agenten der Kontext überl�
     Einstellungen (§9);
     fehlt eines, startet der Lauf mit Klartext-Absage — nie still auf Claude. Das
     **Kontextfenster** kommt aus der Einstellung (die CLI erfände sonst 200k; gemerkt
-    wird für Fremdmodelle nichts). **Kosten-Wahrheit:** FlowForge kennt keine
-    OpenRouter-Preise — Kosten stehen als „nicht gemessen" (null, nicht 0) in Bericht
-    und Metriken, und es gilt keine Ausgaben-Obergrenze (die CLI-eigenen Zahlen wären
-    erfunden); die echte Preisliste ist Bauschritt 60.
+    wird für Fremdmodelle nichts) — seit Bauschritt 60 setzt es FlowForge bei einer
+    Modellwahl aus der Katalog-Liste automatisch (§9). **Kosten-Wahrheit (seit
+    Bauschritt 60): gemessen, nicht gerechnet.** Der Übersetzer fordert beim Anbieter
+    die Kosten-Meldung je Antwort an (`usage.cost`) und übernimmt sie — eine Rechnung
+    aus der Katalog-Preisliste wäre bei Cache-Rabatten und Tageszeit-Staffeln
+    (real gemessen: `pricing.overrides` mit bis zu doppeltem Preis) systematisch
+    falsch. OpenRouter-Kosten sind **echtes Geld beim Anbieter**: Sie stehen als
+    eigene Zahl in Bericht, Blockkarte und Metriken („davon OpenRouter", §3.4) und
+    fließen **nie** in die theoretischen API-Kosten oder die Abo-Beschriftung ein.
+    Meldet der Anbieter keine Kosten (z. B. der Ollama-Prüfstand), steht ehrlich
+    „nicht gemessen" (null, nicht 0). Eine Ausgaben-Obergrenze gilt weiterhin nicht
+    (die CLI-eigenen Zahlen wären erfunden).
+    **Eigener Weg ins Netz (seit Bauschritt 60):** OpenRouter-Motoren bekommen dieselben
+    zwei rein lesenden Web-Werkzeuge wie lokale Blöcke — `web_suche` und
+    `webseite_lesen` (§4.3), samt Georgs SearXNG-Adresse als wählbarer Quelle; jeder
+    Zugriff steht im Ticker. WebSearch/WebFetch der CLI bleiben hart gesperrt (sie
+    laufen über Anthropics Server), die Sperr-Texte verweisen auf die eigenen
+    Werkzeuge. Anders als beim lokalen Block gibt es **keinen Restluft-Deckel** aus
+    einem Füllstands-Wächter — die usage-Meldung ist über den Übersetzer ehrlich, die
+    CLI-eigene Zusammenfassung funktioniert; es gilt der feste Größendeckel der
+    Werkzeuge.
     **Ehrliche Grenzen:** Die CLI ist auf Claude-Modelle gebaut — ob ein Fremdmodell die
-    Werkzeug-Disziplin der Blöcke trägt, zeigt der Alltag, nicht der Einbau. Kein Weg ins
-    Netz für OpenRouter-Blöcke (die CLI-Websuche läuft über Anthropics Server und ist
-    hart gesperrt statt nach einer Rechte-Frage zu scheitern; die Web-Werkzeuge der
-    lokalen Blöcke folgen in Schritt 60). Bilder wandern nur als Platzhalter durch den
-    Übersetzer. `CLAUDE_CODE_MAX_CONTEXT_TOKENS` wirkt nur für Modellnamen, die nicht mit
+    Werkzeug-Disziplin der Blöcke trägt, zeigt der Alltag, nicht der Einbau. Bilder
+    wandern nur als Platzhalter durch den Übersetzer.
+    `CLAUDE_CODE_MAX_CONTEXT_TOKENS` wirkt nur für Modellnamen, die nicht mit
     „claude-" beginnen — für Anthropic-Modelle über OpenRouter griffe die
     Kontext-Einstellung nicht. Für Messungen ohne Konto gibt es die dokumentierte
-    Prüfstands-Variable `FLOWFORGE_OPENROUTER_ZIEL` (leitet das Übersetzer-Ziel um,
-    mit ehrlicher Ticker-Zeile — nie still).
+    Prüfstands-Variable `FLOWFORGE_OPENROUTER_ZIEL` (leitet Übersetzer-Ziel und
+    Modell-Katalog um, mit ehrlicher Ticker- bzw. Status-Zeile — nie still).
   - **V2-Motoren:** eigene Agenten-Kreisläufe gegen beliebige Anbieter-APIs. Der
     lokale Weg ist keine V2-Arbeit mehr, sondern die zweite Motor-Instanz mit
     Ollama-Umgebung (seit Bauschritt 49 gebaut); die OpenRouter-Klasse deckt seit
@@ -468,7 +484,12 @@ als „Modell: nicht vermerkt". Seit 0.48.1 steht darunter je Block die **gewäh
 Klasse und Denktiefe** („Klasse: Extra (Fable 5) · Denktiefe: xhigh (wirksam: xhigh)") —
 die Wahl an der Karte neben dem, was der Motor gemeldet hat; bei Klassen ohne Denktiefe
 (Haiku, lokal) steht „Denktiefe: gilt hier nicht". Bei einem lokalen Block (Bauschritt 49)
-ersetzt „Kosten: keine — lief auf deiner lokalen KI" die theoretischen API-Kosten. Der Ticker
+ersetzt „Kosten: keine — lief auf deiner lokalen KI" die theoretischen API-Kosten. Bei einem
+OpenRouter-Block stehen seit Bauschritt 60 die **gemessenen Anbieter-Kosten** („vom Anbieter
+gemeldet — echtes Geld, kein Abo-Kontingent", mit vier Nachkommastellen für kleine Beträge);
+hat der Anbieter nichts gemeldet, bleibt ehrlich „Kosten: nicht gemessen". Im Lauf-Gesamt
+steht der OpenRouter-Anteil als eigene Zeile (`verbrauch.openrouter`: Tokens, Dauer,
+Kosten) und fließt nie in die theoretischen API-Kosten ein (§2). Der Ticker
 des Laufs steht vollständig im Bericht — dort finden sich seit 0.51.3 auch die **Warnzeile der
 VRAM-Passt-Prüfung** (Anteil des lokalen Modells in der Grafikkarte, §2) und die Zeile mit der
 geltenden Geduld der Werkzeug-Schicht vom Laufanfang. Seit
@@ -676,7 +697,15 @@ Seite aufs Projekt vorgefiltert zeigt (eigener Baustein, nicht Teil der Leinwand
   `verbrauch.lokal` des Laufberichts (im Hauptprozess geführt — zählt auch Anläufe, die
   wegen erschöpften Kontingents keinen Block-Eintrag hinterließen); für 0.49/0.50-Berichte
   ohne dieses Feld gilt der Rückfall über die Block-Klasse „lokal", deren Dauer es
-  rückwirkend nicht gibt („ohne Angabe", nie 0). **Dauer-Definition:** Die Block-Dauer ist
+  rückwirkend nicht gibt („ohne Angabe", nie 0).
+  **„Davon OpenRouter"** (seit Bauschritt 60), nach demselben Muster: Je Lauf stehen
+  Tokens, Dauer und die **gemessenen Kosten** (Summe der vom Anbieter gemeldeten
+  `usage.cost`-Beträge) der OpenRouter-Blöcke neben dem Gesamtverbrauch — Gesamtzeile,
+  Ketten-/Projekt-Tabellen, Wochenzeile, Laufbericht-Kopf. OpenRouter-Tokens sind
+  **weder Abo noch lokal**: Der Abo-Anteil der Beschriftung ist seither gesamt minus
+  lokal minus OpenRouter. Quelle ist `verbrauch.openrouter` des Laufberichts; für
+  0.60-Berichte ohne das Feld gilt der Rückfall über die Block-Klasse „openrouter"
+  (Kosten dann „nicht gemessen", nie 0). **Dauer-Definition:** Die Block-Dauer ist
   die Summe der Wanduhrzeiten aller Anläufe des Blocks (je Anlauf Motorstart bis Ergebnis);
   Rechte-Rückfragen MITTEN in einem Anlauf zählen mit, Wartezeiten ZWISCHEN Anläufen
   (Warteschlange, Kontingent-Pause, Folgen-Frage) zählen nicht — im Vergleich „lokal
@@ -708,7 +737,10 @@ Seite aufs Projekt vorgefiltert zeigt (eigener Baustein, nicht Teil der Leinwand
   Ollama-Modellnamen (das abgeleitete `flowforge-<basis>`), die Zeile zeigt Erstläufe,
   Reparatur-Runden, Dauer und die von Ollama gemeldeten Tokens — bei **Kosten 0**
   (die erfundenen CLI-Kosten verwirft der Motor), Denktiefe leer. So sieht Georg, ob
-  sich die Karte rechnet: Tokens und Zeit statt Dollar. Die **Ø-Dauer-Spalte** gibt es
+  sich die Karte rechnet: Tokens und Zeit statt Dollar. Die Klasse **„openrouter"**
+  erscheint ebenso als eigene Modell-Zeile; seit Bauschritt 60 stehen dort die
+  **gemessenen Anbieter-Kosten** (echtes Geld, keine theoretische Zahl) — Anläufe,
+  für die der Anbieter nichts gemeldet hat, zählen als „ohne Kosten", nie als 0. Die **Ø-Dauer-Spalte** gibt es
   seit Bauschritt 51 für alle Zeilen (Dauer-Definition oben); Anläufe aus Berichten vor
   0.51 haben keine Dauer und zählen als „ohne Angabe", nicht als 0.
 - **Lokaler Prüfer × Abnahme** (seit Bauschritt 50): zwei Kacheln in der Harness-Reihe —
@@ -729,9 +761,10 @@ Seite aufs Projekt vorgefiltert zeigt (eigener Baustein, nicht Teil der Leinwand
 
 ### 3.5 Werkstatt (seit Bauschritt 54)
 
-Eigener Knopf in der Titelleiste neben „Metriken" (§9): die lokale KI live sehen **und
-wirklich messen**. Wie die Metriken reines Nachschlagewerk — kein Lauf-Agent sieht die
-Seite je (§10).
+Eigener Knopf in der Titelleiste neben „Metriken" (§9): die fremden Motoren live sehen
+**und wirklich messen** — die lokale KI und seit Bauschritt 60 auch den
+Übersetzer-Verkehr der OpenRouter-Blöcke. Wie die Metriken reines Nachschlagewerk —
+kein Lauf-Agent sieht die Seite je (§10).
 
 - **Ohne Lauf — Zustand der Rechner** (Entscheidung Georg, 22.08.2026): je Adresse der
   Ollama-Liste (§9) — antwortet der Rechner (`/api/tags`)? liegt Georgs Basis-Modell
@@ -742,9 +775,18 @@ Seite je (§10).
   Ticker. Eine Frage, die sich nicht beantworten lässt, steht als **„nicht
   beantwortbar"** da — „nichts geladen" und „Prozessliste nicht erreichbar" sind
   ausdrücklich zwei verschiedene Aussagen.
-- **Während eines Laufs — je Messstelle:** Adresse, Modell, Block, Laufzeit,
+- **Während eines Laufs — je Messstelle:** Adresse bzw. Ziel, Modell, Block, Laufzeit,
   Gesprächswechsel (samt der gerade **laufenden**), Tokens hinein und heraus
-  (**gemessen**) und Tokens je Sekunde (**abgeleitet**, Ollama meldet sie nicht).
+  (**gemessen**) und Tokens je Sekunde (**abgeleitet**, die Anbieter melden sie nicht).
+  Seit Bauschritt 60 steht hier auch je OpenRouter-Block eine Zeile der Art
+  **„OpenRouter"**: Der eingebaute Übersetzer (§2) zählt seinen eigenen Verkehr nach
+  dem Muster der Zählstelle — samt laufender Anfragen, denn ohne die stünde die
+  Anzeige genau dann auf 0, wenn am meisten passiert (der gemessene 23.08.-Befund).
+  Einen Füllstands-Balken gibt es für OpenRouter-Blöcke nicht: Es existiert keine
+  Schätzung, mit der die Messung zu vergleichen wäre. Anders als die Zählstelle ist
+  der Übersetzer kein optionales Messgerät, sondern der Weg selbst — lässt er sich
+  nicht öffnen, startet der Block mit Klartext gar nicht erst; ungemessenen
+  OpenRouter-Verkehr gibt es deshalb nicht.
 - **Der Kern — Füllstand gemessen neben geschätzt:** Der Füllstand eines lokalen Blocks
   war bis hierher ausschließlich geschätzt (§2, Füllstands-Wächter) — er musste es sein,
   weil Ollama oberhalb der Fensterkante still kappt und danach falsche Zahlen meldet.
@@ -1728,13 +1770,16 @@ gebaute Teilstücke in der Lokale-Helfer-Zeile. Bauen und Abnehmen sind
 Schreibarbeit und unter „darf nur lesen" gesperrt; das Häkchen je Block (s.u.)
 gilt auch hier.
 
-**Websuche der lokalen Blöcke** (seit 0.51.2, Wunsch Georg, 20.08.2026): Blöcke der
-Klasse „lokal" (§2) bekommen zwei rein lesende Nachschlage-Werkzeuge — `web_suche`
-(Suchbegriff → Titel, Adresse, Kurztext je Treffer) und `webseite_lesen`
-(Adresse → Seitentext). Sie hängen an der **lokalen Motor-Instanz und nur dort**:
-Claude-Blöcke haben `WebSearch`/`WebFetch` der CLI, die über Anthropics Server laufen und
-für ein Ollama-Modell schlicht nicht existieren — ohne diese zwei Werkzeuge hat ein
-lokaler Block gar keinen Weg ins Netz. Anlass ist ein gemessener Reflex (20.08.2026,
+**Websuche der lokalen und OpenRouter-Blöcke** (seit 0.51.2, Wunsch Georg, 20.08.2026;
+seit Bauschritt 60 auch Klasse „openrouter"): Blöcke der
+Klasse „lokal" und „openrouter" (§2) bekommen zwei rein lesende Nachschlage-Werkzeuge —
+`web_suche` (Suchbegriff → Titel, Adresse, Kurztext je Treffer) und `webseite_lesen`
+(Adresse → Seitentext). Sie hängen an der **eigenen Motor-Instanz dieser Blöcke und nur
+dort**: Claude-Blöcke haben `WebSearch`/`WebFetch` der CLI, die über Anthropics Server
+laufen und für ein Fremdmodell schlicht nicht existieren — ohne diese zwei Werkzeuge
+hätten diese Blöcke gar keinen Weg ins Netz. Der Restluft-Deckel des Lokal-Wächters
+(unten) gilt nur für lokale Blöcke; bei OpenRouter-Blöcken greifen allein die
+festen Deckel. Anlass ist ein gemessener Reflex (20.08.2026,
 qwen3.8-davidau:27b): Erkennt das Modell eine Wissenslücke, greift es von selbst zum
 Suchwerkzeug; es fehlte nur der Stecker. **Quelle wählbar, ohne Umbau:** Standard ist
 eine **eingebaute, kostenlose** Abfrage ohne Konto (DuckDuckGo); trägt der Nutzer in den
@@ -2622,7 +2667,7 @@ App-Tab oder gehört der Port der Startanleitung einem fremden Prozess, misst Fl
 nicht, statt ihn abzuräumen; und zwei Zeitdeckel (§9) begrenzen, wie lange gemessen wird.
 
 **Nachschlagen im Internet** (seit 0.51.2, Entscheidung Georg, 20.08.2026): Die zwei
-Web-Werkzeuge lokaler Blöcke (`web_suche`, `webseite_lesen`, §4.3) sind **rein lesend
+Web-Werkzeuge lokaler und OpenRouter-Blöcke (`web_suche`, `webseite_lesen`, §4.3) sind **rein lesend
 im Code erzwungen** — sie kennen nur `http`/`https`, sperren diesen Rechner und das
 eigene Netz, prüfen jeden Weiterleitungssprung neu und deckeln hart. Deshalb laufen sie
 **ohne Rückfrage** und sind auch unter der Sperre „darf nur lesen" erlaubt — dieselbe
@@ -2981,10 +3026,23 @@ Block-Agenten als Hinweis daneben (§6).
   **OpenRouter** (seit Bauschritt 59, §2): eigener Bereich mit Häkchen **„OpenRouter
   erlaubt"**, **Schlüsselfeld** (Passwort-Darstellung; gespeichert im Klartext wie der
   API-Schlüssel — bewusst konsistent, eine Verschlüsselung wäre ein eigener Schritt für
-  beide), **Modellfeld** (Freitext in der Schreibweise `anbieter/modell`) und
-  **Kontextfenster** (Token-Zahl, Standard 200.000; Unsinn wird beim Speichern mit
-  Klartext abgelehnt). Bewusst **neutral** — keine Warn- oder Anbieterhinweise
-  (Entscheidung Georg, 25.08.2026). Ein Speichern-Aufruf ohne diese Felder lässt
+  beide), **Modellfeld** und **Kontextfenster** (Token-Zahl, Standard 200.000; Unsinn
+  wird beim Speichern mit Klartext abgelehnt). Seit Bauschritt 60 hängt am Modellfeld
+  die **Auswahlliste aus dem Anbieter-Katalog**: FlowForge holt die Modellliste,
+  sobald der OpenRouter-Bereich sichtbar ist — also beim Öffnen des Dialogs mit
+  gesetztem Häkchen oder beim Setzen des Häkchens; was niemand sieht, wird nicht
+  angefragt (im Hauptprozess eingedampft und zwischengespeichert — nie
+  die Rohliste über die Prozessgrenze), eine Status-Zeile sagt ehrlich, ob sie
+  geladen ist, und zum getroffenen Modell stehen Kontext und Katalog-Basispreis
+  (je Mio Token) als Info-Zeile. Trifft der Feldwert ein Katalog-Modell, setzt
+  FlowForge das **Kontextfenster automatisch** auf die kleinere Zahl aus Modell- und
+  Anbieter-Grenze — ein stehengebliebener 1M-Wert an einem 128k-Modell hieße sonst:
+  Der Übertrag kommt nie, der Anbieter kappt still. Das Feld bleibt sichtbar und von
+  Hand pflegbar (Rückfrage statt Sperre); ist die Liste nicht erreichbar oder nennt
+  sie kein Fenster (Ollama-Prüfstand), bleibt das Modellfeld Freitext in der
+  Schreibweise `anbieter/modell` — der ehrliche Rückfall, keine Sperre. Bewusst
+  **neutral** — keine Warn- oder Anbieterhinweise (Entscheidung Georg, 25.08.2026).
+  Ein Speichern-Aufruf ohne diese Felder lässt
   Schlüssel und Modell unangetastet (dasselbe Sieb-Muster wie die SearXNG-Adresse) ·
   **Websuche der lokalen Blöcke** (seit 0.51.2, §4.3): ein Feld **„SearXNG-Adresse"** —
   **leer heißt eingebaute Quelle**, es gibt bewusst kein zweites Feld für die Quellenwahl
@@ -2994,9 +3052,10 @@ Block-Agenten als Hinweis daneben (§6).
   `https`), und der Dialog zeigt beim Tippen mit, **als was gespeichert wird**. Was sich nicht
   retten lässt (`file:`, `data:`, `ftp:`, Unlesbares), lehnt das Speichern mit Klartext ab —
   wie bei den Feineinstellungen; still verschluckt wird nichts. Das Feld ist auch ohne das
-  Häkchen „Lokale KI darf ganze Blöcke übernehmen" sichtbar und prüfbar, sagt dann aber
-  ausdrücklich, dass es erst mit diesem Häkchen wirkt (nur Blöcke der Klasse „lokal" bekommen
-  die Nachschlage-Werkzeuge). Live-Status wie bei den
+  Häkchen „Lokale KI darf ganze Blöcke übernehmen" sichtbar und prüfbar; ein Hinweis sagt,
+  dass die Nachschlage-Werkzeuge nur Blöcken der Klassen „lokal" und „OpenRouter" (seit
+  Bauschritt 60) gehören und solche Blöcke erst mit dem jeweiligen Häkchen laufen.
+  Live-Status wie bei den
   Ollama-Adressen, aber mit drei ehrlich getrennten Zuständen, die an der **Antwort selbst**
   gemessen werden: „nicht erreichbar" · „erreichbar, liefert aber kein JSON" — mit dem
   konkreten Handgriff, denn eine Standard-SearXNG-Installation liefert **kein** JSON, das

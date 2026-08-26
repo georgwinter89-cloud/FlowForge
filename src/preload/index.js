@@ -24,6 +24,9 @@ contextBridge.exposeInMainWorld('flowforge', {
     ipcRenderer.invoke('lokale-helfer-status', { modell, adresse }),
   // Websuche der lokalen Blöcke (0.51.2): Live-Status der SearXNG-Adresse.
   searxngStatus: (adresse) => ipcRenderer.invoke('searxng-status', adresse),
+  // OpenRouter-Modellkatalog (Bauschritt 60): eingedampfte Liste für die
+  // Auswahl in den Einstellungen — Cache und Zuschnitt liegen im Hauptprozess.
+  openrouterKatalog: () => ipcRenderer.invoke('openrouter-katalog'),
 
   eigeneBloeckeLaden: () => ipcRenderer.invoke('eigene-bloecke-laden'),
   eigenenBlockSpeichern: (block) => ipcRenderer.invoke('eigener-block-speichern', block),

@@ -95,6 +95,16 @@ function ereignisseAusText(text) {
     .map((zeile) => JSON.parse(zeile.slice(6)))
 }
 
+// Bauschritt 60: stand() trägt jetzt auch die Uhr-Felder beginn/dauerMs —
+// für die strikten Vergleiche werden sie geprüft und abgestreift; der Rest
+// bleibt ein toEqual über ALLE Felder (neue Felder fallen sofort auf).
+function standOhneUhr(stelle) {
+  const { beginn, dauerMs, ...rest } = stelle.stand()
+  expect(beginn).toBeGreaterThan(0)
+  expect(dauerMs).toBeGreaterThanOrEqual(0)
+  return rest
+}
+
 describe('Bauschritt 59 · Anfrage-Übersetzung', () => {
   it('ersetzt das model-Feld IMMER durch das konfigurierte Modell', () => {
     const raus = anfrageUebersetzen({ model: 'claude-sonnet-4-5', messages: [] }, 'stealth/ox-alpha')
@@ -429,13 +439,30 @@ describe('Bauschritt 59 · Antwort-Übersetzung als Ereignisstrom', () => {
     ue.stueck({ usage: { prompt_tokens: 1234, completion_tokens: 56 }, choices: [] })
     const delta = ue.abschluss().find((e) => e.type === 'message_delta')
     expect(delta.usage).toEqual({ input_tokens: 1234, output_tokens: 56 })
-    expect(ue.stand()).toEqual({ hinein: 1234, heraus: 56 })
+    // kostenUsd (Bauschritt 60): kein usage.cost im Schlussstück → ehrlich
+    // null („nicht gemessen") — der Ollama-Prüfstand meldet nie einen Betrag.
+    expect(ue.stand()).toEqual({ hinein: 1234, heraus: 56, kostenUsd: null })
+  })
+
+  it('übernimmt usage.cost aus dem Schlussstück — eine gemeldete 0 bleibt eine 0', () => {
+    const ue = antwortUebersetzer('m')
+    ue.stueck({ choices: [{ delta: { content: 'x' } }] })
+    ue.stueck({ usage: { prompt_tokens: 10, completion_tokens: 2, cost: 0.0042 }, choices: [] })
+    expect(ue.stand()).toEqual({ hinein: 10, heraus: 2, kostenUsd: 0.0042 })
+    // 0 ist eine ECHTE Messung („gratis"), kein „nicht gemessen".
+    const gratis = antwortUebersetzer('m')
+    gratis.stueck({ usage: { prompt_tokens: 5, completion_tokens: 1, cost: 0 }, choices: [] })
+    expect(gratis.stand().kostenUsd).toBe(0)
+    // Und ein cost, das keine Zahl ist, wird nie als Betrag übernommen.
+    const kaputt = antwortUebersetzer('m')
+    kaputt.stueck({ usage: { prompt_tokens: 5, completion_tokens: 1, cost: '0.1' }, choices: [] })
+    expect(kaputt.stand().kostenUsd).toBe(null)
   })
 
   it('meldet ehrlich null statt erfundener 0, wenn kein Anbieter-usage kam', () => {
     const ue = antwortUebersetzer('m')
     ue.stueck({ choices: [{ delta: { content: 'x' } }] })
-    expect(ue.stand()).toEqual({ hinein: null, heraus: null })
+    expect(ue.stand()).toEqual({ hinein: null, heraus: null, kostenUsd: null })
     // In message_delta steht dann 0 — das Feld selbst darf nie fehlen.
     expect(ue.abschluss().find((e) => e.type === 'message_delta').usage).toEqual({
       input_tokens: 0,
@@ -624,6 +651,10 @@ describe('Bauschritt 59 · der Übersetzer im Betrieb (echte HTTP-Runde)', () =>
     expect(gesehen.kopf['x-api-key']).toBeUndefined()
     expect(gesehen.rumpf.model).toBe('stealth/ox-alpha')
     expect(gesehen.rumpf.stream_options).toEqual({ include_usage: true })
+    // Gemessene Kosten (Bauschritt 60): Ohne dieses Zusatzfeld meldet
+    // OpenRouter nie einen usage.cost-Betrag. Ollama 0.32.15 verträgt es
+    // (gemessen 26.08.2026: Status 200, Feld wird ignoriert).
+    expect(gesehen.rumpf.usage).toEqual({ include: true })
 
     // Rückweg: ein sauberer Anthropic-Ereignisstrom.
     expect(antwort.status).toBe(200)
@@ -649,7 +680,15 @@ describe('Bauschritt 59 · der Übersetzer im Betrieb (echte HTTP-Runde)', () =>
     expect(delta.delta.stop_reason).toBe('tool_use')
     expect(delta.usage).toEqual({ input_tokens: 123, output_tokens: 45 })
 
-    expect(stelle.stand()).toEqual({ anfragen: 1, tokenHinein: 123, tokenHeraus: 45, fehler: 0 })
+    expect(standOhneUhr(stelle)).toEqual({
+      anfragen: 1,
+      tokenHinein: 123,
+      tokenHeraus: 45,
+      fehler: 0,
+      kostenUsd: null,
+      offeneAnfragen: 0,
+      ziel: stub.adresse + '/v1'
+    })
   })
 
   it('beantwortet den stream:false-Rückfall mit einem kompletten Anthropic-Message-JSON', async () => {
@@ -676,7 +715,15 @@ describe('Bauschritt 59 · der Übersetzer im Betrieb (echte HTTP-Runde)', () =>
     expect(nachricht.content).toEqual([{ type: 'text', text: 'Fertig.' }])
     expect(nachricht.stop_reason).toBe('end_turn')
     expect(nachricht.usage).toEqual({ input_tokens: 11, output_tokens: 3 })
-    expect(stelle.stand()).toEqual({ anfragen: 1, tokenHinein: 11, tokenHeraus: 3, fehler: 0 })
+    expect(standOhneUhr(stelle)).toEqual({
+      anfragen: 1,
+      tokenHinein: 11,
+      tokenHeraus: 3,
+      fehler: 0,
+      kostenUsd: null,
+      offeneAnfragen: 0,
+      ziel: stub.adresse
+    })
   })
 
   it('reicht einen Ziel-Fehler als Anthropic-Fehlerform mit dem Status des Ziels durch', async () => {
@@ -798,7 +845,15 @@ describe('Bauschritt 59 · der Übersetzer im Betrieb (echte HTTP-Runde)', () =>
     expect(ereignisse[0].type).toBe('message_start')
     expect(ereignisse.find((e) => e.content_block?.type === 'tool_use').content_block.id).toBe('call_x')
     expect(ereignisse.find((e) => e.type === 'message_delta').usage).toEqual({ input_tokens: 9, output_tokens: 2 })
-    expect(stelle.stand()).toEqual({ anfragen: 1, tokenHinein: 9, tokenHeraus: 2, fehler: 0 })
+    expect(standOhneUhr(stelle)).toEqual({
+      anfragen: 1,
+      tokenHinein: 9,
+      tokenHeraus: 2,
+      fehler: 0,
+      kostenUsd: null,
+      offeneAnfragen: 0,
+      ziel: stub.adresse
+    })
   })
 
   it('summiert stand() über mehrere Gesprächswechsel', async () => {
@@ -817,7 +872,15 @@ describe('Bauschritt 59 · der Übersetzer im Betrieb (echte HTTP-Runde)', () =>
     const stelle = await starten({ ziel: stub.adresse })
     await anfragen(stelle.adresse, '/v1/messages', { rumpf: '{"messages":[]}' })
     await anfragen(stelle.adresse, '/v1/messages', { rumpf: '{"messages":[]}' })
-    expect(stelle.stand()).toEqual({ anfragen: 2, tokenHinein: 20, tokenHeraus: 10, fehler: 0 })
+    expect(standOhneUhr(stelle)).toEqual({
+      anfragen: 2,
+      tokenHinein: 20,
+      tokenHeraus: 10,
+      fehler: 0,
+      kostenUsd: null,
+      offeneAnfragen: 0,
+      ziel: stub.adresse
+    })
   })
 
   it('schließt idempotent — zweimal schliessen tut nicht weh', async () => {
@@ -826,5 +889,123 @@ describe('Bauschritt 59 · der Übersetzer im Betrieb (echte HTTP-Runde)', () =>
     stelle.schliessen()
     // Nach dem Schließen nimmt niemand mehr ab.
     await expect(anfragen(stelle.adresse, '/v1/messages', { rumpf: '{}' })).rejects.toThrow()
+  })
+})
+
+// Bauschritt 60: gemessene Kosten (usage.cost) und die laufenden Anfragen —
+// echte HTTP-Runden gegen Stub-Anbieter: einer, der usage.cost mitschickt,
+// einer ohne (den Ollama-Fall decken die Prüfungen oben schon ab, ihr
+// kostenUsd bleibt null).
+//
+// Rot vor Grün: Vor diesem Schritt schickte der Übersetzer kein
+// usage:{include:true}, kannte kein kostenUsd (null), keine offenen Anfragen
+// und keine Uhr-Felder — stand() trug genau vier Zähler.
+describe('Bauschritt 60 · usage.cost und offene Anfragen', () => {
+  it('bucht usage.cost aus dem streamenden Schlussstück und summiert über Gesprächswechsel', async () => {
+    const rumpfe = []
+    const stub = await stubStarten((anfrage, antwort) => {
+      let text = ''
+      anfrage.on('data', (s) => (text += s))
+      anfrage.on('end', () => {
+        rumpfe.push(JSON.parse(text))
+        antwort.writeHead(200, { 'content-type': 'text/event-stream' })
+        antwort.write('data: {"choices":[{"delta":{"content":"ok"},"finish_reason":"stop"}]}\n\n')
+        antwort.write(
+          'data: {"usage":{"prompt_tokens":10,"completion_tokens":5,"cost":0.0042},"choices":[]}\n\n'
+        )
+        antwort.write('data: [DONE]\n\n')
+        antwort.end()
+      })
+    })
+    const stelle = await starten({ ziel: stub.adresse })
+    await anfragen(stelle.adresse, '/v1/messages', {
+      rumpf: JSON.stringify({ stream: true, messages: [] })
+    })
+    expect(stelle.stand().kostenUsd).toBeCloseTo(0.0042, 10)
+    await anfragen(stelle.adresse, '/v1/messages', {
+      rumpf: JSON.stringify({ stream: true, messages: [] })
+    })
+    expect(stelle.stand().kostenUsd).toBeCloseTo(0.0084, 10)
+    // Das Zusatzfeld ging in JEDER Anfrage mit hinaus.
+    for (const rumpf of rumpfe) expect(rumpf.usage).toEqual({ include: true })
+  })
+
+  it('bucht usage.cost auch bei stream:false — und eine gemeldete 0 wird eine echte 0', async () => {
+    let kosten = 0.002
+    let gesehen = null
+    const stub = await stubStarten((anfrage, antwort) => {
+      let text = ''
+      anfrage.on('data', (s) => (text += s))
+      anfrage.on('end', () => {
+        gesehen = JSON.parse(text)
+        antwort.writeHead(200, { 'content-type': 'application/json' })
+        antwort.end(
+          JSON.stringify({
+            choices: [{ message: { role: 'assistant', content: 'ok' }, finish_reason: 'stop' }],
+            usage: { prompt_tokens: 7, completion_tokens: 2, cost: kosten }
+          })
+        )
+      })
+    })
+    const stelle = await starten({ ziel: stub.adresse })
+    await anfragen(stelle.adresse, '/v1/messages', {
+      rumpf: JSON.stringify({ stream: false, messages: [{ role: 'user', content: 'hi' }] })
+    })
+    // Auch die stream:false-Anfrage trägt das Zusatzfeld.
+    expect(gesehen.usage).toEqual({ include: true })
+    expect(stelle.stand().kostenUsd).toBeCloseTo(0.002, 10)
+
+    // Eine gemeldete 0 ist eine Messung („gratis") — sie erhält die Summe,
+    // erfindet aber nie einen Betrag aus dem Nichts: Bei einer FRISCHEN
+    // Instanz macht sie aus null eine 0.
+    kosten = 0
+    const frisch = await starten({ ziel: stub.adresse })
+    await anfragen(frisch.adresse, '/v1/messages', {
+      rumpf: JSON.stringify({ stream: false, messages: [] })
+    })
+    expect(frisch.stand().kostenUsd).toBe(0)
+  })
+
+  it('zählt eine laufende Anfrage als offen — mit Zwischenstand statt totem Tab (Angriffsfund 13)', async () => {
+    // Ein Stub, der die usage schon liefert, den Strom aber offen hält, bis
+    // die Prüfung den Zwischenstand gesehen hat — genau die Minuten, in denen
+    // die Werkstatt sonst auf 0 stünde.
+    let stromSchliessen = null
+    const stromOffen = new Promise((da) => (stromSchliessen = da))
+    const stub = await stubStarten((anfrage, antwort) => {
+      anfrage.resume()
+      anfrage.on('end', async () => {
+        antwort.writeHead(200, { 'content-type': 'text/event-stream' })
+        antwort.write('data: {"choices":[{"delta":{"content":"unterwegs"}}]}\n\n')
+        antwort.write('data: {"usage":{"prompt_tokens":50,"completion_tokens":8},"choices":[]}\n\n')
+        await stromOffen
+        antwort.write('data: [DONE]\n\n')
+        antwort.end()
+      })
+    })
+    const stelle = await starten({ ziel: stub.adresse })
+    const laufend = anfragen(stelle.adresse, '/v1/messages', {
+      rumpf: JSON.stringify({ stream: true, messages: [] })
+    })
+    // Warten, bis der Zwischenstand sichtbar ist — nie länger als 5 s.
+    const bis = Date.now() + 5000
+    while (stelle.stand().offeneAnfragen === 0 && Date.now() < bis)
+      await new Promise((r) => setTimeout(r, 10))
+    const mittendrin = stelle.stand()
+    expect(mittendrin.offeneAnfragen).toBe(1)
+    // Abgeschlossen ist noch nichts — aber der Zwischenstand zählt schon.
+    expect(mittendrin.anfragen).toBe(0)
+    const bisTokens = Date.now() + 5000
+    while (stelle.stand().tokenHinein === 0 && Date.now() < bisTokens)
+      await new Promise((r) => setTimeout(r, 10))
+    expect(stelle.stand().tokenHinein).toBe(50)
+    stromSchliessen()
+    await laufend
+    const danach = stelle.stand()
+    expect(danach.offeneAnfragen).toBe(0)
+    expect(danach.anfragen).toBe(1)
+    // Kein Doppelzählen: Der Zwischenstand wurde beim Buchen ersetzt.
+    expect(danach.tokenHinein).toBe(50)
+    expect(danach.tokenHeraus).toBe(8)
   })
 })

@@ -139,7 +139,12 @@ function StellenTabelle({ stellen }) {
         <tbody>
           {stellen.map((s, i) => (
             <tr key={`${s.art} ${s.ziel} ${i}`}>
-              <td>{s.art === 'helfer' ? t.artHelfer : t.artBlock}</td>
+              {/* Drei Arten (Bauschritt 60): Helfer-KI, OpenRouter (der
+                  eingebaute Übersetzer), sonst lokaler Block — vorher lief
+                  alles Unbekannte als „Block" durch. */}
+              <td>
+                {s.art === 'helfer' ? t.artHelfer : s.art === 'openrouter' ? t.artOpenrouter : t.artBlock}
+              </td>
               <td>{s.blockName || t.ohneName}</td>
               <td className="mono">{s.modell || t.ohneName}</td>
               <td className="mono">{s.ziel}</td>
@@ -195,7 +200,10 @@ export default function Werkstatt() {
   // kleine Kreisläufe mit eigenem Kontext — dort gäbe es nichts zu vergleichen.
   // Gezeigt wird auch die Messung OHNE Vergleich (der Block-Agent hat noch
   // nicht angefangen, es gibt also noch keine Schätzung) — sie ist die halbe
-  // Aussage, aber die richtige Hälfte.
+  // Aussage, aber die richtige Hälfte. OpenRouter-Einträge (Bauschritt 60)
+  // hält genau dieser Filter draußen: Der Übersetzer meldet weder vergleich
+  // noch gemessen, weil es dort keine Schätzung gibt — ein Balken wäre
+  // erfunden.
   const mitFuellstand = stellen.filter((s) => s.vergleich || s.gemessen != null)
   const bereite = rechner?.adressen.filter((a) => a.erreichbar && a.basisDa).length ?? 0
   const gesamt = rechner?.adressen.length ?? 0

@@ -343,7 +343,9 @@ describe('0.51.5 · Die Websuche eines Blocks, der geliefert hat', () => {
   it('die feste Marke steht nicht mehr im Werkzeug-Aufbau', () => {
     // umgebungBereinigen kommt im Motor mehrfach vor — ab dem Werkzeug-Aufbau
     // suchen, sonst liegt das Ende vor dem Anfang und der Ausschnitt ist leer.
-    const von = motorQuelle.indexOf('const webServer = lokal')
+    // Seit Bauschritt 60 hängt der Server an `fremd` (lokal ODER openrouter);
+    // die Restluft-Rechnung selbst bleibt ein reines Lokal-Thema.
+    const von = motorQuelle.indexOf('const webServer = fremd')
     const aufbau = motorQuelle.slice(von, motorQuelle.indexOf('const umgebung = umgebungBereinigen(', von))
     expect(aufbau.length).toBeGreaterThan(0)
     expect(aufbau).not.toMatch(/fenster \* LOKAL_WAECHTER_PROZENT/)

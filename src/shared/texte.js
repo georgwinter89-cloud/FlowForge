@@ -9,6 +9,18 @@ function dauerKurz(ms) {
   return `${Math.round(sekunden / 60)} Min`
 }
 
+// Dollar-Betrag mit ehrlicher Auflösung (Bauschritt 60): Die zwei
+// Nachkommastellen der theoretischen API-Kosten machen aus einem
+// 0,004-$-OpenRouter-Block „0,00 $" — der sähe gratis aus. Kleine echte
+// Beträge bekommen deshalb vier Stellen; 0 bleibt 0 (Gratis-Modell ist eine
+// Messung, kein Loch).
+function usdGenau(usd) {
+  if (!Number.isFinite(usd)) return '—'
+  if (usd === 0) return '0 $'
+  if (usd >= 0.01) return usd.toFixed(2).replace('.', ',') + ' $'
+  return usd.toFixed(4).replace('.', ',') + ' $'
+}
+
 export const texte = {
   fensterTitel: 'FlowForge',
   // Kopfleiste = Titelleiste der dunklen Werkbank (Mockup-Runden 3+4).
@@ -29,9 +41,10 @@ export const texte = {
   werkstatt: {
     ueberschrift: 'Werkstatt',
     untertitel:
-      'Die lokale KI live. Ohne Lauf steht hier, ob deine Ollama-Rechner überhaupt bereit sind — ' +
+      'Die fremden Motoren live. Ohne Lauf steht hier, ob deine Ollama-Rechner überhaupt bereit sind — ' +
       'die Frage „kann ich jetzt lokal bauen" also, bevor du startest. Während eines Laufs stehen hier ' +
-      'die gemessenen Zahlen jedes lokalen Blocks. Nur zum Ansehen; kein Lauf-Agent bekommt das je zu sehen.',
+      'die gemessenen Zahlen jedes lokalen und jedes OpenRouter-Blocks. Nur zum Ansehen; kein Lauf-Agent ' +
+      'bekommt das je zu sehen.',
     aktualisieren: 'Neu abfragen',
 
     // --- Zustand der Rechner (ohne Lauf) ---
@@ -68,16 +81,21 @@ export const texte = {
     // --- Während eines Laufs ---
     laufUeberschrift: 'Was gerade misst',
     laufErklaerung:
-      'Jede Zeile ist eine Messstelle, durch die FlowForge den Verkehr zur lokalen KI leitet. Tokens hinein und ' +
-      'heraus sind gemessen; Tokens je Sekunde rechnet FlowForge daraus aus (Ollama meldet die Zahl nicht).',
+      'Jede Zeile ist eine Messstelle, durch die FlowForge den Verkehr zu einem fremden Motor leitet — ' +
+      'zur lokalen KI (Zählstelle) oder zu OpenRouter (der eingebaute Übersetzer). Tokens hinein und ' +
+      'heraus sind gemessen; Tokens je Sekunde rechnet FlowForge daraus aus (die Anbieter melden die Zahl nicht).',
     laufLeer:
-      'Gerade misst nichts — es läuft kein lokaler Block und keine lokale Helfer-KI. Sobald ein Lauf mit lokalem Block startet, füllt sich diese Tabelle von selbst.',
+      'Gerade misst nichts — es läuft kein lokaler Block, kein OpenRouter-Block und keine lokale Helfer-KI. Sobald ein Lauf mit so einem Block startet, füllt sich diese Tabelle von selbst.',
     artBlock: 'Block',
     artHelfer: 'Helfer-KI',
+    // OpenRouter (Bauschritt 60): der Übersetzer-Verkehr als eigene Art —
+    // dieselbe Tabelle, ehrlich beschriftet statt als „Block" an einer
+    // Ollama-Spalte.
+    artOpenrouter: 'OpenRouter',
     spalteArt: 'Wer',
     spalteBlock: 'Block',
     spalteModell: 'Modell',
-    spalteZiel: 'Ollama-Adresse',
+    spalteZiel: 'Ziel',
     spalteLaufzeit: 'Laufzeit',
     spalteAnfragen: 'Gesprächswechsel',
     spalteHinein: 'Tokens hinein',
@@ -124,7 +142,8 @@ export const texte = {
       'Der zusätzliche Sprung über die Messstelle kostet Zeit. Gemessen ist er klein (bei einem 8-MB-Antwortstrom unter einer Sekunde), aber er ist nicht null.',
       'Tokens je Sekunde ist eine abgeleitete Zahl, keine Angabe von Ollama: gemessene Tokens geteilt durch die verstrichene Zeit.',
       'Gezeigt wird nur, was durch die Messstelle geht. Was ein Agent an ihr vorbei tut — etwa ein ausgeführter Befehl, der selbst Ollama anspricht —, sieht sie nicht.',
-      'Lässt sich die Messstelle nicht öffnen, arbeitet der Block trotzdem weiter und redet direkt mit Ollama. Der Liveticker sagt es; hier bleibt die Zeile dann leer.'
+      'Lässt sich die Messstelle nicht öffnen, arbeitet der Block trotzdem weiter und redet direkt mit Ollama. Der Liveticker sagt es; hier bleibt die Zeile dann leer.',
+      'Beim OpenRouter-Block IST die Messstelle der Weg (der eingebaute Übersetzer) — lässt er sich nicht öffnen, startet der Block mit Klartext gar nicht erst. Ungemessenen OpenRouter-Verkehr gibt es deshalb nicht.'
     ]
   },
   // Metriken (BAUPLAN 31): lokale KI und Motor über alle Läufe hinweg — nur
@@ -170,8 +189,12 @@ export const texte = {
       (g.ohneKosten > 0 ? ` (${g.ohneKosten} ${g.ohneKosten === 1 ? 'Lauf' : 'Läufe'} ohne Kostenangabe)` : '') +
       // „Davon lokal" (BAUPLAN 51): lokale Tokens stehen als Beschriftung
       // NEBEN der Gesamtsumme — nie still herausgerechnet, Altberichte
-      // widersprächen sonst. Der Abo-Anteil ist gesamt minus lokal.
-      texte.metriken.davonLokalZusatz(g),
+      // widersprächen sonst. Der Abo-Anteil ist gesamt minus lokal minus
+      // OpenRouter (Bauschritt 60: OpenRouter-Tokens stehen in der
+      // Gesamtsumme, sind aber kein Abo-Verbrauch — ohne den Abzug behauptete
+      // die Metrik zu viel Abo).
+      texte.metriken.davonLokalZusatz(g) +
+      texte.metriken.davonOpenrouterZusatz(g),
     davonLokalZusatz: (g) =>
       g.lokalTokens > 0
         ? ` · davon lokal: ${g.lokalTokens.toLocaleString('de-DE')} Tokens` +
@@ -179,7 +202,19 @@ export const texte = {
           (g.ohneLokalDauer > 0
             ? ` (${g.ohneLokalDauer} ${g.ohneLokalDauer === 1 ? 'Lauf' : 'Läufe'} ohne Dauer-Angabe)`
             : '') +
-          ` · Abo-Anteil: ${Math.max(0, g.tokens - g.lokalTokens).toLocaleString('de-DE')} Tokens`
+          ` · Abo-Anteil: ${Math.max(0, g.tokens - g.lokalTokens - (g.openrouterTokens ?? 0)).toLocaleString('de-DE')} Tokens`
+        : '',
+    // „Davon OpenRouter" (Bauschritt 60), analog „davon lokal". Der
+    // Abo-Anteil steht nur hier, wenn es KEINE lokale Zeile gibt — sonst
+    // stünde dieselbe Zahl zweimal da.
+    davonOpenrouterZusatz: (g) =>
+      (g.openrouterTokens ?? 0) > 0
+        ? ` · davon OpenRouter: ${g.openrouterTokens.toLocaleString('de-DE')} Tokens` +
+          ((g.mitOpenrouterDauer ?? 0) > 0 ? `, ${dauerKurz(g.openrouterDauerMs)}` : '') +
+          ((g.openrouterKostenUsd ?? 0) > 0 ? `, ${usdGenau(g.openrouterKostenUsd)}` : '') +
+          ((g.lokalTokens ?? 0) > 0
+            ? ''
+            : ` · Abo-Anteil: ${Math.max(0, g.tokens - g.openrouterTokens).toLocaleString('de-DE')} Tokens`)
         : '',
     ohneKosten: 'ohne Kosten',
     ohneVerbrauch: 'ohne Verbrauch',
@@ -206,16 +241,30 @@ export const texte = {
       `${w.anzahl} ${w.anzahl === 1 ? 'Lauf' : 'Läufe'} · ${w.tokens.toLocaleString('de-DE')} Tokens` +
       (w.mitKosten > 0 ? ` · ${w.kostenUsd.toFixed(2).replace('.', ',')} $` : '') +
       (w.ohneKosten > 0 ? ` (${w.ohneKosten} ohne Kosten)` : '') +
-      (w.lokalTokens > 0 ? ` · davon lokal: ${w.lokalTokens.toLocaleString('de-DE')}` : ''),
+      (w.lokalTokens > 0 ? ` · davon lokal: ${w.lokalTokens.toLocaleString('de-DE')}` : '') +
+      ((w.openrouterTokens ?? 0) > 0
+        ? ` · davon OpenRouter: ${w.openrouterTokens.toLocaleString('de-DE')}`
+        : ''),
     // „Davon lokal" als Spalte (Ketten-/Projekt-Tabellen) und im Laufbericht
     // (Leinwand liest diese Texte mit — sie gehören zur Kontingent-Sicht).
     spalteDavonLokal: 'davon lokal',
+    // „Davon OpenRouter" (Bauschritt 60): dieselben Tabellen, eigene Spalte —
+    // OpenRouter-Tokens sind weder Abo noch lokal, sie sind echtes Geld beim
+    // Anbieter.
+    spalteDavonOpenrouter: 'davon OpenRouter',
     spalteDauerDurchschnitt: 'Ø Dauer',
     ohneDauer: 'ohne Dauer-Angabe',
     dauerText: (ms) => dauerKurz(ms),
     davonLokalZeile: (lokal) =>
       `Davon lokal (kostet kein Kontingent): ${Number(lokal.tokens ?? 0).toLocaleString('de-DE')} Tokens` +
       (Number.isFinite(lokal.dauerMs) && lokal.dauerMs > 0 ? ` · ${dauerKurz(lokal.dauerMs)}` : ''),
+    // Der OpenRouter-Topf des Laufs (Bauschritt 60): Tokens, Dauer und die
+    // GEMESSENEN Kosten (usage.cost des Anbieters). null heißt ehrlich „der
+    // Anbieter hat keine Kosten gemeldet" — nie 0.
+    davonOpenrouterZeile: (o) =>
+      `Davon OpenRouter (echtes Geld beim Anbieter, kein Abo-Kontingent): ${Number(o.tokens ?? 0).toLocaleString('de-DE')} Tokens` +
+      (Number.isFinite(o.dauerMs) && o.dauerMs > 0 ? ` · ${dauerKurz(o.dauerMs)}` : '') +
+      (o.kostenUsd != null ? ` · ${usdGenau(o.kostenUsd)}` : ' · Kosten nicht gemeldet'),
     blockDauer: (ms) => `Dauer: ${dauerKurz(ms)}`,
     sonderlaufMarke: 'Sonderlauf',
     // Harness-Kennzahlen (BAUPLAN 36): Wie gut trägt das Gerüst? Score UND
@@ -701,7 +750,7 @@ export const texte = {
     // braucht (Einstellungen), was nicht gilt (Denktiefe, Websuche, gemessene
     // Kosten), und die Daten-Ehrlichkeit in einem Satz.
     modellOpenRouterHinweis:
-      'Läuft über OpenRouter auf dem Modell aus den Einstellungen (Bereich „OpenRouter"). Die Denktiefe gilt hier nicht, Websuche gibt es für diese Blöcke noch nicht, und Kosten kann FlowForge nicht messen — der Bericht sagt ehrlich „nicht gemessen". Eingaben und Projektinhalte gehen an den gewählten Anbieter. Ohne Häkchen, Schlüssel und Modell in den Einstellungen startet der Lauf nicht — FlowForge fällt nie still auf Claude zurück.',
+      'Läuft über OpenRouter auf dem Modell aus den Einstellungen (Bereich „OpenRouter"). Die Denktiefe gilt hier nicht. Ins Netz kommt der Block über die eingebauten Werkzeuge web_suche und webseite_lesen — jeder Zugriff steht im Ticker. Kosten übernimmt FlowForge aus den Antworten des Anbieters; meldet er keine, steht im Bericht ehrlich „nicht gemessen". Eingaben und Projektinhalte gehen an den gewählten Anbieter. Ohne Häkchen, Schlüssel und Modell in den Einstellungen startet der Lauf nicht — FlowForge fällt nie still auf Claude zurück.',
     // Kosten-Wahrheit der Klasse Extra (0.48.1, Claude-Code-Doku „Model
     // configuration": über das Agent SDK gibt es keinen Einwilligungs-Dialog —
     // eine Fable-Anfrage, die Guthaben kostet, wird ohne Nachfrage abgerechnet).
@@ -3347,9 +3396,10 @@ export const texte = {
     // Wegnehmen wäre schlechter: Dann könnte Georg die Adresse gar nicht erst
     // vorbereiten und wüsste nicht, dass es sie gibt.
     websucheNurMitBlockAgent:
-      'Wirkt erst, wenn weiter unten „Lokale KI darf ganze Blöcke übernehmen" angehakt ist: ' +
-      'Nur solche Blöcke bekommen die Nachschlage-Werkzeuge. Du kannst die Adresse hier ' +
-      'trotzdem schon eintragen und prüfen.',
+      'Wirkt für Blöcke der Klassen „lokal" und „OpenRouter" — nur sie bekommen die ' +
+      'Nachschlage-Werkzeuge (Claude-Blöcke haben die Websuche der CLI). Solche Blöcke ' +
+      'gibt es erst mit dem Häkchen „Lokale KI darf ganze Blöcke übernehmen" bzw. ' +
+      '„OpenRouter erlaubt"; die Adresse kannst du hier trotzdem schon eintragen und prüfen.',
     // Ergänztes Schema sichtbar machen (Nacharbeit Befund 3): Was gespeichert
     // wird, soll dastehen, bevor gespeichert wird — sonst wäre die Ergänzung
     // nur eine andere Art, still etwas anderes zu tun als das Getippte.
@@ -3382,23 +3432,51 @@ export const texte = {
     openRouterAktivHinweis:
       'An jeder Blockkarte und im Block-Editor gibt es dann die Modellklasse „OpenRouter": ' +
       'Der Block läuft über deinen OpenRouter-Schlüssel auf dem unten eingetragenen Modell — ' +
-      'mit denselben Werkzeugen, Sperren und Rückfragen wie bei Claude. Websuche gibt es für ' +
-      'diese Blöcke noch nicht, Kosten stehen im Bericht ehrlich auf „nicht gemessen". Ohne ' +
+      'mit denselben Werkzeugen, Sperren und Rückfragen wie bei Claude, Websuche eingeschlossen. ' +
+      'Die Kosten übernimmt FlowForge aus den Antworten des Anbieters (echtes Geld, kein ' +
+      'Abo-Kontingent); meldet er keine, steht im Bericht ehrlich „nicht gemessen". Ohne ' +
       'Häkchen, Schlüssel und Modell startet ein Lauf mit einem OpenRouter-Block nicht — ' +
       'FlowForge fällt nie still auf Claude zurück.',
     openRouterSchluesselFeld: 'OpenRouter-Schlüssel',
     openRouterSchluesselPlatzhalter: 'sk-or-…',
     openRouterModellFeld: 'Modell',
     openRouterModellPlatzhalter: 'z.B. anbieter/modell',
+    // Modell-Katalog (Bauschritt 60): Auswahlliste + Live-Status vom
+    // Anbieter-Katalog; das Freitextfeld bleibt der ehrliche Rückfall, wenn
+    // die Liste nicht erreichbar ist.
+    openRouterKatalogLaedt: 'Die Modellliste wird beim Anbieter geholt …',
+    openRouterKatalogDa: (anzahl) =>
+      `Modellliste geladen: ${anzahl} ${anzahl === 1 ? 'Modell' : 'Modelle'} — tippe zum Suchen oder wähle aus der Liste.`,
+    openRouterKatalogFehlt: (fehler) =>
+      `Die Modellliste ist gerade nicht erreichbar (${fehler || 'unbekannter Fehler'}) — das Modellfeld nimmt den Namen weiter von Hand an (Schreibweise anbieter/modell).`,
+    openRouterKatalogUmgeleitet: (ziel) =>
+      `Modellliste vom Prüfstand-Ziel ${ziel} (Umgebungsvariable FLOWFORGE_OPENROUTER_ZIEL).`,
+    openRouterKontextAusListe: (kontext) =>
+      `Kontextfenster automatisch übernommen: ${kontext.toLocaleString('de-DE')} Token (aus der Modellliste).`,
+    openRouterKontextUnbekannt:
+      'Für dieses Modell nennt die Liste kein Kontextfenster — trage es von Hand ein.',
+    // Info-Zeile zum gerade gewählten Modell: Kontext und Preise, ehrlich mit
+    // „unbekannt", wo der Katalog nichts liefert (Ollama-Prüfstand).
+    openRouterModellInfo: (kontext, preisHineinJeMio, preisHerausJeMio) =>
+      `Kontext ${kontext != null ? kontext.toLocaleString('de-DE') + ' Token' : 'unbekannt'} · ` +
+      `Preis ${
+        preisHineinJeMio != null && preisHerausJeMio != null
+          ? preisHineinJeMio.toLocaleString('de-DE', { maximumFractionDigits: 2 }) +
+            ' $/Mio hinein, ' +
+            preisHerausJeMio.toLocaleString('de-DE', { maximumFractionDigits: 2 }) +
+            ' $/Mio heraus (Basispreis laut Katalog; abgerechnet wird, was der Anbieter je Antwort meldet)'
+          : 'unbekannt'
+      }`,
     openRouterModellHinweis:
-      'Der Modellname genau so, wie OpenRouter ihn führt. Eine Auswahlliste mit den Modellen ' +
-      'des Katalogs folgt in einem späteren Bauschritt.',
+      'Der Modellname genau so, wie OpenRouter ihn führt. Wählst du ein Modell aus der Liste, ' +
+      'übernimmt FlowForge das Kontextfenster automatisch aus dem Katalog.',
     openRouterKontextFeld: 'Kontextfenster (Token)',
     openRouterKontextHinweis:
-      'Wie viel das gewählte Modell auf einmal im Kopf behält — steht auf der Modellseite bei ' +
-      'OpenRouter (z.B. 200000, bei 1M-Modellen 1000000). FlowForge richtet daran den ' +
-      'Kontext-Balken und den Übertrag aus; ein zu großer Wert lässt Blöcke mitten in der ' +
-      'Arbeit am vollen Kontext scheitern.',
+      'Wie viel das gewählte Modell auf einmal im Kopf behält. Bei einer Wahl aus der ' +
+      'Modellliste setzt FlowForge den Wert automatisch (die kleinere Zahl aus Modell- und ' +
+      'Anbieter-Grenze); von Hand nötig ist er nur, wenn die Liste nicht erreichbar ist oder ' +
+      'kein Fenster nennt. FlowForge richtet daran den Kontext-Balken und den Übertrag aus; ' +
+      'ein zu großer Wert lässt Blöcke mitten in der Arbeit am vollen Kontext scheitern.',
     fehlerOpenRouterKontext:
       'Das OpenRouter-Kontextfenster muss eine positive Token-Zahl sein (z.B. 200000).',
     // Unteraufgaben-Modell (BAUPLAN 37): der Motor-Zwilling der lokalen
@@ -3519,6 +3597,11 @@ export const texte = {
       `${tokens.toLocaleString('de-DE')} Tokens (alle Fäden zusammen)`,
     verbrauchKosten: (usd) => `Kosten bisher: ${usd.toFixed(2).replace('.', ',')} $`,
     verbrauchKostenAbo: 'im Abo enthalten',
+    // OpenRouter (Bauschritt 60): GEMESSENE Kosten (usage.cost des Anbieters)
+    // — echtes Geld, nie „theoretisch", nie „im Abo enthalten".
+    verbrauchKostenOpenrouter: (usd) =>
+      `Kosten bisher: ${usdGenau(usd)} — echtes Geld bei deinem OpenRouter-Anbieter`,
+    verbrauchKostenOpenrouterUnbekannt: 'Kosten: vom Anbieter nicht gemeldet',
     zustandLabels: {
       erfolgreich: 'Erfolgreich',
       fehlgeschlagen: 'Fehlgeschlagen',
@@ -3736,7 +3819,7 @@ export const texte = {
     // CLI-Websuche läuft über Anthropics Server und endet für einen
     // OpenRouter-Block als Anbieter-Fehler NACH der Rechte-Frage.
     openrouterInternetFuerAgent:
-      'WebSearch und WebFetch stehen OpenRouter-Blöcken nicht zur Verfügung — sie laufen über Anthropics Server und würden hier nur mit einem Anbieter-Fehler enden. Arbeite ohne Internet-Zugriff weiter.',
+      'WebSearch und WebFetch stehen OpenRouter-Blöcken nicht zur Verfügung — sie laufen über Anthropics Server und würden hier nur mit einem Anbieter-Fehler enden. Nutze stattdessen die Werkzeuge web_suche und webseite_lesen.',
     // Co-Pilot (BAUPLAN 33): App bedienen im nur-lesenden Chat fragt nach;
     // einen fremden Port-Besitzer beenden fragt immer.
     appBedienen:
@@ -3813,7 +3896,7 @@ export const texte = {
     openrouterEigeneSession: (blockName, modell) =>
       `„${blockName}" läuft über OpenRouter (${modell}) in einer eigenen Session — nie in der Claude-Lauf-Session.`,
     openrouterSessionGestartet: (modell, kontext = null) =>
-      `Motor gestartet über den eingebauten OpenRouter-Übersetzer (${modell}${kontext ? ', Kontext ' + Math.round(kontext / 1024) + 'k' : ''}) — Kosten kann FlowForge hier nicht messen, das Kontextfenster kommt aus deiner Einstellung.`,
+      `Motor gestartet über den eingebauten OpenRouter-Übersetzer (${modell}${kontext ? ', Kontext ' + Math.round(kontext / 1024) + 'k' : ''}) — Kosten übernimmt FlowForge aus den Antworten des Anbieters, das Kontextfenster kommt aus deiner Einstellung.`,
     blockAgentGestartetOpenrouter: (name, modellName) =>
       `„${name}" läuft als frischer Agent in seiner eigenen OpenRouter-Session — Modell: ${modellName}.`,
     // Prüfstands-Weiche (Bauschritt 59): FLOWFORGE_OPENROUTER_ZIEL lenkt den
@@ -4048,7 +4131,7 @@ export const texte = {
     // OpenRouter-Motor (Bauschritt 59): dieselbe Ehrlichkeits-Regel wie die
     // Zeile darüber — der Ticker nennt den echten Grund, keine Ausrede.
     openrouterInternetGesperrt:
-      'Internet-Zugriff gestoppt — WebSearch/WebFetch laufen über Anthropics Server und gibt es für OpenRouter-Blöcke nicht.',
+      'Internet-Zugriff über WebSearch/WebFetch gestoppt — sie laufen über Anthropics Server; OpenRouter-Blöcke gehen über web_suche und webseite_lesen ins Netz.',
     nurLesenBefehleAktiv:
       'Einstellung aktiv: Nur-lesende Blöcke dürfen Befehle ausführen (auf eigene Gefahr).',
     pruefmappeGesperrt:
@@ -5192,11 +5275,14 @@ export const texte = {
     // Klassen ohne Denktiefe (Haiku, lokal) und lokale Kosten (BAUPLAN 49).
     denktiefeGiltNicht: 'gilt hier nicht',
     lokalKeineKosten: 'Kosten: keine — lief auf deiner lokalen KI, kein Kontingent, keine Dollar.',
-    // OpenRouter (Bauschritt 59): dritter Fall neben „keine" und der
-    // API-Zahl. NICHT „keine Kosten" — was das fremde Modell kostet, weiß
-    // FlowForge schlicht nicht (echte Preisliste: Schritt 60).
+    // OpenRouter (Bauschritt 59/60): dritter Fall neben „keine" und der
+    // API-Zahl. Seit Bauschritt 60 meldet der Anbieter die echten Kosten je
+    // Antwort (usage.cost) — dann steht hier die gemessene Zahl; meldet er
+    // keine (z.B. der Ollama-Prüfstand), bleibt der ehrliche Rückfall.
     openrouterKosten:
-      'Kosten: nicht gemessen — lief über OpenRouter; was das Modell dort kostet, weiß FlowForge (noch) nicht.',
+      'Kosten: nicht gemessen — lief über OpenRouter, und der Anbieter hat keine Kosten gemeldet.',
+    openrouterKostenGemessen: (usd) =>
+      `Kosten: ${usdGenau(usd)} — vom Anbieter gemeldet (OpenRouter); echtes Geld, kein Abo-Kontingent.`,
     klasseZeile: (klasseName, denktiefeName, gemessen) =>
       `Klasse: ${klasseName}` +
       (denktiefeName ? ` · Denktiefe: ${denktiefeName}` : '') +

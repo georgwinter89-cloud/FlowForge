@@ -231,6 +231,21 @@ describe('0.51.2 · Nur die Motor-Instanz eines lokalen Blocks bekommt die Websu
       expect(definition.prompt).not.toContain(texte.agentenWebsuche.anweisungen)
   })
 
+  it('auch der OpenRouter-Motor bekommt die zwei Werkzeuge samt System-Zusatz (Bauschritt 60)', async () => {
+    // WebSearch/WebFetch der CLI sind in OpenRouter-Motoren hart gesperrt —
+    // ohne web_suche/webseite_lesen hätte so ein Block gar keinen Weg ins
+    // Netz. holeLuft gibt es dort nicht (kein Lokal-Wächter): Der
+    // Standard-Deckel des Werkzeugs gilt, gemessen wird das hier nicht —
+    // wohl aber, dass Server und Zusatz WIRKLICH ankommen.
+    const openrouter = await motorOptionen({
+      openrouter: { modell: 'stealth/ox-alpha', kontext: 200000, schluessel: 'sk-or-x' },
+      websuche: { searxngAdresse: '' }
+    })
+    expect(openrouter.mcpServers.web).toBeTruthy()
+    expect(openrouter.mcpServers.web.tools.map((t) => t.name)).toEqual(['web_suche', 'webseite_lesen'])
+    expect(Object.values(openrouter.agents)[0].prompt).toContain(texte.agentenWebsuche.systemZusatz)
+  }, 30000)
+
   it('bekommt der lokale Motor keine websuche-Option, gilt eben die eingebaute Quelle', async () => {
     // Fund 4: Das lokal-Literal in lauf.js wird von Hand gefüllt. Geht das Feld
     // unterwegs verloren, darf der Block nicht still ohne Werkzeuge dastehen.

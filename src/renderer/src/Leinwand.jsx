@@ -701,15 +701,20 @@ function BlockErgebnisZeile({ eintrag }) {
             <p className="feld-hinweis">{tb.aufschluesselungZeile(eintrag.aufschluesselung)}</p>
           )}
           {/* Kosten dreifach ehrlich (Bauschritt 59): lokal = „keine",
-              OpenRouter = „nicht gemessen" (kostenUsd bleibt dort null — die
-              Zeile erscheint trotzdem, sonst sähe fehlend wie gratis aus),
-              sonst die API-Zahl. */}
+              sonst die API-Zahl. OpenRouter seit Bauschritt 60 zweigeteilt:
+              Meldet der Anbieter Kosten (usage.cost), steht hier die GEMESSENE
+              Zahl — vorher gewann die Klasse vor kostenUsd, und selbst ein
+              Bericht MIT Betrag behauptete „nicht gemessen". Ohne Meldung
+              (Ollama-Prüfstand) bleibt der ehrliche Rückfall; die Zeile
+              erscheint auch dann, sonst sähe fehlend wie gratis aus. */}
           {(eintrag.kostenUsd != null || klasseIstOpenRouter(eintrag.klasse)) && (
             <p className="feld-hinweis">
               {klasseIstLokal(eintrag.klasse)
                 ? tb.lokalKeineKosten
                 : klasseIstOpenRouter(eintrag.klasse)
-                  ? tb.openrouterKosten
+                  ? eintrag.kostenUsd != null
+                    ? tb.openrouterKostenGemessen(eintrag.kostenUsd)
+                    : tb.openrouterKosten
                   : tb.apiKosten(eintrag.kostenUsd)}
             </p>
           )}
@@ -887,6 +892,14 @@ function Laufbericht({ bericht, aufklappen = null }) {
               Alte Berichte tragen das Feld nicht, dann fehlt die Zeile. */}
           {bericht.verbrauch?.lokal != null && bericht.verbrauch.lokal.tokens > 0 && (
             <p className="feld-hinweis">{texte.metriken.davonLokalZeile(bericht.verbrauch.lokal)}</p>
+          )}
+          {/* „Davon OpenRouter" (Bauschritt 60), Muster der Lokal-Zeile: der
+              eigene Topf des Laufs — echtes Geld beim Anbieter, deshalb NIE in
+              der Abo-/API-Kostenzeile darüber, sondern hier daneben. */}
+          {bericht.verbrauch?.openrouter != null && bericht.verbrauch.openrouter.tokens > 0 && (
+            <p className="feld-hinweis">
+              {texte.metriken.davonOpenrouterZeile(bericht.verbrauch.openrouter)}
+            </p>
           )}
           {/* Lokale Helfer-KI (Wunsch Georg, 13.08.2026): ihr Anteil steht
               schwarz auf weiß im Bericht — Recherchen, Schritte, Fehlschläge. */}

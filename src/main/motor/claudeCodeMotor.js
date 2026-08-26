@@ -808,9 +808,11 @@ export function unteraufgabenEingabe(eingabe, { lokal = false, unterModell = nul
 // OpenRouter-Übersetzer läuft — dann sind WebSearch/WebFetch der CLI HART
 // gesperrt (Muster lokaleKi-Sperre): Beide laufen über Anthropics Server und
 // endeten für OpenRouter als Anbieter-Fehler NACH Georgs Rechte-Frage — eine
-// Frage, deren „Ja" nur scheitern kann, ist keine Frage. Die gedeckelten
-// Websuche-Werkzeuge folgen für OpenRouter in Schritt 60. Sicherer Standard
-// false: Claude- und Chat-Motoren bleiben unberührt.
+// Frage, deren „Ja" nur scheitern kann, ist keine Frage. Den Weg ins Netz
+// haben diese Motoren seit Bauschritt 60 trotzdem: die gedeckelten
+// Websuche-Werkzeuge (web_suche/webseite_lesen), der Sperr-Text nennt sie als
+// Ersatzweg. Sicherer Standard false: Claude- und Chat-Motoren bleiben
+// unberührt.
 export function pruefeWerkzeug(name, eingabe, projektPfad, nurLesen, darfPruefen, lokaleKi = true, nurLesenBefehle = false, darfKartenAnlegen = false, darfVorschlagen = false, darfLaufVorschlag = false, darfZuteilen = false, pruefOrdner = '', lieferscheinFrei = [], dateiListe = null, inWelle = false, freieKartenOrdner = [], openrouterMotor = false) {
   if (name.startsWith(MENSCH_PRAEFIX)) return { erlaubt: true }
   // Auf den Zusatzbauer warten (Bauschritt 58): frei nur für Prüf-Blöcke —
@@ -877,7 +879,8 @@ export function pruefeWerkzeug(name, eingabe, projektPfad, nurLesen, darfPruefen
   // Server und enden für einen OpenRouter-Block als Anbieter-Fehler NACH
   // Georgs Rechte-Frage; die Frage wäre eine Falle, kein Angebot. Vor allen
   // nur-lesen-Zweigen, damit die Sperre auch für schreibende Blöcke gilt.
-  // Websuche-Werkzeuge für OpenRouter folgen in Schritt 60.
+  // Seit Bauschritt 60 hat der Motor die gedeckelten Websuche-Werkzeuge
+  // (web_suche/webseite_lesen) — der Sperr-Text verweist darauf.
   if (openrouterMotor && INTERNET_WERKZEUGE.has(name))
     return {
       gesperrt: texte.rechteFrage.openrouterInternetFuerAgent,
@@ -1608,11 +1611,14 @@ export function starteLaufMotor(optionen) {
     // Schlüssel wohnt NUR im Übersetzer (Hauptprozess), nie in der Umgebung
     // des Motor-Kindprozesses. Wie lokal: kein maxBudgetUsd (die CLI ERFINDET
     // für fremde Modelle Kosten), Fenster fest aus der Einstellung (die CLI
-    // meldet 200000), Kosten bleiben null („nicht gemessen" — nicht 0, das
+    // meldet 200000). Kosten übernimmt FlowForge seit Bauschritt 60 GEMESSEN
+    // aus den Antworten des Anbieters (usage.cost über den Übersetzer) —
+    // meldet er keine, bleibt ehrlich null („nicht gemessen", nicht 0, das
     // hieße „gratis gemessen"). Anders als lokal: kein Adress-Pool, keine
-    // Zählstelle, kein Lokal-Wächter, keine VRAM-Prüfung, Websuche-Werkzeuge
-    // folgen in Schritt 60 — und die Helfer-KI bleibt erlaubt wie bei
-    // Claude-Blöcken (die Helfer-GPU ist hier nicht der Engpass).
+    // Zählstelle, kein Lokal-Wächter, keine VRAM-Prüfung — die gedeckelten
+    // Websuche-Werkzeuge gibt es seit Bauschritt 60 auch hier, und die
+    // Helfer-KI bleibt erlaubt wie bei Claude-Blöcken (die Helfer-GPU ist
+    // hier nicht der Engpass).
     openrouter = null,
     // Websuche lokaler Blöcke (0.51.2): { searxngAdresse } — leer heißt
     // eingebaute Quelle. Die zwei Werkzeuge hängen an `lokal`, nicht an dieser
@@ -1848,6 +1854,9 @@ export function starteLaufMotor(optionen) {
       // den Balken danach um: Bei einem lokalen Lauf wartet der Koordinator
       // nur, gearbeitet wird im Block-Agenten — also gehört der Balken ihm.
       lokal: Boolean(lokal),
+      // Läuft dieser Block über OpenRouter? (Bauschritt 60) Der Lauf trennt
+      // daran die echten Anbieter-Kosten vom theoretischen API-Kosten-Topf.
+      openrouter: Boolean(openrouter),
       // Modell je Block und Füllstand des Block-Agenten (BAUPLAN 36).
       modelle: modellAnteile(),
       ...(() => {
@@ -1906,6 +1915,11 @@ export function starteLaufMotor(optionen) {
   // CLI spricht kein OpenAI. Der Wurf landet im Fänger der Schleife
   // (blockAufloesen 'fehlgeschlagen'), der Block endet ehrlich statt zu hängen.
   let uebersetzer = null
+  let uebersetzerWerkstattAbmelden = null
+  // Delta-Buchung der gemessenen OpenRouter-Kosten (Bauschritt 60, Muster
+  // kostenStand): uebersetzer.stand().kostenUsd ist je Instanz kumuliert, und
+  // je Anlauf kommen mehrere result-Nachrichten — gebucht wird nur der Zuwachs.
+  let openrouterKostenStand = null
   async function uebersetzerAufbauen() {
     // Wie das SDK erst hier geladen (Bauer 1 baut die Datei parallel): Ein
     // Import am Dateikopf zöge den Übersetzer in jeden Motor — gebraucht wird
@@ -1930,11 +1944,43 @@ export function starteLaufMotor(optionen) {
     })
     if (!gestartet.ok) throw new Error(texte.lauf.openrouterUebersetzerFehler(gestartet.fehler))
     uebersetzer = gestartet
+    // Werkstatt (Bauschritt 60): Der Übersetzer-Verkehr steht als eigene Art
+    // „openrouter" in der Stellen-Tabelle — EIGENE Abmelde-Variable, nicht die
+    // der Zählstelle (die gehört lokalen Motoren). Kein Füllstands-Vergleich:
+    // Es gibt bei OpenRouter keine Schätzung, also nichts zu vergleichen.
+    uebersetzerWerkstattAbmelden = werkstattAnmelden({ holeStand: uebersetzerWerkstattEintrag })
   }
 
   function uebersetzerAbbauen() {
+    uebersetzerWerkstattAbmelden?.()
+    uebersetzerWerkstattAbmelden = null
     uebersetzer?.schliessen()
     uebersetzer = null
+  }
+
+  // Der Werkstatt-Eintrag eines OpenRouter-Motors — eine Funktion wie beim
+  // Zählstellen-Eintrag: Zahlen und Blockname ändern sich mit jeder Antwort.
+  // Die Instanz-Summen SIND das Block-Fenster (Angriffsfund 16): Je Anlauf
+  // baut der Lauf einen frischen Motor samt frischem Übersetzer — ein
+  // blockBeginnt-Schnitt wie bei der Zählstelle wäre dieselbe Zahl doppelt.
+  function uebersetzerWerkstattEintrag() {
+    if (!uebersetzer) return null
+    const stand = uebersetzer.stand()
+    return {
+      art: 'openrouter',
+      projektPfad,
+      // Das EFFEKTIVE Ziel aus dem Übersetzer selbst — inklusive einer
+      // FLOWFORGE_OPENROUTER_ZIEL-Umleitung, nie eine zweite Wahrheit.
+      ziel: stand.ziel,
+      modell: openrouter?.modell ?? '',
+      blockName: block?.blockName ?? '',
+      beginn: stand.beginn,
+      dauerMs: stand.dauerMs,
+      anfragen: stand.anfragen,
+      offeneAnfragen: stand.offeneAnfragen,
+      tokenHinein: stand.tokenHinein,
+      tokenHeraus: stand.tokenHeraus
+    }
   }
 
   // Der Eintrag, den der Werkstatt-Tab live anzeigt. Bewusst eine Funktion:
@@ -2450,10 +2496,13 @@ export function starteLaufMotor(optionen) {
         })
       : null
 
-    // Websuche (0.51.2): NUR an der Motor-Instanz eines lokalen Blocks. Ein
-    // Opus-Block hat WebSearch/WebFetch der CLI (mit Rückfrage) und braucht
-    // nichts davon; ein lokaler Block hätte sonst gar keinen Weg ins Netz.
-    const webServer = lokal
+    // Websuche (0.51.2, seit Bauschritt 60 auch OpenRouter): an der
+    // Motor-Instanz jedes FREMDEN Blocks. Ein Opus-Block hat WebSearch/
+    // WebFetch der CLI (mit Rückfrage) und braucht nichts davon; ein lokaler
+    // oder OpenRouter-Block hätte sonst gar keinen Weg ins Netz (für
+    // OpenRouter sind WebSearch/WebFetch hart gesperrt — sie laufen über
+    // Anthropics Server und endeten dort als Anbieter-Fehler).
+    const webServer = fremd
       ? await webWerkzeugServer({
           searxngAdresse: websuche?.searxngAdresse ?? '',
           aufEreignis,
@@ -2466,14 +2515,20 @@ export function starteLaufMotor(optionen) {
           // Gerechnet wird in lokaleRestluftZeichen — dieselbe Marke, gegen die
           // der Lokal-Wächter oben misst, samt der Schonung nach abgegebener
           // Lieferung (0.51.4/0.51.5).
-          holeLuft: () => {
-            if (!block) return null
-            return lokaleRestluftZeichen(
-              bekanntesFenster || KONTEXT_FENSTER_STANDARD,
-              block.schaetzZeichen,
-              block.meldungen
-            )
-          }
+          // NUR lokal (Bauschritt 60): Ein OpenRouter-Block hat keinen
+          // Lokal-Wächter und keine Schätzung — dort gilt der Standard-Deckel
+          // des Werkzeugs, und die CLI-Compaction funktioniert, weil die
+          // usage-Zahlen des Übersetzers ehrlich sind.
+          holeLuft: lokal
+            ? () => {
+                if (!block) return null
+                return lokaleRestluftZeichen(
+                  bekanntesFenster || KONTEXT_FENSTER_STANDARD,
+                  block.schaetzZeichen,
+                  block.meldungen
+                )
+              }
+            : null
         })
       : null
 
@@ -2555,7 +2610,7 @@ export function starteLaufMotor(optionen) {
           texte.agentenLokaleHelfer.systemZusatz +
           (lokaleHelfer.bewerten ? texte.agentenLokaleHelfer.bewertenSystemZusatz : '')
         : '') +
-      // Websuche (0.51.2, Fund 13): Der Zusatz hängt an `lokal`, NICHT an
+      // Websuche (0.51.2, Fund 13): Der Zusatz hängt an `fremd`, NICHT an
       // helferServer. Gemessen 20.08.2026: lauf.js gibt lokalen Motoren
       // absichtlich keinen lokaleHelfer — ein an helferServer gehängter
       // Hinweis landete in jedem Claude-Block und in keinem lokalen, also
@@ -2563,7 +2618,9 @@ export function starteLaufMotor(optionen) {
       // blockAgentSystemZeichen ihn automatisch in die Startschätzung des
       // Lokal-Wächters aufnimmt. Die MCP-instructions des Servers werden hier
       // NIE hineinkopiert — sie kosten den Block sonst ~88 Token neu.
-      (lokal ? '\n' + texte.agentenWebsuche.systemZusatz : '')
+      // Seit Bauschritt 60 auch für OpenRouter-Motoren: Sie tragen dieselben
+      // zwei Werkzeuge, und ohne den Hinweis wüsste der Agent nichts davon.
+      (fremd ? '\n' + texte.agentenWebsuche.systemZusatz : '')
     // Lokal-Wächter (0.51.1): Der Systemtext zählt zur Startschätzung.
     blockAgentSystemZeichen = blockAgentSystemText.length
     const agentDefinitionen = blockAgentDefinitionen(blockAgentSystemText)
@@ -2980,10 +3037,27 @@ export function starteLaufMotor(optionen) {
           // „unbekannt" (null) — Laufbericht und Metriken zeigen „keine Kosten".
           // OpenRouter (Bauschritt 59): dieselben erfundenen Beträge, aber die
           // GEGENTEILIGE Wahrheit — dort kostet es womöglich Geld, nur weiß
-          // FlowForge nicht wie viel. block.kosten bleibt deshalb null („nicht
-          // gemessen"), NICHT 0 („gratis gemessen"); total_cost_usd der CLI
-          // wird nicht addiert. Die echte Preisliste folgt in Schritt 60.
+          // die CLI nicht wie viel: total_cost_usd wird weiter verworfen.
           if (lokal && block) block.kosten = 0
+          // OpenRouter (Bauschritt 60): Die ECHTEN Kosten kommen vom Anbieter
+          // selbst (usage.cost, gebucht im Übersetzer), nicht von der CLI.
+          // Delta-Buchung wie bei kostenStand unten: stand().kostenUsd ist je
+          // Übersetzer-Instanz kumuliert, und mehrere result-Nachrichten je
+          // Anlauf dürfen denselben Betrag nicht doppelt zählen. Eine
+          // gemeldete 0 ist eine Messung („gratis") — block.kosten wird dann
+          // 0, nicht null; ohne jede Meldung bleibt es ehrlich null („nicht
+          // gemessen"), nie eine erfundene 0.
+          if (openrouter && block && uebersetzer) {
+            const gemessen = uebersetzer.stand().kostenUsd
+            if (gemessen != null) {
+              const delta =
+                openrouterKostenStand === null
+                  ? gemessen
+                  : Math.max(0, gemessen - openrouterKostenStand)
+              openrouterKostenStand = gemessen
+              block.kosten = (block.kosten ?? 0) + delta
+            }
+          }
           if (!lokal && !openrouter && typeof nachricht.total_cost_usd === 'number') {
             const delta =
               kostenStand === null

@@ -53,6 +53,27 @@ export function balkenWahl(verbrauch) {
   }
 }
 
+// Welcher Kosten-Text gehört in die Zeile? (Bauschritt 60)
+//
+// OpenRouter-Verkehr ist echtes Geld beim Anbieter — für ihn darf hier NIE
+// „im Abo enthalten" stehen, auch nicht im Abo-Modus. Erkannt wird er am
+// Block-Feld `openrouter` (Boolean aus dem Motor), und zwar STRENG mit
+// `=== true`: Am Laufbericht heißt `verbrauch.openrouter` der Sammel-Topf
+// {tokens, dauerMs, kostenUsd} — ein Objekt, das auch bei einem reinen
+// Claude-Lauf da (und truthy) ist. Eine lasche Wahrheitsprüfung erklärte dort
+// die theoretischen Abo-Kosten zu echtem Geld.
+//
+// Bei OpenRouter erscheint die Zeile auch OHNE gemeldeten Betrag: „nicht
+// gemeldet" ist eine Aussage — fehlend sähe wie gratis aus.
+export function kostenTeil(verbrauch, modus) {
+  if (verbrauch.openrouter === true)
+    return verbrauch.kostenUsd != null
+      ? t.verbrauchKostenOpenrouter(verbrauch.kostenUsd)
+      : t.verbrauchKostenOpenrouterUnbekannt
+  if (verbrauch.kostenUsd == null) return null
+  return modus === 'abo' ? t.verbrauchKostenAbo : t.verbrauchKosten(verbrauch.kostenUsd)
+}
+
 export default function VerbrauchZeile({ verbrauch, modus, label, mitBalken }) {
   if (!verbrauch) return null
   const balken = mitBalken ? balkenWahl(verbrauch) : null
@@ -68,8 +89,8 @@ export default function VerbrauchZeile({ verbrauch, modus, label, mitBalken }) {
   // Gleichung. Sie ist keine.
   if (verbrauch.tokens != null)
     teile.push(t.verbrauchTokens(verbrauch.tokens + (verbrauch.unterTokens ?? 0)))
-  if (verbrauch.kostenUsd != null)
-    teile.push(modus === 'abo' ? t.verbrauchKostenAbo : t.verbrauchKosten(verbrauch.kostenUsd))
+  const kosten = kostenTeil(verbrauch, modus)
+  if (kosten != null) teile.push(kosten)
   if (teile.length === 0 && !balken) return null
   return (
     <div>

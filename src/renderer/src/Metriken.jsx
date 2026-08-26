@@ -295,6 +295,9 @@ function SummenTabelle({ zeilen, ersteSpalte, beschriftung }) {
             {/* „Davon lokal" (BAUPLAN 51): Tokens der lokalen Blöcke — als
                 eigene Spalte NEBEN der Gesamtsumme, nie herausgerechnet. */}
             <th className="zahl">{t.spalteDavonLokal}</th>
+            {/* „Davon OpenRouter" (Bauschritt 60), dasselbe Muster: weder Abo
+                noch lokal — echtes Geld beim Anbieter, deshalb eigener Ausweis. */}
+            <th className="zahl">{t.spalteDavonOpenrouter}</th>
           </tr>
         </thead>
         <tbody>
@@ -307,6 +310,9 @@ function SummenTabelle({ zeilen, ersteSpalte, beschriftung }) {
               <td className="zahl">{tokensText(z.tokens)}</td>
               <td className="zahl">{z.mitKosten > 0 ? kostenText(z.kostenUsd) : '—'}</td>
               <td className="zahl">{z.lokalTokens > 0 ? tokensText(z.lokalTokens) : '—'}</td>
+              <td className="zahl">
+                {(z.openrouterTokens ?? 0) > 0 ? tokensText(z.openrouterTokens) : '—'}
+              </td>
             </tr>
           ))}
         </tbody>

@@ -279,12 +279,12 @@ describe('Bauschritt 54 · die Vergleichszeile im Laufbericht', () => {
 })
 
 describe('Bauschritt 54 · die Seite nennt ihre Grenzen', () => {
-  it('führt genau die vier Grenzen, die der Bauplan verlangt', () => {
+  it('führt die Grenzen des Bauplans — seit Bauschritt 60 sechs', () => {
     const grenzen = texte.werkstatt.grenzen.join(' ')
     // Seit dem Probelauf am 23.08.2026 gehört dazu, dass die Messung den
     // Koordinator mitzählt — er redet über dieselbe Leitung.
     expect(grenzen).toContain('Koordinator')
-    expect(texte.werkstatt.grenzen).toHaveLength(5)
+    expect(texte.werkstatt.grenzen).toHaveLength(6)
     // Der zusätzliche Sprung kostet Zeit — messbar klein, aber nicht null.
     expect(grenzen).toContain('nicht null')
     // Tokens je Sekunde ist abgeleitet, keine Angabe von Ollama.
@@ -293,6 +293,9 @@ describe('Bauschritt 54 · die Seite nennt ihre Grenzen', () => {
     expect(grenzen).toContain('vorbei')
     // Ausfall der Messstelle tötet keinen Block.
     expect(grenzen).toContain('trotzdem weiter')
+    // Bauschritt 60: Beim OpenRouter-Block IST die Messstelle der Weg —
+    // ungemessenen Verkehr gibt es dort nicht.
+    expect(grenzen).toContain('Ungemessenen OpenRouter-Verkehr gibt es deshalb nicht')
   })
 
   it('trägt den Knopf in der Titelleiste', () => {

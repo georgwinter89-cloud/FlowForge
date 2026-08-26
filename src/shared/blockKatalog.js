@@ -147,9 +147,10 @@ export function klasseKenntDenktiefe(klasse) {
 }
 
 // Nur „extra" kann Guthaben statt Kontingent kosten (BAUPLAN 0.48.1). Lokal
-// kostet gar kein Kontingent — kein Kosten-Hinweis. OpenRouter (Bauschritt 59)
-// auch nicht: Was das gewählte Modell dort kostet, weiß FlowForge nicht — der
-// Bericht sagt ehrlich „nicht gemessen" statt hier eine Warnung zu erfinden.
+// kostet gar kein Kontingent — kein Kosten-Hinweis. OpenRouter auch nicht:
+// Dort kostet jeder Block ohnehin echtes Geld über Georgs eigenen Schlüssel
+// (seit Bauschritt 60 gemessen aus den Antworten des Anbieters) — die
+// Guthaben-Rückfrage hier gilt nur der Abo-Ausnahme „extra".
 export function klasseHatKostenHinweis(klasse) {
   return klasse === MODELL_KLASSE_EXTRA
 }

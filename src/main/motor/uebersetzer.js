@@ -190,6 +190,15 @@ export function anfrageUebersetzen(rumpf, modell) {
   // Daran hängt FlowForges Übertrag bei vollem Kontext — ohne include_usage
   // stünde in message_delta eine erfundene Zahl.
   if (raus.stream) raus.stream_options = { include_usage: true }
+  // Gemessene Kosten (Bauschritt 60): OpenRouter meldet den echten USD-Betrag
+  // je Antwort NUR, wenn die Anfrage dieses Zusatzfeld trägt — streamend im
+  // include_usage-Schlussstück als usage.cost, bei stream:false in usage.cost
+  // der Antwort. Immer mitschicken, auch stream:false: Eine Basispreis-
+  // Rechnung wäre bei Cache-Rabatt und Tageszeit-Staffeln systematisch falsch.
+  // Fremde OpenAI-Endpunkte ignorieren das Feld (gemessen am Ollama-Prüfstand
+  // 0.32.15, 26.08.2026: Status 200, usage kommt ohne cost — dann bleibt es
+  // ehrlich bei „nicht gemessen").
+  raus.usage = { include: true }
 
   const werkzeuge = (Array.isArray(rumpf?.tools) ? rumpf.tools : []).map((werkzeug) => ({
     type: 'function',
@@ -401,10 +410,14 @@ export function antwortUebersetzer(modell) {
     },
 
     // Für das Zählwerk: null heißt ehrlich „nicht gemeldet", nie erfundene 0.
+    // kostenUsd (Bauschritt 60): der vom Anbieter GEMESSENE Betrag aus
+    // usage.cost — eine gemeldete 0 ist eine echte Messung („gratis") und
+    // bleibt 0; nur ein fehlendes Feld ist null („nicht gemessen").
     stand() {
       return {
         hinein: verbrauch?.prompt_tokens ?? null,
-        heraus: verbrauch?.completion_tokens ?? null
+        heraus: verbrauch?.completion_tokens ?? null,
+        kostenUsd: typeof verbrauch?.cost === 'number' ? verbrauch.cost : null
       }
     }
   }
@@ -644,7 +657,24 @@ export async function uebersetzerStarten({
   const pool = new treiber.Agent({ keepAlive: true, maxSockets: 16 })
   const deckel = anfrageDeckel(kontext)
 
-  const gesamt = { anfragen: 0, tokenHinein: 0, tokenHeraus: 0, fehler: 0 }
+  // kostenUsd (Bauschritt 60): Summe der vom Anbieter GEMELDETEN usage.cost-
+  // Beträge — null, solange keiner kam (nie erfundene 0; eine gemeldete 0 ist
+  // eine echte Messung und macht aus null eine 0).
+  const gesamt = { anfragen: 0, tokenHinein: 0, tokenHeraus: 0, fehler: 0, kostenUsd: null }
+  function kostenBuchen(betrag) {
+    if (typeof betrag !== 'number' || !Number.isFinite(betrag)) return
+    gesamt.kostenUsd = (gesamt.kostenUsd ?? 0) + betrag
+  }
+  // Lebensbeginn der Instanz — Werkstatt-Laufzeit. Ein blockBeginnt-Pendant
+  // wie bei der Zählstelle gibt es bewusst NICHT (Angriffsfund 16): Je
+  // OpenRouter-Block-ANLAUF baut der Motor einen frischen Motor samt frischem
+  // Übersetzer (lauf.js) — die Instanz-Summen SIND also schon das
+  // Block-Fenster, ein zweites Fenster wäre dieselbe Zahl mit zweitem Namen.
+  const beginn = Date.now()
+  // Die gerade LAUFENDEN Anfragen (Muster Zählstelle, Angriffsfund 13): Ohne
+  // sie bucht buchen() erst am Stromende, und die Werkstatt stünde während
+  // eines minutenlangen Gesprächswechsels auf 0 und sähe tot aus.
+  const laufend = new Set()
 
   const server = http.createServer()
   // Wartezeiten wie in der Zählstelle begründet: Ein Turn darf Minuten dauern
@@ -688,7 +718,22 @@ export async function uebersetzerStarten({
       return
     }
 
-    gesamt.anfragen++
+    // Zählweise wie in der Zählstelle: `anfragen` sind ABGESCHLOSSENE
+    // Gesprächswechsel, die laufenden stehen getrennt in offeneAnfragen —
+    // sonst zeigte die Werkstatt „1 (+1 läuft)" für eine einzige Anfrage.
+    // holeStand wird im Streaming-Zweig auf den laufenden antwortUebersetzer
+    // gelegt; bis dahin gibt es ehrlich keinen Zwischenstand.
+    const platz = { holeStand: () => null }
+    laufend.add(platz)
+    let abgeschlossen = false
+    function anfrageAbschliessen() {
+      if (abgeschlossen) return
+      abgeschlossen = true
+      // Aus der Liste heraus, BEVOR gebucht wird — sonst zählte dieselbe
+      // Antwort einen Augenblick doppelt (als Zwischenstand und als Summe).
+      laufend.delete(platz)
+      gesamt.anfragen++
+    }
     const openaiRumpf = anfrageUebersetzen(rumpf, modell)
     const streamend = openaiRumpf.stream === true
     const rumpfBytes = Buffer.from(JSON.stringify(openaiRumpf), 'utf8')
@@ -768,8 +813,12 @@ export async function uebersetzerStarten({
               jsonAntwort(antwort, 502, fehlerRumpf(502, 'Anbieter meldet: ' + kern))
               return
             }
+            anfrageAbschliessen()
             gesamt.tokenHinein += daten?.usage?.prompt_tokens ?? 0
             gesamt.tokenHeraus += daten?.usage?.completion_tokens ?? 0
+            // usage.cost (Bauschritt 60): nur ein ECHT gemeldeter Betrag wird
+            // gebucht — fehlt er (Ollama-Prüfstand), bleibt kostenUsd null.
+            kostenBuchen(daten?.usage?.cost)
 
             if (!streamend) {
               jsonAntwort(antwort, 200, JSON.stringify(ganzeAntwortUebersetzen(daten, modell)))
@@ -812,15 +861,20 @@ export async function uebersetzerStarten({
         antwort.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache' })
         const zeilen = sseZeilen()
         const ue = antwortUebersetzer(modell)
+        // Zwischenstand für die Werkstatt (Angriffsfund 13): Solange der Strom
+        // läuft, liefert der laufende antwortUebersetzer, was er schon weiß.
+        platz.holeStand = () => ue.stand()
         let zuEnde = false
         let gebucht = false
 
         function buchen() {
           if (gebucht) return
           gebucht = true
+          anfrageAbschliessen()
           const stand = ue.stand()
           gesamt.tokenHinein += stand.hinein ?? 0
           gesamt.tokenHeraus += stand.heraus ?? 0
+          kostenBuchen(stand.kostenUsd)
         }
 
         function zeilenVerarbeiten(neueZeilen) {
@@ -918,8 +972,11 @@ export async function uebersetzerStarten({
 
     // Bricht der Client ab (Übertrag, harter Stopp), stirbt auch die Anfrage
     // an den Anbieter — sonst liefe dort eine Antwort weiter, die niemand
-    // mehr abholt (und bei OpenRouter kostete sie Geld).
+    // mehr abholt (und bei OpenRouter kostete sie Geld). `close` feuert auch
+    // beim normalen Ende — der letzte gemeinsame Punkt, an dem jede Anfrage
+    // sicher aus der Laufend-Liste kommt (Fehlerpfade eingeschlossen).
     antwort.on('close', () => {
+      anfrageAbschliessen()
       if (!antwort.writableEnded) hinaus.destroy()
     })
 
@@ -994,11 +1051,33 @@ export async function uebersetzerStarten({
     ok: true,
     adresse: `http://127.0.0.1:${port}`,
     stand() {
+      // Zwischenstände der GERADE laufenden Anfragen dazurechnen (Muster
+      // Zählstelle): Die usage-Zahlen einer Antwort sind ihr kumulierter
+      // Stand — bei laufenden Strömen meist noch null (include_usage kommt
+      // erst im Schlussstück), aber offeneAnfragen sagt der Werkstatt schon
+      // jetzt „hier arbeitet etwas".
+      let laufendHinein = 0
+      let laufendHeraus = 0
+      for (const platz of laufend) {
+        const s = platz.holeStand()
+        if (!s) continue
+        laufendHinein += s.hinein ?? 0
+        laufendHeraus += s.heraus ?? 0
+      }
       return {
         anfragen: gesamt.anfragen,
-        tokenHinein: gesamt.tokenHinein,
-        tokenHeraus: gesamt.tokenHeraus,
-        fehler: gesamt.fehler
+        tokenHinein: gesamt.tokenHinein + laufendHinein,
+        tokenHeraus: gesamt.tokenHeraus + laufendHeraus,
+        fehler: gesamt.fehler,
+        // Gemessene Kosten (Bauschritt 60): Summe der gemeldeten usage.cost;
+        // null = im ganzen Fenster kam nie ein Betrag („nicht gemessen").
+        kostenUsd: gesamt.kostenUsd,
+        offeneAnfragen: laufend.size,
+        beginn,
+        dauerMs: Date.now() - beginn,
+        // Das EFFEKTIVE Ziel (inklusive einer Prüfstands-Umleitung) — die
+        // Werkstatt zeigt es, statt es aus der Umgebung zu erraten.
+        ziel: String(ziel)
       }
     },
     schliessen() {

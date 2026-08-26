@@ -123,7 +123,9 @@ const STANDARD = {
   // Bauschritt für BEIDE Schlüssel.
   openRouterSchluessel: '',
   // Freies Modellfeld (Schreibweise „anbieter/modell", wie OpenRouter die
-  // Modelle führt) — die Katalog-Liste von OpenRouter folgt in Bauschritt 60.
+  // Modelle führt). Seit Bauschritt 60 bietet der Dialog dazu die
+  // Katalog-Auswahlliste an — Freitext bleibt der ehrliche Rückfall, wenn
+  // die Liste nicht erreichbar ist.
   openRouterModell: '',
   // Kontextfenster des gewählten Modells in Token. Die CLI meldet für fremde
   // Modelle stur 200000 — deshalb sagt FlowForge ihr das Fenster ausdrücklich

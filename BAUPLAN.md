@@ -15,8 +15,8 @@ gehört repariert (der Rückstand aus 14 — eigene Blöcke durften nur `nurLese
 `fuehrtZusammen` setzen — ist seit Schritt 48 aufgeholt; einzig `uebung` bleibt Katalog-Sache,
 weil es kein Können ist, sondern „Demo-Block").
 
-**Abgeschlossen sind die Bauschritte 1–58** (39 wurde gestrichen); der jüngste Commit
-ist „Bauschritt 58". Davon sind die Schritte **1–49 ausgelagert** ins
+**Abgeschlossen sind die Bauschritte 1–60** (39 wurde gestrichen); der jüngste Commit
+ist „Bauschritt 60". Davon sind die Schritte **1–49 ausgelagert** ins
 [BAUPLAN-ARCHIV.md](BAUPLAN-ARCHIV.md) — Verweise wie „BAUPLAN 19" oder „BAUPLAN 44"
 zeigen dorthin. Hier stehen die fertigen Schritte 50–58.
 
@@ -1455,7 +1455,9 @@ Ox Alpha war nur der Anlass der Idee, nicht das Ziel.)
 Häkchen, Schlüssel, Modell und Kontextfenster, ohne Warntext; der Platzhalter
 im Modellfeld heißt „anbieter/modell".
 
-### 60 — Anbieter-Öffnung II: OpenRouter im Alltag (geplant)
+### 60 — Anbieter-Öffnung II: OpenRouter im Alltag
+(Version: baut als **0.61.0** — die Nummern-Kopplung bleibt seit der 52er-Ausnahme
+um eins verschoben.)
 - Kosten aus OpenRouters Preisliste je Modell (statt „nicht gemessen");
   Metriken „davon OpenRouter" je Lauf analog „davon lokal".
 - Websuche-Werkzeuge (web_suche/webseite_lesen) auch für OpenRouter-Motoren.
@@ -1463,4 +1465,66 @@ im Modellfeld heißt „anbieter/modell".
   Textfeld; Kontextfenster je Modell automatisch.
 - Werkstatt-Messung: Übersetzer-Verkehr in der Werkstatt sichtbar (Muster
   Zählstelle).
+- **Gebaut (26.08.2026):** Kern-Entscheidung „Zweck vor Buchstabe": Kosten werden
+  **gemessen statt aus der Preisliste gerechnet** — der Übersetzer fordert
+  `usage: {include: true}` an und übernimmt `usage.cost` je Antwort; die
+  Angriffsliste hat real gemessen, dass eine Basispreis-Rechnung falsch wäre
+  (OpenRouter-Katalog: `pricing.overrides` mit Tageszeit-Staffeln bis 2× Preis,
+  `input_cache_read` ~1/30 des Prompt-Preises, und `prompt_tokens` enthalten
+  Cache-Treffer). Meldet der Anbieter nichts (Ollama-Prüfstand), bleibt ehrlich
+  „nicht gemessen" (null, nie 0); gemeldete 0 ist eine echte Messung.
+  OpenRouter-Kosten sind **echtes Geld**: eigener Topf `verbrauch.openrouter`
+  (tokens/dauerMs/kostenUsd), nie in den theoretischen API-Kosten, nie „im Abo
+  enthalten" (die zwei Anzeigen, die das behauptet hätten, verzweigen jetzt);
+  kleine Beträge mit vier Nachkommastellen, sonst sähe 0,004 $ wie gratis aus.
+  Websuche: webServer-Gate `lokal || openrouter` (openrouter ohne
+  Restluft-Deckel — die usage ist über den Übersetzer ehrlich, die
+  CLI-Zusammenfassung trägt; SearXNG-Adresse wandert feldweise in die
+  openrouterOption). Katalog `openrouterKatalog.js` (eingedampft auf
+  id/name/kontext/Preise, kontext = min(Modell-, Anbieter-Grenze), TTL-Cache
+  10 min, Fehler nie im Cache; Ollama-Prüfstand liefert weder context_length
+  noch pricing → Felder null, nichts stirbt); Einstellungen mit datalist,
+  Status-Zeile, Preis-Info je Mio und **harter Kontext-Automatik** bei
+  Modellwahl (ein stehengebliebener 1M-Wert an einem 128k-Modell hieße: der
+  Übertrag kommt nie, der Anbieter kappt still); keine neuen
+  Einstellungs-Felder. Werkstatt: Übersetzer erweitert um Block-Fenster-Stand
+  (offene Anfragen mit Zwischenstand — der 23.08.-Befund „Anzeige 0, während
+  alles arbeitet" wäre sonst zurückgekehrt), eigene Art „OpenRouter" in der
+  Stellen-Tabelle, kein Füllstands-Balken (es gibt keine Schätzung, mit der
+  die Messung zu vergleichen wäre); der Übersetzer ist der Weg selbst, nicht
+  ein optionales Messgerät — ungemessenen OpenRouter-Verkehr gibt es nicht.
+  Metriken „davon OpenRouter" in Gesamt-/Wochen-Zeile und Ketten-/Projekt-
+  Tabellen; Abo-Anteil rechnet jetzt gesamt − lokal − OpenRouter.
+- **Messwerte der Bausession (26.08.2026, 1 Angreifer, 2 Bauer mit Vertrag,
+  2 Prüfer, Integrator):** Angriffsliste 23 Funde (6 blockierend, alle vorab in
+  die Verträge eingearbeitet; u.a. „im Abo enthalten"-Lüge, Preisliste
+  komplizierter als geplant → Richtungswechsel auf gemessene usage.cost,
+  Ollama-Katalog ohne Felder, 8 Prüfungs-Pins des Altverhaltens). Bauer
+  kollisionsfrei (texte.js vorab von der Hauptsession, Wunschliste blieb leer).
+  Prüfer 1 (Mechanik, 35 Wegwerf-Messungen an echtem Übersetzer/Planer/
+  Werkstatt/Katalog): alles bestanden, drei Rot-vor-Grün-Gegenproben
+  (Kosten-Weiche, usage.include, Websuche-Gate) sauber rot und zurück,
+  Arbeitsbaum bit-genau unverändert. Prüfer 2 (Ende-zu-Ende, gebaute App, CDP,
+  eigener Datenordner, Stub-Anbieter mit schaltbarem usage.cost über
+  FLOWFORGE_OPENROUTER_ZIEL): Einstellungs-Katalog samt Kontext-Automatik
+  (65536 statt 131072 — die kleinere Anbieter-Grenze gewinnt), Kosten-Lauf
+  0,0042 $ wörtlich als „echtes Geld" an der Blockkarte, Gegenprobe ohne
+  cost → „nicht gemessen", harter Stopp ohne Port-Leck, Lokal-Regression
+  grün. **Befund C1 (mittel-hoch, nachgearbeitet):** OpenRouter-Tokens wurden
+  nirgends gebucht — die Faden-Zuwachs-0-Korrektur aus 0.51 galt nur
+  `knotenLokal`; erweitert auf openrouter, Rot-vor-Grün gemessen (865 statt
+  700 Gesamt-Tokens, Topf 165), Nachmessung am neuen Build bestätigt. Bewusst
+  offen: WebSearch/WebFetch stehen in der Werkzeugliste, die die CLI dem
+  Fremdmodell schickt (CLI-intern, nicht abschaltbar) — die harte
+  Aufruf-Sperre wirkt nachweislich (im E2E gestoppt gemessen), das Modell
+  kann nur einen Umweg verschwenden; Bilder wandern weiter als Platzhalter;
+  der echte TLS-Weg zu openrouter.ai samt echter cost-Meldung bleibt Georgs
+  Alltagstest mit eigenem Schlüssel. 1989 Prüfungen grün.
+**Alltagstest:** Georg öffnet die Einstellungen: Die Modellliste lädt vom
+OpenRouter-Katalog, er wählt sein Modell aus der Liste, das Kontextfenster
+springt automatisch mit. Ein Lauf mit einem OpenRouter-Bauer: Der Ticker zeigt
+Websuche-Zeilen des Fremdmodells, die Werkstatt eine „OpenRouter"-Zeile mit
+laufenden Anfragen, und im Laufbericht stehen echte Dollar („vom Anbieter
+gemeldet — echtes Geld, kein Abo-Kontingent") samt „davon OpenRouter" in den
+Metriken. Ohne Kosten-Meldung des Anbieters steht ehrlich „nicht gemessen".
 

@@ -286,7 +286,8 @@ describe('Nacharbeit B · Der Einstellungstext verspricht keine zu kurze Sperre 
 
   it('SPEC und Einstellungstext widersprechen sich nicht mehr', () => {
     const spec = lesen('SPEC.md')
-    const abschnitt = spec.slice(spec.indexOf('**Websuche der lokalen Blöcke**'))
+    // Bauschritt 60: Die Überschrift trägt jetzt auch die OpenRouter-Blöcke.
+    const abschnitt = spec.slice(spec.indexOf('**Websuche der lokalen und OpenRouter-Blöcke**'))
     expect(abschnitt.slice(0, 3000)).toContain('über eine Stunde')
     expect(abschnitt.slice(0, 3000)).not.toMatch(/45–241 s/)
   })

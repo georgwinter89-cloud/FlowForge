@@ -93,6 +93,32 @@ function feinAusText(felder) {
   )
 }
 
+// OpenRouter-Modellkatalog (Bauschritt 60) — reine Regeln, exportiert für die
+// Prüfungen (messen statt Quelltext lesen).
+//
+// Trifft der Feldwert (Auswahl aus der Liste ODER von Hand getippt) genau
+// einen Katalog-Eintrag? Verglichen wird die getrimmte Eingabe mit der id —
+// mehr Magie nicht: Ein halber Name ist KEIN Treffer, das Feld bleibt
+// ehrlicher Freitext.
+export function katalogEintragFuer(katalog, modell) {
+  if (!katalog?.ok) return null
+  const wert = String(modell ?? '').trim()
+  if (!wert) return null
+  return katalog.modelle.find((m) => m.id === wert) ?? null
+}
+
+// Die Status-Zeilen unterm Modellfeld: noch keine Antwort = „lädt", Antwort
+// ohne ok = nicht erreichbar (mit Grund, Freitext bleibt der Weg), sonst die
+// Anzahl — und beim Prüfstand (FLOWFORGE_OPENROUTER_ZIEL) sichtbar die
+// Umleitung, damit eine Ollama-Liste nie wie der echte Katalog aussieht.
+export function katalogStatusZeilen(katalog) {
+  if (katalog == null) return [t.openRouterKatalogLaedt]
+  if (!katalog.ok) return [t.openRouterKatalogFehlt(katalog.fehler)]
+  const zeilen = [t.openRouterKatalogDa(katalog.modelle.length)]
+  if (katalog.umgeleitet) zeilen.push(t.openRouterKatalogUmgeleitet(katalog.ziel))
+  return zeilen
+}
+
 // Globale Einstellungen: Motor-Modus (Abo/API), API-Schlüssel, Ausgaben-Obergrenze.
 export default function Einstellungen({ onSchliessen }) {
   // '' = noch nicht gewählt (Erststart-Wahl, 0.46.4) — dann ist kein Radio an.
@@ -134,6 +160,11 @@ export default function Einstellungen({ onSchliessen }) {
   const [openRouterSchluessel, setOpenRouterSchluessel] = useState('')
   const [openRouterModell, setOpenRouterModell] = useState('')
   const [openRouterKontext, setOpenRouterKontext] = useState('200000')
+  // Modellkatalog (Bauschritt 60): null = noch keine Antwort (Anzeige „lädt").
+  const [openRouterKatalog, setOpenRouterKatalog] = useState(null)
+  // Hinweis unterm Kontextfeld nach einem Modell-Wechsel, der einen
+  // Katalog-Eintrag traf: {art:'ausListe', kontext} | {art:'unbekannt'} | null.
+  const [openRouterKontextInfo, setOpenRouterKontextInfo] = useState(null)
   const [lokalFeinText, setLokalFeinText] = useState(() =>
     feinAlsText(LOKAL_FEIN_VORLAGEN['ollama-standard'])
   )
@@ -254,6 +285,49 @@ export default function Einstellungen({ onSchliessen }) {
       clearTimeout(uhr)
     }
   }, [lokaleHelferAktiv, searxngAdresse])
+
+  // Modellkatalog holen (Bauschritt 60), sobald der OpenRouter-Abschnitt
+  // sichtbar ist — Muster der Helfer-Status-Abfragen: nichts anfragen, was
+  // gerade niemand sieht. Der Hauptprozess hält einen eigenen Cache; erneutes
+  // Öffnen kostet deshalb keine neue Netzrunde.
+  useEffect(() => {
+    if (!openRouterAktiv) return
+    let aktuell = true
+    setOpenRouterKatalog(null)
+    Promise.resolve(window.flowforge?.openrouterKatalog?.())
+      .then((k) => {
+        // Eine leere Antwort (fehlende Brücke, kaputter Handler) darf nicht
+        // ewig „lädt …" anzeigen — sie wird ein ehrliches „nicht erreichbar".
+        if (aktuell) setOpenRouterKatalog(k ?? { ok: false, fehler: '' })
+      })
+      .catch(() => {
+        if (aktuell) setOpenRouterKatalog({ ok: false, fehler: '' })
+      })
+    return () => {
+      aktuell = false
+    }
+  }, [openRouterAktiv])
+
+  // Modell-Wechsel (Angriffsfund 20): Trifft der neue Wert einen
+  // Katalog-Eintrag, wird das Kontextfeld HART auf den Katalogwert gesetzt —
+  // ein stehengebliebener 1M-Wert an einem 128k-Modell würde vom Anbieter
+  // still gekappt, und der Motor plante mit einem Fenster, das es nicht gibt.
+  // Nur beim WECHSEL, nie beim bloßen Öffnen des Dialogs: Ein von Hand
+  // nachgepflegter Wert bliebe sonst nie stehen. Nennt der Katalog kein
+  // Fenster (Ollama-Prüfstand), sagt der Hinweis genau das — das Feld bleibt
+  // in jedem Fall von Hand pflegbar (Rückfrage statt Sperre, nie gesperrt).
+  function openRouterModellSetzen(wert) {
+    setOpenRouterModell(wert)
+    const eintrag = katalogEintragFuer(openRouterKatalog, wert)
+    if (!eintrag) return setOpenRouterKontextInfo(null)
+    if (eintrag.kontext == null) return setOpenRouterKontextInfo({ art: 'unbekannt' })
+    setOpenRouterKontext(String(eintrag.kontext))
+    setOpenRouterKontextInfo({ art: 'ausListe', kontext: eintrag.kontext })
+  }
+
+  // Der Katalog-Eintrag zum aktuellen Feldwert — Info-Zeile mit Kontext und
+  // Preisen (Katalog führt USD je Token, die Anzeige spricht in $/Mio).
+  const openRouterEintrag = katalogEintragFuer(openRouterKatalog, openRouterModell)
 
   // Aktive Vorlage (Markierung der Knöpfe) und der Wert, der gespeichert
   // wird — beides aus denselben Feldern gerechnet.
@@ -742,12 +816,37 @@ export default function Einstellungen({ onSchliessen }) {
               </label>
               <label className="feld">
                 <span>{t.openRouterModellFeld}</span>
+                {/* Auswahlliste aus dem Katalog (Bauschritt 60): datalist statt
+                    select — Freitext bleibt möglich, der ehrliche Rückfall,
+                    wenn die Liste nicht erreichbar ist. */}
                 <input
                   type="text"
+                  list="openrouter-modelle"
                   placeholder={t.openRouterModellPlatzhalter}
                   value={openRouterModell}
-                  onChange={(e) => setOpenRouterModell(e.target.value)}
+                  onChange={(e) => openRouterModellSetzen(e.target.value)}
                 />
+                <datalist id="openrouter-modelle">
+                  {(openRouterKatalog?.ok ? openRouterKatalog.modelle : []).map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name}
+                    </option>
+                  ))}
+                </datalist>
+                {katalogStatusZeilen(openRouterKatalog).map((zeile) => (
+                  <span className="feld-hinweis" key={zeile}>
+                    {zeile}
+                  </span>
+                ))}
+                {openRouterEintrag && (
+                  <span className="feld-hinweis">
+                    {t.openRouterModellInfo(
+                      openRouterEintrag.kontext,
+                      openRouterEintrag.preisHinein != null ? openRouterEintrag.preisHinein * 1e6 : null,
+                      openRouterEintrag.preisHeraus != null ? openRouterEintrag.preisHeraus * 1e6 : null
+                    )}
+                  </span>
+                )}
                 <span className="feld-hinweis">{t.openRouterModellHinweis}</span>
               </label>
               <label className="feld">
@@ -759,6 +858,17 @@ export default function Einstellungen({ onSchliessen }) {
                   value={openRouterKontext}
                   onChange={(e) => setOpenRouterKontext(e.target.value)}
                 />
+                {/* Kontext-Automatik (Angriffsfund 20): nach einem Treffer in
+                    der Liste steht hier, WOHER die Zahl kommt — bzw. dass die
+                    Liste keine kennt und Georg sie von Hand pflegt. */}
+                {openRouterKontextInfo?.art === 'ausListe' && (
+                  <span className="feld-hinweis">
+                    {t.openRouterKontextAusListe(openRouterKontextInfo.kontext)}
+                  </span>
+                )}
+                {openRouterKontextInfo?.art === 'unbekannt' && (
+                  <span className="feld-hinweis">{t.openRouterKontextUnbekannt}</span>
+                )}
                 <span className="feld-hinweis">{t.openRouterKontextHinweis}</span>
               </label>
             </>

@@ -1939,7 +1939,14 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     // Anläufe pushen kein blockErgebnis, ihre Tokens stehen aber längst hier.
     // Die Trennung läuft über TOKENS (Abo-Währung), nicht über Dollar —
     // lokale Kosten sind ehrlich 0.
-    lokal: { tokens: 0, dauerMs: 0 }
+    lokal: { tokens: 0, dauerMs: 0 },
+    // „Davon OpenRouter" (Bauschritt 60, Muster lokal): Tokens, Wanduhrzeit
+    // und die GEMESSENEN Anbieter-Kosten aller OpenRouter-Anläufe. kostenUsd
+    // ist echtes Geld beim Anbieter und fließt bewusst NIE in das
+    // kostenUsd-Feld darüber (das ist die theoretische API-Kosten-/
+    // Abo-Anzeige); null heißt „kein Anbieter hat je einen Betrag gemeldet",
+    // nie eine erfundene 0.
+    openrouter: { tokens: 0, dauerMs: 0, kostenUsd: null }
   }
   // Die echte Kontextfenster-Größe lernt der Lauf aus der ersten Motor-Session
   // und reicht sie an alle weiteren durch — für eine richtige Übertrags-Schwelle.
@@ -4388,16 +4395,20 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         // OpenRouter (Bauschritt 59): dieselbe Fund-4-Regel wie bei `lokal`
         // oben — ein NEUES Objekt-Literal aus einzeln aufgezählten Feldern,
         // kein Spread. Ein neues Feld muss hier von Hand nachgetragen werden,
-        // sonst kommt es im Motor nie an. Kein Adress-Pool und keine
-        // Websuche-Option: OpenRouter-Blöcke laufen parallel wie
-        // Claude-Blöcke, die Websuche-Werkzeuge folgen in Schritt 60.
+        // sonst kommt es im Motor nie an. Kein Adress-Pool: OpenRouter-Blöcke
+        // laufen parallel wie Claude-Blöcke. Websuche (Bauschritt 60): auch
+        // OpenRouter-Motoren bekommen die zwei Nachschlage-Werkzeuge —
+        // WebSearch/WebFetch der CLI sind dort hart gesperrt, und ohne diese
+        // Option ignorierte jeder OpenRouter-Block still Georgs
+        // SearXNG-Adresse und fiele auf die eingebaute Quelle.
         ...(openrouterOption
           ? {
               openrouter: {
                 modell: openrouterOption.modell,
                 kontext: openrouterOption.kontext,
                 schluessel: openrouterOption.schluessel
-              }
+              },
+              websuche: { searxngAdresse: einstellungen.searxngAdresse ?? '' }
             }
           : {}),
         nurLesenBefehle: Boolean(einstellungen.nurLesenBefehle),
@@ -5308,6 +5319,9 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         const anlaufDauerMs = Date.now() - anlaufStart
         blockDauerMs += anlaufDauerMs
         if (knotenLokal) gesamtVerbrauch.lokal.dauerMs += anlaufDauerMs
+        // „Davon OpenRouter" (Bauschritt 60): dieselbe Regel wie lokal — auch
+        // Anläufe, die später kein blockErgebnis pushen, haben hier gedauert.
+        if (knotenOpenRouter) gesamtVerbrauch.openrouter.dauerMs += anlaufDauerMs
         // Denktiefe gemessen (0.48.1): der jüngste Messwert gewinnt.
         if (typeof ergebnis.denktiefeGemessen === 'string' && ergebnis.denktiefeGemessen)
           blockDenktiefeGemessen = ergebnis.denktiefeGemessen
@@ -5330,10 +5344,15 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           // Lokale Ehrlichkeit (Befund Prüfer 2, Bausession 51): Beim lokalen
           // Motor kann der Faden-Zuwachs 0 melden, obwohl die Modell-
           // Aufschlüsselung echte Ollama-Tokens trägt (gemessen: 0 gegen
-          // 48.419 bei einem Anlauf ohne Fazit). Für lokale Blöcke gewinnt
-          // die größere Zahl — sie fließt in Gesamt UND Lokal-Topf, sonst
-          // löge der Abo-Anteil (gesamt − lokal).
-          if (knotenLokal) {
+          // 48.419 bei einem Anlauf ohne Fazit). Für fremde Blöcke gewinnt
+          // die größere Zahl — sie fließt in Gesamt UND den eigenen Topf,
+          // sonst löge der Abo-Anteil (gesamt − lokal − openrouter).
+          // OpenRouter genauso (Befund C1 Prüfer 2, Bauschritt 60): Der
+          // Faden-Zuwachs meldete in allen vier E2E-Läufen 0, die
+          // Aufschlüsselung trug die echten 165 Anbieter-Tokens — Topf und
+          // Block-Ergebnis standen auf 0, die „davon OpenRouter"-Zeile und
+          // die Metrik-Spalten blieben leer.
+          if (knotenLokal || knotenOpenRouter) {
             const modelleSumme = (ergebnis.verbrauch.modelle ?? []).reduce(
               (summe, m) => summe + (m.tokens ?? 0),
               0
@@ -5345,9 +5364,23 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           // in den eigenen Topf — die Gesamtsumme bleibt unangetastet, der
           // Ausweis steht daneben (Abo-Anteil = tokens − lokal.tokens).
           if (knotenLokal) gesamtVerbrauch.lokal.tokens += zaehlTokens
+          // „Davon OpenRouter" (Bauschritt 60): OpenRouter-Tokens zusätzlich
+          // in den eigenen Topf — die Gesamtsumme bleibt unangetastet, der
+          // Ausweis steht daneben (Muster lokal).
+          if (knotenOpenRouter) gesamtVerbrauch.openrouter.tokens += zaehlTokens
           blockTokens += zaehlTokens
           if (ergebnis.verbrauch.kostenUsd != null) {
-            gesamtVerbrauch.kostenUsd = (gesamtVerbrauch.kostenUsd ?? 0) + ergebnis.verbrauch.kostenUsd
+            // OpenRouter-Kosten sind echtes Geld beim Anbieter (gemessen,
+            // usage.cost) — sie fließen NUR in den OpenRouter-Topf, nie in
+            // gesamtVerbrauch.kostenUsd (die theoretische API-Kosten-/
+            // Abo-Anzeige; „im Abo enthalten" wäre dort eine Falschaussage).
+            // blockKosten trägt die gemessene Zahl in jedem Fall weiter —
+            // sie steht am Block-Ergebnis im Laufbericht.
+            if (knotenOpenRouter)
+              gesamtVerbrauch.openrouter.kostenUsd =
+                (gesamtVerbrauch.openrouter.kostenUsd ?? 0) + ergebnis.verbrauch.kostenUsd
+            else
+              gesamtVerbrauch.kostenUsd = (gesamtVerbrauch.kostenUsd ?? 0) + ergebnis.verbrauch.kostenUsd
             blockKosten = (blockKosten ?? 0) + ergebnis.verbrauch.kostenUsd
           }
           // Aufschlüsselung: der Motor meldet den Anteil dieses Blocks.
