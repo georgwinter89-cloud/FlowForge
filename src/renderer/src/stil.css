@@ -1015,6 +1015,16 @@ body {
   gap: 8px;
 }
 
+/* Serienlauf (Bauschritt 61): Stand-Zeile im Lauf-Tab — Text und
+   „Serie beenden"-Knopf in einer Reihe, sonst rutscht der Knopf unter
+   die Zeile. */
+.serie-zeile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 .knopf-gefahr {
   padding: 5px 10px;
   border: 1px solid var(--signal);

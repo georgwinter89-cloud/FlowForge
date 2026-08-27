@@ -992,6 +992,41 @@ export function pruefePflichtfelder(bloecke) {
   return null
 }
 
+// Auftragsquelle „Feld oder offene Aufgaben-Karten" (Entscheidung Georg,
+// 07.08.2026), als reine Funktion herausgelöst für den Serienlauf (Bauschritt
+// 61): Der Laufstart prüft sie vor jedem Start, die Serie zusätzlich am Ende
+// eines Erfolgs — die nächste Runde soll mit Klartext enden statt mit einem
+// Fehlstart. defVon kommt als Parameter, weil Sonderläufe eigene Definitionen
+// tragen und dieses Modul browser-tauglich bleiben muss (keine Node-Importe).
+// aufgabenIds ist die Auswahl-Menge der (nächsten) Runde; karten der frische
+// Kartenbestand. Rückgabe null = versorgt, sonst der erste Fund.
+export function auftragsquelleFehlt({ kette, bloecke, pfeile, aufgabenIds, karten, defVon }) {
+  const auswahl = new Set(Array.isArray(aufgabenIds) ? aufgabenIds : [])
+  const bestand = Array.isArray(karten) ? karten : []
+  for (const eintrag of Array.isArray(kette) ? kette : []) {
+    const def = defVon(eintrag.blockId)
+    for (const feld of def?.felder ?? []) {
+      if (!feld.oderOffeneAufgaben) continue
+      // Ausnahme 1: Das Feld ist gefüllt — der Block weiß, was gebaut wird.
+      if ((eintrag.feldWerte?.[feld.id] ?? '').trim()) continue
+      // Ausnahme 2: Ein Vorfahre, der selbst Aufgaben-Karten erzeugt
+      // (Spec-Interview), zählt als Auftragsquelle — bei „Neue App starten"
+      // gibt es beim Start noch keine Karten.
+      if (
+        vorfahrenSortiert(bloecke, pfeile, eintrag.instanzId).some(
+          (v) => defVon(v.blockId)?.erzeugtAufgaben
+        )
+      )
+        continue
+      const offene = bestand.filter(
+        (k) => auswahl.has(k.id) && k.sorte === 'aufgabe' && !k.erledigt
+      )
+      if (offene.length === 0) return { instanzId: eintrag.instanzId, feldLabel: feld.label }
+    }
+  }
+  return null
+}
+
 // Setzt die Feldwerte in den Arbeitsauftrag ein ({{feldId}}-Platzhalter).
 export function auftragMitFeldern(def, feldWerte) {
   let auftrag = def.auftrag

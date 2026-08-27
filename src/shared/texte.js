@@ -993,6 +993,33 @@ export const texte = {
     verwerfen: 'Verwerfen',
     ohneKarten: 'ohne Karten'
   },
+  // Serienlauf (Bauschritt 61): mehrere Runden hintereinander — nach jeder
+  // erfolgreichen Runde übernimmt FlowForge den Karten-Vorschlag des
+  // Sessionendes mechanisch und startet die nächste Runde. Die Leinwand wird
+  // nie umgebaut, der Empfehlungssatz wird angezeigt, nie ausgeführt.
+  serie: {
+    wahlLabel: 'Runden',
+    wahlEinzeln: 'Einzellauf',
+    wahlRunden: (n) => `Serie: ${n} Runden`,
+    // Der Start-Dialog sagt ehrlich, was eine Serie kostet und wann sie steht
+    // (Rückfrage statt Sperre — Hinweis, keine Bedingung).
+    startFrage: (n) =>
+      `Serie mit ${n} Runden starten? Jede Runde ist ein voller Lauf und kostet entsprechend. ` +
+      `Nach einer erfolgreichen Runde übernimmt FlowForge den Karten-Vorschlag des Sessionendes ` +
+      `und startet die nächste Runde von selbst; ohne Vorschlag läuft die normale Vorauswahl. ` +
+      `Sind die Rechte-Rückfragen an, hält jede Rückfrage den Lauf an — und die Serie steht mit, ` +
+      `bis du antwortest.`,
+    startKnopf: 'Serie starten',
+    stand: (runde, gesamt) => `Serienlauf: Runde ${runde} von ${gesamt}`,
+    beenden: 'Serie beenden',
+    beendenHinweis:
+      'Der laufende Lauf macht normal fertig, danach startet keine weitere Runde.',
+    beendetVormerkung: 'Serie endet nach diesem Lauf.',
+    // Klartext, wenn die nächste Runde nicht starten konnte (Ereignis
+    // serie-fehler — der Bericht der Vorrunde ist da schon geschrieben).
+    fehler: (text) => `Die Serie ist beendet: ${text}`,
+    berichtVermerk: (runde, gesamt) => `Serienlauf: Runde ${runde} von ${gesamt}`
+  },
   // Gespräch mit dem Agenten (BAUPLAN 9): Frage-Blöcke und das Spec-Interview
   // stellen Fragen über das mensch-Werkzeug — beantwortet wird hier.
   gespraech: {
@@ -3625,6 +3652,11 @@ export const texte = {
       'Dein Abo-Kontingent ist im Moment erschöpft. Der Lauf hat angehalten — alles bisher Gebaute bleibt bestehen. Starte den Workflow neu, sobald dein Kontingent wieder da ist.',
     okKnopf: 'Alles klar',
     schonAktiv: 'Es läuft schon ein Workflow. Bitte warte, bis er fertig ist.',
+    // Serienlauf (Bauschritt 61): Zwischen zwei Runden rutscht kein anderer
+    // Start des Projekts dazwischen — ehrliche Absage statt stillem Einreihen.
+    serieLaeuft:
+      'In diesem Projekt läuft eine Serie. Beende sie erst („Serie beenden"), bevor du von Hand startest.',
+    serieRundenUngueltig: 'Die Rundenzahl der Serie muss eine ganze Zahl zwischen 2 und 99 sein.',
     // Eine Motor-Session pro Lauf (BAUPLAN 19): Ohne Fazit des Block-Agenten
     // gilt der Block ehrlich als fehlgeschlagen — statt ein leeres Ergebnis
     // an die Folgeblöcke weiterzureichen.
@@ -4486,6 +4518,31 @@ export const texte = {
     // und damit auch im Laufbericht des erzeugenden Laufs.
     laufVorschlagGespeichert: (anzahl, empfehlung) =>
       `Vorschlag fürs nächste Paket: ${anzahl} Karte${anzahl === 1 ? '' : 'n'} — ${empfehlung}`,
+    // Serienlauf (Bauschritt 61): Die Runden-Zeile tickert der NEUE Lauf —
+    // nur so steht sie im sichtbaren Ticker UND im Laufbericht der Runde
+    // (nach dem Speichern des Vorberichts getickerte Zeilen gingen verloren).
+    serieRundeVorschlag: (runde, gesamt, titel) =>
+      `Serienlauf: Runde ${runde} von ${gesamt} — Karten aus dem Vorschlag der Vorrunde: „${titel.join('“, „')}".`,
+    serieRundeVorauswahl: (runde, gesamt) =>
+      `Serienlauf: Runde ${runde} von ${gesamt} — kein Vorschlag, normale Vorauswahl (alle offenen Aufgaben).`,
+    serieRundeWiederholung: (runde, gesamt) =>
+      `Serienlauf: Runde ${runde} von ${gesamt} — Wiederholung des fehlgeschlagenen Laufs mit denselben Karten.`,
+    serieErsteRunde: (gesamt) =>
+      `Serienlauf gestartet: Runde 1 von ${gesamt} — mit deiner aktuellen Kartenauswahl.`,
+    // Abschluss-Zeilen — sie tickert der ENDENDE Lauf, vor dem Speichern
+    // seines Berichts (danach käme die Zeile nicht mehr in die Datei).
+    serieWeiter: (runde, gesamt) =>
+      `Serienlauf: Runde ${runde} von ${gesamt} ist beendet — die nächste Runde startet gleich.`,
+    serieEndeAbgeschlossen: (gesamt) =>
+      `Serienlauf beendet: alle ${gesamt} Runden sind gelaufen.`,
+    serieEndeKeineAufgaben:
+      'Serienlauf beendet: keine offenen Aufgaben mehr — die Arbeit ist getan.',
+    serieEndeGewuenscht:
+      'Serienlauf beendet: du hast „Serie beenden" gedrückt — keine weitere Runde startet.',
+    serieEndeFehlschlag:
+      'Serienlauf beendet: auch der Wiederholungsversuch ist fehlgeschlagen.',
+    serieEndeZustand: (zustandLabel) =>
+      `Serienlauf beendet: der Lauf endete mit „${zustandLabel}" — die Serie startet keine weitere Runde.`,
     // Karten-Zuteilung (BAUPLAN 29): sichtbar im Ticker und damit im Laufbericht.
     kartenZuteilung: (zeilen) => `Karten verteilt: ${zeilen}`,
     // Paket melden & Themen (BAUPLAN 30). Seit BAUPLAN 44 mit der Bezeichnung

@@ -916,6 +916,14 @@ function Laufbericht({ bericht, aufklappen = null }) {
           {bericht.naechsterLauf && (
             <p className="feld-hinweis">{tb.naechsterLaufZeile(bericht.naechsterLauf)}</p>
           )}
+          {/* Serienlauf (Bauschritt 61): welche Runde welcher Serie dieser
+              Lauf war — alte Berichte tragen das Feld nicht, dann fehlt die
+              Zeile einfach. */}
+          {bericht.serie && (
+            <p className="feld-hinweis">
+              {texte.serie.berichtVermerk(bericht.serie.runde, bericht.serie.gesamt)}
+            </p>
+          )}
           {/* Karten-Zuteilung (BAUPLAN 29): wie Paket schneiden/Diagnose die
               Karten auf die Folgeblöcke verteilt hat. */}
           {(bericht.kartenZuteilung ?? []).length > 0 && (
@@ -1395,6 +1403,18 @@ export default function Leinwand({
   // Karten-Vorschlag fürs nächste Paket (BAUPLAN 28): die Vorschlags-Zeile an
   // der Kartenauswahl — null = keiner da, sonst { empfehlung, karten }.
   const [laufVorschlag, setLaufVorschlag] = useState(null)
+  // Serienlauf (Bauschritt 61): Georgs Wahl am Start-Knopf — 1 = Einzellauf.
+  // Bewusst NICHT in workflow.json: Der Plan sagt „Georg wählt beim Start",
+  // und workflow-speichern ist bei laufendem Projekt ohnehin gesperrt.
+  const [serienRunden, setSerienRunden] = useState(1)
+  // Laufende Serie dieses Projekts — null oder { runde, gesamt,
+  // beendenAngefordert }. Gespeist aus laufZustand (Mount/Projektwechsel) und
+  // dem 'laeufe'-Ereignis — dem einzigen Kanal, der auch zwischen zwei Runden
+  // (kein aktiver Lauf) alle Fenster erreicht.
+  const [serie, setSerie] = useState(null)
+  // Die Serien-Bestätigung überlebt die Extra-Kosten-Rückfrage — sonst fragte
+  // FlowForge nach „Trotzdem starten" gleich noch einmal nach der Serie.
+  const serieBestaetigtRef = useRef(false)
   // Schaubild: gemessene Kartengrößen, laufender Karten-Zug, laufender Pfeil-Zug
   const [groessen, setGroessen] = useState({})
   const [ziehen, setZiehen] = useState(null) // { instanzId, dx, dy }
@@ -1437,6 +1457,10 @@ export default function Leinwand({
       if (!e.ok) return
       setLaufAnzahl(e.laufAnzahl ?? 0)
       setWartePosition(e.wartePosition ?? 0)
+      // Serienlauf (Bauschritt 61): VOR den frühen Rückwegen setzen — eine
+      // Serie kann auch ohne aktiven Lauf bestehen (zwischen zwei Runden
+      // oder wartend in der Warteschlange).
+      setSerie(e.serie ?? null)
       if (!e.aktiv) {
         // Wartet das Projekt in der Warteschlange, zeigt der Lauf-Tab das an.
         if (e.wartet) {
@@ -1468,6 +1492,12 @@ export default function Leinwand({
         setLaufAnzahl(ereignis.aktive.length)
         const position = ereignis.warteschlange.indexOf(pfad) + 1
         setWartePosition(position)
+        // Serienlauf (Bauschritt 61): Das 'laeufe'-Ereignis trägt die aktiven
+        // Serien aller Projekte — der einzige Kanal, der auch zwischen zwei
+        // Runden (kein aktiver Lauf) ankommt. Fehlt das Projekt, ist die
+        // Serie vorbei und die Anzeige verschwindet.
+        const serienEintrag = (ereignis.serien ?? []).find(([p]) => p === pfad)
+        setSerie(serienEintrag ? serienEintrag[1] : null)
         if (position === 0 && !ereignis.aktive.includes(pfad))
           setZustand((z) => (z === 'wartet' ? 'bereit' : z))
         return
@@ -1497,6 +1527,14 @@ export default function Leinwand({
       if (ereignis.art === 'warteschlange-fehler') {
         setZustand((z) => (z === 'wartet' ? 'bereit' : z))
         setFehler(texte.lauf.warteschlangeFehler(ereignis.fehler))
+        setTab('schaubild')
+      }
+      // Serienlauf (Bauschritt 61): Die nächste Runde konnte nicht starten
+      // (z.B. Schaubild inzwischen kaputt) — die Serie ist damit beendet,
+      // der Klartext landet im selben Fehler-Feld wie der Warteschlangen-Fall.
+      if (ereignis.art === 'serie-fehler') {
+        setSerie(null)
+        setFehler(texte.serie.fehler(ereignis.fehler))
         setTab('schaubild')
       }
       if (ereignis.art === 'block')
@@ -2012,6 +2050,21 @@ export default function Leinwand({
   async function starten() {
     setMeldung('')
     setFehler('')
+    // Serienlauf (Bauschritt 61): Vor dem ersten Start einmal ehrlich fragen —
+    // jede Runde ist ein voller Lauf und kostet entsprechend. Die Bestätigung
+    // ruft starten() erneut auf; der Merker verhindert die zweite Frage und
+    // überlebt auch die Extra-Kosten-Rückfrage weiter unten.
+    const runden = serienRunden > 1 ? serienRunden : undefined
+    if (runden && !serieBestaetigtRef.current) {
+      return setBestaetigung({
+        frage: texte.serie.startFrage(runden),
+        knopf: texte.serie.startKnopf,
+        aktion: () => {
+          serieBestaetigtRef.current = true
+          starten()
+        }
+      })
+    }
     // Die Lauf-Anzeige leert das „Lauf startet"-Ereignis — so wird sie auch
     // bei automatischen Starts aus der Warteschlange frisch (BAUPLAN 12).
     // Nur die gewählte ARBEIT geht mit (BAUPLAN 53) — Wissens- und
@@ -2020,7 +2073,7 @@ export default function Leinwand({
     const kartenIds = kontextAuswahl()
       .filter((k) => k.sorte === 'aufgabe')
       .map((k) => k.id)
-    const antwort = await window.flowforge.laufStarten(pfad, kartenIds)
+    const antwort = await window.flowforge.laufStarten(pfad, kartenIds, runden)
     // Kosten-Rückfrage der Klasse Extra (0.48.1): Der Hauptprozess startet
     // nicht, sondern fragt einmal — Fable 5 kann im Abo Guthaben statt
     // Kontingent kosten. „Trotzdem starten" merkt sich die Antwort
@@ -2037,6 +2090,9 @@ export default function Leinwand({
         }
       })
     }
+    // Der Serien-Merker hat seinen Dienst getan — der Start ist durch (oder
+    // ehrlich gescheitert), die nächste Serie fragt wieder.
+    serieBestaetigtRef.current = false
     if (!antwort.ok) return setFehler(antwort.fehler)
     // Projekt belegt oder alle Plätze vergeben: der Start wartet sichtbar.
     if (antwort.wartet) {
@@ -2050,6 +2106,14 @@ export default function Leinwand({
     await window.flowforge.laufWarteschlangeVerlassen(pfad)
     setWartePosition(0)
     setZustand((z) => (z === 'wartet' ? 'bereit' : z))
+  }
+
+  // Serie beenden (Bauschritt 61): Der laufende Lauf macht normal fertig,
+  // danach startet keine weitere Runde. Die Vormerkung wird sofort angezeigt —
+  // das nächste 'laeufe'-Ereignis bestätigt sie aus dem Hauptprozess.
+  async function serieBeenden() {
+    const antwort = await window.flowforge.serieBeenden(pfad)
+    if (antwort.ok) setSerie((alt) => (alt ? { ...alt, beendenAngefordert: true } : alt))
   }
 
   function hartStoppen() {
@@ -2222,12 +2286,39 @@ export default function Leinwand({
               läuft von allein an, sobald Platz ist. */}
           <button
             className="knopf-start"
-            disabled={bloecke.length === 0 || wartePosition > 0}
-            title={wartePosition > 0 ? t.schonInWarteschlange : undefined}
+            // Während einer Serie startet niemand von Hand dazwischen — der
+            // Hauptprozess lehnte es ohnehin ab, die Oberfläche bietet es
+            // gar nicht erst an (Bauschritt 61).
+            disabled={bloecke.length === 0 || wartePosition > 0 || Boolean(serie)}
+            title={
+              serie
+                ? texte.lauf.serieLaeuft
+                : wartePosition > 0
+                  ? t.schonInWarteschlange
+                  : undefined
+            }
             onClick={starten}
           >
             ▶ {tk.starten}
           </button>
+          {/* Serien-Wahl (Bauschritt 61): gilt für den nächsten Start-Klick,
+              wird nicht gespeichert — Runde 1 läuft mit Georgs aktueller
+              Kartenauswahl, danach übernimmt FlowForge die Vorschläge. */}
+          <label className="runden-feld">
+            {texte.serie.wahlLabel}
+            <select
+              value={serienRunden}
+              disabled={Boolean(serie)}
+              onChange={(e) => setSerienRunden(Number(e.target.value))}
+            >
+              <option value={1}>{texte.serie.wahlEinzeln}</option>
+              {[2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
+                <option key={n} value={n}>
+                  {texte.serie.wahlRunden(n)}
+                </option>
+              ))}
+            </select>
+          </label>
           <label className="runden-feld" title={tk.reparaturRundenHinweis}>
             {tk.reparaturRundenLabel}
             <input
@@ -2347,12 +2438,21 @@ export default function Leinwand({
               </span>
             </span>
           ))}
-          <button className="vorschlag-knopf" onClick={laufVorschlagUebernehmen}>
-            {tn.uebernehmen}
-          </button>
-          <button className="vorschlag-knopf" onClick={laufVorschlagVerwerfen}>
-            {tn.verwerfen}
-          </button>
+          {/* Serienlauf (Bauschritt 61): Während einer Serie bleiben die
+              Knöpfe weg — im Rundenwechsel-Fenster könnte Georg sonst genau
+              den Vorschlag wegdrücken, den die Serie gleich liest (Race).
+              Der Empfehlungssatz selbst bleibt sichtbar: angezeigt, nie
+              ausgeführt. */}
+          {!serie && (
+            <>
+              <button className="vorschlag-knopf" onClick={laufVorschlagUebernehmen}>
+                {tn.uebernehmen}
+              </button>
+              <button className="vorschlag-knopf" onClick={laufVorschlagVerwerfen}>
+                {tn.verwerfen}
+              </button>
+            </>
+          )}
         </div>
       )}
 
@@ -2505,6 +2605,29 @@ export default function Leinwand({
         </div>
       </div>
 
+      {/* Serienlauf (Bauschritt 61): Stand und „Serie beenden" — bewusst VOR
+          den zustandsabhängigen Blöcken und allein aus dem serie-Feld
+          gespeist, nie aus dem Laufzustand-String: Die Zeile muss auch im
+          Zustand „wartet" und zwischen zwei Runden (kein aktiver Lauf)
+          stehen bleiben. */}
+      {tab === 'lauf' && serie && (
+        <p className="feld-hinweis serie-zeile">
+          {serie.beendenAngefordert ? (
+            texte.serie.beendetVormerkung
+          ) : (
+            <>
+              {texte.serie.stand(serie.runde, serie.gesamt)}
+              <button
+                className="knopf-sekundaer knopf-klein"
+                title={texte.serie.beendenHinweis}
+                onClick={serieBeenden}
+              >
+                {texte.serie.beenden}
+              </button>
+            </>
+          )}
+        </p>
+      )}
       {tab === 'lauf' && zustand === 'bereit' && ticker.length === 0 && (
         <p className="feld-hinweis">{texte.projektansicht.tabLaufLeer}</p>
       )}

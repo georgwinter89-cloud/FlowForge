@@ -20,6 +20,12 @@ function KachelZustand({ zustand }) {
         {zustand.wartet && (
           <span className="zustand-marke zustand-wartend">{t.kachelWarteschlange}</span>
         )}
+        {/* Serienlauf (Bauschritt 61): dezent daneben, welche Runde läuft. */}
+        {zustand.serie && (
+          <span className="feld-hinweis">
+            {texte.serie.stand(zustand.serie.runde, zustand.serie.gesamt)}
+          </span>
+        )}
       </span>
     )
   }
@@ -34,6 +40,13 @@ function KachelZustand({ zustand }) {
       <span className={'zustand-marke zustand-' + zustand.letzterLauf.zustand}>
         {texte.lauf.zustandLabels[zustand.letzterLauf.zustand] ?? zustand.letzterLauf.zustand}
       </span>
+      {/* Serienlauf (Bauschritt 61): auch zwischen zwei Runden (kein aktiver
+          Lauf) sieht Georg auf der Kachel, dass die Serie weiterläuft. */}
+      {zustand.serie && (
+        <span className="feld-hinweis">
+          {texte.serie.stand(zustand.serie.runde, zustand.serie.gesamt)}
+        </span>
+      )}
     </span>
   )
 }

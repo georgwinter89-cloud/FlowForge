@@ -28,6 +28,7 @@ import {
   laufSanftStoppen,
   laufHartStoppen,
   laufWarteschlangeVerlassen,
+  serieBeenden,
   laufFrageAntworten,
   laufEntscheidungAntworten,
   laufMenschAntworten,
@@ -205,9 +206,20 @@ function registriereIpc() {
     return workflowSpeichern(pfad, workflow)
   })
 
-  ipcMain.handle('lauf-starten', (ereignis, { pfad, kartenIds }) =>
-    laufStarten(BrowserWindow.fromWebContents(ereignis.sender), pfad, kartenIds)
+  // Serienlauf (Bauschritt 61): serienRunden > 0 macht den Start zur Serie —
+  // die Prüfung der Rundenzahl (ganze Zahl 2–99) liegt in laufStarten selbst.
+  ipcMain.handle('lauf-starten', (ereignis, { pfad, kartenIds, serienRunden }) =>
+    laufStarten(
+      BrowserWindow.fromWebContents(ereignis.sender),
+      pfad,
+      kartenIds,
+      null,
+      false,
+      null,
+      serienRunden ? { runden: serienRunden } : null
+    )
   )
+  ipcMain.handle('serie-beenden', (_e, { pfad }) => serieBeenden(pfad))
   // Wiederaufnahme nach Neustart mitten im Lauf (SPEC §3.3, BAUPLAN 11).
   ipcMain.handle('laufstand-info', (_e, pfad) => laufstandInfo(pfad))
   ipcMain.handle('laufstand-verwerfen', (_e, pfad) => laufstandVerwerfen(pfad))

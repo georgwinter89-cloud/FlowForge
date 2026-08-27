@@ -59,6 +59,9 @@ import {
   budgetNehmen,
   budgetAusStand,
   laufstandPasst,
+  // Serienlauf (Bauschritt 61): dieselbe Auftragsquellen-Prüfung wie beim
+  // Start, am Serienende als Vorabprüfung der nächsten Runde.
+  auftragsquelleFehlt,
   zielListe,
   zielAdresse,
   zuschnittAuftragZusatz,
@@ -184,7 +187,13 @@ import {
 } from './sicherungspunkte.js'
 import { workflowLaden } from './workflow.js'
 import { laufstandSpeichern, laufstandLaden, laufstandLoeschen } from './laufstand.js'
-import { laufVorschlagSpeichern, laufVorschlagLoeschen } from './naechsterLauf.js'
+import {
+  laufVorschlagSpeichern,
+  laufVorschlagLoeschen,
+  // Serienlauf (Bauschritt 61): Übernahme des Vorschlags in die nächste Runde.
+  laufVorschlagRohLaden,
+  serienKartenAusVorschlag
+} from './naechsterLauf.js'
 import { kartenZuteilungPruefen, paketMeldungPruefen } from './motor/kartenZuteilungWerkzeuge.js'
 import { chatBeschaeftigt, chatLaufBeginnt, laufZustandQuelleSetzen } from './chat.js'
 import { metrikUrteilSchreiben } from './metriken.js'
@@ -1021,7 +1030,24 @@ const KONTINGENT_PAUSE_MS = 10 * 60 * 1000
 // automatisch an.
 const MAX_PARALLEL_LAEUFE = 3
 const aktiveLaeufe = new Map() // projektPfad → Lauf
-const warteschlange = [] // { fenster, projektPfad, kartenIds, fortsetzen, sonderlauf }
+const warteschlange = [] // { fenster, projektPfad, kartenIds, fortsetzen, sonderlauf, serienAuftrag }
+
+// Serienlauf (Bauschritt 61): Der Registereintrag lebt über die GANZE Serie —
+// auch in der Lücke zwischen zwei Runden, in der weder aktiveLaeufe noch die
+// Warteschlange das Projekt kennen. Er ist die Sperre gegen fremde Starts,
+// die Quelle der Sichtbarkeit (laufZustand, laeufeMelden) und das Gedächtnis
+// für Wiederholung und Wiederaufnahme.
+//   naechsteTicker: { art: 'vorschlag', titel } | { art: 'vorauswahl' } |
+//   { art: 'wiederholung' } | null — die Runden-Zeile tickert der NEUE Lauf,
+//   denn der Renderer leert die Ticker-Anzeige beim zustand-laeuft-Ereignis.
+const serien = new Map() // projektPfad → { gesamt, runde, wiederholungVerbraucht, beendenAngefordert, letzteKarten, letzterBerichtId, naechsteTicker, fenster }
+
+function serienMeldung() {
+  return [...serien.entries()].map(([pfad, e]) => [
+    pfad,
+    { runde: e.runde, gesamt: e.gesamt, beendenAngefordert: e.beendenAngefordert }
+  ])
+}
 
 // Sonderläufe (BAUPLAN 30, Entscheidung Georg, 15.08.2026): Die Aufräum-Knöpfe
 // der Karten-Seitenleiste starten je einen festen Ein-Block-Workflow im
@@ -1088,16 +1114,21 @@ function laeufeMelden() {
   const daten = {
     art: 'laeufe',
     aktive: [...aktiveLaeufe.keys()],
-    warteschlange: warteschlange.map((eintrag) => eintrag.projektPfad)
+    warteschlange: warteschlange.map((eintrag) => eintrag.projektPfad),
+    // Serienlauf (Bauschritt 61): der einzige Push-Kanal, der auch ohne
+    // aktiven Lauf alle Fenster erreicht — die Serien-Anzeige hängt daran.
+    serien: serienMeldung()
   }
   for (const fenster of BrowserWindow.getAllWindows())
     if (!fenster.isDestroyed()) fenster.webContents.send('lauf-ereignis', daten)
 }
 
-function inWarteschlangeStellen(fenster, projektPfad, kartenIds, fortsetzen, sonderlauf = null) {
+function inWarteschlangeStellen(fenster, projektPfad, kartenIds, fortsetzen, sonderlauf = null, serienAuftrag = null) {
   if (warteschlange.some((eintrag) => eintrag.projektPfad === projektPfad))
     return { ok: false, fehler: texte.lauf.schonInWarteschlange }
-  warteschlange.push({ fenster, projektPfad, kartenIds, fortsetzen, sonderlauf })
+  // Serienlauf (Bauschritt 61): Der Serienbezug reist im Eintrag mit — sonst
+  // verlöre eine eingereihte Runde beim Anstoßen ihre Serie.
+  warteschlange.push({ fenster, projektPfad, kartenIds, fortsetzen, sonderlauf, serienAuftrag })
   laeufeMelden()
   return { ok: true, wartet: true, position: warteschlange.length }
 }
@@ -1125,7 +1156,9 @@ async function warteschlangeAnstossen() {
             eintrag.kartenIds,
             null,
             true,
-            eintrag.sonderlauf
+            eintrag.sonderlauf,
+            // Serienlauf (Bauschritt 61): der Serienbezug reist mit.
+            eintrag.serienAuftrag ?? null
           )
     } catch (fehler) {
       ergebnis = { ok: false, fehler: String(fehler?.message ?? fehler) }
@@ -1134,12 +1167,18 @@ async function warteschlangeAnstossen() {
     }
     // Klappt der automatische Start nicht (z.B. Schaubild inzwischen leer),
     // erfährt Georg das sichtbar — der Eintrag verschwindet aus der Schlange.
-    if (!ergebnis.ok && !eintrag.fenster.isDestroyed())
-      eintrag.fenster.webContents.send('lauf-ereignis', {
-        projektPfad: eintrag.projektPfad,
-        art: 'warteschlange-fehler',
-        fehler: ergebnis.fehler
-      })
+    if (!ergebnis.ok) {
+      // Serienlauf (Bauschritt 61): Scheitert eine EINGEREIHTE Runde beim
+      // Anstoßen, endet die Serie — sonst sperrte der Registereintrag das
+      // Projekt für immer, ohne dass je wieder eine Runde anliefe.
+      const serienEnde = eintrag.serienAuftrag && serien.delete(eintrag.projektPfad)
+      if (!eintrag.fenster.isDestroyed())
+        eintrag.fenster.webContents.send('lauf-ereignis', {
+          projektPfad: eintrag.projektPfad,
+          art: serienEnde ? 'serie-fehler' : 'warteschlange-fehler',
+          fehler: ergebnis.fehler
+        })
+    }
   }
   laeufeMelden()
 }
@@ -1223,7 +1262,15 @@ export function projektZustaende(pfade) {
       // null-sicher, ein Lauf ohne diese Felder bleibt gültig.
       workflow: lauf?.bericht?.workflow ?? null,
       letzteZeile: lauf?.bericht?.ticker?.at(-1)?.text ?? null,
-      kontext: lauf?.kontext ?? null
+      kontext: lauf?.kontext ?? null,
+      // Serienlauf (Bauschritt 61): dieselbe Form wie in laufZustand.
+      serie: serien.has(pfad)
+        ? {
+            runde: serien.get(pfad).runde,
+            gesamt: serien.get(pfad).gesamt,
+            beendenAngefordert: serien.get(pfad).beendenAngefordert
+          }
+        : null
     }
   }
   return { ok: true, zustaende }
@@ -1405,7 +1452,10 @@ const TOR_BEANSTANDUNG_ZEILE_MAX = 400
 // wird bei belegtem Platz nicht erneut eingereiht, sondern ehrlich abgelehnt.
 // sonderlauf (BAUPLAN 30): { art, instanzId } — statt des Schaubilds läuft ein
 // fester Ein-Block-Workflow (SONDERLAEUFE); die Leinwand bleibt unangetastet.
-export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung = null, ausWarteschlange = false, sonderlauf = null) {
+// serienAuftrag (Bauschritt 61): ANGEHÄNGT statt eingeschoben — viele Rufer
+// geben sechs Positionsargumente. Entweder { runden } (Georgs Serienstart)
+// oder 'runde' (interne Folgerunde, Warteschlange, Wiederaufnahme).
+export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung = null, ausWarteschlange = false, sonderlauf = null, serienAuftrag = null) {
   if (typeof projektPfad !== 'string' || !projektPfad.trim() || !fs.existsSync(projektPfad))
     return { ok: false, fehler: texte.fehler.projektNichtGefunden }
   // Kanonische Schreibweise, bevor der Pfad in den Lauf wandert: Ein
@@ -1414,6 +1464,16 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
   // Ablagen) — die Karten-Werkzeuge meldeten dann den ganzen Lauf lang
   // „Der Projektordner ist nicht mehr da" (Befund 24.08.2026).
   projektPfad = path.resolve(projektPfad)
+  // Serienlauf (Bauschritt 61): Während einer Serie rutscht kein fremder
+  // Start dazwischen — auch nicht still in die Warteschlange. Nur die eigenen
+  // Runden (serienAuftrag gesetzt) kommen durch.
+  if (serien.has(projektPfad) && !serienAuftrag)
+    return { ok: false, fehler: texte.lauf.serieLaeuft }
+  if (serienAuftrag && serienAuftrag !== 'runde') {
+    const runden = serienAuftrag.runden
+    if (!Number.isInteger(runden) || runden < 2 || runden > 99)
+      return { ok: false, fehler: texte.lauf.serieRundenUngueltig }
+  }
   if (sonderlauf && !SONDERLAEUFE[sonderlauf.art])
     return { ok: false, fehler: texte.fehler.unbekannt }
   // Blockdefinition je Block dieses Laufs — bei Sonderläufen ggf. mit
@@ -1489,28 +1549,24 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
   // was gebaut werden soll — der Lauf startet gar nicht erst. Bei einer
   // Wiederaufnahme entfällt die Prüfung: frühere Blöcke sind schon gelaufen,
   // ihre Aufgaben können bereits abgehakt sein.
-  for (const eintrag of fortsetzung ? [] : kette) {
-    const def = defVon(eintrag.blockId)
-    for (const feld of def.felder) {
-      if (!feld.oderOffeneAufgaben) continue
-      if ((eintrag.feldWerte?.[feld.id] ?? '').trim()) continue
-      // Ein Vorfahre, der selbst Aufgaben-Karten erzeugt (Spec-Interview),
-      // zählt als Auftragsquelle — bei „Neue App starten" gibt es beim Start
-      // noch keine Karten, die Aufgaben entstehen erst im Lauf.
-      if (
-        vorfahrenSortiert(workflow.bloecke, workflow.pfeile, eintrag.instanzId).some(
-          (v) => defVon(v.blockId).erzeugtAufgaben
-        )
-      )
-        continue
-      const frisch = kartenLaden(projektPfad)
-      const offene = frisch.ok
-        ? frisch.karten.filter(
-            (k) => ausgewaehlt.includes(k.id) && k.sorte === 'aufgabe' && !k.erledigt
-          )
-        : []
-      if (offene.length === 0)
-        return { ok: false, fehler: texte.kette.fehlerAuftragsquelle(anzeigeVon(eintrag), feld.label) }
+  // Seit Bauschritt 61 als reine Funktion in kettenRegeln.js — der Serienlauf
+  // stellt am Ende einer erfolgreichen Runde dieselbe Frage für die nächste.
+  if (!fortsetzung) {
+    const frisch = kartenLaden(projektPfad)
+    const quellenFund = auftragsquelleFehlt({
+      kette,
+      bloecke: workflow.bloecke,
+      pfeile: workflow.pfeile,
+      aufgabenIds: ausgewaehlt,
+      karten: frisch.ok ? frisch.karten : [],
+      defVon
+    })
+    if (quellenFund) {
+      const eintrag = kette.find((e) => e.instanzId === quellenFund.instanzId)
+      return {
+        ok: false,
+        fehler: texte.kette.fehlerAuftragsquelle(anzeigeVon(eintrag), quellenFund.feldLabel)
+      }
     }
   }
 
@@ -1568,10 +1624,13 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
   // Start von Hand: Wiederaufnahme, Warteschlange und Sonderläufe sind
   // entweder schon bestätigt oder tragen keine Karten-Wahl. Im API-Modus
   // entfällt sie — dort zahlt ohnehin jeder Block pro Verbrauch.
+  // Serienlauf (Bauschritt 61): Folgerunden haben in Runde 1 bestätigt — ohne
+  // die Ausnahme stürbe Runde 2 still an der Rückfrage, die niemand sieht.
   if (
     !fortsetzung &&
     !ausWarteschlange &&
     !sonderlauf &&
+    serienAuftrag !== 'runde' &&
     einstellungen.motorModus === 'abo' &&
     !einstellungen.extraKostenBestaetigt &&
     kette.some((e) => klasseHatKostenHinweis(blockModellKlasse(defVon(e.blockId), e)))
@@ -1584,12 +1643,31 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
   // Fehler (leeres Schaubild, leeres Pflichtfeld) kommen sofort zurück.
   // Ein Start aus der Warteschlange zählt in plaetzeBelegt() schon selbst mit —
   // seine Platz-Prüfung hat der Anstoßer vor dem Herausnehmen gemacht.
+  // Serienlauf (Bauschritt 61): Auch ein eingereihter Serienstart legt den
+  // Registereintrag SOFORT an — erst er macht die Sperre gegen fremde Starts
+  // wirksam, und der Eintrag in der Schlange trägt den Serienbezug mit.
+  const serienEintragAnlegen = () => {
+    if (serienAuftrag && serienAuftrag !== 'runde' && !serien.has(projektPfad))
+      serien.set(projektPfad, {
+        gesamt: serienAuftrag.runden,
+        runde: 1,
+        wiederholungVerbraucht: false,
+        beendenAngefordert: false,
+        letzteKarten: null,
+        letzterBerichtId: null,
+        naechsteTicker: null,
+        fenster
+      })
+  }
   if (aktiveLaeufe.has(projektPfad)) {
     if (ausWarteschlange) return { ok: false, fehler: texte.lauf.schonAktiv }
-    return inWarteschlangeStellen(fenster, projektPfad, kartenIds, Boolean(fortsetzung), sonderlauf)
+    serienEintragAnlegen()
+    return inWarteschlangeStellen(fenster, projektPfad, kartenIds, Boolean(fortsetzung), sonderlauf, serienAuftrag)
   }
-  if (!ausWarteschlange && plaetzeBelegt() >= MAX_PARALLEL_LAEUFE)
-    return inWarteschlangeStellen(fenster, projektPfad, kartenIds, Boolean(fortsetzung), sonderlauf)
+  if (!ausWarteschlange && plaetzeBelegt() >= MAX_PARALLEL_LAEUFE) {
+    serienEintragAnlegen()
+    return inWarteschlangeStellen(fenster, projektPfad, kartenIds, Boolean(fortsetzung), sonderlauf, serienAuftrag)
+  }
 
   // Co-Pilot (BAUPLAN 27/33): Arbeitet der Chat gerade in diesem Projekt,
   // startet kein Lauf — der Chat kennt weder Datenvertrag noch Strang und
@@ -1647,6 +1725,9 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     sonderlauf: sonderlauf?.art ?? null
   }
   aktiveLaeufe.set(projektPfad, lauf)
+  // Serienlauf (Bauschritt 61): Der Start ist angenommen — ab jetzt sperrt
+  // die Serie fremde Starts. Vor laeufeMelden, damit EINE Meldung beides trägt.
+  serienEintragAnlegen()
   laeufeMelden()
   // Prozess-Hygiene (BAUPLAN 32): Ab jetzt beobachtet der Späher, was aus
   // diesem Lauf heraus gestartet wird — die Motor-Prozesse melden sich als
@@ -1862,6 +1943,11 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
   )
   if (!sicherung.ok) {
     aktiveLaeufe.delete(projektPfad)
+    // Serienlauf (Bauschritt 61): Ein frisch angelegter Serien-Eintrag geht
+    // mit dem gescheiterten Start wieder weg — sonst sperrte er das Projekt
+    // für immer. Eine Folgerunde ('runde') bleibt: Ihr Rufer (Serien-Hook,
+    // Warteschlange) räumt den Eintrag selbst ab und meldet den Fehler.
+    if (serienAuftrag && serienAuftrag !== 'runde') serien.delete(projektPfad)
     laeufeMelden()
     void prozessgruppeAbraeumen('lauf:' + projektPfad)
     return { ok: false, fehler: sicherung.fehler }
@@ -1873,6 +1959,16 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
   // Erst jetzt, wo der Lauf wirklich startet: Ein gescheiterter Startversuch
   // soll die Vorschlags-Zeile nicht kosten.
   laufVorschlagLoeschen(projektPfad)
+
+  // Serienlauf (Bauschritt 61): Der Eintrag begleitet den Lauf als Closure —
+  // hier werden die Karten dieser Runde für eine mögliche Wiederholung
+  // gemerkt und das Fenster aufgefrischt (die Folgerunde erbt sonst ein
+  // längst geschlossenes).
+  const serienEintrag = serien.get(projektPfad) ?? null
+  if (serienEintrag) {
+    serienEintrag.letzteKarten = gewaehlteAufgaben
+    serienEintrag.fenster = fenster
+  }
 
   const bericht = {
     id: crypto.randomUUID(),
@@ -1900,6 +1996,18 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     // Sonderlauf (BAUPLAN 30): Kennzeichen für Bericht und Ansicht — die
     // Leinwand war nicht beteiligt.
     ...(sonderlauf ? { sonderlauf: sonderlauf.art } : {}),
+    // Serienlauf (Bauschritt 61): der Serien-Vermerk jeder Runde. Der Verweis
+    // auf die Vorrunde läuft über bericht.id (stabil), nicht über gestartetAm.
+    // Alte Berichte tragen das Feld nicht — Leser müssen null-sicher sein.
+    ...(serienEintrag
+      ? {
+          serie: {
+            runde: serienEintrag.runde,
+            gesamt: serienEintrag.gesamt,
+            vorigerLaufId: serienEintrag.letzterBerichtId ?? null
+          }
+        }
+      : {}),
     // Abschlusstext jedes gelaufenen Blocks — die Leinwand zeigt ihn direkt
     // an der jeweiligen Karte an.
     blockErgebnisse: [],
@@ -2360,6 +2468,27 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
   // Lauf-Start sofort melden — noch vor der ersten Ticker-Zeile, damit die
   // Ansicht die Anzeige des vorigen Laufs sauber leeren kann.
   senden({ art: 'zustand', zustand: 'laeuft' })
+  // Serienlauf (Bauschritt 61): Die Runden-Zeile tickert der NEUE Lauf — nur
+  // hier steht sie im sichtbaren Ticker UND im Bericht der Runde (der
+  // Renderer leert die Anzeige beim zustand-laeuft-Ereignis oben). Eine
+  // Wiederaufnahme mitten in der Serie hat keinen gemerkten Anlass
+  // (naechsteTicker null) — dann sagt der Vermerk im Bericht die Runde.
+  if (serienEintrag) {
+    if (serienEintrag.runde === 1) tickern(texte.ticker.serieErsteRunde(serienEintrag.gesamt))
+    else if (serienEintrag.naechsteTicker?.art === 'vorschlag')
+      tickern(
+        texte.ticker.serieRundeVorschlag(
+          serienEintrag.runde,
+          serienEintrag.gesamt,
+          serienEintrag.naechsteTicker.titel
+        )
+      )
+    else if (serienEintrag.naechsteTicker?.art === 'vorauswahl')
+      tickern(texte.ticker.serieRundeVorauswahl(serienEintrag.runde, serienEintrag.gesamt))
+    else if (serienEintrag.naechsteTicker?.art === 'wiederholung')
+      tickern(texte.ticker.serieRundeWiederholung(serienEintrag.runde, serienEintrag.gesamt))
+    serienEintrag.naechsteTicker = null
+  }
   // Ehrlichkeit (Entscheidung Georg, 14.08.2026): Ist die Auf-eigene-Gefahr-
   // Einstellung aktiv, steht das sichtbar am Laufstart — im Ticker und damit
   // auch im Laufbericht.
@@ -3818,6 +3947,22 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       zusatzStandAuffrischen()
       laufstandSpeichern(projektPfad, {
         gestartetAm: bericht.gestartetAm,
+        // Serienlauf (Bauschritt 61): Der Serienstand wandert ausdrücklich in
+        // den Laufstand — standSpeichern baut ein explizites Objekt, ohne das
+        // Feld ginge die Serie beim ersten Speichern verloren. Live aus dem
+        // Register gelesen (nicht aus der Start-Closure): serieBeenden kann
+        // beendenAngefordert mitten im Lauf setzen. Alte Stände ohne das Feld
+        // bleiben gültig, laufstandPasst prüft nur bekannte Felder.
+        ...(serien.has(projektPfad)
+          ? {
+              serie: {
+                gesamt: serien.get(projektPfad).gesamt,
+                runde: serien.get(projektPfad).runde,
+                wiederholungVerbraucht: serien.get(projektPfad).wiederholungVerbraucht,
+                beendenAngefordert: serien.get(projektPfad).beendenAngefordert
+              }
+            }
+          : {}),
         kettenIds,
         // Zusatznamen (BAUPLAN 41): Ein geänderter Name macht den Stand
         // ungültig — die Wiederaufnahme prüft ihn mit (laufstandPasst).
@@ -8298,6 +8443,93 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
             kontextFenster: bekanntesKontextFenster > 0 ? bekanntesKontextFenster : null
           }
         : null
+    // Serienlauf (Bauschritt 61), Teil 1: Die Entscheidung fällt VOR dem
+    // Speichern des Berichts, denn ihre Ticker-Zeile gehört in die
+    // Bericht-Datei dieser Runde. Der ganze Block in try/catch: Ein Fehler in
+    // der Serien-Mechanik darf weder den Laufende-Block anhalten noch die
+    // Serie klemmen lassen — im Zweifel endet sie.
+    // serieWeiterStart = { kartenIds } heißt: unten, nach laeufeMelden,
+    // startet die nächste Runde. null bei 'vorauswahl' wäre falsch benannt:
+    // kartenIds null heißt „normale Vorauswahl", [] hieße „keine Karten" und
+    // erzeugte einen Fehlstart.
+    let serieWeiterStart = null
+    if (serienEintrag && serien.has(projektPfad)) {
+      try {
+        const weiter = (naechsteTicker, kartenIdsNaechste) => {
+          serienEintrag.naechsteTicker = naechsteTicker
+          serienEintrag.letzterBerichtId = bericht.id
+          tickern(texte.ticker.serieWeiter(serienEintrag.runde, serienEintrag.gesamt))
+          serienEintrag.runde += 1
+          serieWeiterStart = { kartenIds: kartenIdsNaechste }
+        }
+        if (serienEintrag.beendenAngefordert) {
+          // „Serie beenden": Der Lauf endete normal, keine weitere Runde.
+          tickern(texte.ticker.serieEndeGewuenscht)
+          serien.delete(projektPfad)
+        } else if (serienEintrag.runde >= serienEintrag.gesamt) {
+          // Harter Deckel: Die Rundenzahl zählt LÄUFE, auch Wiederholungen.
+          tickern(texte.ticker.serieEndeAbgeschlossen(serienEintrag.gesamt))
+          serien.delete(projektPfad)
+        } else if (endZustand === 'erfolgreich') {
+          // Der Vorschlag des Sessionendes liegt noch da — gelöscht wird die
+          // Datei erst beim Start der NÄCHSTEN Runde (laufVorschlagLoeschen).
+          const roh = laufVorschlagRohLaden(projektPfad)
+          const frisch = kartenLaden(projektPfad)
+          const kartenJetzt = frisch.ok ? frisch.karten : []
+          const vorschlag = serienKartenAusVorschlag(roh, kartenJetzt)
+          // Vorabprüfung mit der effektiven nächsten Auswahl: Sind keine
+          // offenen Aufgaben mehr da und der Workflow trägt eine
+          // Auftragsquelle, endet die Serie mit Klartext, BEVOR der
+          // Startprüfer einen Fehlstart produziert.
+          const naechsteAuswahl = vorschlag
+            ? vorschlag.ids
+            : kartenJetzt.filter((k) => k.sorte === 'aufgabe' && !k.erledigt).map((k) => k.id)
+          const quellenFund = auftragsquelleFehlt({
+            // kette/pfeile/defVon aus dem Closure: Das Schaubild ist während
+            // der Serie gesperrt, also unverändert.
+            kette,
+            bloecke: workflow.bloecke,
+            pfeile: workflow.pfeile,
+            aufgabenIds: naechsteAuswahl,
+            karten: kartenJetzt,
+            defVon
+          })
+          if (quellenFund) {
+            tickern(texte.ticker.serieEndeKeineAufgaben)
+            serien.delete(projektPfad)
+          } else {
+            // Nach einem Erfolg gilt wieder ein frischer Wiederholungsversuch.
+            serienEintrag.wiederholungVerbraucht = false
+            weiter(
+              vorschlag ? { art: 'vorschlag', titel: vorschlag.titel } : { art: 'vorauswahl' },
+              vorschlag ? vorschlag.ids : null
+            )
+          }
+        } else if (endZustand === 'fehlgeschlagen') {
+          if (!serienEintrag.wiederholungVerbraucht) {
+            // Genau EIN Wiederholungsversuch mit denselben Karten.
+            serienEintrag.wiederholungVerbraucht = true
+            weiter({ art: 'wiederholung' }, serienEintrag.letzteKarten ?? null)
+          } else {
+            tickern(texte.ticker.serieEndeFehlschlag)
+            serien.delete(projektPfad)
+          }
+        } else {
+          // Alle anderen Ausgänge beenden die Serie: sanft = Georg wollte
+          // anhalten; hart/wiederhergestellt = der Ordner wurde zurückgesetzt,
+          // „dieselben Karten" liefen gegen einen anderen Stand; zurückgestellt
+          // = eine offene Folgen-Frage; Kontingent = die Wiederholung
+          // verbrennt nur eine Runde.
+          tickern(
+            texte.ticker.serieEndeZustand(texte.lauf.zustandLabels[endZustand] ?? endZustand)
+          )
+          serien.delete(projektPfad)
+        }
+      } catch {
+        serien.delete(projektPfad)
+        serieWeiterStart = null
+      }
+    }
     try {
       berichtSpeichern(projektPfad, bericht)
     } catch {
@@ -8326,6 +8558,52 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
       fehlertext: bericht.fehlertext,
       bericht
     })
+    // Serienlauf (Bauschritt 61), Teil 2: Die nächste Runde startet HIER —
+    // nach aktiveLaeufe.delete/laeufeMelden, vor warteschlangeAnstossen.
+    // laufStarten belegt aktiveLaeufe synchron (vor seinem ersten await im
+    // Normalfall) und die serien-Map blieb die ganze Zeit besetzt — die Lücke
+    // zwischen zwei Runden ist damit gegen fremde Starts dicht. serien.has
+    // wird trotzdem noch einmal geprüft: serieBeenden kann in einer
+    // await-Lücke dazwischengekommen sein.
+    if (serieWeiterStart && serien.has(projektPfad)) {
+      try {
+        const folge = await laufStarten(
+          serienEintrag.fenster,
+          projektPfad,
+          serieWeiterStart.kartenIds,
+          null,
+          false,
+          null,
+          'runde'
+        )
+        // Auch { ok: true, wartet: true } ist ein angenommener Start — die
+        // Runde wartet dann in der Schlange und trägt ihren Serienbezug mit.
+        if (!folge.ok) {
+          serien.delete(projektPfad)
+          laeufeMelden()
+          // Exakt das Muster von warteschlange-fehler: gleicher Kanal, damit
+          // Georg sichtbar erfährt, warum die Serie nicht weiterlief (z. B.
+          // Co-Pilot beschäftigt, lokale KI weg).
+          if (!serienEintrag.fenster.isDestroyed())
+            serienEintrag.fenster.webContents.send('lauf-ereignis', {
+              projektPfad,
+              art: 'serie-fehler',
+              fehler: folge.fehler
+            })
+        }
+      } catch (fehler) {
+        // Ein werfender Start darf weder die Serie klemmen lassen noch den
+        // Laufende-Block abbrechen.
+        serien.delete(projektPfad)
+        laeufeMelden()
+        if (!serienEintrag.fenster.isDestroyed())
+          serienEintrag.fenster.webContents.send('lauf-ereignis', {
+            projektPfad,
+            art: 'serie-fehler',
+            fehler: String(fehler?.message ?? fehler)
+          })
+      }
+    }
     // Der Platz ist frei — der nächste wartende Lauf startet von allein.
     warteschlangeAnstossen()
   })()
@@ -8426,17 +8704,40 @@ export function laufWarteschlangeVerlassen(projektPfad) {
   const idx = warteschlange.findIndex((eintrag) => eintrag.projektPfad === projektPfad)
   if (idx >= 0) {
     warteschlange.splice(idx, 1)
+    // Serienlauf (Bauschritt 61): Nimmt Georg den Eintrag einer Serie heraus,
+    // endet die Serie — es gäbe sonst niemanden mehr, der je eine Runde
+    // startet, und der Registereintrag sperrte das Projekt für immer.
+    serien.delete(projektPfad)
     laeufeMelden()
   }
+  return { ok: true }
+}
+
+// Serienlauf (Bauschritt 61): „Serie beenden" — der laufende Lauf endet
+// normal, danach startet keine weitere Runde. Steht die Serie gerade NUR in
+// der Warteschlange (kein aktiver Lauf), endet sie sofort.
+export function serieBeenden(projektPfad) {
+  const eintrag = serien.get(projektPfad)
+  if (!eintrag) return { ok: false, fehler: texte.fehler.unbekannt }
+  eintrag.beendenAngefordert = true
+  if (!aktiveLaeufe.has(projektPfad)) {
+    const idx = warteschlange.findIndex((e) => e.projektPfad === projektPfad)
+    if (idx >= 0) warteschlange.splice(idx, 1)
+    serien.delete(projektPfad)
+  }
+  laeufeMelden()
   return { ok: true }
 }
 
 // Wiederaufnahme nach App-/Rechner-Neustart (SPEC §3.3, BAUPLAN 11): Liegt in
 // diesem Projekt ein unterbrochener Lauf, den die App fortsetzen kann?
 export function laufstandInfo(projektPfad) {
-  // Läuft oder wartet das Projekt schon, gibt es nichts anzubieten.
+  // Läuft oder wartet das Projekt schon, gibt es nichts anzubieten. Während
+  // einer Serie (Bauschritt 61) ebenfalls nicht — sonst erschiene in der
+  // Lücke zwischen zwei Runden der Wiederaufnahme-Dialog.
   if (
     aktiveLaeufe.has(projektPfad) ||
+    serien.has(projektPfad) ||
     warteschlange.some((eintrag) => eintrag.projektPfad === projektPfad)
   )
     return { ok: true, vorhanden: false }
@@ -8532,6 +8833,32 @@ export async function laufFortsetzen(fenster, projektPfad, ausWarteschlange = fa
     stand.sonderlauf && SONDERLAEUFE[stand.sonderlauf.art] && typeof stand.sonderlauf.instanzId === 'string'
       ? { art: stand.sonderlauf.art, instanzId: stand.sonderlauf.instanzId }
       : null
+  // Serienlauf (Bauschritt 61): Trägt der Stand plausible Serien-Zahlen, lebt
+  // die Serie nach dem App-Neustart weiter — der Registereintrag wird
+  // wiederhergestellt, die Runde läuft als 'runde' (keine Sperre gegen sich
+  // selbst, keine zweite Extra-Kosten-Rückfrage). Unplausible Zahlen heißen
+  // ehrlich: keine Serie mehr.
+  const serieStand =
+    stand.serie &&
+    Number.isInteger(stand.serie.gesamt) &&
+    Number.isInteger(stand.serie.runde) &&
+    stand.serie.gesamt >= 2 &&
+    stand.serie.gesamt <= 99 &&
+    stand.serie.runde >= 1 &&
+    stand.serie.runde <= stand.serie.gesamt
+      ? stand.serie
+      : null
+  if (serieStand && !serien.has(projektPfad))
+    serien.set(projektPfad, {
+      gesamt: serieStand.gesamt,
+      runde: serieStand.runde,
+      wiederholungVerbraucht: serieStand.wiederholungVerbraucht === true,
+      beendenAngefordert: serieStand.beendenAngefordert === true,
+      letzteKarten: Array.isArray(stand.kartenIds) ? stand.kartenIds : null,
+      letzterBerichtId: null,
+      naechsteTicker: null,
+      fenster
+    })
   return laufStarten(
     fenster,
     projektPfad,
@@ -8543,8 +8870,14 @@ export async function laufFortsetzen(fenster, projektPfad, ausWarteschlange = fa
     // Prüfmappen bewusst stehengeblieben sind.
     { ...stand, rollbackGeschuetzt: zurueck.geschuetztUebersprungen ?? 0 },
     ausWarteschlange,
-    sonderlauf
-  )
+    sonderlauf,
+    serieStand ? 'runde' : null
+  ).then((ergebnis) => {
+    // Scheitert der Start, darf der eben wiederhergestellte Serien-Eintrag
+    // das Projekt nicht für immer sperren (Bauschritt 61).
+    if (!ergebnis.ok && serieStand && serien.delete(projektPfad)) laeufeMelden()
+    return ergebnis
+  })
 }
 
 // Sonderlauf starten (BAUPLAN 30): Aufräum-Knöpfe der Karten-Seitenleiste.
@@ -8570,10 +8903,18 @@ export function laufZustand(projektPfad) {
   const lauf = aktiveLaeufe.get(projektPfad)
   const wartePosition =
     warteschlange.findIndex((eintrag) => eintrag.projektPfad === projektPfad) + 1
+  // Serienlauf (Bauschritt 61): In der Lücke zwischen zwei Runden (weder
+  // aktiv noch in der Schlange) meldet das Projekt wartet:true — damit
+  // greifen die Sperren für Schaubild, Wiederherstellen und Sonderläufe über
+  // die GANZE Serie, ohne dass eine dieser Stellen die Serie kennen muss.
+  const serie = serien.get(projektPfad)
   const rahmen = {
     laufAnzahl: aktiveLaeufe.size,
-    wartet: wartePosition > 0,
-    wartePosition
+    wartet: wartePosition > 0 || Boolean(serie && !lauf),
+    wartePosition,
+    serie: serie
+      ? { runde: serie.runde, gesamt: serie.gesamt, beendenAngefordert: serie.beendenAngefordert }
+      : null
   }
   if (!lauf) return { ok: true, aktiv: false, ...rahmen }
   return {

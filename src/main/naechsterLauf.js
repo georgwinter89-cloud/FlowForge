@@ -58,3 +58,31 @@ export function laufVorschlagLaden(projektPfad) {
   const geladen = kartenLaden(projektPfad)
   return laufVorschlagAufloesen(roh, geladen.ok ? geladen.karten : [])
 }
+
+// Roh-Leser für den Serienlauf (Bauschritt 61): Die IDs müssen aus der DATEI
+// kommen — bericht.naechsterLauf trägt nur Titel, und laufVorschlagLaden gibt
+// die fürs Anzeigen aufgelöste Form ohne erledigt-Kennzeichen zurück.
+export function laufVorschlagRohLaden(projektPfad) {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(projektPfad, VORSCHLAG_DATEI), 'utf8'))
+  } catch {
+    return null
+  }
+}
+
+// Serienlauf (Bauschritt 61): Was aus einem Vorschlag mechanisch in die
+// nächste Runde übernommen wird. Strenger als der Übernehmen-Knopf des
+// Renderers: Der zieht erledigte Karten bewusst mit herein (Georg sieht sie),
+// die Serie darf das NICHT — der Startprüfer zählt nur offene Aufgaben, eine
+// erledigte Karte in der Auswahl erzeugte einen Fehlstart mitten in der Nacht.
+// Leeres Ergebnis oder ungültiges roh → null = normale Vorauswahl (ein
+// absichtlich leerer Vorschlag ist laut Werkzeug erlaubt).
+export function serienKartenAusVorschlag(roh, karten) {
+  if (!roh || !Array.isArray(roh.kartenIds)) return null
+  const nachId = new Map((Array.isArray(karten) ? karten : []).map((k) => [k.id, k]))
+  const offene = roh.kartenIds
+    .map((id) => nachId.get(id))
+    .filter((k) => k && k.sorte === 'aufgabe' && !k.erledigt)
+  if (offene.length === 0) return null
+  return { ids: offene.map((k) => k.id), titel: offene.map((k) => k.titel) }
+}

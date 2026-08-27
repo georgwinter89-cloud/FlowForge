@@ -507,7 +507,11 @@ außerdem die **Session-Kennung des Laufs** (über sie setzt der Co-Pilot die
 Lauf-Session fort, §6) und trägt den **Chat-Verlauf** des Co-Piloten (Abschnitt seit der letzten Marke) als eigenen
 Abschnitt nach (Bilder als Marker, nicht als Daten). Seit Bauschritt 28 steht auch der
 **Karten-Vorschlag fürs nächste Paket** (§5) samt Empfehlung und Begründung im Bericht
-des erzeugenden Laufs.
+des erzeugenden Laufs. Seit Bauschritt 61 trägt der Bericht einer Serien-Runde (§5)
+einen **Serien-Vermerk** — Runde k von n und die Kennung des vorigen Laufs der Serie —,
+und im Ticker der Runde steht, woher ihre Karten kamen (Vorschlag der Vorrunde,
+normale Vorauswahl oder Wiederholung nach Fehlschlag); die Abschluss-Zeile der Serie
+steht im Bericht der letzten Runde. Berichte von Einzelläufen tragen den Vermerk nicht.
 
 ### 3.3 Sicherungspunkte
 
@@ -2316,7 +2320,42 @@ umstellbar wie jede Karte.
   den Vorschlag ab (übernommen oder nicht), ein neues Sessionende ersetzt ihn; Läufe
   ohne Sessionende erzeugen keinen. Die Vorauswahl aller offenen Aufgaben bleibt der
   Normalfall. Ehrlichkeit: Vorschlag samt Empfehlung steht im Ticker und im
-  Laufbericht des erzeugenden Laufs.
+  Laufbericht des erzeugenden Laufs. **Im Serienlauf** (unten) übernimmt FlowForge
+  den Vorschlag nach einer erfolgreichen Runde selbst — das ist die einzige
+  Ausnahme vom Handgriff, und auch dort wird nur die Kartenauswahl übernommen,
+  nie die Empfehlung ausgeführt.
+- **Serienlauf** (seit Bauschritt 61): Mehrere Runden hintereinander — der Vorschlag
+  der Vorrunde steuert. Der Nutzer wählt beim Start im Schaubild-Tab eine
+  **Rundenzahl** (2–10 im Auswahlfeld); ein ehrlicher Start-Dialog sagt, dass jede
+  Runde ein voller Lauf ist und entsprechend kostet, und dass bei eingeschalteten
+  Rechte-Rückfragen jede Rückfrage den Lauf und damit die Serie anhält (Hinweis,
+  keine Sperre). Runde 1 läuft mit der aktuellen Kartenauswahl. Nach einer
+  **erfolgreichen** Runde übernimmt FlowForge den Karten-Vorschlag des Sessionendes
+  mechanisch (erledigte und gelöschte Karten fallen dabei heraus) und startet die
+  nächste Runde; ohne (oder mit leerem) Vorschlag läuft die normale Vorauswahl.
+  **Keine offenen Aufgaben mehr** — geprüft mit derselben Auftragsquellen-Regel wie
+  beim Startprüfer — beendet die Serie mit Klartext im Ticker, bevor ein Fehlstart
+  entsteht: das ehrliche „fertig". Nach einem **Fehlschlag** genau ein
+  Wiederholungsversuch mit denselben Karten (ein späterer Erfolg setzt den Versuch
+  wieder frei); scheitert auch der, endet die Serie. Alle anderen Ausgänge (sanft
+  gestoppt, sofort abgebrochen, zurückgestellt, wiederhergestellt, Kontingent
+  erschöpft) beenden die Serie sofort mit Klartext. Die **Rundenzahl zählt Läufe,
+  nicht Erfolge** — auch die Wiederholung verbraucht eine Runde; die gewählte Zahl
+  ist der harte Deckel des Verbrauchs. Die Serie **antwortet nie selbst**: Fragen an
+  den Menschen und Rechte-Rückfragen warten wie immer, die Serie steht mit. Jede
+  Runde behält ihren eigenen Laufbericht (mit Serien-Vermerk, §3.2) und ihre
+  Ticker-Zeile je Rundenwechsel („Serienlauf: Runde 2 von 3 — Karten aus dem
+  Vorschlag der Vorrunde: …"). **„Serie beenden"** lässt den laufenden Lauf normal
+  zu Ende laufen und startet keine weitere Runde; der harte Stopp beendet die Serie
+  sofort. Die Sperren „Schaubild-Umbau" und „Wiederherstellen" gelten über die
+  **ganze** Serie, und zwischen zwei Runden rutscht kein anderer Start des Projekts
+  dazwischen (Handstarts werden mit Klartext abgewiesen statt eingereiht). Der
+  Serienstand wandert in den Laufstand (§3.3) — die Wiederaufnahme nach einem
+  App-Neustart setzt auch die Serie fort. Ehrliche Grenze: Schließt sich die App im
+  kurzen Fenster zwischen Laufende und dem ersten Laufstand der Folgerunde, ist die
+  Serie weg (der einzelne Lauf bleibt davon unberührt); konnte eine Folgerunde nicht
+  starten (etwa weil der Co-Pilot gerade in dem Projekt arbeitet), endet die Serie
+  mit sichtbarem Klartext statt still.
 - **Parallelität** (seit Bauschritt 12): Bis zu **3 Workflows gleichzeitig, aber nur in
   verschiedenen Projekten.** Pro Projekt läuft immer nur **ein** Workflow; innerhalb dieses
   Laufs schreiben seit Bauschritt 46 mehrere Blöcke als **Welle** (unten), lesende dürfen
@@ -3082,15 +3121,20 @@ Block-Agenten als Hinweis daneben (§6).
   „Zum Lauf"); darunter die übrigen Projekte als Kacheln mit Zustands-Abzeichen (seit
   Bauschritt 15: „läuft", „wartet auf deine Antwort" — mit „Zum Gespräch", das direkt
   in den Lauf-Tab springt —, „wartet in der Warteschlange", sonst der Ausgang des
-  letzten Laufs samt Zeitpunkt) + „Neues Projekt". Die Zustände aktualisieren sich
+  letzten Laufs samt Zeitpunkt; läuft eine Serie, steht „Serienlauf: Runde k von n"
+  dabei, §5) + „Neues Projekt". Die Zustände aktualisieren sich
   live, während Läufe im Hintergrund weiterlaufen; sind mehrere Läufe aktiv oder
   eingereiht, erinnert eine Hinweisleiste an den vervielfachten Verbrauch.
 - **Projektansicht** dreigeteilt: links **Karten-Seitenleiste** (filterbar), Mitte
   **Leinwand**, rechts **Blockbibliothek** (Vorlagen + eigene Blöcke).
 - Die Mittelspalte hat **Tabs** (Feedback Georg, 07.08.2026 — vorher stapelte sich
   alles mit Scrollleisten): **Schaubild** (Workflow bearbeiten, Start,
-  Kartenauswahl) · **Lauf** (Verbrauch, Stopp, Gespräch, Liveticker, Denk-Bereich,
-  Ergebnis) · **Laufberichte** (seit Bauschritt 15 filterbar nach Ausgang; Details je
+  Kartenauswahl; seit Bauschritt 61 die **Serien-Wahl** neben dem Start-Knopf —
+  „Einzellauf" oder 2–10 Runden, mit ehrlichem Start-Dialog, §5; während einer Serie
+  ist der Start-Knopf gesperrt und die Vorschlags-Knöpfe „Übernehmen"/„Verwerfen"
+  sind ausgeblendet, der Empfehlungssatz bleibt sichtbar) · **Lauf** (Verbrauch,
+  Stopp, Gespräch, Liveticker, Denk-Bereich, Ergebnis; während einer Serie die Zeile
+  „Serienlauf: Runde k von n" mit dem Knopf **„Serie beenden"**, §5) · **Laufberichte** (seit Bauschritt 15 filterbar nach Ausgang; Details je
   Bericht mit Dauer und den Ergebnissen jedes Blocks) · **Sicherungspunkte** ·
   **Metriken** (seit Bauschritt 31, §3.4 — aufs Projekt vorgefiltert) · **App** (seit
   Bauschritt 32, §8 — Startanleitung ausführen, Ausgabe live, Prozess-Liste). Beim Lauf-Start wechselt

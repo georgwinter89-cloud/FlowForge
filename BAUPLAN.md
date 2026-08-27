@@ -15,10 +15,11 @@ gehört repariert (der Rückstand aus 14 — eigene Blöcke durften nur `nurLese
 `fuehrtZusammen` setzen — ist seit Schritt 48 aufgeholt; einzig `uebung` bleibt Katalog-Sache,
 weil es kein Können ist, sondern „Demo-Block").
 
-**Abgeschlossen sind die Bauschritte 1–60** (39 wurde gestrichen); der jüngste Commit
-ist „Bauschritt 60". Davon sind die Schritte **1–49 ausgelagert** ins
+**Abgeschlossen sind die Bauschritte 1–61** (39 wurde gestrichen); der jüngste Commit
+ist „Bauschritt 61". Davon sind die Schritte **1–49 ausgelagert** ins
 [BAUPLAN-ARCHIV.md](BAUPLAN-ARCHIV.md) — Verweise wie „BAUPLAN 19" oder „BAUPLAN 44"
-zeigen dorthin. Hier stehen die fertigen Schritte 50–58.
+zeigen dorthin. Hier stehen die fertigen Schritte 50–61; ein nächster Schritt ist
+noch nicht geplant.
 
 ## Bauschritte
 
@@ -1527,4 +1528,123 @@ Websuche-Zeilen des Fremdmodells, die Werkstatt eine „OpenRouter"-Zeile mit
 laufenden Anfragen, und im Laufbericht stehen echte Dollar („vom Anbieter
 gemeldet — echtes Geld, kein Abo-Kontingent") samt „davon OpenRouter" in den
 Metriken. Ohne Kosten-Meldung des Anbieters steht ehrlich „nicht gemessen".
+
+### 61 — Serienlauf: Runden hintereinander, der Vorschlag der Vorrunde steuert
+(Wunsch Georg, 27.08.2026: „mehrere Durchläufe hintereinander, wo einfach
+jeweils die empfohlenen Aufgabenkarten vom Vorlauf abgearbeitet werden."
+Name **Serienlauf** — „Automodus" ist seit 07.08.2026 die Rechte-Einstellung
+in §7 und bleibt unangetastet. Version: baut als **0.62.0**, die
+Nummern-Kopplung bleibt seit der 52er-Ausnahme um eins verschoben.
+Drei Folgen-Entscheidungen Georg, 27.08.2026: Rundenzahl wählt er beim Start;
+nach einem Fehlschlag genau EIN Wiederholungsversuch, dann Stopp; ohne
+Vorschlag läuft die nächste Runde mit der normalen Vorauswahl weiter.)
+
+**Der Kern:** Der Mechanismus existiert seit Bauschritt 28 — das Sessionende
+benennt per `naechster_lauf_vorschlagen` die Karten für den nächsten Lauf,
+Georg drückt „Übernehmen" und startet von Hand. Der Serienlauf automatisiert
+genau diese zwei Handgriffe, sonst nichts: dasselbe Schaubild, dieselben
+Rechte, dieselben Berichte — FlowForge baut weiterhin nie die Leinwand um.
+
+- **Start:** Neben dem Start-Knopf im Schaubild-Tab eine Serien-Wahl mit
+  **Rundenzahl** (Georg wählt beim Start, z. B. 3). Runde 1 läuft mit seiner
+  aktuellen Kartenauswahl wie heute. Der Start-Dialog sagt ehrlich: Jede Runde
+  ist ein voller Lauf und kostet entsprechend; ist der Automodus (§7) aus,
+  hält jede Rechte-Rückfrage die Serie an — Hinweis, keine Sperre
+  („Rückfrage statt Sperre").
+- **Rundenwechsel:** Nach einem erfolgreichen Lauf übernimmt FlowForge den
+  Karten-Vorschlag des Sessionendes mechanisch (dieselbe Stelle wie der
+  „Übernehmen"-Knopf) und startet die nächste Runde. **Kein Vorschlag** (auch:
+  Workflow ohne Sessionende) → nächste Runde mit der normalen Vorauswahl
+  (alle offenen Aufgaben; Entscheidung Georg). **Keine offenen Aufgaben mehr**
+  → Serie endet mit Klartext im Ticker, bevor der Startprüfer einen Fehlstart
+  produziert — das ist das ehrliche „fertig".
+- **Fehlschlag:** Genau ein Wiederholungsversuch mit denselben Karten
+  (Entscheidung Georg); scheitert auch der, endet die Serie mit Klartext.
+  **Die Rundenzahl zählt Läufe, nicht Erfolge** — auch der
+  Wiederholungsversuch verbraucht eine Runde. Folge der Planbarkeits-
+  Entscheidung: Die beim Start gewählte Zahl ist der harte Deckel dessen,
+  was maximal verbraucht wird, ohne Ausnahme.
+- **Die Serie antwortet nie selbst:** „Frage an den Menschen" und
+  Rechte-Rückfragen warten wie heute auf Georg — der laufende Lauf steht, die
+  Serie steht mit; die Projektübersicht zeigt „wartet auf deine Antwort" wie
+  bisher. Der Automodus-Mechanismus (§7) wird nicht angefasst.
+- **Sichtbarkeit:** Ticker-Zeile je Rundenwechsel („Serienlauf: Runde 2 von 3
+  — Karten aus dem Vorschlag der Vorrunde: …" bzw. „… — kein Vorschlag,
+  normale Vorauswahl"). Jede Runde behält ihren eigenen Laufbericht, ergänzt
+  um den Serien-Vermerk (Runde k von n, Verweis auf den vorigen Lauf). Der
+  Empfehlungssatz des Sessionendes wird weiterhin angezeigt, nie ausgeführt.
+- **Beenden:** Knopf „Serie beenden" — der laufende Lauf läuft normal zu
+  Ende, danach startet keine weitere Runde (der harte Stopp des Laufs beendet
+  die Serie sofort). Die Schaubild-/Wiederherstellen-Sperre („läuft oder
+  wartet") gilt über die ganze Serie; zwischen zwei Runden rutscht kein
+  anderer Start des Projekts dazwischen.
+- **Neustart-Fest:** Der Serienstand (gewählte und verbleibende Runden,
+  Wiederholung verbraucht?) wandert in den Laufstand — die vorhandene
+  Wiederaufnahme nach App-/Rechner-Neustart setzt damit auch die Serie fort,
+  statt sie still zu vergessen.
+- Nachzuziehen: SPEC §5 (Serienlauf; Vorschlags-Verfall ergänzen: im
+  Serienlauf übernimmt FlowForge selbst), §3.2 (Serien-Vermerk im Bericht),
+  §9 (Start-Dialog, Projektübersicht).
+- **Gebaut (27.08.2026):** Serien-Register `serien` (Map projektPfad → Stand) im
+  Hauptprozess neben `aktiveLaeufe`/`warteschlange` — NICHT als durchgereichtes
+  Argument: Das hält die Sperre auch in der Lücke zwischen zwei Runden dicht,
+  überlebt die Warteschlange und macht die Serie ohne aktiven Lauf sichtbar.
+  `laufStarten` bekam ein **angehängtes** 7. Argument (`{ runden }` | `'runde'`;
+  ~20 bestehende Prüfungen rufen sechs Positionsargumente und blieben unberührt).
+  Rundenwechsel-Hook zweigeteilt: Entscheidung und Abschluss-Ticker **vor**
+  `berichtSpeichern` (danach getickerte Zeilen stünden nicht in der Bericht-Datei),
+  Start der Folgerunde **nach** `aktiveLaeufe.delete`/`laeufeMelden` und **vor**
+  `warteschlangeAnstossen` — ohne `await` dazwischen, damit kein fremder Start
+  hineinrutscht; beide Teile in try/catch (ein Fehler beendet die Serie, statt sie
+  zu klemmen). Runden-Zeile tickert der **neue** Lauf direkt nach dem
+  zustand-laeuft-Ereignis (nur dort steht sie im sichtbaren Ticker UND im Bericht
+  der Runde). Reine Funktionen: `serienKartenAusVorschlag` (naechsterLauf.js —
+  filtert erledigte und gelöschte Karten, leer → normale Vorauswahl) und
+  `auftragsquelleFehlt` (kettenRegeln.js — aus der Startprüfung herausgelöst,
+  jetzt zwei Aufrufer: Startprüfer und Serien-Vorabprüfung). Sichtbarkeit über
+  `laufZustand`/`projektZustaende`/`laeufeMelden` (`serien`-Feld; `wartet: true`
+  in der Runden-Lücke, damit die vier Sperr-Stellen und `sonderlaufStarten`
+  **unverändert** greifen), `laufstandInfo` schweigt während der Serie (sonst
+  erschiene mitten in der Serie der Wiederaufnahme-Dialog samt Rückroll-Angebot).
+  Serienstand im Laufstand, `laufFortsetzen` stellt ihn wieder her. Oberfläche:
+  Auswahlfeld „Runden" neben dem Start-Knopf (Einzellauf, 2–10), ehrlicher
+  Start-Dialog, Serien-Zeile mit „Serie beenden" im Lauf-Tab, gesperrter
+  Start-Knopf und ausgeblendete Vorschlags-Knöpfe während der Serie,
+  Serien-Vermerk im Laufbericht, Serien-Zeile auf der Projektkachel.
+- **Messwerte der Bausession (27.08.2026, 1 Angreifer, 2 Bauer mit Vertrag,
+  2 Prüfer, Integrator):** Angriffsliste 9 blockierende Funde, alle vorab in die
+  Verträge eingearbeitet — u. a. die **komplett offene Sperre zwischen zwei
+  Runden** (Schaubild-Umbau und Wiederherstellen wären dort erlaubt gewesen),
+  `warteschlangeAnstossen` als Einfallstor für einen fremden Start, die
+  Rundenwechsel-Zeile, die im Bericht gefehlt hätte, und erledigte
+  Vorschlags-Karten, die einen Fehlstart statt des ehrlichen „fertig" erzeugt
+  hätten. Prüfer 1 (Mechanik, 25 Wegwerf-Messungen am echten Ablaufplaner plus
+  3 Rot-vor-Grün-Experimenten): alle 10 Plan-Zusagen bestanden, **kein
+  Produktbefund**; scharf gemessen wurde auch die Lücke selbst (Sonde synchron im
+  fertig-Ereignis: `aktiv:false, wartet:true, serie:{runde:2}`, Sonderlauf und
+  Fremdstart abgelehnt, `laufstandInfo` still). Ein Prüfschärfe-Befund
+  nachgearbeitet: Die Fehlschlag-Prüfung hielt „mit denselben Karten" nicht fest
+  (ein auf null verstümmeltes `letzteKarten` blieb grün) — Gegenprobe ergänzt.
+  Prüfer 2 (Ende-zu-Ende, gebaute App, CDP, eigener Datenordner, Ollama-Stub
+  statt echtem Modell): Serien-Wahl, Start-Dialog wörtlich, **automatischer
+  Rundenwechsel in der gebauten App belegt** (Runde 2 startete zwei Sekunden nach
+  Runde 1, Vermerk und `vorigerLaufId`-Verkettung in den Bericht-Dateien),
+  Deckel („alle 2 Runden sind gelaufen"), Fehlschlag-Regel (5-Runden-Serie endete
+  nach genau einem Wiederholungsversuch — kein dritter Lauf), „Serie beenden"
+  (Vormerkung sichtbar, laufende Runde lief normal zu Ende, keine weitere Runde),
+  gesperrter Start-Knopf mit Klartext, Einzelläufe ohne Serien-Vermerk, und ein
+  gescheiterter Serienstart hinterlässt keine Geister-Serie. 2025 Prüfungen grün.
+  **Ehrliche Grenzen:** Der Stub liefert kein Block-Fazit, deshalb endeten alle
+  E2E-Läufe als Fehlschlag — der **Erfolgs- und Vorschlags-Pfad** (Vorschlag
+  übernehmen, Vorauswahl-Rückfall, „keine offenen Aufgaben mehr") ist nur auf
+  Mechanik-Ebene am echten Ablaufplaner gemessen, nicht in der gebauten App;
+  dasselbe gilt für die Wiederaufnahme der Serie nach einem App-Neustart. Beides
+  deckt Georgs Alltagstest ab. Ein zweiter Prüflauf gegen ein echtes Modell steht
+  aus.
+**Alltagstest:** Georg startet im Übungsprojekt eine Serie mit 3 Runden.
+Runde 2 startet ohne sein Zutun mit den Karten aus dem Vorschlag von Runde 1
+(der Ticker sagt es); nach Runde 3 endet die Serie von selbst. Gegenproben:
+„Serie beenden" während Runde 2 → Runde 2 läuft zu Ende, Runde 3 startet
+nicht; ein doppelt fehlgeschlagener Lauf beendet die Serie früher, mit
+Klartext im Ticker und Bericht.
 

@@ -44,7 +44,10 @@ contextBridge.exposeInMainWorld('flowforge', {
   workflowLaden: (pfad) => ipcRenderer.invoke('workflow-laden', pfad),
   workflowSpeichern: (pfad, workflow) => ipcRenderer.invoke('workflow-speichern', { pfad, workflow }),
 
-  laufStarten: (pfad, kartenIds) => ipcRenderer.invoke('lauf-starten', { pfad, kartenIds }),
+  // Serienlauf (Bauschritt 61): serienRunden optional, ganze Zahl ≥ 2.
+  laufStarten: (pfad, kartenIds, serienRunden) =>
+    ipcRenderer.invoke('lauf-starten', { pfad, kartenIds, serienRunden }),
+  serieBeenden: (pfad) => ipcRenderer.invoke('serie-beenden', { pfad }),
   laufstandInfo: (pfad) => ipcRenderer.invoke('laufstand-info', pfad),
   laufstandVerwerfen: (pfad) => ipcRenderer.invoke('laufstand-verwerfen', pfad),
   laufFortsetzen: (pfad) => ipcRenderer.invoke('lauf-fortsetzen', pfad),
