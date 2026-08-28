@@ -1234,10 +1234,19 @@ export const BLOCK_KATALOG = [
       'offenen Aufgaben-Karten vor, an denen der nächste Lauf arbeiten sollte (kartenIds = ' +
       'ihre Kennungen — du kennst den Lauf gerade am besten: was fertig wurde, was offen ' +
       'blieb; Wissens- und Entscheidungs-Karten kommen ohnehin bei jedem Lauf mit). Dazu ' +
-      'empfehlung: EIN Satz in Alltagssprache, was als Nächstes ansteht (du darfst eine ' +
-      'Vorlage nennen, z.B. „als Nächstes ‚Bug jagen‘"), und begruendung: kurz, warum genau ' +
-      'diese Karten. Das ist nur eine Einladung an den Nutzer — FlowForge baut nichts um und ' +
-      'startet nichts. ' +
+      'empfehlung: EIN Satz in Alltagssprache, was als Nächstes ansteht, und begruendung: ' +
+      'kurz, warum genau diese Karten. Das ist nur eine Einladung an den Nutzer — FlowForge ' +
+      'baut nichts um und startet nichts. ' +
+      // Anker gegen das Kreisen (BAUPLAN 62). Der Mechanismus sitzt im
+      // Werkzeug (er lehnt ab), dieser Absatz sagt dem Agenten vorher, was
+      // ihn erwartet — sonst lernt er die Regeln erst an drei Ablehnungen.
+      '6. Bleib am Projektziel: Die Karte „Projektziel" steht immer in deinem Auftrag. Sag in ' +
+      'zielstand, wie nah der jetzige Stand daran ist (was steht, was fehlt) — und setze ' +
+      'zielErreicht nur dann auf true, wenn nichts mehr fehlt. Zwei Regeln gelten hart: ' +
+      'Ältere offene Aufgaben kommen VOR den Funden dieses Laufs (willst du davon abweichen, ' +
+      'gehört in frischBegruendung, warum sie nicht warten können), und von den Karten über ' +
+      'FlowForges eigenen Kram — veraltete Prüfmappen, Wegwerf-Reste, doppelte Hilfsdateien — ' +
+      'darf höchstens EINE je Lauf in den Vorschlag. Die Runde gehört dem Projekt. ' +
       PRUEFMAPPE_HINWEIS +
       'In deine Meldung gehört: welche Karten du geändert oder angelegt hast und warum ' +
       '(Feld getan), was du für den nächsten Lauf vorgeschlagen hast (Feld inhalt) und was ' +

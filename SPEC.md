@@ -312,7 +312,18 @@ Fünf Sorten, als strukturierte Datensätze in der App — nicht als Textdateien
 | **Entscheidung** | „X festgelegt, weil Y" — verhindert, dass der Agent Entscheidungen wieder aufrollt |
 | **Wissen** | Fakten übers Projekt |
 | **Status** | Genau **eine** pro Projekt: „Wo stehen wir gerade" |
+| **Ziel** | Genau **eine** pro Projekt (seit Bauschritt 62): „Woran erkennen wir, dass wir fertig sind" |
 | **Prüfung** | Legt FlowForge automatisch nach jeder bestandenen Prüfung an; dahinter bewahrt es die Prüfdateien des Laufs auf (§4.3) |
+
+**Ziel-Karte** (seit Bauschritt 62): der Zwilling der Status-Karte — genau eine je Projekt,
+von FlowForge beim Anlegen erzeugt (Projekte von vorher bekommen sie beim ersten Lesen
+nachgerüstet), weder löschbar noch doppelt anlegbar, mit festem Titel „Projektziel" und ohne
+Thema. Ihr Inhalt gehört dem Nutzer: FlowForge trägt einen Starttext ein, der zum Eintragen
+auffordert, und denkt sich kein Ziel aus. Solange dieser Starttext unverändert dasteht, gilt
+das Ziel als **nicht gesetzt**. Sie steht — wie die Status-Karte — in **jedem** Blockauftrag
+im Volltext und als fester Chip in der Kartenauswahl: Ein Anker, den die Blöcke nicht sehen,
+steuert nichts. Wozu sie da ist: Ohne Ziel misst ein Projekt seinen Fortschritt an der Länge
+der Fundliste — und ein Serienlauf dreht sich, bis die Rundenzahl aufgebraucht ist (§5).
 
 **Harte Längengrenze pro Karte (Richtwert 3–5 Sätze; durchgesetzt als 400 Zeichen Inhalt,
 80 Zeichen Titel) — gilt auch für den Agenten.** Wer mehr zu
@@ -348,6 +359,16 @@ und wieder geöffnet wird die Karte mechanisch (§5); zu jedem Zeitpunkt sagt si
 Wahrheit. Ehrlich benannt: Die früh angelegte Karte steht im Karten-Verzeichnis, das
 auch der Prüfer bekommt, der über dieselbe Sache urteilt — eine kleine Vorwegnahme, für
 den Nutzer harmlos.
+
+**Eigenpflege-Karten** (seit Bauschritt 62): Nennt eine neue Aufgaben-Karte einen von
+FlowForges **eigenen** Orten — den Wegwerf-Ordner `arbeitsablage`, eine aufbewahrte
+Prüfmappe —, setzt FlowForge ihr **mechanisch** das feste Thema **„Eigenpflege"** und
+überschreibt damit das gewählte Thema des Agenten. Angelegt wird sie immer, und der Nutzer
+kann sie per Drag & Drop in jedes andere Thema ziehen; die Klassifizierung ist bewusst eng
+gehalten, damit Produktarbeit nicht hineinrutscht. Der Sinn liegt im Vorschlag (§5): Nur was
+erkennbar ist, lässt sich deckeln. Gemessener Anlass: In zehn Serienrunden am Testprojekt
+Haushaltsplaner (27./28.08.2026) betrafen **49 von 109** neuen Karten FlowForges eigenen
+Apparat statt das Projekt.
 
 **Ordnung in der Karten-Seitenleiste** (seit Bauschritt 30): Die Karten stehen in vier
 festen, ausklappbaren **Gruppen**, die sich aus der Sorte ergeben (nichts zu pflegen):
@@ -507,7 +528,8 @@ außerdem die **Session-Kennung des Laufs** (über sie setzt der Co-Pilot die
 Lauf-Session fort, §6) und trägt den **Chat-Verlauf** des Co-Piloten (Abschnitt seit der letzten Marke) als eigenen
 Abschnitt nach (Bilder als Marker, nicht als Daten). Seit Bauschritt 28 steht auch der
 **Karten-Vorschlag fürs nächste Paket** (§5) samt Empfehlung und Begründung im Bericht
-des erzeugenden Laufs. Seit Bauschritt 61 trägt der Bericht einer Serien-Runde (§5)
+des erzeugenden Laufs — seit Bauschritt 62 zusätzlich mit dem **Stand zum Projektziel**
+(und, falls genannt, der Begründung für vorgezogene Frischfunde). Seit Bauschritt 61 trägt der Bericht einer Serien-Runde (§5)
 einen **Serien-Vermerk** — Runde k von n und die Kennung des vorigen Laufs der Serie —,
 und im Ticker der Runde steht, woher ihre Karten kamen (Vorschlag der Vorrunde,
 normale Vorauswahl oder Wiederholung nach Fehlschlag); die Abschluss-Zeile der Serie
@@ -2323,19 +2345,45 @@ umstellbar wie jede Karte.
   Laufbericht des erzeugenden Laufs. **Im Serienlauf** (unten) übernimmt FlowForge
   den Vorschlag nach einer erfolgreichen Runde selbst — das ist die einzige
   Ausnahme vom Handgriff, und auch dort wird nur die Kartenauswahl übernommen,
-  nie die Empfehlung ausgeführt.
+  nie die Empfehlung ausgeführt. **Drei harte Leitplanken gegen das Kreisen**
+  (seit Bauschritt 62, am Werkzeugaufruf durchgesetzt — abgelehnt wird mit
+  Klartext, gekürzt wird nie): (1) **Zielstand ist Pflicht**, sobald das
+  Projektziel gesetzt ist — ein Satz, wie nah der Stand daran ist, dazu
+  `zielErreicht` nur, wenn nichts mehr fehlt; beides steht im Laufbericht und
+  im Ticker. (2) **Frischware ist nachrangig**: Karten, die *dieser* Lauf selbst
+  angelegt hat, weist das Werkzeug ab, solange ältere offene Aufgaben liegen
+  bleiben — es sei denn, der Agent füllt `frischBegruendung` und sagt, warum
+  sie nicht warten können; die Ablehnung nennt die drei ältesten offenen Karten.
+  (3) **Eigenpflege-Deckel**: höchstens **eine** Karte mit dem Thema
+  „Eigenpflege" (§3.1) je Vorschlag. Gemessener Anlass — zehn Serienrunden am
+  Testprojekt Haushaltsplaner (27./28.08.2026): 109 neue Karten, 94 abgehakt,
+  offen blieben konstant ~15; **fünf von sechs** vorgeschlagenen Karten waren
+  Minuten alt und stammten aus derselben Runde; die Vorlage „als Nächstes ‚Bug
+  jagen'" aus der Feldbeschreibung stand in **6 von 10** Empfehlungen wörtlich
+  — sie ist deshalb ersatzlos aus Feldbeschreibung und Sessionende-Auftrag
+  entfernt.
 - **Serienlauf** (seit Bauschritt 61): Mehrere Runden hintereinander — der Vorschlag
   der Vorrunde steuert. Der Nutzer wählt beim Start im Schaubild-Tab eine
   **Rundenzahl** (2–10 im Auswahlfeld); ein ehrlicher Start-Dialog sagt, dass jede
   Runde ein voller Lauf ist und entsprechend kostet, und dass bei eingeschalteten
   Rechte-Rückfragen jede Rückfrage den Lauf und damit die Serie anhält (Hinweis,
-  keine Sperre). Runde 1 läuft mit der aktuellen Kartenauswahl. Nach einer
+  keine Sperre). **Ein Serienstart verlangt ein gesetztes Projektziel** (§3.1,
+  seit Bauschritt 62): Ohne Ziel kann keine Serie erkennen, wann sie fertig ist
+  — sie liefe, bis die Rundenzahl aufgebraucht ist. Abgewiesen wird nur der
+  Serienstart, nicht der Einzellauf, und nur beim Start: Wer das Ziel mitten in
+  der Serie leert, strandet keine laufende Serie. Runde 1 läuft mit der
+  aktuellen Kartenauswahl. Nach einer
   **erfolgreichen** Runde übernimmt FlowForge den Karten-Vorschlag des Sessionendes
   mechanisch (erledigte und gelöschte Karten fallen dabei heraus) und startet die
   nächste Runde; ohne (oder mit leerem) Vorschlag läuft die normale Vorauswahl.
-  **Keine offenen Aufgaben mehr** — geprüft mit derselben Auftragsquellen-Regel wie
-  beim Startprüfer — beendet die Serie mit Klartext im Ticker, bevor ein Fehlstart
-  entsteht: das ehrliche „fertig". Nach einem **Fehlschlag** genau ein
+  Meldet das Sessionende das **Projektziel als erreicht**, endet die Serie nach
+  dieser Runde mit Klartext — auch wenn noch Karten offen sind und ein Vorschlag
+  bereitliegt (seit Bauschritt 62; das ist das eigentliche „fertig", denn ein
+  leerer Kartenstapel ist keins). In **jeder** Runde tickert FlowForge außerdem
+  den gemeldeten Stand zum Ziel: Daran sieht der Nutzer ein Kreisen, ohne zehn
+  Laufberichte zu vergleichen. **Keine offenen Aufgaben mehr** — geprüft mit
+  derselben Auftragsquellen-Regel wie beim Startprüfer — beendet die Serie
+  ebenfalls mit Klartext im Ticker, bevor ein Fehlstart entsteht. Nach einem **Fehlschlag** genau ein
   Wiederholungsversuch mit denselben Karten (ein späterer Erfolg setzt den Versuch
   wieder frei); scheitert auch der, endet die Serie. Alle anderen Ausgänge (sanft
   gestoppt, sofort abgebrochen, zurückgestellt, wiederhergestellt, Kontingent

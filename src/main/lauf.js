@@ -115,6 +115,7 @@ import { diffTextBauen, diffBilanz } from '../shared/laufDiff.js'
 import { einstellungenLaden, motorBereit } from './einstellungen.js'
 import {
   kartenLaden,
+  zielGesetzt,
   kontingentVerhaltenLaden,
   pruefkarteAnlegen,
   karteAnlegen,
@@ -1371,7 +1372,8 @@ export function volltextKarten({ zugeteilt, imBereich, istAuftragsquelle, gewaeh
 function kartenKontext(projektPfad, kartenIds, waehltAus = false) {
   const geladen = kartenLaden(projektPfad)
   if (!geladen.ok) return ''
-  const imVolltext = (k) => k.sorte === 'status' || kartenIds.includes(k.id)
+  const imVolltext = (k) =>
+    k.sorte === 'status' || k.sorte === 'ziel' || kartenIds.includes(k.id)
   const gewaehlt = geladen.karten.filter(imVolltext)
   if (gewaehlt.length === 0) return ''
   // Bewusst OHNE die Volltext-Karten: Sie stehen schon oben, ein zweites Mal
@@ -1415,7 +1417,7 @@ function projektwissenFuerHelfer(projektPfad, kartenIds) {
   const geladen = kartenLaden(projektPfad)
   if (!geladen.ok) return ''
   const gewaehlt = geladen.karten.filter(
-    (k) => k.sorte === 'status' || kartenIds.includes(k.id)
+    (k) => k.sorte === 'status' || k.sorte === 'ziel' || kartenIds.includes(k.id)
   )
   if (gewaehlt.length === 0) return ''
   return texte.agentenLokaleHelfer.projektwissen(
@@ -1473,6 +1475,14 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
     const runden = serienAuftrag.runden
     if (!Number.isInteger(runden) || runden < 2 || runden > 99)
       return { ok: false, fehler: texte.lauf.serieRundenUngueltig }
+    // Ziel-Pflicht (BAUPLAN 62): Ohne Ziel kann keine Serie erkennen, wann sie
+    // fertig ist — sie liefe, bis die Rundenzahl aufgebraucht ist. Geprüft nur
+    // beim Serienstart, nicht bei den Folgerunden ('runde'): Ein Nutzer, der
+    // das Ziel mitten in der Serie leert, soll keine halbe Serie stranden sehen.
+    // Der Einzellauf bleibt unberührt.
+    const kartenFuerZiel = kartenLaden(projektPfad)
+    if (kartenFuerZiel.ok && !zielGesetzt(kartenFuerZiel.karten))
+      return { ok: false, fehler: texte.lauf.serieOhneZiel }
   }
   if (sonderlauf && !SONDERLAEUFE[sonderlauf.art])
     return { ok: false, fehler: texte.fehler.unbekannt }
@@ -2245,9 +2255,34 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
   // die Karten für den nächsten Lauf. Gespeichert wird nur ein Vorschlag —
   // angezeigt an der Kartenauswahl im Schaubild-Tab, entschieden vom Nutzer;
   // ein erneuter Aufruf (oder ein späteres Sessionende) ersetzt den alten.
-  function laufVorschlagAnnehmen({ kartenIds, empfehlung, begruendung, kartenTitel }) {
-    laufVorschlagSpeichern(projektPfad, { kartenIds, empfehlung, begruendung, erstelltAm: jetztIso() })
-    bericht.naechsterLauf = { empfehlung, begruendung, karten: kartenTitel }
+  function laufVorschlagAnnehmen({
+    kartenIds,
+    empfehlung,
+    begruendung,
+    kartenTitel,
+    // BAUPLAN 62: Zielstand und Frisch-Begründung wandern mit in die
+    // Vorschlagsdatei — der Rundenwechsel der Serie liest sie dort, und im
+    // Laufbericht steht damit schwarz auf weiß, wie nah das Projekt am Ziel war.
+    zielstand = '',
+    zielErreicht = false,
+    frischBegruendung = ''
+  }) {
+    laufVorschlagSpeichern(projektPfad, {
+      kartenIds,
+      empfehlung,
+      begruendung,
+      zielstand,
+      zielErreicht,
+      frischBegruendung,
+      erstelltAm: jetztIso()
+    })
+    bericht.naechsterLauf = {
+      empfehlung,
+      begruendung,
+      karten: kartenTitel,
+      ...(zielstand ? { zielstand, zielErreicht } : {}),
+      ...(frischBegruendung ? { frischBegruendung } : {})
+    }
     tickern(texte.ticker.laufVorschlagGespeichert(kartenTitel.length, empfehlung))
   }
 
@@ -4723,6 +4758,9 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           : null,
         aufKartenVorschlag: (vorschlag) => vorschlagStellen(vorschlag, holeName()),
         aufLaufVorschlag: laufVorschlagAnnehmen,
+        // BAUPLAN 62: Startzeit dieses Laufs — daran erkennt das
+        // Vorschlags-Werkzeug die Karten, die dieser Lauf selbst angelegt hat.
+        laufStart: bericht.gestartetAm,
         aufKartenZuteilung: kartenZuteilungAnnehmen,
         // Paket melden & Herkunft (BAUPLAN 30).
         aufPaketMeldung: paketMeldungAnnehmen,
@@ -8477,6 +8515,17 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
           const frisch = kartenLaden(projektPfad)
           const kartenJetzt = frisch.ok ? frisch.karten : []
           const vorschlag = serienKartenAusVorschlag(roh, kartenJetzt)
+          // Stand zum Projektziel (BAUPLAN 62): steht in JEDER Runde im
+          // Ticker — daran sieht Georg, ob die Serie dem Ziel näher kommt oder
+          // sich im Kreis dreht, ohne zehn Laufberichte zu vergleichen.
+          if (roh?.zielstand)
+            tickern(
+              texte.ticker.serieZielstand(
+                serienEintrag.runde,
+                serienEintrag.gesamt,
+                roh.zielstand
+              )
+            )
           // Vorabprüfung mit der effektiven nächsten Auswahl: Sind keine
           // offenen Aufgaben mehr da und der Workflow trägt eine
           // Auftragsquelle, endet die Serie mit Klartext, BEVOR der
@@ -8494,7 +8543,13 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
             karten: kartenJetzt,
             defVon
           })
-          if (quellenFund) {
+          if (roh?.zielErreicht === true) {
+            // Das ehrliche „fertig" (BAUPLAN 62): Nicht der leere Kartenstapel
+            // beendet die Serie, sondern das erreichte Ziel. Offene Karten
+            // dürfen liegen bleiben — sie gehören dann nicht mehr zum Ziel.
+            tickern(texte.ticker.serieEndeZielErreicht(roh.zielstand ?? ''))
+            serien.delete(projektPfad)
+          } else if (quellenFund) {
             tickern(texte.ticker.serieEndeKeineAufgaben)
             serien.delete(projektPfad)
           } else {

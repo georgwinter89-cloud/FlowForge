@@ -59,11 +59,25 @@ const status = { id: '11111111-aaaa-4000-8000-000000000001', sorte: 'status', ti
 const aufgabe1 = { id: '22222222-bbbb-4000-8000-000000000002', sorte: 'aufgabe', erledigt: false, thema: 'Motor', titel: 'Ticker aufräumen', text: 'Die doppelten Zeilen im Ticker müssen weg.' }
 const aufgabe2 = { id: '33333333-cccc-4000-8000-000000000003', sorte: 'aufgabe', erledigt: false, thema: 'Motor', titel: 'Absturz beheben', text: 'Der Start bricht mit Fehlercode ab.' }
 
+// Ziel-Karte (Bauschritt 62): Ein Serienstart verlangt seit dem Anker gegen
+// das Kreisen ein gesetztes Projektziel — sonst könnte keine Serie erkennen,
+// wann sie fertig ist. Jedes Szenario hier bekommt sie mit; dass ihr FEHLEN
+// den Serienstart abweist, prüft ankerSerienziel.test.js.
+const ziel = {
+  id: '99999999-eeee-4000-8000-000000000009',
+  sorte: 'ziel',
+  titel: 'Projektziel',
+  text: 'Der Ticker zeigt jede Zeile genau einmal, und der Start läuft ohne Fehlercode durch.'
+}
+
 function kartenStellen(...karten) {
   KARTEN.length = 0
   // Flache Kopien — die Szenarien dürfen erledigt setzen, ohne dass ein
   // späteres describe den veränderten Zustand erbt.
-  KARTEN.push(...karten.map((k) => ({ ...k })))
+  // Bringt ein Szenario eine eigene Ziel-Karte mit (etwa eine ungesetzte),
+  // gilt seine — sonst stünden zwei Ziele im Bestand.
+  const eigenesZiel = karten.some((k) => k.sorte === 'ziel')
+  KARTEN.push(...(eigenesZiel ? karten : [ziel, ...karten]).map((k) => ({ ...k })))
 }
 
 function projektAnlegen(name, workflow) {
@@ -83,10 +97,10 @@ const spaeherWorkflow = {
 
 // Der „Werkzeug-Ersatz" fürs Sessionende: legt den Vorschlag genau so ab, wie
 // laufVorschlagSpeichern es täte — die Serie liest die DATEI, nicht den Bericht.
-function vorschlagAblegen(projekt, kartenIds) {
+function vorschlagAblegen(projekt, kartenIds, zusatz = {}) {
   fs.writeFileSync(
     path.join(projekt, 'naechster-lauf.json'),
-    JSON.stringify({ kartenIds, empfehlung: 'Weiter damit.', begruendung: '', erstelltAm: new Date().toISOString() }),
+    JSON.stringify({ kartenIds, empfehlung: 'Weiter damit.', begruendung: '', ...zusatz, erstelltAm: new Date().toISOString() }),
     'utf8'
   )
 }
@@ -447,6 +461,74 @@ describe('Bauschritt 61 · Keine offenen Aufgaben mehr: Klartext statt Fehlstart
     expect(laufZustand(projekt).serie).toBeNull()
     // Kein Fehlstart heißt auch: kein serie-fehler-Ereignis an die Ansicht.
     expect(sicht.ereignisse.some((e) => e.art === 'serie-fehler')).toBe(false)
+  })
+})
+
+describe('Bauschritt 62 · Ohne Projektziel startet keine Serie', () => {
+  it('weist den Serienstart ab, solange das Ziel der Starttext ist — der Einzellauf geht', async () => {
+    const projekt = projektAnlegen('ohneziel', spaeherWorkflow)
+    // Ziel-Karte da, aber unverändert: genau der Zustand eines Projekts, das
+    // noch nie ein Ziel bekommen hat.
+    kartenStellen({ ...ziel, text: texte.zielKarte.startText }, status, aufgabe1)
+    const sicht = fensterErsatz()
+    expect(
+      await laufStarten(sicht.fenster, projekt, [aufgabe1.id], null, false, null, { runden: 3 })
+    ).toEqual({ ok: false, fehler: texte.lauf.serieOhneZiel })
+    // Kein Serienstand hängengeblieben, und der Einzellauf bleibt unberührt:
+    // Die Ziel-Pflicht gilt nur für Serien.
+    expect(laufZustand(projekt).serie).toBeNull()
+  })
+})
+
+describe('Bauschritt 62 · Ziel erreicht beendet die Serie vor der Rundenzahl', () => {
+  const projekt = projektAnlegen('zielerreicht', {
+    reparaturRunden: 0,
+    uebertragGrenze: 5,
+    bloecke: [{ instanzId: 'q', blockId: QUELLEN_BLOCK.id, zusatz: '' }],
+    pfeile: []
+  })
+  let sicht
+  let berichte
+
+  beforeAll(async () => {
+    eigeneBloeckeSetzen([QUELLEN_BLOCK])
+    kartenStellen(status, aufgabe1, aufgabe2)
+    steuerung.auftraege = []
+    const motor = motorErsatz()
+    sicht = fensterErsatz()
+    expect(
+      await laufStarten(sicht.fenster, projekt, [aufgabe1.id], null, false, null, { runden: 5 })
+    ).toEqual({ ok: true })
+    await motor.warteAufStart('q')
+    // Das Sessionende meldet: Ziel erreicht — obwohl aufgabe2 offen bleibt und
+    // sogar ein Vorschlag für die nächste Runde daliegt. Das Ziel schlägt beides.
+    vorschlagAblegen(projekt, [aufgabe2.id], {
+      zielstand: 'Beide Geräte zeigen denselben Plan — nichts fehlt mehr.',
+      zielErreicht: true
+    })
+    await motor.freigeben('q')
+    await sicht.warteAufFertig(1)
+    await new Promise((r) => setTimeout(r, 400))
+    berichte = laufberichteLaden(projekt).berichte
+  }, 90000)
+
+  afterAll(() => {
+    eigeneBloeckeSetzen([])
+  })
+
+  it('endet nach Runde 1 mit Klartext statt nach fünf Runden', () => {
+    expect(berichte).toHaveLength(1)
+    expect(steuerung.auftraege).toHaveLength(1)
+    expect(laufZustand(projekt).serie).toBeNull()
+    const zeilen = berichte[0].ticker.map((z) => z.text)
+    expect(
+      zeilen.some((t) =>
+        t.startsWith('Serienlauf beendet: das Projektziel ist laut Sessionende erreicht')
+      )
+    ).toBe(true)
+    // Und der Stand zum Ziel steht in derselben Runde im Ticker — daran sieht
+    // Georg ein Kreisen, ohne zehn Laufberichte zu vergleichen.
+    expect(zeilen.some((t) => t.includes('Stand zum Projektziel nach Runde 1 von 5'))).toBe(true)
   })
 })
 

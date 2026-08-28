@@ -355,7 +355,8 @@ function KartenVorschlag({ eintrag, onAntwort }) {
   if (v.art === 'thema') return <ThemenVorschlag eintrag={eintrag} onAntwort={onAntwort} />
 
   const mitFeldern = v.art === 'aktualisieren' || v.art === 'anlegen'
-  const titelFest = v.art === 'aktualisieren' && v.alteKarte?.sorte === 'status'
+  const titelFest =
+    v.art === 'aktualisieren' && ['status', 'ziel'].includes(v.alteKarte?.sorte)
   const sorteLabel = v.alteKarte ? (texte.karten.sorten[v.alteKarte.sorte] ?? v.alteKarte.sorte) : null
 
   async function antworten(wahl, felder) {
@@ -1957,11 +1958,12 @@ export default function Leinwand({
   function kontextAuswahl() {
     // Feste Sortierung nach Sorte (Feedback Georg, 07.08.2026): Status zuerst,
     // dann die Aufgaben.
-    const sortenReihenfolge = { status: 0, aufgabe: 1 }
+    const sortenReihenfolge = { ziel: 0, status: 1, aufgabe: 2 }
     return (karten ?? [])
       .filter(
         (k) =>
           k.sorte === 'status' ||
+          k.sorte === 'ziel' ||
           (k.sorte === 'aufgabe' &&
             (kontextZusatz.has(k.id) || (!k.erledigt && !kontextRaus.has(k.id))))
       )
@@ -2391,7 +2393,7 @@ export default function Leinwand({
               <span className="chip-text">
                 {texte.karten.sorten[karte.sorte]}: {karte.titel}
               </span>
-              {karte.sorte === 'status' ? (
+              {karte.sorte === 'status' || karte.sorte === 'ziel' ? (
                 <em className="chip-fest">{ta.immerDabei}</em>
               ) : (
                 <button

@@ -854,6 +854,7 @@ export const texte = {
       entscheidung: 'Entscheidung',
       wissen: 'Wissen',
       status: 'Status',
+      ziel: 'Ziel',
       pruefung: 'Prüfung'
     },
     offen: 'offen',
@@ -937,6 +938,10 @@ export const texte = {
       `Der Inhalt ist zu lang: ${ist} von höchstens ${max} Zeichen — kürze um ` +
       `mindestens ${ist - max} Zeichen oder teile den Inhalt auf mehrere fokussierte Karten auf.`,
     statusUnantastbar: 'Die Status-Karte gibt es genau einmal — sie kann nicht gelöscht oder neu angelegt werden.',
+    // Ziel-Karte (BAUPLAN 62): dieselbe Sperre, eigener Satz — „Status-Karte"
+    // in der Ablehnung einer Ziel-Karte hätte niemand verstanden.
+    zielUnantastbar:
+      'Die Ziel-Karte gibt es genau einmal je Projekt — sie kann nicht gelöscht oder neu angelegt werden. Ihr Inhalt ist änderbar.',
     nurAufgabenErledigbar: 'Nur Aufgaben-Karten können erledigt werden.',
     // Prüfkarten (BAUPLAN 18): legt und pflegt ausschließlich FlowForge.
     pruefkarteNurFlowForge:
@@ -956,6 +961,19 @@ export const texte = {
   statusKarte: {
     titel: 'Status',
     startText: 'Projekt frisch angelegt. Noch nichts gebaut.'
+  },
+  // Ziel-Karte (BAUPLAN 62): Der Anker, an dem ein Serienlauf erkennt, dass er
+  // fertig ist. Der Starttext ist bewusst eine Aufforderung an den Nutzer —
+  // FlowForge denkt sich kein Ziel aus, und ein leeres Ziel ist ehrlicher als
+  // ein erfundenes.
+  zielKarte: {
+    titel: 'Projektziel',
+    startText:
+      'Noch nicht gesetzt. Trag hier ein, woran du erkennst, dass dieses Projekt fertig ist — ' +
+      'in Alltagssprache, ruhig als Liste dessen, was funktionieren muss.',
+    // Woran FlowForge „noch nicht gesetzt" mechanisch erkennt: am unveränderten
+    // Starttext. Jede eigene Formulierung des Nutzers gilt als Ziel.
+    hinweisLeer: 'Für dieses Projekt ist noch kein Ziel eingetragen.'
   },
   kartenAuswahl: {
     ueberschrift: 'Aufgaben für den Lauf',
@@ -1008,7 +1026,8 @@ export const texte = {
       `Nach einer erfolgreichen Runde übernimmt FlowForge den Karten-Vorschlag des Sessionendes ` +
       `und startet die nächste Runde von selbst; ohne Vorschlag läuft die normale Vorauswahl. ` +
       `Sind die Rechte-Rückfragen an, hält jede Rückfrage den Lauf an — und die Serie steht mit, ` +
-      `bis du antwortest.`,
+      `bis du antwortest. Die Serie endet früher, sobald das Sessionende das Projektziel als ` +
+      `erreicht meldet.`,
     startKnopf: 'Serie starten',
     stand: (runde, gesamt) => `Serienlauf: Runde ${runde} von ${gesamt}`,
     beenden: 'Serie beenden',
@@ -1248,7 +1267,30 @@ export const texte = {
       `Abgelehnt: empfehlung muss gefüllt sein — ein Satz in Alltagssprache, höchstens ${max} Zeichen.`,
     gespeichert: (anzahl) =>
       `Vorschlag gespeichert (${anzahl} Karte${anzahl === 1 ? '' : 'n'}). Der Nutzer sieht ` +
-      'ihn an der Kartenauswahl und entscheidet selbst — ein erneuter Aufruf ersetzt ihn.'
+      'ihn an der Kartenauswahl und entscheidet selbst — ein erneuter Aufruf ersetzt ihn.',
+    // --- Anker gegen das Kreisen (BAUPLAN 62) ---
+    // 1. Frischware: Karten, die DIESER Lauf angelegt hat, dürfen nicht
+    // stillschweigend an älteren offenen Aufgaben vorbeiziehen. Gemessen an
+    // zehn Serienrunden (Haushaltsplaner, 27./28.08.2026): fünf von sechs
+    // vorgeschlagenen Karten waren Minuten alt — ältere kamen nie dran.
+    frischOhneBegruendung: (aelteste) =>
+      'Abgelehnt: Du schlägst Karten vor, die in DIESEM Lauf entstanden sind, während ältere ' +
+      `offene Aufgaben liegen bleiben — zum Beispiel: ${aelteste}. Nimm die älteren zuerst, ` +
+      'oder fülle frischBegruendung: warum die frischen Funde nicht warten können.',
+    // 2. Eigenpflege-Deckel: Arbeit, die FlowForge sich selbst macht, darf nicht
+    // die Runde füllen. Gemessen: 49 von 109 Karten in zehn Runden.
+    eigenpflegeDeckel: (anzahl, hoechstens) =>
+      `Abgelehnt: ${anzahl} der vorgeschlagenen Karten sind Eigenpflege (veraltete Prüfmappen, ` +
+      `Wegwerf-Reste, doppelte Hilfsdateien). Höchstens ${hoechstens} davon je Lauf — der Rest ` +
+      'der Runde gehört dem Projekt selbst. Nimm die überzähligen heraus.',
+    // 3. Zielstand: Pflicht, sobald ein Projektziel gesetzt ist.
+    zielstandFehlt: (max) =>
+      'Abgelehnt: Dieses Projekt hat ein Ziel (Karte „Projektziel"). Sag in zielstand ' +
+      `(höchstens ${max} Zeichen), wie nah der Stand jetzt daran ist — was davon steht und was ` +
+      'fehlt —, und setze zielErreicht nur dann auf true, wenn NICHTS mehr fehlt.',
+    zielstandZuLang: (max) => `Abgelehnt: zielstand ist zu lang — höchstens ${max} Zeichen.`,
+    zielErreichtVermerk:
+      ' Vermerkt: Ziel erreicht — ein laufender Serienlauf endet nach dieser Runde.'
   },
   // Karten-Zuteilung (BAUPLAN 29): Texte an die Auftragsquellen-Agenten
   // (Paket schneiden, Diagnose) für karten_zuteilen.
@@ -3657,6 +3699,12 @@ export const texte = {
     serieLaeuft:
       'In diesem Projekt läuft eine Serie. Beende sie erst („Serie beenden"), bevor du von Hand startest.',
     serieRundenUngueltig: 'Die Rundenzahl der Serie muss eine ganze Zahl zwischen 2 und 99 sein.',
+    // Ziel-Pflicht für Serien (BAUPLAN 62, Entscheidung Georg 28.08.2026): Ohne
+    // Ziel kann keine Serie erkennen, wann sie fertig ist — sie liefe im Kreis,
+    // bis die Rundenzahl aufgebraucht ist. Der Einzellauf bleibt unberührt.
+    serieOhneZiel:
+      'Für eine Serie braucht dieses Projekt erst ein Ziel: Trag in die Karte „Projektziel" ein, ' +
+      'woran du erkennst, dass es fertig ist. Ein einzelner Lauf geht auch ohne.',
     // Eine Motor-Session pro Lauf (BAUPLAN 19): Ohne Fazit des Block-Agenten
     // gilt der Block ehrlich als fehlgeschlagen — statt ein leeres Ergebnis
     // an die Folgeblöcke weiterzureichen.
@@ -4537,6 +4585,13 @@ export const texte = {
       `Serienlauf beendet: alle ${gesamt} Runden sind gelaufen.`,
     serieEndeKeineAufgaben:
       'Serienlauf beendet: keine offenen Aufgaben mehr — die Arbeit ist getan.',
+    // Ziel erreicht (BAUPLAN 62): das zweite ehrliche „fertig" — es zählt das
+    // Projektziel, nicht der leere Kartenstapel.
+    serieEndeZielErreicht: (zielstand) =>
+      `Serienlauf beendet: das Projektziel ist laut Sessionende erreicht — ${zielstand}`,
+    // Sichtbar in jeder Runde, damit ein Kreisen auffällt, bevor zehn Runden weg sind.
+    serieZielstand: (runde, gesamt, zielstand) =>
+      `Serienlauf: Stand zum Projektziel nach Runde ${runde} von ${gesamt} — ${zielstand}`,
     serieEndeGewuenscht:
       'Serienlauf beendet: du hast „Serie beenden" gedrückt — keine weitere Runde startet.',
     serieEndeFehlschlag:

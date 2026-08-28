@@ -10,9 +10,38 @@ export const TEXT_MAX = 400
 export const THEMA_MAX = 30
 // 'pruefung' (BAUPLAN 18) legt ausschließlich FlowForge selbst an — nach
 // jeder bestandenen Prüfung; Mensch-Formular und Agenten-Werkzeuge nicht.
-export const SORTEN = ['aufgabe', 'entscheidung', 'wissen', 'status', 'pruefung']
+// 'ziel' (BAUPLAN 62) ist der Zwilling der Status-Karte: genau eine je
+// Projekt, von FlowForge angelegt, nicht löschbar, ohne Thema. Status sagt
+// „wo stehen wir", Ziel sagt „woran erkennen wir, dass wir fertig sind".
+export const SORTEN = ['aufgabe', 'entscheidung', 'wissen', 'status', 'ziel', 'pruefung']
+// Sorten, die es genau einmal je Projekt gibt und die niemand anlegt oder
+// löscht — weder Mensch noch Agent (BAUPLAN 62: vorher nur 'status').
+export const EINMAL_SORTEN = ['status', 'ziel']
 // Sorten, die ein Thema tragen.
 export const THEMEN_SORTEN = ['aufgabe', 'entscheidung', 'wissen']
+// Festes Thema für Arbeit, die FlowForge sich selbst macht (BAUPLAN 62):
+// veraltete Prüfmappen, Wegwerf-Reste im Arbeitsordner, doppelte eigene
+// Hilfsdateien. Mechanisch gesetzt statt vom Agenten gewählt — ein Auftragssatz
+// ist kein Mechanismus (dieselbe Lehre wie bei den Fund-Karten, BAUPLAN 57).
+export const THEMA_EIGENPFLEGE = 'Eigenpflege'
+// Woran FlowForge Eigenpflege erkennt: an SEINEN EIGENEN Orten. Bewusst eng
+// gehalten — eine Produktkarte, die zufällig das Wort „Test" trägt, soll nicht
+// hierher rutschen; im Zweifel bleibt die Karte normale Arbeit.
+const EIGENPFLEGE_MERKMALE = [
+  'arbeitsablage',
+  'pruefkarte-',
+  'prüfmappe',
+  'pruefmappe',
+  'aufbewahrte prüfung',
+  'aufbewahrte pruefung'
+]
+
+// Reine Erkennung, exportiert für die Regel-Prüfungen: Nennt Titel oder Text
+// einen von FlowForges eigenen Orten, ist die Karte Eigenpflege.
+export function istEigenpflege({ titel, text } = {}) {
+  const s = `${titel ?? ''} ${text ?? ''}`.toLocaleLowerCase('de')
+  return EIGENPFLEGE_MERKMALE.some((m) => s.includes(m))
+}
 
 // Liefert null, wenn alles passt — sonst eine Fehlermeldung in Alltagssprache.
 export function pruefeKarteneingabe({ titel, text }) {

@@ -17,7 +17,7 @@ export default function KartenFormular({ karte, themen = [], onSpeichern, onAbbr
   const [fehler, setFehler] = useState('')
 
   const uebrig = TEXT_MAX - text.trim().length
-  const istStatus = karte?.sorte === 'status'
+  const istStatus = karte?.sorte === 'status' || karte?.sorte === 'ziel'
   const mitThema = THEMEN_SORTEN.includes(sorte)
   const themaPflicht = !bearbeiten || Boolean(karte?.thema)
 

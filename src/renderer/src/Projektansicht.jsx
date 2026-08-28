@@ -89,7 +89,9 @@ function HerkunftZeile({ karte, onZumBericht }) {
 }
 
 function Karte({ karte, onBearbeiten, onErledigt, onLoeschen, onZumBericht }) {
-  const istStatus = karte.sorte === 'status'
+  // Status- und Ziel-Karte (BAUPLAN 62) sind die beiden Einmal-Karten: immer
+  // im Lauf-Kontext, deshalb nicht ziehbar und nicht löschbar.
+  const istStatus = karte.sorte === 'status' || karte.sorte === 'ziel'
   const istAufgabe = karte.sorte === 'aufgabe'
   return (
     <div
@@ -463,8 +465,9 @@ export default function Projektansicht({ pfad, initialTab }) {
   }
 
   const statusKarte = karten.find((k) => k.sorte === 'status')
+  const zielKarte = karten.find((k) => k.sorte === 'ziel')
   const gefiltert = karten
-    .filter((k) => k.sorte !== 'status')
+    .filter((k) => k.sorte !== 'status' && k.sorte !== 'ziel')
     .filter((k) => filter === 'alle' || k.sorte === filter)
   // Feste Karten-Gruppen (BAUPLAN 30) — ergeben sich aus der Sorte, nichts zu
   // pflegen: Arbeit (offene Aufgaben) · Wissen (Entscheidungen + Wissen) ·
@@ -545,6 +548,7 @@ export default function Projektansicht({ pfad, initialTab }) {
           </div>
           {aufraeumFehler && <p className="fehlermeldung">{aufraeumFehler}</p>}
           <div className="karten-liste">
+            {zielKarte && <Karte karte={zielKarte} {...kartenProps} />}
             {statusKarte && <Karte karte={statusKarte} {...kartenProps} />}
             {gruppen.map((gruppe) => (
               <Klappe

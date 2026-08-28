@@ -12,6 +12,9 @@ import {
   themaSchluessel,
   kanonischesThema,
   THEMEN_SORTEN,
+  EINMAL_SORTEN,
+  THEMA_EIGENPFLEGE,
+  istEigenpflege,
   THEMA_MAX,
   TITEL_MAX,
   TEXT_MAX
@@ -65,6 +68,30 @@ function istBekanntesProjekt(pfad) {
   return ladeRegistry().some((eintrag) => projektPfadSchluessel(eintrag.pfad) === schluessel)
 }
 
+// Ziel-Karte (BAUPLAN 62) als Bauteil — an zwei Stellen gebraucht: beim
+// Anlegen eines Projekts und beim Nachrüsten der Projekte, die es vor
+// Bauschritt 62 schon gab.
+function zielKarteNeu(jetzt) {
+  return {
+    id: crypto.randomUUID(),
+    sorte: 'ziel',
+    titel: texte.zielKarte.titel,
+    text: texte.zielKarte.startText,
+    angelegtAm: jetzt,
+    geaendertAm: jetzt
+  }
+}
+
+// Ist der Text der Ziel-Karte noch der unveränderte Starttext, gilt das Ziel
+// als NICHT gesetzt. Rein und exportiert, damit Lauf-Verwaltung und
+// Regel-Prüfungen dieselbe Antwort bekommen wie die Oberfläche.
+export function zielGesetzt(karten) {
+  const ziel = (Array.isArray(karten) ? karten : []).find((k) => k?.sorte === 'ziel')
+  if (!ziel) return false
+  const text = String(ziel.text ?? '').trim()
+  return Boolean(text) && text !== texte.zielKarte.startText.trim()
+}
+
 function ladeKarten(projektPfad) {
   const daten = JSON.parse(fs.readFileSync(path.join(projektPfad, KARTEN_DATEI), 'utf8'))
   if (!Array.isArray(daten)) throw new Error('karten.json ist keine Liste')
@@ -77,7 +104,21 @@ export function kartenLaden(projektPfad) {
   if (!istBekanntesProjekt(projektPfad) || !fs.existsSync(projektPfad))
     return { ok: false, fehler: texte.fehler.projektNichtGefunden }
   try {
-    return { ok: true, karten: ladeKarten(projektPfad) }
+    const karten = ladeKarten(projektPfad)
+    // Nachrüstung (BAUPLAN 62): Projekte, die es vor der Ziel-Karte schon gab,
+    // bekommen sie beim ersten Lesen — sonst stünde Georg vor einem Serienstart,
+    // der eine Karte verlangt, die es in seinem Projekt gar nicht gibt.
+    // Schlägt das Speichern fehl, arbeitet der Lauf trotzdem mit der Karte
+    // weiter; der nächste Lesezugriff versucht es erneut.
+    if (!karten.some((k) => k?.sorte === 'ziel')) {
+      karten.push(zielKarteNeu(new Date().toISOString()))
+      try {
+        speichereKarten(projektPfad, karten)
+      } catch {
+        // Nur-Lese-Ordner: die Karte gilt für diesen Lauf, gespeichert wird später.
+      }
+    }
+    return { ok: true, karten }
   } catch {
     return { ok: false, fehler: texte.fehler.kartenDateiKaputt }
   }
@@ -119,7 +160,11 @@ export async function projektAnlegen(name, ablageort) {
       text: texte.statusKarte.startText,
       angelegtAm: jetzt,
       geaendertAm: jetzt
-    }
+    },
+    // Ziel-Karte (BAUPLAN 62): der Anker, an dem ein Serienlauf erkennt, dass
+    // er fertig ist. Sie steht von Anfang an da — leer, mit der Aufforderung
+    // an den Nutzer; FlowForge denkt sich kein Ziel aus.
+    zielKarteNeu(jetzt)
   ])
 
   const registry = ladeRegistry()
@@ -258,6 +303,7 @@ export function karteAnlegen(projektPfad, { sorte, titel, text, thema }, herkunf
     // Prüfkarten legt nur FlowForge selbst an (BAUPLAN 18).
     if (sorte === 'pruefung')
       return { ok: false, fehler: texte.kartenRegeln.pruefkarteNurFlowForge }
+    if (sorte === 'ziel') return { ok: false, fehler: texte.kartenRegeln.zielUnantastbar }
     if (sorte === 'status' || !THEMEN_SORTEN.includes(sorte))
       return { ok: false, fehler: texte.kartenRegeln.statusUnantastbar }
     const fehler = pruefeKarteneingabe({ titel, text })
@@ -268,12 +314,20 @@ export function karteAnlegen(projektPfad, { sorte, titel, text, thema }, herkunf
     const themaUrteil = pruefeThema(karten, thema, { pflicht: true })
     if (themaUrteil.fehler) return { ok: false, fehler: themaUrteil.fehler }
     const jetzt = new Date().toISOString()
+    // Eigenpflege (BAUPLAN 62): Nennt die Karte einen von FlowForges eigenen
+    // Orten — Wegwerf-Ordner, aufbewahrte Prüfmappe —, bekommt sie mechanisch
+    // das feste Thema; das gewählte Thema des Agenten wird überschrieben.
+    // Grund: Der Deckel im Vorschlag wirkt nur, wenn diese Karten erkennbar
+    // sind, und ein Auftragssatz ist kein Mechanismus (Lehre aus BAUPLAN 57).
+    // Folgenlos für die Arbeit selbst: angelegt wird sie immer, und Georg kann
+    // sie per Drag & Drop in jedes andere Thema ziehen.
+    const eigenpflege = sorte === 'aufgabe' && istEigenpflege({ titel, text })
     const karte = {
       id: crypto.randomUUID(),
       sorte,
       titel: titel.trim(),
       text: text.trim(),
-      thema: themaUrteil.thema,
+      thema: eigenpflege ? kanonischesThema(karten, THEMA_EIGENPFLEGE) : themaUrteil.thema,
       ...(sorte === 'aufgabe' ? { erledigt: false } : {})
     }
     stempeln(karte, herkunft, jetzt, { neu: true })
@@ -291,7 +345,7 @@ export function karteAendern(projektPfad, id, { titel, text, thema }, herkunft =
     const karte = karten.find((k) => k.id === id)
     if (!karte) return { ok: false, fehler: texte.fehler.unbekannt }
     // Die Status-Karte behält ihren festen Titel — nur der Inhalt ist änderbar.
-    const neuerTitel = karte.sorte === 'status' ? karte.titel : titel
+    const neuerTitel = EINMAL_SORTEN.includes(karte.sorte) ? karte.titel : titel
     const fehler = pruefeKarteneingabe({ titel: neuerTitel, text })
     if (fehler) return { ok: false, fehler }
     let neuesThema = null
@@ -370,6 +424,8 @@ export function karteLoeschen(projektPfad, id) {
   const ergebnis = mitKarten(projektPfad, (karten) => {
     const stelle = karten.findIndex((k) => k.id === id)
     if (stelle === -1) return { ok: false, fehler: texte.fehler.unbekannt }
+    if (karten[stelle].sorte === 'ziel')
+      return { ok: false, fehler: texte.kartenRegeln.zielUnantastbar }
     if (karten[stelle].sorte === 'status')
       return { ok: false, fehler: texte.kartenRegeln.statusUnantastbar }
     geloeschte = karten[stelle]

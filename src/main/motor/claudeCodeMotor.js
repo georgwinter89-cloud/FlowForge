@@ -1644,6 +1644,11 @@ export function starteLaufMotor(optionen) {
     // Karten-Vorschlag fürs nächste Paket (BAUPLAN 28): speichert den
     // Vorschlag des Sessionendes — kein Warten, nur eine Meldung.
     aufLaufVorschlag,
+    // Startzeit dieses Laufs als ISO-Zeitstempel (BAUPLAN 62): Daran erkennt
+    // das Vorschlags-Werkzeug „Frischware" — Karten, die dieser Lauf selbst
+    // angelegt hat. Nur die Lauf-Verwaltung setzt den Wert; Chat- und
+    // Helfer-Motoren lassen ihn weg, dann fällt die Regel still weg.
+    laufStart = null,
     // Karten-Zuteilung (BAUPLAN 29): merkt sich, welche Karten die
     // nachfolgenden Blöcke bekommen — kein Warten, nur eine Meldung.
     aufKartenZuteilung,
@@ -2402,7 +2407,7 @@ export function starteLaufMotor(optionen) {
     // Karten-Vorschlag fürs nächste Paket (BAUPLAN 28): das Werkzeug des
     // Sessionendes — freigeschaltet nur für Blöcke mit laufVorschlag.
     const laufVorschlagServer = aufLaufVorschlag
-      ? await laufVorschlagWerkzeugServer({ projektPfad, aufLaufVorschlag })
+      ? await laufVorschlagWerkzeugServer({ projektPfad, aufLaufVorschlag, laufStart })
       : null
     // Karten-Zuteilung (BAUPLAN 29): das Werkzeug der Auftragsquellen-Blöcke —
     // freigeschaltet nur für Blöcke mit kartenZuteilung. Die Zuteilung braucht

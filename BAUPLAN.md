@@ -1648,3 +1648,98 @@ Runde 2 startet ohne sein Zutun mit den Karten aus dem Vorschlag von Runde 1
 nicht; ein doppelt fehlgeschlagener Lauf beendet die Serie früher, mit
 Klartext im Ticker und Bericht.
 
+
+### 62 — Der Anker: Projektziel, Frischware-Nachrang, Eigenpflege-Deckel
+(Anlass: Georgs Beobachtung am 28.08.2026, die Läufe am Haushaltsplaner drehten
+sich im Kreis. Nachgemessen an zehn Serienrunden vom 27./28.08.2026 — sie stimmt.
+Version: baut als **0.63.0**, die Kopplung bleibt seit der 52er-Ausnahme um eins
+verschoben. Drei Folgen-Entscheidungen Georg, 28.08.2026: Ziel-Karte ist Pflicht
+und beendet die Serie; Frischware nachrangig mit Begründungszwang statt harter
+Sperre; Eigenpflege bekommt eine eigene Klasse mit Deckel statt Verbannung.)
+
+**Der gemessene Befund** (10 Runden, ~25 Stunden, rund 370 $): 109 neue
+Aufgaben-Karten, 94 abgehakt — offen blieben konstant ~15. Die Findungsrate war
+gleich der Erledigungsrate, der Stapel wurde nie kleiner. Drei Ursachen, alle
+mechanisch: **(1)** Der Vorschlag fraß seinen eigenen Auswurf — fünf von sechs
+vorgeschlagenen Karten waren Minuten alt und stammten aus derselben Runde, die
+den Vorschlag schrieb; die älteste offene Karte lag drei Tage. **(2)** 49 der 109
+Karten betrafen FlowForges eigenen Apparat (veraltete Prüfmappen, Wegwerf-Reste
+in `arbeitsablage/`, eine vom Bauer dreifach kopierte Hilfsfunktion, die derselbe
+Lauf danach als Aufgabe notierte) — der Apparat fütterte sich selbst. **(3)** Es
+gab kein Ziel, an dem eine Runde ihren Fortschritt hätte messen können; die
+Vorlage „als Nächstes ‚Bug jagen'" aus der Feldbeschreibung des Werkzeugs stand
+in 6 von 10 Empfehlungen wörtlich.
+
+- **Ziel-Karte** (neue Sorte `ziel`, Zwilling der Status-Karte): genau eine je
+  Projekt, beim Anlegen erzeugt, für Altprojekte beim ersten `kartenLaden`
+  nachgerüstet, nicht löschbar, fester Titel, kein Thema. Starttext ist eine
+  Aufforderung an Georg — FlowForge denkt sich kein Ziel aus; solange der
+  Starttext dasteht, gilt das Ziel als nicht gesetzt. Sie steht wie die
+  Status-Karte in **jedem** Blockauftrag im Volltext und als fester Chip in der
+  Kartenauswahl.
+- **Zielstand als Pflichtfeld** von `naechster_lauf_vorschlagen`, sobald ein Ziel
+  gesetzt ist: ein Satz, wie nah der Stand daran ist, plus `zielErreicht`. Beides
+  wandert in Vorschlagsdatei, Laufbericht und Ticker.
+- **Serie mit Ziel**: Ein Serienstart ohne gesetztes Ziel wird mit Klartext
+  abgewiesen (nur der Start, nur die Serie — der Einzellauf bleibt frei). Meldet
+  das Sessionende `zielErreicht`, endet die Serie nach dieser Runde, auch bei
+  offenen Karten und bereitliegendem Vorschlag. In jeder Runde tickert der
+  Zielstand.
+- **Frischware nachrangig**: Karten aus dem laufenden Lauf lehnt das Werkzeug ab,
+  solange ältere offene Aufgaben liegen bleiben — die Ablehnung nennt die drei
+  ältesten. Ausweg ist `frischBegruendung`, nicht die Umgehung: Der Vorschlag
+  wird nie stillschweigend umgeschrieben.
+- **Eigenpflege**: FlowForge erkennt beim Anlegen mechanisch, ob eine
+  Aufgaben-Karte einen seiner eigenen Orte nennt (`arbeitsablage`, aufbewahrte
+  Prüfmappe, `pruefkarte-`), und setzt das feste Thema „Eigenpflege" —
+  Auftragssätze halten nicht (Lehre aus Bauschritt 57). Im Vorschlag höchstens
+  **eine** solche Karte je Lauf; mehr ist eine harte Ablehnung, kein stilles
+  Kürzen.
+- Die Vorlage „Bug jagen" ist aus Feldbeschreibung **und** Sessionende-Auftrag
+  entfernt; der Auftrag nennt stattdessen Ziel, Zielstand und die beiden Regeln.
+- **Gebaut (28.08.2026):** Neue Sorte in `kartenRegeln.js` (`SORTEN`,
+  `EINMAL_SORTEN` — vorher stand `'status'` an sieben Stellen einzeln), reine
+  Erkennung `istEigenpflege` und `zielGesetzt` (in `projekte.js`, damit
+  Lauf-Verwaltung, Werkzeug und Prüfungen dieselbe Antwort bekommen). Die
+  Nachrüstung sitzt in `kartenLaden` und nicht im Projekt-Öffnen: Das ist der
+  einzige Weg, den *alle* Leser teilen — schlägt das Speichern fehl (Nur-Lese-
+  Ordner), gilt die Karte trotzdem für diesen Lauf. Die drei Leitplanken sitzen
+  in `laufVorschlagPruefen` **nach** der Kurz-Kennungs-Auflösung (davor stünden
+  dort Kurzformen, und jeder Vergleich ginge ins Leere) und sind im Schema
+  **optional**, im Handler Pflicht — dasselbe Muster wie der 25er-Deckel von
+  `karten_lesen` (Bauschritt 53): Eine Schema-Ablehnung lieferte dem Agenten
+  englisches Roh-JSON statt des Satzes, der ihm sagt, was zu tun ist.
+  `laufStart` reicht die Lauf-Verwaltung über den Motor durch (Chat- und
+  Helfer-Motoren lassen ihn weg, dann fällt die Frischware-Regel still weg statt
+  falsch zu greifen). Das Serienende bei erreichtem Ziel steht **vor** der
+  Auftragsquellen-Vorabprüfung im vorhandenen Rundenwechsel-Hook, also weiterhin
+  vor `berichtSpeichern` — sonst stünde die Abschlusszeile nicht in der Datei.
+- **Angriffsliste vorab (13 Funde, alle vor dem Bauen ausgeräumt):** Altprojekte
+  ohne Ziel-Karte hätten jeden Serienstart mit einer Meldung über eine nicht
+  existierende Karte blockiert; `karteAnlegen`/`karteLoeschen` hätten die
+  Ziel-Karte mit der *Status*-Meldung abgewiesen (unverständlich); ohne den
+  Volltext-Eintrag hätte kein Block das Ziel je gesehen; der Frisch-Vergleich
+  wäre vor der Kennungs-Auflösung ins Leere gelaufen; ein stilles Kürzen beim
+  Deckel hätte etwas anderes gespeichert, als der Agent meinte; `zielErreicht`
+  ohne gesetztes Ziel hätte eine Serie beendet, die nie ein Ziel hatte.
+- **Prüfungen:** `ankerGegenKreisen.test.js` (14 Fälle: Sorte und Einmal-Regel,
+  Zielstand-Pflicht samt Starttext-Ausnahme, `zielErreicht` ohne Ziel, Frischware
+  mit und ohne Begründung, Deckel-Ablehnung und die erlaubte Einzelkarte, „Bug
+  jagen" nirgends mehr) plus zwei neue Serien-Szenarien am echten Ablaufplaner
+  (`serienLauf.test.js`: Serienstart ohne Ziel abgewiesen; `zielErreicht` beendet
+  eine 5-Runden-Serie nach Runde 1, mit Zielstand-Zeile im Ticker derselben
+  Runde). 2041 Prüfungen grün.
+- **Ehrliche Grenze:** Alles ist an der Mechanik und am Ablaufplaner gemessen,
+  nicht in einem echten Serienlauf gegen ein Modell — ob die Empfehlungen ohne
+  die „Bug jagen"-Vorlage wirklich anders ausfallen, zeigt erst Georgs nächster
+  Serienlauf am Haushaltsplaner. Die Eigenpflege-Erkennung ist bewusst eng: Eine
+  Karte über eigenen Kram, die keinen der Orte beim Namen nennt, bleibt normale
+  Arbeit.
+
+**Alltagstest:** Georg öffnet den Haushaltsplaner. In der Karten-Seitenleiste
+steht ganz oben eine neue Karte „Projektziel" mit der Aufforderung, das Ziel
+einzutragen. Startet er ohne sie eine Serie, sagt FlowForge in Alltagssprache,
+dass erst das Ziel fehlt — ein Einzellauf startet trotzdem. Trägt er das Ziel ein
+und startet eine Serie, steht nach jeder Runde im Ticker, wie nah das Projekt am
+Ziel ist; meldet das Sessionende „erreicht", endet die Serie von selbst, auch
+wenn noch Karten offen sind.
