@@ -585,6 +585,32 @@ function umleitungsZiele(befehl) {
   return zieleZerlegen(text, false).ziele
 }
 
+// Ein Umleitungsziel, das die Zerlegung NICHT auflösen konnte (BAUPLAN 63):
+// eine nicht ersetzte Shell-Variable ($out, ${p}, %TEMP%, $env:TEMP) oder ein
+// Bruchstück, das gar kein Pfad sein kann (Klammern, Glob-Zeichen). Gemessen an
+// 18 Läufen am Haushaltsplaner: 10 von 13 gestoppten Schreibversuchen waren
+// solche Phantome — „$dump", „$p\dump1.html", „/gi)", „[0-9]*" —, und der Agent
+// wollte damit in arbeitsablage/ schreiben, das der Datenvertrag ausdrücklich
+// freilässt. Die Sperre schützte dort nichts und erzwang nur Umwege.
+//
+// Solche Ziele werden nicht hart gesperrt, sondern fallen auf die Rückfrage
+// durch (Georgs Regel „Rückfrage statt Sperre"): Was FlowForge nicht lesen
+// kann, kann es auch nicht ehrlich beurteilen — ein hartes Nein behauptete
+// Wissen, das nicht da ist. Das Anführungszeichen war schon vorher so behandelt.
+const VARIABLE = /\$\w|\$\{|%\w+%/
+const KEIN_PFADZEICHEN = /[()*?[\]{}]/
+
+export function zielUnaufloesbar(ziel) {
+  const t = String(ziel ?? '')
+  if (/["']/.test(t)) return true
+  // Variablen aller drei Schreibweisen: $name, ${name}, %NAME%, $env:NAME
+  if (VARIABLE.test(t)) return true
+  // Zeichen, die in keinem echten Zielpfad stehen — Reste einer Zerlegung, die
+  // mitten in einem Ausdruck zugegriffen hat.
+  if (KEIN_PFADZEICHEN.test(t)) return true
+  return false
+}
+
 function umleitungsZielAusserhalb(befehl, projektPfad) {
   for (const ziel of umleitungsZiele(befehl)) if (!liegtImProjekt(ziel, projektPfad)) return ziel
   return null
@@ -1033,9 +1059,10 @@ export function pruefeWerkzeug(name, eingabe, projektPfad, nurLesen, darfPruefen
     // und die erlaubt der Automodus ohne Nachfrage: `echo x > ../draussen.txt`
     // käme durch, während `echo x > src/fremd.js` hart gesperrt wird.
     for (const ziel of umleitungsZiele(befehl))
-      // Ein Ziel mit stehengebliebenem Anführungszeichen ist ein Fehlgriff der
-      // Zerlegung, kein Pfad — im Zweifel NICHT sperren.
-      if (!/["']/.test(ziel) && ausserhalbDateiliste(ziel, projektPfad, dateiListe, pruefOrdner))
+      // Ein Ziel, das die Zerlegung nicht auflösen konnte (Anführungszeichen,
+      // Shell-Variable, Bruchstück), ist ein Fehlgriff und kein Pfad — im
+      // Zweifel NICHT sperren, sondern durchfallen lassen (BAUPLAN 63).
+      if (!zielUnaufloesbar(ziel) && ausserhalbDateiliste(ziel, projektPfad, dateiListe, pruefOrdner))
         return {
           gesperrt: texte.rechteFrage.ausserhalbDateilisteFuerAgent(ziel, dateiListe),
           tickerText: texte.ticker.ausserhalbDateilisteGesperrt(ziel)

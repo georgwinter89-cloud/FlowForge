@@ -875,6 +875,23 @@ body {
   margin-top: 4px;
 }
 
+/* Ruhende Prüfung (BAUPLAN 63): Die Frage steht an der Karte, sichtbar
+   abgesetzt — sie wartet, sie drängt nicht. */
+.karte-ruht {
+  margin-top: 6px;
+  padding: 8px;
+  border-radius: 6px;
+  border: 1px solid var(--rand);
+  background: var(--flaeche-hervor);
+}
+
+.karte-ruht-text {
+  font-size: 12px;
+  color: var(--text-zweit);
+  line-height: 1.45;
+  margin-bottom: 6px;
+}
+
 /* Leinwand: Übungs-Workflows, Liveticker, Laufberichte */
 
 .kopfleiste {

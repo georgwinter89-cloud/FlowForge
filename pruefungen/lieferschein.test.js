@@ -212,10 +212,13 @@ describe('BAUPLAN 42 · Ebene 2: FlowForge prüft im Code', () => {
     expect(frei.meldung.inhalt).toBe(inhalt.trim())
   })
 
-  // Was BLEIBT: Pflicht, Auswahl, Plausibilität — und die Karten-Grenzen der
-  // Prüfkarte (SPEC §3.1), denn das sind Karten-Regeln, keine Übergabe-Grenzen.
-  it('hält an den Karten-Grenzen der Prüfkarte fest', () => {
-    const zuLang = meldungPruefen(
+  // Was BLEIBT: Pflicht, Auswahl, Plausibilität. Die Karten-Grenzen der
+  // Prüfkarte sind seit BAUPLAN 63 KEIN Grund mehr, die Meldung zu verwerfen:
+  // 67-mal in 18 gemessenen Läufen ging so ein ganzer Prüfbeleg verloren, weil
+  // ein Kartenfeld ein paar Zeichen zu lang war — während pruefkarteAnlegen
+  // genau dieses Feld beim Anlegen ohnehin kürzt.
+  it('nimmt einen langen Prüfkartentext an, statt den ganzen Beleg zu verwerfen', () => {
+    const lang = meldungPruefen(
       'pruefbeleg',
       {
         ...rahmen,
@@ -225,7 +228,16 @@ describe('BAUPLAN 42 · Ebene 2: FlowForge prüft im Code', () => {
       },
       'Prüfbeleg'
     )
-    expect(zuLang.fehler).toContain('401')
+    expect(lang.fehler).toBeUndefined()
+    expect(lang.meldung.pruefkarte.text).toHaveLength(401)
+  })
+  it('weist eine halbe Prüfkarte weiter ab — Titel ohne Text ergibt keine Karte', () => {
+    const halb = meldungPruefen(
+      'pruefbeleg',
+      { ...rahmen, urteil: 'bestanden', pruefkarteTitel: 'Tunnelfahrt' },
+      'Prüfbeleg'
+    )
+    expect(halb.fehler).toBe(texte.lieferschein.pruefkarteUnvollstaendig)
   })
 
   it('lässt eine leere Fundliste zu — nichts gefunden ist ein gutes Ergebnis', () => {

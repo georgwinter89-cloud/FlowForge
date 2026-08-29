@@ -857,6 +857,18 @@ export const texte = {
       ziel: 'Ziel',
       pruefung: 'Prüfung'
     },
+    // Dauerrote Prüfung (BAUPLAN 63): Die Frage steht an der Karte selbst —
+    // kein Dialog, der einen Lauf anhielte.
+    ruhtHinweis: (laeufe) =>
+      `Diese Prüfung war ${laeufe} Läufe hintereinander rot und läuft seitdem nicht mehr mit. ` +
+      'Entscheide einmal: wieder aufnehmen, als Aufgabe notieren oder löschen.',
+    ruhtWiederAufnehmen: 'Wieder aufnehmen',
+    ruhtAlsAufgabe: 'Als Aufgabe notieren',
+    ruhtAufgabeTitel: (titel) => `Ruhende Prüfung „${titel}" anpassen oder abschaffen`.slice(0, 80),
+    ruhtAufgabeText: (titel) =>
+      `Die aufbewahrte Prüfung „${titel}" war dreimal hintereinander rot und ruht seitdem. ` +
+      'Behoben, wenn sie entweder wieder grün läuft (dann in der Kartenansicht wieder aufnehmen) ' +
+      'oder als überholt gelöscht ist.',
     offen: 'offen',
     erledigt: 'erledigt',
     erledigen: 'Erledigen',
@@ -929,14 +941,10 @@ export const texte = {
   },
   kartenRegeln: {
     titelFehlt: 'Bitte gib der Karte einen Titel.',
-    titelZuLang: (max, ist) =>
-      `Der Titel ist zu lang: ${ist} von höchstens ${max} Zeichen.`,
     textFehlt: 'Bitte schreib etwas in die Karte.',
-    // Mit Ist-Länge (Befund 14.08.2026): Ohne die Zahl kürzte der Agent
-    // blind und lief mehrfach in dieselbe Ablehnung.
-    textZuLang: (max, ist) =>
-      `Der Inhalt ist zu lang: ${ist} von höchstens ${max} Zeichen — kürze um ` +
-      `mindestens ${ist - max} Zeichen oder teile den Inhalt auf mehrere fokussierte Karten auf.`,
+    // titelZuLang/textZuLang sind mit BAUPLAN 63 entfallen: Die Längen sind
+    // Richtwerte, keine Sperre (Entscheidung Georg, 29.08.2026) — 202 dieser
+    // Ablehnungen in 18 gemessenen Läufen, Median 14 Zeichen darüber.
     statusUnantastbar: 'Die Status-Karte gibt es genau einmal — sie kann nicht gelöscht oder neu angelegt werden.',
     // Ziel-Karte (BAUPLAN 62): dieselbe Sperre, eigener Satz — „Status-Karte"
     // in der Ablehnung einer Ziel-Karte hätte niemand verstanden.
@@ -4367,6 +4375,11 @@ export const texte = {
     kartenNichtGemessen: (titel, grund) => `Alte Prüfung „${titel}" ohne Urteil: ${grund}.`,
     kartenRotation: (titel) =>
       `Alte Prüfung „${titel}" läuft reihum mit — sie war am längsten nicht dran.`,
+    // Dauerrot (BAUPLAN 63): genau einmal beim Übergang in die Ruhe.
+    kartenRuhtJetzt: (titel, laeufe) =>
+      `Alte Prüfung „${titel}" war jetzt ${laeufe} Läufe hintereinander ROT — sie ruht ab ` +
+      'sofort und läuft nicht mehr mit. Entscheide an der Karte: wieder aufnehmen, ' +
+      'anpassen lassen oder löschen.',
     kartenRot: (titel, was) =>
       `Alte Prüfung „${titel}" ist ROT (${was}). Der Kartenordner bleibt liegen, damit der Prüfer hineinsehen kann.`,
     kartenFreigegeben: (block, titel) =>

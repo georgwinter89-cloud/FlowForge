@@ -28,7 +28,13 @@ import {
   nameTrifftMuster,
   kartenAuswahl
 } from '../shared/pruefkartenRegeln.js'
-import { stempelLaden, stempelMessungVermerken } from './pruefkartenStempel.js'
+import {
+  stempelLaden,
+  stempelMessungVermerken,
+  stempelRotVermerken,
+  stempelGruenVermerken,
+  ROT_LAEUFE_BIS_RUHE
+} from './pruefkartenStempel.js'
 import { pruefkarteEinlegen } from './pruefkarten.js'
 import { kartenLaden } from './projekte.js'
 import { befehlAbspielen } from './torProzess.js'
@@ -219,7 +225,13 @@ export async function kartenMesspunkt({
   // Karten, die in diesem Lauf kein einziges Mal dran waren — die Zusage
   // „mindestens einmal je Lauf" wird ein letztes Mal eingelöst, und was auch
   // dann nicht mehr passt, steht namentlich im Ticker statt gar nicht.
-  nurNieGelaufen = false
+  nurNieGelaufen = false,
+  // Dauerrot zählt je LAUF (BAUPLAN 63): Ein Lauf hat mehrere Messpunkte —
+  // ohne die Lauf-Kennung käme eine Prüfung in einem einzigen Lauf auf drei
+  // rote Runden und ruhte sofort. Fehlt sie (alte Aufrufer, Regel-Prüfungen),
+  // zählt der Messpunkt jedes Mal — das ist die konservativere Richtung als
+  // gar nicht zu zählen, und die Prüfungen setzen sie.
+  laufId = ''
 }) {
   const begonnen = Date.now()
   const ergebnisse = []
@@ -238,6 +250,7 @@ export async function kartenMesspunkt({
     schonGelaufen: 0,
     nichtAbspielbar: 0,
     rotation: 0,
+    ruht: 0,
     zurueckgestellt: 0,
     nichtGemessen: 0
   }
@@ -323,11 +336,16 @@ export async function kartenMesspunkt({
   for (const e of auswahl.uebersprungen) {
     if (e.grund === 'gezogen') zahlen.gezogen++
     else if (e.grund === 'beimPruefer') zahlen.beimPruefer++
+    else if (e.grund === 'ruht') zahlen.ruht++
     else zahlen.nichtBetroffen++
   }
   zahlen.schonGelaufen = auswahl.laeuft.length - laufListe.length
   zahlen.uebersprungen =
-    zahlen.nichtBetroffen + zahlen.gezogen + zahlen.beimPruefer + zahlen.schonGelaufen
+    zahlen.nichtBetroffen +
+    zahlen.gezogen +
+    zahlen.beimPruefer +
+    zahlen.schonGelaufen +
+    zahlen.ruht
   zahlen.nichtAbspielbar = auswahl.nichtAbspielbar.length
   zahlen.rotation = laufListe.filter((e) => e.grund === 'rotation').length
   zahlen.ausgewaehlt = laufListe.length
@@ -528,6 +546,13 @@ export async function kartenMesspunkt({
       } else zahlen.ausgefuehrt++
       if (ausgang === 'rot') {
         zahlen.rot++
+        // Dauerrot (BAUPLAN 63): einmal je LAUF zählen. Ab der dritten roten
+        // Runde ruht die Prüfung, statt in jedem Lauf erneut gemeldet zu werden
+        // — gemessen war eine Prüfung 16 Läufe hintereinander rot, ohne dass je
+        // etwas eskalierte. Der Ticker sagt es genau einmal.
+        const dauerrot = stempelRotVermerken(projektPfad, kartenId, laufId)
+        if (dauerrot.ruhtJetzt)
+          tickern(texte.ticker.kartenRuhtJetzt(titel, dauerrot.rotLaeufe))
         // Der Ordner BLEIBT liegen: Der Prüfer soll hineinsehen und die alte
         // Prüfung anpassen können, wenn sie nur veraltet ist.
         ausgelegt.set(kartenId, {
@@ -537,6 +562,9 @@ export async function kartenMesspunkt({
         dieseRunde.delete(kartenId)
         tickern(texte.ticker.kartenRot(titel, was))
       } else {
+        // Grün: Der Dauerrot-Zähler fällt zurück (BAUPLAN 63) — eine reparierte
+        // Prüfung darf nicht eine Runde vor der Stilllegung stehen bleiben.
+        if (ausgang !== 'nichtGemessen') stempelGruenVermerken(projektPfad, kartenId)
         abraeumen(projektPfad, kartenId, titel, ausgelegt, dieseRunde, tickern)
       }
     }

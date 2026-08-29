@@ -2,7 +2,13 @@ import { useEffect, useState } from 'react'
 import { texte } from '../../shared/texte.js'
 import { ETIKETT_BESCHREIBUNG_MAX } from '../../shared/etikettRegeln.js'
 import { eigeneBloeckeSetzen, eigeneEtikettenSetzen } from '../../shared/blockKatalog.js'
-import { THEMEN_SORTEN, themaSchluessel, vorhandeneThemen, THEMA_MAX } from '../../shared/kartenRegeln.js'
+import {
+  THEMEN_SORTEN,
+  themaSchluessel,
+  vorhandeneThemen,
+  THEMA_MAX,
+  THEMA_EIGENPFLEGE
+} from '../../shared/kartenRegeln.js'
 import KartenFormular from './KartenFormular.jsx'
 import Bestaetigung from './Bestaetigung.jsx'
 import Leinwand from './Leinwand.jsx'
@@ -88,7 +94,17 @@ function HerkunftZeile({ karte, onZumBericht }) {
   )
 }
 
-function Karte({ karte, onBearbeiten, onErledigt, onLoeschen, onZumBericht }) {
+function Karte({
+  karte,
+  onBearbeiten,
+  onErledigt,
+  onLoeschen,
+  onZumBericht,
+  ruhende,
+  onWiederAufnehmen,
+  onAlsAufgabe
+}) {
+  const ruht = ruhende?.[karte.id] ?? null
   // Status- und Ziel-Karte (BAUPLAN 62) sind die beiden Einmal-Karten: immer
   // im Lauf-Kontext, deshalb nicht ziehbar und nicht löschbar.
   const istStatus = karte.sorte === 'status' || karte.sorte === 'ziel'
@@ -115,6 +131,22 @@ function Karte({ karte, onBearbeiten, onErledigt, onLoeschen, onZumBericht }) {
       <p className="karte-titel">{karte.titel}</p>
       <HerkunftZeile karte={karte} onZumBericht={onZumBericht} />
       <p className="karte-text">{karte.text}</p>
+      {/* Dauerrote Prüfung (BAUPLAN 63): Sie läuft nicht mehr mit, bis Georg
+          entschieden hat — die Frage steht an der Karte, nicht in einem
+          Dialog, der einen Lauf anhalten würde. */}
+      {ruht && (
+        <div className="karte-ruht">
+          <p className="karte-ruht-text">{tk.ruhtHinweis(ruht.rotLaeufe)}</p>
+          <div className="karte-knoepfe">
+            <button className="knopf-klein" onClick={() => onWiederAufnehmen(karte)}>
+              {tk.ruhtWiederAufnehmen}
+            </button>
+            <button className="knopf-klein" onClick={() => onAlsAufgabe(karte)}>
+              {tk.ruhtAlsAufgabe}
+            </button>
+          </div>
+        </div>
+      )}
       <div className="karte-knoepfe">
         {istAufgabe && (
           <button className="knopf-klein" onClick={() => onErledigt(karte)}>
@@ -227,6 +259,8 @@ export default function Projektansicht({ pfad, initialTab }) {
   // Läuft oder wartet das Projekt? Dann sind die Aufräum-Knöpfe gesperrt.
   const [laufAktiv, setLaufAktiv] = useState(false)
   const [aufraeumFehler, setAufraeumFehler] = useState('')
+  // Dauerrote Prüfungen (BAUPLAN 63): Kennung → { rotLaeufe }.
+  const [ruhende, setRuhende] = useState({})
   // Einklapp-Zustände je Projekt (BAUPLAN 30): „Erledigt" ist standardmäßig zu.
   const [istOffen, umschalten] = useKlappen(pfad, ['karten:erledigt'])
 
@@ -235,6 +269,11 @@ export default function Projektansicht({ pfad, initialTab }) {
       if (!ergebnis.ok) return setFehler(ergebnis.fehler)
       setProjekt(ergebnis.projekt)
       setKarten(ergebnis.karten)
+    })
+    // Welche Prüfungen ruhen, weil sie dreimal hintereinander rot waren
+    // (BAUPLAN 63) — sie stellen ihre Frage an der Karte selbst.
+    window.flowforge.ruhendePruefungen(pfad).then((liste) => {
+      setRuhende(Object.fromEntries((liste ?? []).map((e) => [e.id, e])))
     })
     // Auch nach einer Wiederherstellung kann die Startanleitung auftauchen
     // oder verschwinden — deshalb hier mitgeladen.
@@ -478,11 +517,30 @@ export default function Projektansicht({ pfad, initialTab }) {
     { id: 'geprueft', karten: gefiltert.filter((k) => k.sorte === 'pruefung') },
     { id: 'erledigt', karten: gefiltert.filter((k) => k.sorte === 'aufgabe' && k.erledigt) }
   ].filter((g) => filter === 'alle' || g.karten.length > 0)
+  // Georgs Antworten auf eine ruhende Prüfung (BAUPLAN 63). „Löschen" ist der
+  // vorhandene Knopf — er nimmt Stempel und Archiv ohnehin mit.
+  async function wiederAufnehmen(karte) {
+    await window.flowforge.pruefungWiederAufnehmen(pfad, karte.id)
+    projektLaden()
+  }
+  async function alsAufgabeNotieren(karte) {
+    const ergebnis = await window.flowforge.karteAnlegen(pfad, {
+      sorte: 'aufgabe',
+      titel: tk.ruhtAufgabeTitel(karte.titel),
+      text: tk.ruhtAufgabeText(karte.titel),
+      thema: THEMA_EIGENPFLEGE
+    })
+    if (!ergebnis.ok) return setAufraeumFehler(ergebnis.fehler)
+    projektLaden()
+  }
   const kartenProps = {
     onBearbeiten: setFormular,
     onErledigt: erledigtWechseln,
     onLoeschen: loeschen,
-    onZumBericht: zumBericht
+    onZumBericht: zumBericht,
+    ruhende,
+    onWiederAufnehmen: wiederAufnehmen,
+    onAlsAufgabe: alsAufgabeNotieren
   }
   const alleThemen = vorhandeneThemen(karten)
 

@@ -67,6 +67,8 @@ import {
 import { etikettVorschlagErstellen } from './etikettAssistent.js'
 import { klappenLaden, klappenSpeichern } from './klappen.js'
 import { metrikenLaden } from './metriken.js'
+// Dauerrote Prüfungen (BAUPLAN 63).
+import { stempelLaden, stempelRuheAufheben } from './pruefkartenStempel.js'
 // Werkstatt (Bauschritt 54): Register der laufenden Zählstellen und der
 // Zustand der Ollama-Rechner.
 import { werkstattStand, rechnerZustandFuerEinstellungen } from './werkstatt.js'
@@ -139,6 +141,18 @@ function registriereIpc() {
     karteErledigtSetzen(pfad, id, erledigt)
   )
   ipcMain.handle('karte-loeschen', (_e, { pfad, id }) => karteLoeschen(pfad, id))
+  // Dauerrote Prüfungen (BAUPLAN 63): Welche ruhen — und Georgs Antwort darauf.
+  // „Löschen" braucht keinen eigenen Weg: Das vorhandene Löschen der Prüfkarte
+  // nimmt Stempel und Archiv ohnehin mit.
+  ipcMain.handle('ruhende-pruefungen', (_e, pfad) => {
+    const { karten } = stempelLaden(pfad)
+    return Object.entries(karten)
+      .filter(([, e]) => e?.ruht === true)
+      .map(([id, e]) => ({ id, rotLaeufe: e.rotLaeufe ?? 0 }))
+  })
+  ipcMain.handle('pruefung-wieder-aufnehmen', (_e, { pfad, id }) => ({
+    ok: stempelRuheAufheben(pfad, id)
+  }))
   // Themen (BAUPLAN 30): Karte per Drag & Drop in ein anderes Thema, Thema umbenennen.
   ipcMain.handle('karte-thema-setzen', (_e, { pfad, id, thema }) => karteThemaSetzen(pfad, id, thema))
   ipcMain.handle('thema-umbenennen', (_e, { pfad, alt, neu }) => themaUmbenennen(pfad, alt, neu))

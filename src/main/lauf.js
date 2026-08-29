@@ -6104,6 +6104,8 @@ export async function laufStarten(fenster, projektPfad, kartenIds, fortsetzung =
         phase,
         instanzId,
         runde,
+        // Dauerrot zählt je Lauf, nicht je Messpunkt (BAUPLAN 63).
+        laufId: bericht.id,
         // Der Listenschnitt: Dateiliste des laufenden Pakets gegen die
         // gestempelte Dateiliste der Karte. Ohne Liste läuft alles mit —
         // im Zweifel ausführen.

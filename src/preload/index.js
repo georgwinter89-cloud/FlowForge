@@ -13,6 +13,9 @@ contextBridge.exposeInMainWorld('flowforge', {
   karteErledigtSetzen: (pfad, id, erledigt) =>
     ipcRenderer.invoke('karte-erledigt-setzen', { pfad, id, erledigt }),
   karteLoeschen: (pfad, id) => ipcRenderer.invoke('karte-loeschen', { pfad, id }),
+  ruhendePruefungen: (pfad) => ipcRenderer.invoke('ruhende-pruefungen', pfad),
+  pruefungWiederAufnehmen: (pfad, id) =>
+    ipcRenderer.invoke('pruefung-wieder-aufnehmen', { pfad, id }),
   karteThemaSetzen: (pfad, id, thema) => ipcRenderer.invoke('karte-thema-setzen', { pfad, id, thema }),
   themaUmbenennen: (pfad, alt, neu) => ipcRenderer.invoke('thema-umbenennen', { pfad, alt, neu }),
   sonderlaufStarten: (pfad, art) => ipcRenderer.invoke('sonderlauf-starten', { pfad, art }),

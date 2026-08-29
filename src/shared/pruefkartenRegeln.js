@@ -217,6 +217,15 @@ export function kartenAuswahl({
       uebersprungen.push({ id, grund: 'beimPruefer' })
       continue
     }
+    // Dauerrot und stillgelegt (BAUPLAN 63): Sie wartet auf Georgs Entscheidung
+    // und wird bis dahin nicht mehr abgespielt. Vor der Stempel-Prüfung, weil
+    // „ruht" die stärkere Aussage ist — eine ruhende Karte ohne Befehl wäre
+    // sonst als „nicht abspielbar" gemeldet und niemand verstünde, warum sie
+    // nicht mehr läuft.
+    if (eintrag && typeof eintrag === 'object' && eintrag.ruht === true) {
+      uebersprungen.push({ id, grund: 'ruht' })
+      continue
+    }
     // Ohne Stempel ist nichts zu raten (gemessen: keine der 38 heutigen Karten
     // im echten Archiv hat einen zuordenbaren Prüfbefehl, und ein Einstieg
     // lässt sich auch nicht ableiten — mal alle.mjs, mal sammel.mjs, mal zwei

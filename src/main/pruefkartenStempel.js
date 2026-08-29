@@ -37,9 +37,22 @@ function eintragLesen(roh) {
     ordner: String(roh.ordner ?? '').trim(),
     instanzId: String(roh.instanzId ?? ''),
     zuletztMs: Number.isFinite(Number(roh.zuletztMs)) ? Number(roh.zuletztMs) : 0,
-    dauerMs: Number.isFinite(Number(roh.dauerMs)) ? Number(roh.dauerMs) : 0
+    dauerMs: Number.isFinite(Number(roh.dauerMs)) ? Number(roh.dauerMs) : 0,
+    // Dauerrot (BAUPLAN 63): Wie viele LÄUFE hintereinander war diese Prüfung
+    // rot, und in welchem Lauf wurde zuletzt gezählt (ein Lauf spielt sie an
+    // mehreren Messpunkten ab — ohne die Lauf-Kennung zählte ein einziger Lauf
+    // bis drei). `ruht`: stillgelegt, bis Georg entschieden hat.
+    rotLaeufe: Number.isFinite(Number(roh.rotLaeufe)) ? Number(roh.rotLaeufe) : 0,
+    rotLaufId: String(roh.rotLaufId ?? ''),
+    ruht: roh.ruht === true
   }
 }
+
+// Ab wann eine dauerhaft rote Prüfung ruht statt weiterzulaufen (Entscheidung
+// Georg, 29.08.2026). Gemessen an 18 Läufen am Haushaltsplaner: „Wochenplan-
+// Ansicht geprüft" wurde in 16 Läufen hintereinander rot gemeldet, vor und nach
+// jeder Runde — 550 ROT-Zeilen insgesamt, ohne dass je etwas eskalierte.
+export const ROT_LAEUFE_BIS_RUHE = 3
 
 // Alle Stempel eines Projekts.
 //
@@ -147,7 +160,13 @@ export function stempelSetzen(projektPfad, kartenId, { dateiListe, befehl, ordne
       // Die Rotationsmarke gehört der Messung, nicht dem Anlegen: Wird eine
       // Karte neu gestempelt, ist sie deswegen nicht neu gelaufen.
       zuletztMs: vorher?.zuletztMs ?? 0,
-      dauerMs: vorher?.dauerMs ?? 0
+      dauerMs: vorher?.dauerMs ?? 0,
+      // Dasselbe für den Dauerrot-Stand (BAUPLAN 63): Ein neuer Stempel ist
+      // kein grüner Lauf — sonst setzte jede Neu-Stempelung den Zähler zurück
+      // und die Stilllegung wäre nie zu erreichen.
+      rotLaeufe: vorher?.rotLaeufe ?? 0,
+      rotLaufId: vorher?.rotLaufId ?? '',
+      ruht: vorher?.ruht === true
     })
     dateiSchreiben(projektPfad, { karten })
     return beiseite ? { ok: true, beiseite: true } : { ok: true }
@@ -181,6 +200,55 @@ export function stempelMessungVermerken(projektPfad, kartenId, { zuletztMs, daue
   } catch {
     return false
   }
+}
+
+// Dauerrot zählen (BAUPLAN 63): einmal je LAUF, nicht je Messpunkt. Liefert
+// { rotLaeufe, ruhtJetzt } — ruhtJetzt ist nur beim Übergang true, damit der
+// Aufrufer genau einmal Klartext tickert und genau eine Frage stellt.
+export function stempelRotVermerken(projektPfad, kartenId, laufId) {
+  try {
+    const { karten } = stempelLaden(projektPfad)
+    const vorher = karten[String(kartenId)]
+    if (!vorher) return { rotLaeufe: 0, ruhtJetzt: false }
+    if (vorher.rotLaufId === String(laufId))
+      return { rotLaeufe: vorher.rotLaeufe, ruhtJetzt: false }
+    const rotLaeufe = vorher.rotLaeufe + 1
+    const ruhtJetzt = !vorher.ruht && rotLaeufe >= ROT_LAEUFE_BIS_RUHE
+    karten[String(kartenId)] = {
+      ...vorher,
+      rotLaeufe,
+      rotLaufId: String(laufId),
+      ruht: vorher.ruht || ruhtJetzt
+    }
+    dateiSchreiben(projektPfad, { karten })
+    return { rotLaeufe, ruhtJetzt }
+  } catch {
+    // Ein klemmender Stempel darf das Abspielen nicht anhalten — dann zählt
+    // dieser Lauf eben nicht mit.
+    return { rotLaeufe: 0, ruhtJetzt: false }
+  }
+}
+
+// Grün gelaufen: Der Dauerrot-Zähler fällt auf null zurück. Ohne das bliebe
+// eine reparierte Prüfung für immer eine Runde vor der Stilllegung.
+export function stempelGruenVermerken(projektPfad, kartenId) {
+  try {
+    const { karten } = stempelLaden(projektPfad)
+    const vorher = karten[String(kartenId)]
+    if (!vorher || (vorher.rotLaeufe === 0 && !vorher.ruht)) return false
+    karten[String(kartenId)] = { ...vorher, rotLaeufe: 0, rotLaufId: '', ruht: false }
+    dateiSchreiben(projektPfad, { karten })
+    return true
+  } catch {
+    return false
+  }
+}
+
+// Georgs Antwort auf die Frage einer ruhenden Prüfung: wieder aufnehmen.
+// „Löschen" braucht keinen eigenen Weg — das ist das vorhandene Löschen der
+// Prüfkarte, das Stempel und Archiv ohnehin mitnimmt.
+export function stempelRuheAufheben(projektPfad, kartenId) {
+  return stempelGruenVermerken(projektPfad, kartenId)
 }
 
 // Löschen einer Prüfkarte räumt ihren Stempel mit weg — wie schon ihr Archiv.

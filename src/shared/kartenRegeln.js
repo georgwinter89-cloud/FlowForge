@@ -44,13 +44,19 @@ export function istEigenpflege({ titel, text } = {}) {
 }
 
 // Liefert null, wenn alles passt — sonst eine Fehlermeldung in Alltagssprache.
+//
+// Die Längen sind seit BAUPLAN 63 RICHTWERTE, keine Sperre (Entscheidung Georg,
+// 29.08.2026). Gemessen an 18 Läufen am Haushaltsplaner: 202 Ablehnungen wegen
+// Länge, Median 14 Zeichen darüber, 81 davon höchstens 10 Zeichen — jede eine
+// volle Modellrunde mit dem ganzen Kontext, Ketten bis 14 hintereinander. Der
+// Richtwert steht weiter in Werkzeugbeschreibung und Auftrag; durchgesetzt wird
+// nur noch, dass überhaupt etwas dasteht. Leer bleibt hart: Eine Karte ohne
+// Titel oder Text ist keine Karte.
 export function pruefeKarteneingabe({ titel, text }) {
   const t = (titel ?? '').trim()
   const x = (text ?? '').trim()
   if (!t) return texte.kartenRegeln.titelFehlt
-  if (t.length > TITEL_MAX) return texte.kartenRegeln.titelZuLang(TITEL_MAX, t.length)
   if (!x) return texte.kartenRegeln.textFehlt
-  if (x.length > TEXT_MAX) return texte.kartenRegeln.textZuLang(TEXT_MAX, x.length)
   return null
 }
 

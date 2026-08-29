@@ -76,6 +76,10 @@ describe('BAUPLAN 52 · Der Stempel entsteht beim Anlegen der Karte', () => {
     expect(stempelLaden(projekt).karten[KARTE_A]).toEqual({
       dateiListe: ['src/api/nutzer.js'],
       befehl: 'node pruefung/pruefer-6c746d22/pruefe.mjs',
+      // Dauerrot (BAUPLAN 63): frisch gestempelt heißt null rote Läufe.
+      rotLaeufe: 0,
+      rotLaufId: '',
+      ruht: false,
       ordner: 'pruefer-6c746d22',
       instanzId: '6c746d22-8d13',
       zuletztMs: 0,

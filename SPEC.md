@@ -325,9 +325,19 @@ im Volltext und als fester Chip in der Kartenauswahl: Ein Anker, den die Blöcke
 steuert nichts. Wozu sie da ist: Ohne Ziel misst ein Projekt seinen Fortschritt an der Länge
 der Fundliste — und ein Serienlauf dreht sich, bis die Rundenzahl aufgebraucht ist (§5).
 
-**Harte Längengrenze pro Karte (Richtwert 3–5 Sätze; durchgesetzt als 400 Zeichen Inhalt,
-80 Zeichen Titel) — gilt auch für den Agenten.** Wer mehr zu
-sagen hat, legt mehrere fokussierte Karten an. Die Status-Karte wird beim Anlegen des Projekts
+**Längen-Richtwert pro Karte: 3–5 Sätze (400 Zeichen Inhalt, 80 Zeichen Titel) — seit
+Bauschritt 63 ein Richtwert und keine Sperre** (Entscheidung Georg, 29.08.2026). FlowForge
+nennt ihn in Werkzeugbeschreibung und Auftrag, weist aber nichts mehr deswegen ab; hart
+bleibt nur, dass Titel und Inhalt überhaupt gefüllt sind. Gemessener Anlass: In 18 Läufen am
+Testprojekt Haushaltsplaner lehnte FlowForge **202** Karten wegen Länge ab — Median **14
+Zeichen** darüber, 81 davon höchstens 10 Zeichen, Ketten bis 14 Ablehnungen hintereinander;
+jede kostete eine volle Modellrunde mit dem ganzen Kontext. Zusätzlich verwarf der
+Lieferschein **67** vollständige Prüfbelege, weil ein Prüfkarten-Feld ein paar Zeichen zu
+lang war — obwohl FlowForge dieses Feld beim Anlegen der Prüfkarte ohnehin kürzt. Die
+einzige Stelle, an der die Titellänge noch wirkt, ist die **Anzeige im Karten-Verzeichnis**
+(es steht in jedem Blockauftrag): Dort wird ein überlanger Titel mit „…" gekürzt dargestellt,
+während die Karte ihren vollen Titel behält. Wer mehr zu sagen hat, legt weiterhin besser
+mehrere fokussierte Karten an. Die Status-Karte wird beim Anlegen des Projekts
 automatisch erzeugt und kann weder gelöscht noch doppelt angelegt werden. Weitere Sorten erst, wenn der Alltag sie einfordert.
 
 **Prüfkarten** (seit Bauschritt 18): legt ausschließlich FlowForge an — automatisch nach
@@ -1499,6 +1509,16 @@ Umleitung (`rm`, `mv`, `cp`): Welchen Ordner er trifft, steht in einem
 Befehlstext nicht verlässlich; er bleibt ein Rückfrage-Fall (§7) — im Automodus
 also ein Ja. Deshalb sagt der Auftrag des Prüfers es zusätzlich als Regel:
 in fremden Prüf- und Kartenordnern nichts schreiben, löschen oder verschieben.
+**Unauflösbare Umleitungsziele** (seit Bauschritt 63): Ein Ziel, das FlowForge aus dem
+Befehlstext nicht wirklich lesen kann — stehengebliebenes Anführungszeichen, nicht ersetzte
+Shell-Variable (`$out`, `${p}`, `%TEMP%`) oder ein Bruchstück mit Klammern und
+Glob-Zeichen —, wird **nicht mehr hart gesperrt**, sondern fällt auf die Rückfrage durch
+(„Rückfrage statt Sperre"): Was FlowForge nicht auflösen kann, kann es auch nicht ehrlich
+beurteilen, und ein hartes Nein behauptete Wissen, das nicht da ist. Gemessener Anlass: In
+18 Läufen am Testprojekt Haushaltsplaner waren **10 von 13** gestoppten Schreibversuchen
+solche Phantome (`$dump`, `$pdump1.html`, `/gi)`, `[0-9]*`) — der Agent wollte damit in
+`arbeitsablage/` schreiben, das der Datenvertrag ausdrücklich freilässt. Für auflösbare
+Pfade bleibt die Sperre unverändert hart.
 
 **Prüfbefehl — Pflicht-Artefakt des Prüfers** (seit Bauschritt 35; gilt auch für
 die Gesamtprüfung): Neben seinen Tests hinterlegt der Prüfer über das Werkzeug
@@ -1920,6 +1940,19 @@ Mechanik wie das Tor (§4.3), im echten Projektordner.
   Karten als **Rotation** mit — die eingebaute Gegenprobe für die indirekten Fälle, die
   ein Listenschnitt strukturell nicht sieht. Von Hand gezogene Karten bleiben liegen:
   Sie laufen beim Prüfer.
+- **Dauerrot ruht** (seit Bauschritt 63, Entscheidung Georg 29.08.2026): FlowForge zählt je
+  Prüfkarte, in wie vielen **Läufen** hintereinander sie rot war (je Lauf einmal — ein Lauf
+  hat mehrere Messpunkte). Nach der **dritten** roten Runde läuft sie nicht mehr mit,
+  sondern **ruht**: eine Ticker-Zeile sagt es genau einmal, und die Frage steht danach an
+  der Karte selbst in der Seitenleiste — „wieder aufnehmen", „als Aufgabe notieren" oder
+  löschen (kein Dialog, der einen Lauf anhielte; dasselbe Muster wie die Vorschlags-Zeile,
+  §5). Läuft die Prüfung wieder grün, fällt der Zähler auf null zurück; ein neuer Stempel
+  setzt ihn nicht zurück. In der Abspiel-Abrechnung erscheint sie als eigener Grund
+  („ruht"), nicht unter „nicht betroffen". Gemessener Anlass: In 18 Läufen am Testprojekt
+  Haushaltsplaner standen **550** Zeilen „Alte Prüfung … ist ROT" — eine einzige Prüfung war
+  in **16 Läufen hintereinander** rot, vor und nach jeder Runde neu abgespielt, ohne dass je
+  etwas eskalierte; aus diesen Meldungen entstanden wiederum Aufgaben-Karten über
+  FlowForges eigenen Apparat.
 - **Wie:** Die aufbewahrten Dateien werden ausgelegt, der **gestempelte** Prüfbefehl wird
   auf den Kartenordner umgeschrieben und abgespielt — je Karte mit eigener Prozessgruppe,
   eigenem Zeitlimit und Aufräumen danach.

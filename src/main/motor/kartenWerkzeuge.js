@@ -55,7 +55,14 @@ export function kartenZeile(karte) {
 // Übersicht bekommt die kurze Zeile. Dieselbe Sortenmarke wie oben, nur
 // ohne „: text": Der Index ist kein neues Format, es fällt nur der Text weg.
 export function kartenIndexZeile(karte) {
-  return `[${sorteMarke(karte)}] ${karte.titel}`
+  return `[${sorteMarke(karte)}] ${titelFuerIndex(karte.titel)}`
+}
+
+// Nur für die Anzeige im Verzeichnis: Ein überlanger Titel wird hier gekürzt,
+// nicht in der Karte. Rein und exportiert für die Regel-Prüfungen.
+export function titelFuerIndex(titel) {
+  const t = String(titel ?? '').trim()
+  return t.length > TITEL_MAX ? t.slice(0, TITEL_MAX - 2).trimEnd() + ' …' : t
 }
 
 // Der Index, wie ihn karten_uebersicht ausliefert — als reine Funktion
@@ -176,8 +183,8 @@ export async function kartenWerkzeugServer({ projektPfad, aufEreignis, holeHerku
 
   const anlegen = tool(
     'karte_anlegen',
-    `Legt eine neue Projektkarte an. Harte Regeln: Titel höchstens ${TITEL_MAX} Zeichen, ` +
-      `Inhalt höchstens ${TEXT_MAX} Zeichen — wer mehr zu sagen hat, legt mehrere fokussierte ` +
+    `Legt eine neue Projektkarte an. Richtwert: Titel bis ${TITEL_MAX} Zeichen, ` +
+      `Inhalt bis ${TEXT_MAX} Zeichen (3–5 Sätze) — wer mehr zu sagen hat, legt mehrere fokussierte ` +
       'Karten an. Jede Karte braucht ein thema (kurzes Schlagwort zum Einsortieren): nimm ' +
       'bevorzugt ein vorhandenes Thema aus deinem Auftrag oder karten_uebersicht, ein neues ' +
       'nur, wenn keines passt. Eine Status-Karte kann nicht angelegt werden (es gibt genau eine).',
@@ -185,8 +192,8 @@ export async function kartenWerkzeugServer({ projektPfad, aufEreignis, holeHerku
       sorte: z
         .enum(['aufgabe', 'entscheidung', 'wissen'])
         .describe('Sorte der Karte: aufgabe, entscheidung oder wissen'),
-      titel: z.string().describe(`Titel, höchstens ${TITEL_MAX} Zeichen`),
-      text: z.string().describe(`Inhalt, höchstens ${TEXT_MAX} Zeichen (3–5 Sätze)`),
+      titel: z.string().describe(`Titel, Richtwert ${TITEL_MAX} Zeichen — eine Zeile, kein Satzgefüge`),
+      text: z.string().describe(`Inhalt, Richtwert ${TEXT_MAX} Zeichen (3–5 Sätze)`),
       // Bewusst optional im Schema, hart durchgesetzt im Handler: So bekommt der
       // Agent bei fehlendem Thema unsere Ablehnung samt Themenliste statt eines
       // nackten Schema-Fehlers (Rettungsanker, BAUPLAN 30).
@@ -222,7 +229,7 @@ export async function kartenWerkzeugServer({ projektPfad, aufEreignis, holeHerku
         .string()
         .optional()
         .describe('Neuer Titel; weglassen, um den bisherigen Titel zu behalten'),
-      text: z.string().describe(`Neuer Inhalt, höchstens ${TEXT_MAX} Zeichen`),
+      text: z.string().describe(`Neuer Inhalt, Richtwert ${TEXT_MAX} Zeichen (3–5 Sätze)`),
       thema: z
         .string()
         .optional()

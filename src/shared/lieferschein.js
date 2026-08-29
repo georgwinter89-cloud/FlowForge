@@ -876,18 +876,19 @@ function pruefbelegPruefen(roh) {
   }
   const rotVorGruen = freierText(roh?.rotVorGruen, false)
   const geprueft = zeilenListe(roh?.geprueft)
-  // Prüfkarte: dieselben harten Längengrenzen wie für jede andere Karte —
-  // FlowForge legt sie nach bestandener Prüfung selbst an (BAUPLAN 18). Das
-  // sind Karten-Regeln (SPEC §3.1), keine Übergabe-Grenzen — sie bleiben.
+  // Prüfkarte: seit BAUPLAN 63 OHNE Längen-Ablehnung. Der Grund steht in den
+  // Zahlen: 67-mal wurde in 18 Läufen die GANZE Meldung eines Prüfers
+  // verworfen — Urteil, Beanstandungen, Rot-vor-Grün-Beleg —, weil eines dieser
+  // beiden Kartenfelder ein paar Zeichen zu lang war. Und pruefkarteAnlegen,
+  // das die Karte danach anlegt, kürzt genau diese Felder ohnehin mechanisch
+  // („FlowForge kürzt, statt zu scheitern — die Karte muss immer entstehen").
+  // Die beiden Enden widersprachen sich, und das teure gewann.
+  // Unvollständig bleibt hart: Titel ohne Text ergäbe keine Karte.
   let pruefkarte = null
   const kartenTitel = einzeilig(roh?.pruefkarteTitel)
   const kartenText = einzeilig(roh?.pruefkarteText)
   if (kartenTitel || kartenText) {
     if (!kartenTitel || !kartenText) return { fehler: tl.pruefkarteUnvollstaendig }
-    if (kartenTitel.length > TITEL_MAX)
-      return { fehler: tl.feldZuLang(tl.felder.pruefkarteTitel, TITEL_MAX, kartenTitel.length) }
-    if (kartenText.length > TEXT_MAX)
-      return { fehler: tl.feldZuLang(tl.felder.pruefkarteText, TEXT_MAX, kartenText.length) }
     pruefkarte = { titel: kartenTitel, text: kartenText }
   }
   return {

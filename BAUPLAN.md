@@ -1743,3 +1743,83 @@ dass erst das Ziel fehlt — ein Einzellauf startet trotzdem. Trägt er das Ziel
 und startet eine Serie, steht nach jeder Runde im Ticker, wie nah das Projekt am
 Ziel ist; meldet das Sessionende „erreicht", endet die Serie von selbst, auch
 wenn noch Karten offen sind.
+
+### 63 — Nachsicht statt Ablehnung: Längen, Dauerrot, Phantom-Pfade
+(Anlass: Georgs Frage am 29.08.2026, wo die Mechanik gegen die Agenten arbeitet.
+Nachgemessen an 18 Laufberichten am Haushaltsplaner vom 27.–29.08.2026. Version:
+baut als **0.64.0**, die Kopplung bleibt um eins verschoben. Zwei Folgen-Ent-
+scheidungen Georg, 29.08.2026: Längengrenzen aufheben und nur noch als Richtwert
+nennen; eine dauerhaft rote Prüfung nach drei Runden einmal zur Entscheidung
+vorlegen.)
+
+**Der gemessene Befund:** An drei Stellen hörte die Mechanik auf zu helfen und
+fing an zu bremsen. **(1) Längen:** 202 Karten-Ablehnungen wegen Länge, Median 14
+Zeichen darüber, 81 davon höchstens 10 Zeichen („401 von 400"); Ketten bis 14
+Ablehnungen hintereinander, im Sessionende bis zu 14 in einer einzigen Minute.
+Dazu 67-mal die **komplette Meldung** eines Prüfers verworfen, weil ein
+Prüfkarten-Feld ein paar Zeichen zu lang war — obwohl `pruefkarteAnlegen` genau
+dieses Feld beim Anlegen ohnehin kürzt („FlowForge kürzt, statt zu scheitern —
+die Karte muss immer entstehen"). Die beiden Enden widersprachen sich, und das
+teure gewann. **(2) Dauerrot:** 550 Zeilen „Alte Prüfung … ist ROT"; eine einzige
+Prüfung war in 16 Läufen hintereinander rot, vor und nach jeder Runde neu
+abgespielt, ohne dass je etwas eskalierte — und die Meldungen erzeugten wiederum
+Aufgaben-Karten über FlowForges eigenen Apparat (der Motor der Eigenpflege-
+Schleife aus Bauschritt 62). **(3) Phantom-Pfade:** 10 von 13 gestoppten
+Schreibversuchen galten Zielen, die gar keine Dateien sind — `$dump`, `$out`,
+`$p\dump1.html`, `/gi)`, `[0-9]*`: nicht ersetzte Shell-Variablen und
+Regex-Bruchstücke. Der Agent wollte damit in `arbeitsablage/` schreiben, das der
+Datenvertrag ausdrücklich freilässt.
+
+- **Längen sind Richtwerte:** `pruefeKarteneingabe` weist nur noch Leeres ab; der
+  Lieferschein verwirft keinen Prüfbeleg mehr wegen der Kartenfelder. Der
+  Richtwert steht weiter in Werkzeugbeschreibung und Auftrag — der Wortlaut ist,
+  was von der Regel übrig bleibt. Einzige verbliebene Wirkung der Titellänge: die
+  **Anzeige** im Karten-Verzeichnis, das in jedem Blockauftrag steht — dort kürzt
+  FlowForge mit „…", während die Karte ihren vollen Titel behält.
+- **Dauerrot ruht:** Der Stempel zählt rote **Läufe** je Karte (je Lauf einmal —
+  ein Lauf hat mehrere Messpunkte). Nach der dritten läuft die Prüfung nicht mehr
+  mit; eine Ticker-Zeile sagt es genau einmal, die Frage steht danach an der Karte
+  in der Seitenleiste: „wieder aufnehmen", „als Aufgabe notieren" oder löschen.
+  Grün laufen setzt den Zähler zurück, ein neuer Stempel nicht.
+- **Unauflösbare Umleitungsziele fallen auf die Rückfrage durch** statt hart
+  gesperrt zu werden. Für auflösbare Pfade bleibt die Sperre unverändert.
+- **Gebaut (29.08.2026):** Die Ruhe-Frage ist bewusst **kein Dialog**, sondern
+  eine Zeile an der Karte — dasselbe Muster wie die Vorschlags-Zeile (Bauschritt
+  28): Ein blockierender Dialog hielte nachts einen Lauf und mit ihm eine ganze
+  Serie an. Der Zähler wohnt im Stempel (`rotLaeufe`, `rotLaufId`, `ruht`) und
+  nicht am Kartentext: Am Text stünde er im Karten-Index jedes Auftrags.
+  `stempelSetzen` übernimmt ihn wie die Rotationsmarke — sonst setzte jede
+  Neu-Stempelung die Stilllegung zurück und wäre nie zu erreichen. Ruhende Karten
+  fallen in `kartenAuswahl` **vor** der Stempel-Prüfung heraus, mit eigenem Grund
+  („ruht"): Eine ruhende Karte ohne Befehl hätte sonst „nicht abspielbar"
+  gemeldet, und niemand hätte verstanden, warum sie nicht mehr läuft.
+  `zielUnaufloesbar` steht neben der vorhandenen Anführungszeichen-Leitplanke,
+  die schon dieselbe Regel trug — sie war nur zu eng gefasst.
+- **Was das für Bauschritt 62 heißt:** Die Anker gegen das Kreisen benutzen
+  dasselbe Ablehnungs-Muster. Bei Frischware und Eigenpflege ist das gewollt (der
+  Agent soll neu entscheiden). Der Zielstand ist die Ausnahme, die zu beobachten
+  ist: Er hängt an einer kleinen Meldung, seine Ablehnung kostet wenig — bleibt es
+  dabei, kann er so bleiben.
+- **Prüfungen:** `nachsichtStattAblehnung.test.js` (9 Fälle: Karten über dem
+  Richtwert gehen durch, Leeres bleibt hart, Index kürzt nur die Anzeige, langer
+  Prüfkartentext verwirft den Beleg nicht mehr, die sieben gemessenen Phantome
+  gelten als unauflösbar, echte Pfade nicht, ein echter Fremdschreibversuch wird
+  weiter gesperrt) und `dauerroteRuhe.test.js` (7 Fälle: je Lauf einmal zählen,
+  Stilllegung genau einmal melden, Rückfall bei Grün, Wiederaufnahme,
+  Neu-Stempeln erhält den Stand, ruhende Karte fällt aus der Auswahl und kommt
+  nach der Aufhebung zurück). Zwei bestehende Prüfungen wurden umgedreht, weil
+  ihr altes Verhalten genau der gemessene Fehlgriff war (`$nullwert.txt` in
+  `dateilisteSperre.test.js`, die Prüfkarten-Grenze in `lieferschein.test.js`).
+  2058 Prüfungen grün.
+- **Ehrliche Grenzen:** Gemessen ist die Mechanik, nicht der Alltag — ob die
+  Sessionende-Blöcke ohne Ablehnungsschleifen wirklich kürzer arbeiten, zeigt erst
+  Georgs nächster Lauf. Die Phantom-Erkennung ist eine Heuristik: Ein Zielpfad,
+  der wirklich eine Klammer im Namen trägt, wird jetzt nicht mehr hart gesperrt,
+  sondern nur noch erfragt. Und ohne Durchsetzung der Länge kann ein Kartentext
+  wachsen — er kostet Kontext beim `karten_lesen`, nicht im Index.
+
+**Alltagstest:** Georg lässt einen Lauf am Haushaltsplaner laufen. Im Ticker
+stehen keine „Karten-Änderung abgelehnt: … zu lang"-Zeilen mehr. Ist eine alte
+Prüfung zum dritten Mal rot, sagt der Ticker einmal, dass sie ab jetzt ruht — und
+an ihrer Karte in der Seitenleiste stehen die drei Antworten. Drückt er „Wieder
+aufnehmen", läuft sie im nächsten Lauf wieder mit.

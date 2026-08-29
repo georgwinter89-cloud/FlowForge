@@ -395,10 +395,14 @@ describe('BAUPLAN 44 · Pfeile aus Code sind keine Umleitung', () => {
       'npx vitest run pruefung/p1/x.test.js 2>$null'
     ])
       expect(bauer('Bash', { command: befehl }).erlaubt).toBe(true)
-    // Nur der Name selbst ist ein Nichts-Ziel: eine echte Datei daneben bleibt gesperrt.
-    expect(bauer('Bash', { command: 'npm test > $nullwert.txt' }).gesperrt).toBe(
-      texte.rechteFrage.ausserhalbDateilisteFuerAgent('$nullwert.txt', liste)
-    )
+    // Seit BAUPLAN 63 gilt auch „$nullwert.txt" als unauflösbar und wird NICHT
+    // mehr hart gesperrt: Genau diese Form — Variable plus Endung — stand in den
+    // gemessenen Läufen als „$p\dump1.html" und „$out" und stoppte Befehle, mit
+    // denen der Agent in arbeitsablage/ schreiben wollte, das der Datenvertrag
+    // ausdrücklich freilässt (10 von 13 gestoppten Schreibversuchen waren solche
+    // Phantome). Was FlowForge nicht auflösen kann, beurteilt es nicht hart —
+    // es bleibt die Rückfrage.
+    expect(bauer('Bash', { command: 'npm test > $nullwert.txt' }).gesperrt).toBeUndefined()
   })
 
   it('erkennt ein zitiertes Ziel NACH dem Pfeil weiterhin — Leerzeichen im Pfad', () => {
