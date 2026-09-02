@@ -1,215 +1,296 @@
 <p align="center"><img src="docs/bilder/banner.png" alt="FlowForge Werkbank" width="100%"></p>
 
-Eine Windows-Desktop-App, mit der Nicht-Programmierer per Drag & Drop
-Coding-Workflows aus Blöcken bauen — Angreifer, Bauer, Prüfer, Sessionende … —
-und ein KI-Agent führt sie aus: mit Sicherungspunkten, harten Sperren,
-Rechte-Rückfragen und einem Laufbericht, der ehrlich sagt, was passiert ist.
+FlowForge ist eine Windows-Desktop-App (Electron), in der man Coding-Workflows
+als Kette von Blöcken zusammensteckt: Paket schneiden, Angreifer, Bauer, Prüfer,
+Sessionende. Die App startet dafür die offizielle Claude Code CLI über das Claude
+Agent SDK und gibt ihr Block für Block genau einen Auftrag. Reihenfolge, Rechte,
+Sicherungspunkte und Reparatur-Runden setzt FlowForge selbst durch, nicht der Agent.
 
-Ich bin Georg, ich programmiere nicht. Den gesamten Code hat Claude geschrieben,
-Schritt für Schritt nach [BAUPLAN.md](BAUPLAN.md); was die App heute tut, steht
-in [SPEC.md](SPEC.md). Diese beiden Dateien sind die Dokumentation; dieses README
-zeigt Bilder und verweist.
+Ich bin Georg und programmiere nicht. Den gesamten Code hat Claude geschrieben,
+in nummerierten Bauschritten nach [BAUPLAN.md](BAUPLAN.md). Was die App heute
+tut, steht vollständig in [SPEC.md](SPEC.md). Dieses README ist die technische
+Kurzfassung.
 
-## So arbeitet FlowForge
-
-<img src="docs/bilder/ueberblick.png" alt="So arbeitet FlowForge: Du baust das Schaubild — FlowForge steuert und erzwingt — der Motor arbeitet — du siehst, was passiert ist" width="100%">
-
-Die Werkbank ist nicht der Arbeiter: FlowForge bekommt keine Tokens, entscheidet
-aber alles, was zählt — Reihenfolge, Sperren, Sicherungspunkte, Reparatur-Runden.
-Die KI ist die offizielle Claude Code CLI, über das Agent SDK im Hintergrund
-gestartet; sie bekommt Block für Block genau einen Auftrag.
-
-## Die Werkbank in Bildern
-
-**Das Schaubild.** Block-Karten auf der Leinwand, Pfeile bestimmen die
-Reihenfolge. An jeder Karte steht, was der Block **braucht** und **liefert**, und
-woher es kommt („← Paket schneiden"); ein Prüfer ohne Arbeitspaket lässt sich gar
-nicht erst starten. Je Karte wählst du außerdem **Modell** und **Denktiefe** —
-vom sparsamen Sonnet bis zur lokalen KI auf deinem eigenen Rechner. Der rote
-Prüf-Block schickt den Bauer bei Rot zurück („Fehlschlag, 2 Runden") — mechanisch,
-ohne dass die KI darüber entscheidet.
-
-<img src="docs/bilder/schaubild.png" alt="Schaubild: Spec-Interview → Web-Recherche → Paket schneiden → Angreifer → zwei Bauer → Prüfer, mit braucht/liefert-Chips, Modell- und Denktiefe-Wahl je Karte und Rückführungspfeil" width="100%">
-
-Dieselbe Leinwand weitergescrollt: zwei Bauer laufen **parallel**, jeder mit
-eigenem Prüfer; der **Integrator (Code)** führt ihre Teile zusammen und geht
-selbst noch einmal durch einen Prüfer, bevor das **Sessionende** die Karten auf
-Stand bringt.
-
-<img src="docs/bilder/schaubild-fortsetzung.png" alt="Fortsetzung des Schaubilds: zwei Bauer mit je eigenem Prüfer, Integrator (Code) führt zusammen, danach Prüfer und Sessionende" width="100%">
-
-**Ein Lauf, während er läuft.** Oben das **Gespräch**: Ein Block darf dich fragen,
-wenn eine Entscheidung dir gehört — der Lauf hält an, bis du antwortest (hier
-unscharf, es ging um private Haushaltsfragen). Darunter der **Liveticker**, der
-jeden Schritt mitschreibt: gemessene Größe des Start-Prompts, jeder ausgeführte
-Befehl, jede Frage. Ganz unten kannst du dem Agenten beim **Denken** zusehen.
-
-<img src="docs/bilder/werkbank-lauf.png" alt="Laufender Lauf: Gespräch mit Rückfragen an den Menschen, Liveticker mit Token-Messung und Befehlen, aufgeklapptes Denken des Agenten" width="100%">
-
-**Rechte des Agenten.** Drei Stufen, die FlowForge je Werkzeugaufruf durchsetzt:
-ohne Rückfrage · nur mit deiner Erlaubnis · immer gesperrt. Der Automodus betrifft
-nur die mittlere Spalte — die harten Sperren gelten immer.
-
-<p align="center"><img src="docs/bilder/rechte.png" alt="Projekt-Einstellungen: Rechte des Agenten in drei Spalten" width="860"></p>
-
-**Sicherungspunkte.** Vor dem Lauf und nach jedem schreibenden Block — technisch
-Git, für dich eine Liste mit „Wiederherstellen" (mit Vorschau, selbst wieder
-rückgängig). Aus zwei Punkten rechnet FlowForge den Diff, den die Reparatur-Runde
-bekommt.
-
-<p align="center"><img src="docs/bilder/sicherungspunkte.png" alt="Sicherungspunkte-Liste mit Wiederherstellen-Knöpfen" width="860"></p>
-
-**Metriken.** Nicht was es kostet, sondern was es taugt: Prüfer besteht beim
-ersten Mal, Reparatur-Runden je Lauf, Rückfragen je Lauf — und die Trefferquote
-der lokalen KI. Kein Agent bekommt diese Zahlen zu sehen.
-
-<img src="docs/bilder/metriken.png" alt="Metriken-Seite: lokale KI, Motor, wie gut trägt das Gerüst, je Kette" width="100%">
-
-**Projektübersicht und erster Start.** Läuft etwas, liegt der Lauf als große
-Kachel obenauf; beim allerersten Start fragt FlowForge, wie sich der Motor
-anmelden soll (siehe unten).
-
-<img src="docs/bilder/projektuebersicht.png" alt="Projektübersicht mit Kacheln" width="100%">
-<img src="docs/bilder/erststart.png" alt="Erststart-Dialog: Abo-Login oder API-Schlüssel" width="100%">
-
-## Die lokale KI: Opus an den Enden, dein Rechner in der Mitte
-
-Seit Bauschritt 49–51 kann jeder Block auch von einer **lokalen KI über Ollama**
-ausgeführt werden — auf demselben Rechner oder einem anderen im Heimnetz. Das
-kostet kein Kontingent und keine Cent. Der Gedanke dahinter: Die teuren Modelle
-stehen an den Enden der Kette (Paket schneiden, Prüfen, Abnahme), die lokale KI
-arbeitet in der Mitte.
-
-Damit das kein Vertrauensvorschuss bleibt, prüft FlowForge nach:
-
-- **Lokaler Prüfer mit Abnahme.** Sagt eine lokale KI „bestanden", spielt
-  FlowForge ihren Prüfbefehl selbst nach. Rot dreht das Urteil mechanisch um —
-  ein „bestanden" gilt nie ungeprüft.
-- **Der Lokal-Wächter.** Gemessen: Ollama schneidet oberhalb der Fensterkante
-  still ab und meldet dann geschönte Zahlen, die eingebaute Verdichtung der CLI
-  kann lokal also nie greifen. FlowForge schätzt den Füllstand deshalb selbst und
-  löst die Übergabe rechtzeitig aus, statt den Block sterben zu lassen.
-- **Speicher-Ehrlichkeit.** FlowForge fragt Ollamas Prozessliste, ob das Modell
-  wirklich auf der Grafikkarte liegt — statt es aus der Modellgröße zu raten. Ein
-  Lauf, der in den Arbeitsspeicher ausgelagert wird, kriecht sonst stundenlang.
-- **Websuche für lokale Blöcke.** Zwei rein lesende Werkzeuge, wahlweise über eine
-  eingebaute Quelle oder deine eigene SearXNG-Instanz. Harte Größendeckel, dein
-  Rechner und dein Heimnetz gesperrt, jeder Zugriff im Liveticker.
-- **Mehrere Rechner.** Eine Adress-Liste statt eines Feldes: je Adresse läuft ein
-  lokaler Block, mit mehreren laufen sie parallel.
-
-## Prüfungen, die nicht veralten
-
-Nach jeder bestandenen Prüfung legt FlowForge eine **Prüfkarte** an und bewahrt
-die Prüfdateien dahinter auf. Seit Bauschritt 52 spielt es sie **von selbst**
-wieder ab — ohne KI, 0 Tokens —, direkt vor und nach jedem schreibenden Block.
-Welche Prüfung dran ist, entscheidet eine Regel und kein Agent: Fasst das laufende
-Paket eine Datei an, die diese Prüfung kennt, läuft sie; im Zweifel läuft sie.
-Dazu laufen je Messpunkt zwei Karten reihum mit — die Gegenprobe gegen die
-Blindheit eines Listenvergleichs. Das Ergebnis geht dem Prüfer in den Auftrag,
-löst aber **keine** Reparatur-Runde aus: Zwischen zwei Bau-Runden darf Rot
-legitim sein.
-
-Was FlowForge **erzwingt**, statt darum zu bitten (die Lehre aus dem Vorgängerprojekt,
-in dem Regeln nur als Text im Prompt standen):
-
-| Regel | Wie sie gilt |
+| | |
 |---|---|
-| „darf nur lesen" (Angreifer, Diagnose, Audit) | Schreib-Werkzeuge werden am Aufruf abgelehnt, nicht „bitte nicht" |
-| braucht / liefert | Steck-Prüfung vor dem Start; Lieferungen gehen entlang der Pfeile |
-| Ergebnis je Block | Lieferschein mit Pflichtfeldern — ein leeres Feld hält den Lauf an |
-| Parallel schreiben | nur mit getrennten Dateilisten (Wirkbereich), Prüfer nie neben Bauer |
-| Jeder Schritt rückholbar | Sicherungspunkt vor dem Lauf und nach jedem schreibenden Block |
-| Kontext läuft über | bei ~85 % Füllstand der Lauf-Session Übergabe und frische Session, derselbe Block läuft weiter — automatisch |
-| Lokales „bestanden" | wird mechanisch nachgespielt; rot dreht das Urteil um |
-| Alte Prüfungen | laufen automatisch mit, ausgewählt per Dateivergleich — kein Agent schätzt, was betroffen ist |
-| Prüfmappe `pruefung/` | gehört den Prüf-Blöcken; jeder Prüfer nur sein eigener Ordner — auch für Befehle, die dorthin schreiben |
+| Plattform | Windows 11, Electron 43, React 19, electron-vite, Node 24 |
+| KI-Motor | Claude Code CLI, gestartet über `@anthropic-ai/claude-agent-sdk` |
+| Modelle je Block | Fable 5 · Opus · Sonnet · Haiku · OpenRouter (beliebiges Modell) · Ollama (lokal) |
+| Anmeldung | Claude-Abo (bestehendes CLI-Login) oder API-Schlüssel |
+| Sicherungspunkte | Git im Projektordner, über isomorphic-git |
+| Tests | `npm test`, 102 Dateien, 2.058 Regel-Prüfungen (vitest) |
+| Sprache | Oberfläche, Code, Kommentare und Doku auf Deutsch |
+| Lizenz | MIT |
 
-## Was es ist — und was nicht
+## So läuft ein Workflow ab
 
-- **Ist:** ein Ein-Personen-Projekt, das ich für mich gebaut habe und benutze.
-  Windows 11. Der KI-Motor ist die offizielle Claude Code CLI, über das Claude
-  Agent SDK gebündelt und im Hintergrund gestartet. Optional übernimmt eine
-  lokale KI über Ollama einzelne Blöcke ganz (siehe oben).
-- **Ist nicht:** ein Produkt. Kein Support, keine Roadmap für andere, keine
-  Beiträge erwartet (Issues und Pull Requests werden vermutlich nicht bearbeitet).
-  Kein macOS, kein Linux.
+<img src="docs/bilder/ueberblick.png" alt="Schaubild bauen, FlowForge steuert, Motor arbeitet, Ergebnis sehen" width="100%">
 
-### Warum alles auf Deutsch ist
+1. **Schaubild.** Blöcke liegen als Karten auf der Leinwand, Pfeile geben die
+   Reihenfolge vor. Jede Karte trägt Modellklasse, Denktiefe, optional einen
+   Zusatznamen und ein Rückführungsziel (Prüfer schickt bei Rot zum Bauer zurück).
+   Gespeichert wird das als `workflow.json` im Projektordner.
+2. **Steck-Prüfung.** Jeder Block deklariert, was er braucht und was er liefert
+   (Arbeitspaket, Angriffsliste, Prüfergebnis, Diff). Fehlt einem Block seine
+   Eingabe, startet der Lauf nicht. Lieferungen wandern entlang der Pfeile.
+3. **Lauf-Session.** Der Hauptprozess startet eine Claude-Code-Session als
+   Koordinator (immer Haiku). Jeder Block läuft darin als eigener Subagent mit dem
+   Modell seiner Karte. Der Koordinator sieht nur Aufträge und Fazite, deshalb
+   wächst sein Kontext langsam.
+4. **Durchsetzung per Hook.** Ein `PreToolUse`-Hook prüft jeden Werkzeugaufruf des
+   Agenten gegen die Rechte des Projekts: erlaubt, Rückfrage an den Menschen oder
+   hartes Nein. Ein rein lesender Block (Angreifer, Diagnose, Audit) bekommt
+   Schreibwerkzeuge abgelehnt, nicht per Bitte im Prompt.
+5. **Lieferschein.** Jeder Block beendet sich über ein eigenes MCP-Werkzeug mit
+   einem Ergebnis, das gegen ein Zod-Schema mit Pflichtfeldern geprüft wird. Ein
+   leeres Feld hält den Lauf an.
+6. **Sicherungspunkt.** Vor dem Lauf und nach jedem schreibenden Block legt
+   FlowForge einen Git-Commit im Projekt an. Aus zwei Punkten entsteht der Diff,
+   den ein Prüfer oder eine Reparatur-Runde bekommt.
+7. **Übertrag bei vollem Kontext.** FlowForge misst den Füllstand der
+   Lauf-Session aus den Token-Meldungen des Motors. Bei etwa 85 % schreibt der
+   Koordinator eine Übergabe, und derselbe Block läuft in einer frischen Session
+   weiter.
+8. **Sessionende und Laufbericht.** Der letzte Block bringt die Projektkarten auf
+   Stand und schlägt das nächste Paket vor. Der Laufbericht liegt als Datei unter
+   `laufberichte/` im Projekt und nennt je Block Modell, Denktiefe, Tokens, Kosten
+   und alle Rückfragen.
 
-V1 ist **bewusst deutsch** — Oberfläche, Blocknamen, Aufträge an die Agenten,
-SPEC, BAUPLAN, Variablennamen, Kommentare. Der einzige Nutzer von V1 bin ich, und
-ich denke auf Deutsch; jedes Wort, das ich erst übersetzen müsste, ist eine Hürde
-mehr zwischen mir und dem, was der Agent gerade tut. Alle sichtbaren Texte liegen
-zentral in `src/shared/texte.js`, damit eine englische Oberfläche in V2 kein Umbau
-ist — aber sie ist nicht versprochen.
+## Blöcke
 
-### Ehrlich zum Code
+| Block | Rechte | Aufgabe |
+|---|---|---|
+| Spec-Interview | schreibt Karten | Befragt den Nutzer über das Gespräch und legt erste Aufgaben-Karten an |
+| Paket schneiden | schreibt Karten | Schneidet aus Wunsch oder offenen Karten ein Arbeitspaket mit Dateiliste und Fertig-Kriterien |
+| Angreifer | nur lesend | Sucht vor dem Bauen, woran das Paket scheitern könnte; darf Testbefehle ausführen |
+| Diagnose | nur lesend | Belegt die Ursache eines Fehlers mit Fundort, bevor etwas angefasst wird |
+| Bauer | schreibt Code | Setzt genau das Paket um, begrenzt auf dessen Dateiliste (Wirkbereich) |
+| Integrator (Code) | schreibt Code | Führt parallel gebaute Teile zusammen |
+| Integrator (Recherche) | nur lesend | Führt Rechercheergebnisse zusammen |
+| Prüfer | schreibt nur in `pruefung/` | Prüft das Paket gegen seine Fertig-Kriterien, hinterlässt einen Prüfbefehl |
+| Gesamtprüfung | schreibt nur in `pruefung/` | Prüft das ganze Projekt statt eines Pakets |
+| Audit | nur lesend | Drei Blickwinkel als Unteraufgaben, legt bei Befund Karten an |
+| Karten-Prüfer | nur lesend | Vergleicht Karten mit dem Code und schlägt Korrekturen vor |
+| Frage an den Menschen | nur lesend | Stellt eine Folgen-Frage mit Optionen, der Lauf wartet |
+| Sessionende | schreibt Karten | Aktualisiert Karten, schreibt den Bericht, schlägt das nächste Paket vor |
+| Zusatzbauer | schreibt Code | Wird automatisch angelegt, wenn Angreifer oder Prüfer Funde außerhalb der Dateiliste melden |
 
-Der Code ist **gewachsen, nicht entworfen** — eher Spaghetti als Architektur.
-`src/main/lauf.js` hat fast 7.000 Zeilen, der Motor-Adapter 3.300, die Texte
-4.900; es gibt keine saubere Schichtung, vieles hängt an langen Funktionen mit
-vielen Sonderfällen, die jeweils eine Lehre aus einem echten Lauf sind. Was ihn
-zusammenhält: Jeder Bauschritt beginnt mit einer Angriffsliste (woran könnte genau
-das scheitern?) und endet mit Prüfer-Agenten, die das Verhalten nachmessen statt
-den Code zu lesen; `npm test` fährt über 1.500 Regel-Prüfungen in `pruefungen/`.
-Das ist der Schutz, nicht die Struktur. Wer den Code lesen will: entlang der
-SPEC-Paragraphen und der Prüfdateien, nicht entlang der Ordner. Ein Aufräumen
-steht nicht im Bauplan — die fachlichen Schritte gehen vor.
+Eigene Blöcke lassen sich im Block-Editor anlegen, wahlweise mit KI-Assistent.
+Vorlagen: „Neue App starten", „Feature hinzufügen", „Bug jagen",
+„Feature hinzufügen · lokal".
 
-## Starten
+Blöcke arbeiten parallel, wenn ihre Dateilisten disjunkt sind. FlowForge weist
+überlappende Zuschnitte beim Paketschneiden ab. Ein Prüfer läuft nie neben einem
+Bauer.
 
-1. Installer aus den [Releases](../../releases) laden (`FlowForge-Setup-<Version>.exe`)
-   und ausführen — ein Klick, kein Assistent.
-2. Beim ersten Start fragt FlowForge, wie sich der Motor anmelden soll
-   (siehe unten). Danach: neues Projekt anlegen, Ordner wählen, Blöcke aufs
-   Schaubild ziehen, Lauf starten.
+<img src="docs/bilder/schaubild.png" alt="Schaubild mit Spec-Interview, Paket schneiden, Angreifer, zwei Bauern und Prüfer" width="100%">
+<img src="docs/bilder/schaubild-fortsetzung.png" alt="Fortsetzung: Integrator, Prüfer, Sessionende" width="100%">
 
-Aus dem Quellcode: `npm install`, `npm run dev` (Entwicklung) bzw.
-`npm run installer` (Setup-Datei nach `dist/`). `npm test` fährt die
-Regel-Prüfungen in `pruefungen/`. Die Bilder in `docs/bilder/` sind Screenshots
-der App; Banner und Überblick rendert `npm run schaubilder` aus
-`tools/schaubilder/` mit den Schriften und Farben der App.
+## Was FlowForge erzwingt
+
+| Regel | Mechanismus |
+|---|---|
+| Nur lesen | Schreibwerkzeuge werden im Hook abgelehnt |
+| braucht / liefert | Steck-Prüfung vor dem Start, Lieferungen entlang der Pfeile |
+| Ergebnis je Block | Lieferschein mit Zod-Schema, Pflichtfelder |
+| Parallel schreiben | nur mit disjunkten Dateilisten |
+| Verwaltungsdateien | `projekt.json`, `karten.json`, `workflow.json`, `laufberichte/` und weitere sind für den Agenten gesperrt, Karten ändert er nur über Werkzeuge |
+| Prüfmappe | jeder Prüfer schreibt nur in seinen eigenen Ordner unter `pruefung/` |
+| Prüfbefehl | Pflicht-Artefakt des Prüfers; FlowForge spielt ihn nach einem „bestanden" selbst nach, Rot dreht das Urteil um |
+| Alte Prüfungen | Prüfkarten laufen vor und nach jedem schreibenden Block automatisch mit, ausgewählt per Dateivergleich, ohne KI |
+| Kontext | Übertrag bei ~85 % Füllstand, lokal bei 80 % geschätzt |
+| Kein stiller Rückfall | Ist Ollama oder OpenRouter nicht erreichbar, startet der Lauf nicht, statt still auf Claude zu laufen |
+| Eigenpflege | Ein Deckel begrenzt, wie oft ein Serienlauf nur an seinen eigenen Karten arbeitet statt am Projektziel |
+
+<p align="center"><img src="docs/bilder/rechte.png" alt="Rechte des Agenten in drei Spalten" width="860"></p>
+
+## Modelle und Anbieter
+
+**Claude.** Sechs Modellklassen je Karte. Standard ist fest Opus, damit Läufe über
+Monate vergleichbar bleiben. Denktiefe (low bis max) ist ein Feld der
+Agent-Definition; FlowForge definiert je Stufe einen Subagent-Typ und liest beim
+ersten Werkzeugaufruf zurück, welche Stufe wirklich gilt. Der Koordinator läuft
+immer auf Haiku, Unteraufgaben standardmäßig auf Sonnet.
+
+**Ollama.** Ein lokaler Block läuft in einer zweiten CLI-Instanz mit
+`ANTHROPIC_BASE_URL` auf Ollamas Anthropic-Schnittstelle. Davor sitzt eine
+Zählstelle im Hauptprozess, die jede Anfrage mitmisst. Vor dem Lauf legt FlowForge
+per Ollama-API ein abgeleitetes Modell `flowforge-<basis>` mit Kontextfenster und
+Sampling-Werten an. Gemessene Eigenheiten, die FlowForge abfängt:
+
+- Ollama kappt Prompts oberhalb des Fensters still und meldet danach falsche
+  Token-Zahlen. FlowForge schätzt den Füllstand selbst und übergibt bei 80 %.
+- Passt das Fenster nicht in den Grafikspeicher, lagert Ollama in den RAM aus.
+  FlowForge fragt `/api/ps` ab und warnt, wenn das Modell unter 99 % im VRAM liegt.
+- Die Werkzeug-Schicht der CLI bricht nach Stille ab, nicht nach Dauer.
+  `API_TIMEOUT_MS` ist einstellbar, Standard 30 Minuten.
+- Mehrere Ollama-Adressen bilden einen Pool: ein lokaler Block je Adresse.
+- Ein lokaler Prüfer bekommt einen Claude-Prüfer als Abnahme dahinter.
+
+**OpenRouter.** Ein eingebauter Übersetzer im Hauptprozess (127.0.0.1, freier
+Port, je Motor frisch) dolmetscht Anthropic `/v1/messages` nach OpenAI
+`/chat/completions` und zurück, inklusive Werkzeugdefinitionen, Streaming und
+Token-Zählung. Der OpenRouter-Schlüssel bleibt im Hauptprozess und geht nie in die
+Umgebung des Kindprozesses. Kosten kommen gemessen aus `usage.cost` des Anbieters,
+nicht aus einer Preisliste, und werden getrennt von Abo und API ausgewiesen.
+
+**Websuche für Fremdmodelle.** WebSearch und WebFetch der CLI laufen über
+Anthropics Server und stehen Ollama und OpenRouter nicht zur Verfügung. FlowForge
+gibt diesen Motoren zwei eigene, rein lesende Werkzeuge (`web_suche`,
+`webseite_lesen`) mit Größendeckel, wahlweise über eine eingebaute Quelle oder eine
+eigene SearXNG-Instanz. Eigener Rechner und Heimnetz sind gesperrt.
+
+## Werkbank
+
+<img src="docs/bilder/werkbank-lauf.png" alt="Laufender Lauf mit Gespräch, Liveticker und Denken des Agenten" width="100%">
+
+Oben das Gespräch, in dem ein Block Rückfragen stellt; der Lauf wartet auf die
+Antwort. Darunter der Liveticker mit jedem Werkzeugaufruf, jeder Rückfrage und der
+gemessenen Größe des Start-Prompts. Ganz unten das Denken des Agenten.
+
+<p align="center"><img src="docs/bilder/sicherungspunkte.png" alt="Sicherungspunkte mit Wiederherstellen" width="860"></p>
+
+Sicherungspunkte sind Git-Commits mit Vorschau und Wiederherstellen. Die
+Wiederherstellung ist selbst ein Sicherungspunkt.
+
+<img src="docs/bilder/metriken.png" alt="Metriken-Seite" width="100%">
+
+Metriken je Kette: Prüfer besteht beim ersten Mal, Reparatur-Runden je Lauf,
+Rückfragen je Lauf, Trefferquote der lokalen KI, Urteil lokal gegen Abnahme.
+Kein Agent sieht diese Seite. Die Werkstatt zeigt daneben live, welche
+Ollama-Adressen erreichbar sind, welches Modell geladen ist und zu welchem Anteil
+im VRAM, sowie den Übersetzer-Verkehr der OpenRouter-Blöcke.
+
+<img src="docs/bilder/projektuebersicht.png" alt="Projektübersicht" width="100%">
+
+**Serienlauf.** Mehrere Runden hintereinander; der Vorschlag des Sessionendes
+steuert die nächste Runde. Ein Serienstart verlangt ein gesetztes Projektziel
+(eine feste Karte je Projekt), gegen das jeder Bericht den Stand nennt.
+
+## Dateien
+
+Im Projektordner:
+
+```
+projekt.json          Projektname, Rechte, Einstellungen
+karten.json           Projektkarten (Status, Aufgaben, Entscheidungen, Projektziel)
+workflow.json         Schaubild: Blöcke, Pfeile, Modell und Denktiefe je Karte
+laufstand.json        Zustand eines laufenden oder unterbrochenen Laufs
+naechster-lauf.json   Vorschlag des Sessionendes für das nächste Paket
+chat.json             Verlauf des Co-Piloten
+pruefbefehl.json      Prüfbefehl des Tors
+laufberichte/         ein Bericht je Lauf
+pruefung/             Prüfmappe, ein Unterordner je Prüf-Instanz
+```
+
+Im Datenordner `%APPDATA%\flowforge`:
+
+```
+einstellungen.json    Motor-Modus, API-Schlüssel, Ollama-Adressen, OpenRouter, Websuche
+projekte.json         Liste der bekannten Projekte
+metriken/             eine Datei je Lauf, Anhänge-Format für die lokale KI
+```
+
+Der Datenordner ist für die Werkzeuge des Agenten hart gesperrt.
+
+## Quellcode
+
+```
+src/main/               Hauptprozess (Electron)
+  lauf.js               Ablaufsteuerung eines Laufs, 9.000 Zeilen
+  sicherungspunkte.js   Git-Sicherungspunkte über isomorphic-git
+  pruefkarten*.js       Prüfkarten anlegen, auswählen, abspielen
+  werkstatt.js          Zustand der Ollama-Rechner und Übersetzer-Verkehr
+  motor/
+    claudeCodeMotor.js  Adapter zum Agent SDK: Sessions, Hooks, Subagents, 3.900 Zeilen
+    uebersetzer.js      Anthropic-nach-OpenAI-Übersetzer für OpenRouter
+    zaehlstelle.js      Weiterleiter mit Token-Messung für Ollama
+    lokalesModell.js    abgeleitetes Ollama-Modell anlegen
+    websuche.js         web_suche und webseite_lesen
+    *Werkzeuge.js       MCP-Werkzeuge: Lieferschein, Karten, Mensch, Prüfbefehl, Start
+src/renderer/src/       Oberfläche (React)
+  Leinwand.jsx          Schaubild mit Karten und Pfeilen, 3.000 Zeilen
+  Einstellungen.jsx, BlockEditor.jsx, Metriken.jsx, Werkstatt.jsx, Chat.jsx
+src/shared/             Regeln ohne Electron-Abhängigkeit, von Main und Renderer genutzt
+  blockKatalog.js       Blockbibliothek mit Voreinstellungen
+  kettenRegeln.js       Steck-Prüfung braucht/liefert, Parallelität
+  lieferschein.js       Zod-Schemata der Blockergebnisse
+  texte.js              alle sichtbaren Texte, 5.700 Zeilen
+pruefungen/             102 vitest-Dateien
+tools/schaubilder/      rendert Banner und Überblicksbild per Electron
+```
+
+Der Code ist gewachsen, nicht entworfen. Es gibt keine saubere Schichtung, dafür
+lange Funktionen mit vielen Sonderfällen, die jeweils aus einem echten Lauf
+stammen. Jeder Bauschritt beginnt mit einer Angriffsliste (woran könnte genau das
+scheitern) und endet mit Prüfer-Agenten, die das Verhalten ausführen statt den
+Code zu lesen. Wer den Code lesen will, kommt über die SPEC-Paragraphen und die
+Prüfdateien weiter als über die Ordner.
+
+## Installieren und bauen
+
+Installer aus den [Releases](../../releases) laden (`FlowForge-Setup-<Version>.exe`).
+Ein-Klick-Setup ohne Assistent. Beim ersten Start fragt FlowForge, wie sich der
+Motor anmelden soll.
+
+<img src="docs/bilder/erststart.png" alt="Erststart-Dialog: Abo oder API-Schlüssel" width="100%">
+
+Aus dem Quellcode:
+
+```bash
+npm install
+npm run dev          # Entwicklung mit electron-vite
+npm test             # Regel-Prüfungen in pruefungen/
+npm run installer    # Setup-Datei nach dist/
+npm run schaubilder  # Banner und Überblicksbild neu rendern
+```
+
+Die Versionsnummer folgt dem Bauschritt: Bauschritt N ergibt 0.N.0. Die native
+`claude.exe` des SDK liegt entpackt neben dem asar-Archiv (`asarUnpack` in
+`electron-builder.yml`), sonst ließe sie sich nicht als Prozess starten.
 
 ## Abo oder API-Schlüssel
 
-FlowForge kann den Motor auf zwei Wegen anmelden: mit deinem **Claude-Abo**
-(dein bestehendes Claude-Code-Login, läuft über dein Abo-Kontingent) oder mit
-einem **API-Schlüssel** (Abrechnung pro Verbrauch, mit Ausgaben-Obergrenze je
-Lauf). Beim ersten Start wählst du selbst; in den Einstellungen kannst du wechseln.
+FlowForge startet die offizielle CLI über das Agent SDK, wahlweise mit dem
+bestehenden Claude-Code-Login (Abo-Kontingent) oder mit einem API-Schlüssel
+(Abrechnung pro Verbrauch, Ausgaben-Obergrenze je Lauf einstellbar).
 
-Ehrlich gesagt, wie es mit dem Abo steht (Stand 19.08.2026):
+Stand 19.08.2026, was Anthropic dazu schreibt:
 
-- Anthropics Legal-Doku sagt, das Unternehmen erlaube Drittanbietern nicht,
-  claude.ai-Login in ihren Apps anzubieten — ausdrücklich „including agents built
-  on the Claude Agent SDK" ([code.claude.com/docs/en/legal-and-compliance](https://code.claude.com/docs/en/legal-and-compliance)).
-- Chronologie 2026: Im Januar/Februar sperrte Anthropic Abo-Token, die außerhalb
-  der Claude-CLI direkt gegen die API liefen; am 4. April flogen Drittanbieter-
-  Harnesses wie OpenClaw aus dem Abo; im Mai kündigte Anthropic ein separates
-  SDK-Guthaben an — auch für „third-party apps that authenticate with your
-  Claude subscription through the Agent SDK".
-- Am **15. Juni 2026** pausierte Anthropic das und schrieb im Hilfeartikel
-  „Use the Claude Agent SDK with your Claude plan" ([support.claude.com](https://support.claude.com)):
+- Die Legal-Doku ([code.claude.com/docs/en/legal-and-compliance](https://code.claude.com/docs/en/legal-and-compliance))
+  untersagt Drittanbietern, claude.ai-Login in ihren Apps anzubieten, ausdrücklich
+  „including agents built on the Claude Agent SDK".
+- Der Hilfeartikel „Use the Claude Agent SDK with your Claude plan"
+  ([support.claude.com](https://support.claude.com)) vom 15. Juni 2026 sagt:
   „For now, nothing has changed: Claude Agent SDK, `claude -p`, and third-party
   app usage still draw from your subscription's usage limits. […] When we have an
   update, we'll share it before anything takes effect."
 
-FlowForge startet die offizielle CLI über das Agent SDK — genau dieser Weg. Das
-Restrisiko ist ein Abrechnungs-, kein Verbotsrisiko: Anthropic will die
-SDK-Nutzung irgendwann getrennt abrechnen und vorher Bescheid geben — dann ist der
-API-Schlüssel der Weg. „Läuft" ist nicht „ist erlaubt"; hier sagt aber der Anbieter
-selbst, dass es läuft und bis auf Weiteres so bleibt. Ich verstecke den Abo-Modus
-deshalb nicht hinter einem Schalter — ein `false` im Code wäre ein Schild, kein
-Schloss. Wer FlowForge nutzt, entscheidet selbst und sieht den Hinweis dazu in der App.
+FlowForge zeigt diesen Hinweis im Erststart und in den Einstellungen und
+überlässt die Wahl dem Nutzer. Fällt der Abo-Weg weg, ist der API-Schlüssel
+derselbe Motor mit einem Umschalter in den Einstellungen.
+
+Fable 5 kann je nach Abo Guthaben statt Kontingent kosten. Vor dem ersten Lauf
+mit einem Fable-Block im Abo-Modus fragt FlowForge einmal nach.
+
+## Grenzen
+
+- Ein-Personen-Projekt, das ich für mich gebaut habe und benutze. Kein Support,
+  keine Roadmap für andere. Issues und Pull Requests werden vermutlich nicht
+  bearbeitet.
+- Nur Windows. Kein macOS, kein Linux.
+- Alles auf Deutsch, auch Variablennamen und Kommentare. Die sichtbaren Texte
+  liegen in `src/shared/texte.js`; eine englische Oberfläche wäre kein Umbau, ist
+  aber nicht geplant.
+- Die CLI ist auf Claude-Modelle gebaut. Ob ein Fremdmodell über OpenRouter die
+  Werkzeug-Disziplin der Blöcke trägt, zeigt der Alltag. Bilder wandern nur als
+  Platzhalter durch den Übersetzer.
 
 ## Lizenz
 
-[MIT](LICENSE). Bewusst so gewählt: Eine Nicht-Kommerziell-Lizenz wäre für mich
-kaum durchsetzbar, und das Konzept ist mit KI ohnehin in Tagen nachbaubar. Was
-bleibt, sind die Entscheidungen, die Prüfungen und die Person dahinter.
+[MIT](LICENSE).
 
 ## Unterstützen
 
-Wenn dir FlowForge etwas bringt: Kaffeegeld über den „Sponsor"-Knopf oben auf der
-Repo-Seite oder direkt über [github.com/sponsors/georgwinter89-cloud](https://github.com/sponsors/georgwinter89-cloud). Ehrliche
-Erwartung: keine Einnahmequelle — ein Signal, dass hier ein Mensch dahintersteht.
+Wer FlowForge nutzt und etwas zurückgeben will:
+[github.com/sponsors/georgwinter89-cloud](https://github.com/sponsors/georgwinter89-cloud).
